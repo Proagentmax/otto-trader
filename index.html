@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en" style="color-scheme:dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Otto Trader</title>
+<meta name="description" content="Otto Trader — your week's homework, the jargon decoded, a coach that only knows what your mentor actually said, your journal, and the pre-market routine.">
+<meta name="theme-color" content="#0B0C0E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Otto">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon-32.png" sizes="32x32">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0B0C0E;--surface:#15171B;--surface-2:#1D2026;--surface-3:#262A31;
+  --ink:#F2F5F8;--ink-2:#98A1AD;--ink-3:#646C78;
+  --rule:#22262C;--up:#00C805;--down:#FF5000;
+  --paper:var(--bg);--paper-2:var(--surface);--paper-3:var(--surface-2);
+  --mark:var(--down);--pin:var(--up);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --disp:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --gut:18px;--nav:64px;--safe-b:env(safe-area-inset-bottom,0px);--tap:44px;
+  --r:12px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);
+  font-size:16px;line-height:1.5;overscroll-behavior-y:none;
+  font-feature-settings:"tnum" 1,"cv05" 1;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+:focus-visible{outline:2px solid var(--up);outline-offset:2px}
+::selection{background:rgba(0,200,5,.24)}
+h1,h2,h3{margin:0}
+
+.top{position:sticky;top:0;z-index:40;background:var(--bg);
+  padding:calc(env(safe-area-inset-top,0px) + 14px) var(--gut) 12px;display:flex;align-items:center;gap:12px}
+.brand{font-family:var(--disp);font-weight:700;font-size:18px;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.brand .dot{width:8px;height:8px;border-radius:50%;background:var(--up);flex:none;box-shadow:0 0 10px rgba(0,200,5,.6)}
+.top .sub{font-size:11px;color:var(--ink-3);margin-left:auto;text-align:right;line-height:1.4;max-width:48%;letter-spacing:.01em}
+.icon{width:var(--tap);height:var(--tap);display:grid;place-items:center;margin:-10px -10px -10px 0;color:var(--ink-2);flex:none}
+.icon svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7}
+
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(11,12,14,.94);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid var(--rule);
+  display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:var(--safe-b)}
+.nav button{min-height:var(--nav);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  font-size:10px;font-weight:500;letter-spacing:.01em;color:var(--ink-3);position:relative;padding:8px 2px}
+.nav button svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7}
+.nav button[aria-selected=true]{color:var(--up)}
+.badge{position:absolute;top:9px;left:calc(50% + 8px);min-width:16px;height:16px;padding:0 4px;background:var(--down);
+  color:#fff;border-radius:8px;font-size:9.5px;font-weight:600;line-height:16px;text-align:center}
+
+main{padding:6px var(--gut) calc(var(--nav) + var(--safe-b) + 28px)}
+.pane{display:none}.pane.on{display:block}
+
+.sec{margin-bottom:30px}
+.sec>h2{font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--ink-2);text-transform:none;
+  padding-bottom:10px;margin-bottom:8px;display:flex;gap:9px;align-items:baseline;border:0}
+.sec>h2 .c{margin-left:auto;color:var(--ink-3);font-weight:400}
+.btn{font-size:14px;font-weight:600;letter-spacing:-.01em;text-transform:none;border:1px solid var(--surface-3);
+  border-radius:999px;padding:0 20px;min-height:var(--tap);color:var(--ink);
+  display:inline-flex;align-items:center;justify-content:center;background:var(--surface)}
+.btn:active{transform:scale(.985)}
+.btn:disabled{opacity:.35}
+.btn.solid{background:var(--up);color:#04140A;border-color:var(--up)}
+.btn.wide{width:100%}
+.btn.danger{color:var(--down);border-color:rgba(255,80,0,.4);background:transparent}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>.btn{flex:1;min-width:130px}
+
+label.f{display:block;font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink-2);margin-bottom:6px}
+input.f,select.f,textarea.f{width:100%;border:1px solid var(--surface-3);border-radius:10px;background:var(--surface);
+  padding:13px 13px;font-family:var(--body);font-size:16px;color:var(--ink)}
+textarea.f{line-height:1.45;resize:vertical}
+input.f:focus,textarea.f:focus,select.f:focus{outline:none;border-color:var(--up);background:var(--surface-2)}
+input.f::placeholder,textarea.f::placeholder{color:var(--ink-3)}
+select.f{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-2) 50%),linear-gradient(135deg,var(--ink-2) 50%,transparent 50%);
+  background-position:calc(100% - 17px) 21px,calc(100% - 12px) 21px;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.grid{display:grid;gap:12px}.g2{grid-template-columns:1fr 1fr}
+.hint{font-size:12.5px;color:var(--ink-3);margin:7px 0 0;line-height:1.5}
+.empty{border:1px solid var(--rule);border-radius:var(--r);padding:22px 18px;color:var(--ink-2);font-size:15px;line-height:1.55;background:var(--surface)}
+.empty b{font-size:12px;letter-spacing:0;text-transform:none;color:var(--ink);display:block;margin-bottom:7px;font-weight:600}
+.empty code{font-family:var(--mono);font-size:12.5px;background:var(--surface-2);padding:2px 6px;border-radius:5px;color:var(--ink-2)}
+
+.task{display:flex;gap:13px;padding:15px 0;border-bottom:1px solid var(--rule);align-items:flex-start}
+.task:last-child{border-bottom:0}
+.box{width:var(--tap);height:var(--tap);margin:-12px 0 -12px -12px;flex:none;display:grid;place-items:center}
+.box i{width:21px;height:21px;border:2px solid var(--ink-3);border-radius:50%;display:block;position:relative}
+.box[aria-pressed=true] i{background:var(--up);border-color:var(--up)}
+.box[aria-pressed=true] i::after{content:"";position:absolute;left:6.5px;top:3px;width:5px;height:10px;
+  border:solid #04140A;border-width:0 2px 2px 0;transform:rotate(42deg)}
+.task .t{font-size:16px;font-weight:500;line-height:1.4}
+.task.done .t{color:var(--ink-3);text-decoration:line-through}
+.task .d{font-size:14.5px;color:var(--ink-2);margin-top:5px;line-height:1.45}
+.task .m{font-size:11.5px;color:var(--ink-3);margin-top:8px;display:flex;gap:13px;flex-wrap:wrap}
+.task .m .who{color:var(--up)}
+.quote{color:var(--ink-2);font-size:14.5px;border-left:2px solid var(--surface-3);padding-left:11px;margin-top:8px;font-style:normal}
+
+.item{display:flex;gap:13px;padding:14px 0;border-bottom:1px solid var(--rule)}
+.item:last-child{border-bottom:0}
+.item .n{font-size:12px;font-weight:600;color:var(--up);flex:none;padding-top:2px;min-width:20px}
+.item .why{color:var(--ink-2);font-size:14.5px;display:block;margin-top:4px;line-height:1.45}
+.item b{font-family:var(--body);font-size:15.5px;font-weight:600}
+.qs{background:rgba(255,80,0,.08);border:1px solid rgba(255,80,0,.25);border-left:3px solid var(--down);
+  border-radius:0 var(--r) var(--r) 0;padding:15px 16px;margin:0;list-style:none}
+.qs li{margin-bottom:12px;font-size:15px}.qs li:last-child{margin-bottom:0}
+.qs .why{color:var(--ink-2);font-size:14px;display:block;margin-top:3px}
+
+.seg{display:flex;gap:4px;background:var(--surface);border:0;border-radius:999px;padding:4px;margin-bottom:18px}
+.seg button{flex:1;min-height:38px;border-radius:999px;font-size:13.5px;font-weight:600;letter-spacing:0;
+  text-transform:none;color:var(--ink-2)}
+.seg button[aria-selected=true]{background:var(--surface-3);color:var(--ink)}
+.card{border:1px solid var(--rule);border-radius:var(--r);padding:16px 17px;margin-bottom:12px;background:var(--surface)}
+.card h3{font-size:16.5px;font-weight:600;letter-spacing:-.015em;line-height:1.3;margin-bottom:7px}
+.card .term{font-size:16px;font-weight:600;margin-bottom:6px;color:var(--up)}
+.card p{margin:0;font-size:15px;line-height:1.5;color:var(--ink-2)}
+.card .said{font-size:13.5px;line-height:1.5;color:var(--ink-3);border-left:2px solid var(--surface-3);
+  padding-left:12px;margin-top:12px}
+.card .said em{font-style:normal;color:var(--ink-3);display:block;margin-top:3px;font-size:11.5px;font-family:var(--mono)}
+
+.corpus{font-size:12px;color:var(--ink-3);margin-bottom:14px;line-height:1.5}
+.prompts{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:16px;-webkit-overflow-scrolling:touch}
+.prompts button{flex:none;font-size:13px;font-weight:500;border:1px solid var(--surface-3);border-radius:999px;
+  padding:10px 15px;color:var(--ink-2);background:var(--surface);white-space:nowrap}
+.chat{display:flex;flex-direction:column;gap:16px;margin-bottom:14px}
+.msg{max-width:92%}
+.msg.you{align-self:flex-end;background:var(--up);color:#04140A;border-radius:18px 18px 5px 18px;
+  padding:11px 15px;font-size:15.5px;font-weight:500}
+.msg.coach{align-self:flex-start;background:var(--surface);border:1px solid var(--rule);border-radius:18px 18px 18px 5px;padding:13px 15px}
+.msg.coach .b{font-size:15.5px;line-height:1.55;color:var(--ink)}
+.msg.coach .b p{margin:0 0 10px}.msg.coach .b p:last-child{margin:0}
+.msg .cites{margin-top:11px;display:flex;gap:7px;flex-wrap:wrap}
+.cite{font-family:var(--mono);font-size:11px;border:1px solid var(--surface-3);border-radius:6px;
+  padding:4px 8px;color:var(--ink-3)}
+.errtxt{color:var(--down);font-size:14px}
+.ask{position:sticky;bottom:calc(var(--nav) + var(--safe-b));background:var(--bg);padding:10px 0 14px;
+  display:flex;gap:10px;align-items:flex-end}
+.ask textarea{flex:1;border:1px solid var(--surface-3);border-radius:22px;padding:12px 17px;font-size:16px;
+  font-family:var(--body);resize:none;max-height:120px;background:var(--surface);line-height:1.4;color:var(--ink)}
+.ask textarea:focus{outline:none;border-color:var(--up)}
+.ask button{width:var(--tap);height:var(--tap);border-radius:50%;background:var(--up);color:#04140A;
+  flex:none;display:grid;place-items:center}
+.ask button:disabled{opacity:.3}
+.ask button svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2.4}
+
+.gate{border:1px solid var(--rule);border-left:3px solid var(--up);border-radius:0 var(--r) var(--r) 0;
+  padding:15px 17px;margin-bottom:18px;background:var(--surface)}
+.gate.hot{border-left-color:var(--down);background:rgba(255,80,0,.07);border-color:rgba(255,80,0,.25)}
+.gate .h{font-size:11.5px;letter-spacing:.02em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px;font-weight:600}
+.gate .b{font-size:15.5px;color:var(--ink)}.gate.hot .b{color:var(--down)}
+.trade{border:1px solid var(--rule);border-radius:var(--r);padding:15px 17px;margin-bottom:11px;background:var(--surface)}
+.trade .hd{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:7px}
+.trade .sym{font-size:17px;font-weight:700;letter-spacing:-.02em}
+.trade .dir{font-size:11px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;padding:3px 8px;
+  border:0;border-radius:6px;background:var(--surface-2);color:var(--ink-2)}
+.trade .pnl{font-family:var(--mono);font-size:17px;margin-left:auto;font-weight:600;letter-spacing:-.02em}
+.trade .pnl.up{color:var(--up)}.trade .pnl.dn{color:var(--down)}
+.trade .when{font-size:12px;color:var(--ink-3);width:100%;margin-top:2px}
+.trade .lab{font-size:11px;letter-spacing:.02em;text-transform:uppercase;color:var(--ink-3);margin:13px 0 4px;font-weight:600}
+.trade p{margin:0;font-size:15px;line-height:1.5;color:var(--ink-2)}
+.trade p.none{color:var(--down);font-size:13.5px}
+.trade .x{font-size:11px;color:var(--ink-3);margin-left:10px;padding:6px}
+
+.step{border-bottom:1px solid var(--rule);padding:20px 0}
+.step:last-child{border-bottom:0}
+.step .hd{display:flex;gap:11px;align-items:baseline;margin-bottom:3px}
+.step .num{font-family:var(--mono);font-size:12px;color:var(--ink-3);flex:none}
+.step h3{font-size:17px;font-weight:600;letter-spacing:-.02em}
+.step .src{font-size:12.5px;letter-spacing:0;text-transform:none;color:var(--ink-3);margin:0 0 13px 27px}
+.step .bd{margin-left:27px}
+.reads{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.read{border:1px solid var(--rule);border-radius:var(--r);padding:13px 14px;background:var(--surface)}
+.read .k{font-size:11.5px;letter-spacing:0;text-transform:none;color:var(--ink-3);font-weight:500}
+.read .v{font-family:var(--mono);font-size:24px;font-weight:600;margin-top:5px;letter-spacing:-.035em;color:var(--ink)}
+.read .s{font-family:var(--mono);font-size:12.5px;margin-top:4px;color:var(--ink-3);font-weight:500}
+.read .s.up{color:var(--up)}.read .s.dn{color:var(--down)}
+.read.trip{border-color:rgba(255,80,0,.45);background:rgba(255,80,0,.07)}
+.read.trip .v{color:var(--down)}
+.read.wait .v{color:var(--ink-3);font-size:15px;font-weight:400}
+.verdict{font-size:13.5px;line-height:1.55;margin-top:13px;color:var(--ink-2)}
+.verdict b{color:var(--down);font-weight:600}.verdict.ok b{color:var(--up)}
+.earn{font-size:14px;line-height:2.1}
+.earn .d{color:var(--ink-3);margin-right:11px;font-family:var(--mono);font-size:12.5px}
+.earn b{font-weight:600}
+.manual{display:flex;gap:13px;align-items:flex-start;padding:6px 0;font-size:15px;color:var(--ink-2)}
+.keybar{border:1px solid var(--rule);border-radius:var(--r);padding:14px 16px;margin-bottom:16px;background:var(--surface)}
+.keybar .stamp{font-size:12.5px;color:var(--ink-3);line-height:1.6}
+.bar{height:3px;background:var(--surface-2);border-radius:2px;overflow:hidden;margin:14px 0}
+.bar i{display:block;height:100%;background:var(--up);width:0;transition:width .3s}
+
+dialog{border:0;padding:0;background:var(--surface);color:var(--ink);width:100%;max-width:100%;max-height:92dvh;
+  margin:auto auto 0;border-radius:20px 20px 0 0}
+dialog::backdrop{background:rgba(0,0,0,.72);backdrop-filter:blur(3px)}
+dialog .grip{width:38px;height:4px;background:var(--surface-3);border-radius:2px;margin:10px auto 0}
+dialog .hd{padding:14px var(--gut);display:flex;align-items:baseline;gap:11px;border:0}
+dialog .hd h3{font-size:19px;font-weight:700;letter-spacing:-.02em}
+dialog .hd .stamp{font-size:12px;color:var(--ink-3);margin-left:auto}
+dialog .bd{padding:6px var(--gut) 18px;overflow-y:auto;max-height:62dvh;-webkit-overflow-scrolling:touch}
+dialog .ft{padding:12px var(--gut) calc(14px + var(--safe-b));border-top:1px solid var(--rule);display:flex;gap:10px}
+dialog .ft .btn{flex:1}
+pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pre-wrap;border:1px solid var(--rule);
+  background:var(--bg);padding:15px;border-radius:var(--r);margin:0;color:var(--ink-2)}
+
+.toast{position:fixed;left:50%;bottom:calc(var(--nav) + var(--safe-b) + 18px);transform:translate(-50%,10px);
+  background:var(--surface-3);color:var(--ink);font-size:14px;font-weight:500;padding:12px 18px;border-radius:999px;
+  z-index:200;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:88vw;text-align:center;
+  border:1px solid var(--rule)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (min-width:720px){
+  :root{--gut:28px}
+  main{max-width:780px;margin:0 auto;padding-bottom:60px}
+  .nav{position:sticky;top:0;bottom:auto;border-top:0;border-bottom:1px solid var(--rule);backdrop-filter:none;
+    background:var(--bg);max-width:780px;margin:0 auto;grid-template-columns:repeat(5,auto);justify-content:start}
+  .nav button{min-height:54px;flex-direction:row;gap:9px;padding:0 18px;font-size:13.5px;font-weight:600}
+  .badge{position:static;margin-left:4px}
+  .top{position:static}
+  .ask{bottom:0}
+  .toast{bottom:28px}
+  dialog{max-width:620px;margin:auto;border-radius:16px}
+  dialog .grip{display:none}
+  dialog .ft{padding-bottom:14px;justify-content:flex-end}
+  dialog .ft .btn{flex:0 0 auto}
+  .reads{grid-template-columns:repeat(4,1fr)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><span class="dot"></span>Otto Trader</div>
+  <div class="sub" id="sub"></div>
+  <button class="icon" id="settingsBtn" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9 4.6a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
+</header>
+
+<nav class="nav" role="tablist">
+  <button role="tab" aria-selected="true" data-p="week"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Week<span class="badge" id="bWeek" hidden></span></button>
+  <button role="tab" aria-selected="false" data-p="insights"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Insights</button>
+  <button role="tab" aria-selected="false" data-p="coach"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5a8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4z"/></svg>Coach</button>
+  <button role="tab" aria-selected="false" data-p="journal"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Journal</button>
+  <button role="tab" aria-selected="false" data-p="market"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>Market</button>
+</nav>
+
+<main>
+  <section class="pane on" id="p-week">
+    <div id="weekEmpty" class="empty">
+      <b>No call loaded</b>
+      Two ways in. Load a <code>week-DATE.json</code> built in Claude, or hand it the raw Zoom <code>.vtt</code> and let the app read the call itself — that needs a Claude API key in Settings.
+      <div class="row" style="margin-top:16px"><label class="btn solid wide" for="fIn">Load a file</label></div>
+      <input type="file" id="fIn" accept=".json,.vtt,.srt,.txt" hidden>
+    </div>
+    <div id="weekBody" hidden>
+      <div class="sec"><h2>Homework <span class="c" id="assignCount"></span></h2><div id="assignList"></div></div>
+      <div class="sec" id="secRules"><h2>Standing rules</h2><div id="rulesList"></div></div>
+      <div class="sec" id="secSetups"><h2>Setups taught</h2><div id="setupsList"></div></div>
+      <div class="sec" id="secQs"><h2>Ask before you act</h2><ul class="qs" id="qsList"></ul></div>
+      <label class="btn wide" for="fIn2">Add another call</label>
+      <input type="file" id="fIn2" accept=".json,.vtt,.srt,.txt" hidden>
+    </div>
+  </section>
+
+  <section class="pane" id="p-insights">
+    <div class="seg" role="tablist">
+      <button role="tab" aria-selected="true" data-i="ideas">Key insights</button>
+      <button role="tab" aria-selected="false" data-i="terms">Jargon decoded</button>
+    </div>
+    <div id="insBody"></div>
+  </section>
+
+  <section class="pane" id="p-coach">
+    <div class="corpus" id="corpus"></div>
+    <div class="prompts" id="prompts"></div>
+    <div class="chat" id="chat"></div>
+    <div class="ask">
+      <textarea id="q" rows="1" placeholder="Ask about anything he covered…" enterkeyhint="send"></textarea>
+      <button id="send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+    </div>
+  </section>
+
+  <section class="pane" id="p-journal">
+    <div class="gate" id="gate"><div class="h">Today</div><div class="b" id="gateB"></div></div>
+    <div class="row" style="margin-bottom:20px">
+      <button class="btn solid" id="addTradeBtn">Log a trade</button>
+      <button class="btn" id="recapBtn">Weekly recap</button>
+      <label class="btn" for="fCsv">Import CSV</label>
+      <input type="file" id="fCsv" accept=".csv,text/csv" hidden>
+    </div>
+    <div class="sec"><h2>Trades <span class="c" id="tradeCount"></span></h2><div id="tradeList"></div></div>
+  </section>
+
+  <section class="pane" id="p-market">
+    <div class="keybar" id="keybar"></div>
+    <button class="btn solid wide" id="runBtn">Run the routine</button>
+    <div class="bar" id="progBar" hidden><i></i></div>
+    <div class="row" style="margin-top:10px;align-items:center"><span class="corpus" id="runStamp" style="margin:0;flex:1"></span><button class="btn" id="clearRunBtn" style="min-height:34px;font-size:10.5px;flex:0 0 auto">Clear</button></div>
+    <div id="steps"></div>
+  </section>
+</main>
+
+<dialog id="dlgTrade">
+  <div class="grip"></div><div class="hd"><h3>Log a trade</h3></div>
+  <div class="bd">
+    <div class="grid g2" style="margin-bottom:12px">
+      <div><label class="f" for="tDate">Date</label><input class="f" type="date" id="tDate"></div>
+      <div><label class="f" for="tSym">Instrument</label><input class="f" id="tSym" placeholder="ES" autocapitalize="characters" autocomplete="off"></div>
+      <div><label class="f" for="tSess">Session</label><select class="f" id="tSess"><option>New York</option><option>Asia</option><option>London</option></select></div>
+      <div><label class="f" for="tDir">Direction</label><select class="f" id="tDir"><option>Long</option><option>Short</option></select></div>
+      <div><label class="f" for="tQty">Contracts</label><input class="f" type="number" id="tQty" value="1" min="1" inputmode="numeric"></div>
+      <div><label class="f" for="tPnl">P/L dollars</label><input class="f" type="number" id="tPnl" step="any" inputmode="decimal" placeholder="125 or -62.5"></div>
+      <div><label class="f" for="tIn">Entry</label><input class="f" type="number" id="tIn" step="any" inputmode="decimal"></div>
+      <div><label class="f" for="tOut">Exit</label><input class="f" type="number" id="tOut" step="any" inputmode="decimal"></div>
+    </div>
+    <div style="margin-bottom:13px">
+      <label class="f" for="tWhy">Why you took it</label>
+      <textarea class="f" id="tWhy" rows="3" placeholder="What did you see? Which level? Why was this the best trade available, not just a trade?"></textarea>
+      <p class="hint">This is the field Jason will ask about on Friday.</p>
+    </div>
+    <div><label class="f" for="tRev">What you'd do differently</label><textarea class="f" id="tRev" rows="2"></textarea></div>
+  </div>
+  <div class="ft"><button class="btn" id="tCancel">Cancel</button><button class="btn solid" id="tSave">Save</button></div>
+</dialog>
+
+<dialog id="dlgRecap">
+  <div class="grip"></div><div class="hd"><h3>Weekly recap</h3><span class="stamp" id="recapRange"></span></div>
+  <div class="bd"><pre class="out" id="recapOut"></pre></div>
+  <div class="ft"><button class="btn" id="rClose">Close</button><button class="btn solid" id="rCopy">Copy</button></div>
+</dialog>
+
+<dialog id="dlgCsv">
+  <div class="grip"></div><div class="hd"><h3>Import trades</h3><span class="stamp" id="csvCount"></span></div>
+  <div class="bd">
+    <p class="hint" style="margin-top:0">Match each column to what it holds. Rows without a date are skipped.</p>
+    <div class="grid g2" id="csvMap"></div>
+    <div style="margin-top:16px"><label class="f">Preview</label><pre class="out" id="csvPrev"></pre></div>
+  </div>
+  <div class="ft"><button class="btn" id="csvCancel">Cancel</button><button class="btn solid" id="csvGo">Import</button></div>
+</dialog>
+
+<dialog id="dlgSet">
+  <div class="grip"></div><div class="hd"><h3>Settings</h3></div>
+  <div class="bd">
+    <div style="margin-bottom:20px">
+      <label class="f" for="sClaude">Claude API key</label>
+      <input class="f" id="sClaude" placeholder="sk-ant-…" type="password" autocomplete="off" spellcheck="false">
+      <p class="hint">Powers the Coach and lets the app read raw transcripts itself. Without it, you can still load week files made in Claude. Stored only in this browser — don't enter it on a shared device.</p>
+    </div>
+    <div style="margin-bottom:20px">
+      <label class="f" for="sKey">Alpha Vantage key</label>
+      <input class="f" id="sKey" placeholder="market data key" autocomplete="off" spellcheck="false">
+      <p class="hint">Free at alphavantage.co. 25 calls a day; the routine uses 11.</p>
+    </div>
+    <div class="grid g2" style="margin-bottom:20px">
+      <div><label class="f" for="sTen">10Y pressure</label><input class="f" type="number" step="any" id="sTen" inputmode="decimal"></div>
+      <div><label class="f" for="sTenH">10Y tumble</label><input class="f" type="number" step="any" id="sTenH" inputmode="decimal"></div>
+      <div><label class="f" for="sJpy">USD/JPY sell above</label><input class="f" type="number" step="any" id="sJpy" inputmode="decimal"></div>
+      <div><label class="f" for="sMax">Max trades a day</label><input class="f" type="number" id="sMax" min="1" inputmode="numeric"></div>
+    </div>
+    <div><label class="f" for="sWatch">Earnings watchlist</label><input class="f" id="sWatch" autocapitalize="characters">
+      <p class="hint">Only these show. The full feed is ~1,800 companies that don't move the index.</p></div>
+  </div>
+  <div class="ft"><button class="btn danger" id="sWipe">Erase all</button><button class="btn" id="sClose">Close</button><button class="btn solid" id="sSave">Save</button></div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
+const DEF={key:"",claude:"",ten:4.7,tenH:4.88,jpy:160,maxDay:1,watch:"WMT, TGT, HD, NVDA, COST"};
+let CFG={...DEF},CALLS=[],CUR=0,TRADES=[],DONE={},RUN=null,CHAT=[],INSTAB="ideas";
+const NS="otto:";
+const LS={
+  get(k,f){try{const v=localStorage.getItem(NS+k);return v?JSON.parse(v):f}catch(e){return f}},
+  set(k,v){try{localStorage.setItem(NS+k,JSON.stringify(v))}catch(e){toast("Storage full or blocked")}},
+  del(k){try{localStorage.removeItem(NS+k)}catch(e){}}};
+/* carry over anything saved before the rename so nobody re-enters their keys */
+(function migrate(){
+  try{
+    if(localStorage.getItem(NS+"cfg"))return;
+    ["cfg","calls","trades","done","run","tab","chat"].forEach(k=>{
+      const v=localStorage.getItem("tb:"+k);
+      if(v!==null){localStorage.setItem(NS+k,v);localStorage.removeItem("tb:"+k)}
+    });
+  }catch(e){}
+})();
+let tT;const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(tT);tT=setTimeout(()=>t.classList.remove("on"),2800)};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const money=n=>(n<0?"-":"+")+"$"+Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const today=()=>new Date().toISOString().slice(0,10);
+const week=()=>CALLS[CUR]||null;
+
+$$(".nav button").forEach(b=>b.addEventListener("click",()=>{
+  $$(".nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
+  $$(".pane").forEach(p=>p.classList.toggle("on",p.id==="p-"+b.dataset.p));
+  LS.set("tab",b.dataset.p);window.scrollTo(0,0);}));
+
+/* ---------- intake ---------- */
+function handleFile(file){
+  const r=new FileReader();
+  r.onload=async()=>{
+    const txt=r.result;
+    if(/\.json$/i.test(file.name)){
+      let j;try{j=JSON.parse(txt)}catch(e){return toast("That JSON won't parse")}
+      if(!j.assignments&&!j.rules&&!j.insights)return toast("No call content in that file");
+      return addCall(j);
+    }
+    if(!CFG.claude){openSettings();return toast("Add a Claude API key to read raw transcripts")}
+    if(!/-->/.test(txt))return toast("That doesn't look like a VTT or SRT");
+    toast("Reading the call — takes about a minute");
+    try{addCall(await extractCall(txt,file.name))}
+    catch(e){toast("Extraction failed: "+String(e.message).slice(0,70))}
+  };
+  r.readAsText(file);
+}
+$("#fIn").addEventListener("change",e=>e.target.files[0]&&handleFile(e.target.files[0]));
+$("#fIn2").addEventListener("change",e=>e.target.files[0]&&handleFile(e.target.files[0]));
+
+function addCall(j){
+  const d=j.call?.date||today();
+  const i=CALLS.findIndex(c=>(c.call?.date||"")===d);
+  if(i>=0)CALLS[i]=j;else CALLS.push(j);
+  CALLS.sort((a,b)=>String(b.call?.date||"").localeCompare(String(a.call?.date||"")));
+  CUR=CALLS.indexOf(j);seedLevels(j);LS.set("calls",CALLS);renderAll();toast("Call loaded");
+}
+function seedLevels(j){
+  (j.levels||[]).forEach(l=>{
+    const v=parseFloat(String(l.value).replace(/[^\d.]/g,""));if(!isFinite(v))return;
+    const inst=(l.instrument||"").toLowerCase(),m=(l.meaning||"").toLowerCase();
+    if(/10.?y|ten.?year|treasur/.test(inst)){/tumble|straight down|crash/.test(m)?CFG.tenH=v:CFG.ten=v}
+    if(/jpy|yen/.test(inst))CFG.jpy=v;});
+  LS.set("cfg",CFG);
+}
+
+/* ---------- Claude ---------- */
+async function claude(system,user,maxTok){
+  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+    headers:{"content-type":"application/json","x-api-key":CFG.claude,
+      "anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:maxTok||4000,system,messages:[{role:"user",content:user}]})});
+  const j=await res.json();
+  if(j.error)throw new Error(j.error.message||"API error");
+  return (j.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+}
+const EXTRACT_SYS=`You process recorded trading-mentorship calls into structured study material.
+
+Return ONLY a JSON object. No prose, no markdown fences. Shape:
+{"call":{"title","date","duration","mentor","students":[]},
+ "assignments":[{"id","task","detail","for","due","at","quote","status":"open"}],
+ "rules":[{"rule","why","at"}],
+ "setups":[{"name","trigger","invalidation","timeframe","at"}],
+ "levels":[{"instrument","value","meaning","at"}],
+ "glossary":[{"term","plain","said","at"}],
+ "insights":[{"title","body","said","at"}],
+ "admin":[{"item","at","status":"open"}],
+ "questions":[{"q","why"}]}
+
+Hard rules:
+- NEVER invent an assignment, rule, price level or number that was not said. A student acting on a hallucinated level loses real money.
+- Anything ambiguous, garbled or contradictory goes in "questions", never into another bucket as a guess. Mis-transcribed prices are common.
+- "at" is the transcript timestamp. "quote"/"said" is the mentor's own wording, under 15 words.
+- Assignments complete; rules never do. If it can be ticked off it is an assignment.
+- glossary: every term used as if the student already knows it. Be thorough — mentors use jargon constantly without noticing.
+- insights: the reasoning under the rules, not the rules themselves. Six to ten. Cut anything that reads like a motivational poster.
+- Only capture instructions aimed at the student. The mentor's personal preferences are not rules.`;
+
+async function extractCall(vtt,name){
+  let out=await claude(EXTRACT_SYS,`Transcript file: ${name}\n\n${vtt.slice(0,140000)}`,8000);
+  out=out.trim().replace(/^```(?:json)?/,"").replace(/```$/,"").trim();
+  const j=JSON.parse(out);
+  j._transcript=vtt.slice(0,200000);
+  return j;
+}
+
+/* ---------- week ---------- */
+function renderWeek(){
+  const w=week(),badge=$("#bWeek");
+  $("#weekEmpty").hidden=!!w;$("#weekBody").hidden=!w;
+  if(!w){badge.hidden=true;$("#sub").textContent=new Date().toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});return}
+  const c=w.call||{};
+  $("#sub").innerHTML=esc(c.title||"Call")+"<br>"+esc(c.date||"");
+  const A=w.assignments||[],open=A.filter(a=>!DONE[a.id]).length;
+  badge.hidden=!open;badge.textContent=open;
+  $("#assignCount").textContent=A.length?`${A.length-open}/${A.length} done`:"";
+  $("#assignList").innerHTML=A.length?A.map(a=>`
+    <div class="task ${DONE[a.id]?"done":""}">
+      <button class="box" aria-pressed="${!!DONE[a.id]}" data-id="${esc(a.id)}" aria-label="Done: ${esc(a.task)}"><i></i></button>
+      <div style="flex:1">
+        <div class="t">${esc(a.task)}</div>
+        ${a.detail?`<div class="d">${esc(a.detail)}</div>`:""}
+        ${a.quote?`<div class="quote">${esc(a.quote)}</div>`:""}
+        <div class="m">${a.for?`<span class="who">${esc(a.for)}</span>`:""}${a.due?`<span>due ${esc(a.due)}</span>`:""}${a.at?`<span>${esc(a.at)}</span>`:""}</div>
+      </div></div>`).join(""):`<p style="color:var(--ink-2)">Nothing assigned on this call.</p>`;
+  const R=w.rules||[];$("#secRules").hidden=!R.length;
+  $("#rulesList").innerHTML=R.map((r,i)=>`<div class="item"><span class="n">${String(i+1).padStart(2,"0")}</span><div><span>${esc(r.rule)}</span>${r.why?`<span class="why">${esc(r.why)}</span>`:""}</div></div>`).join("");
+  const S=w.setups||[];$("#secSetups").hidden=!S.length;
+  $("#setupsList").innerHTML=S.map(s=>`<div class="item"><span class="n">▸</span><div><b>${esc(s.name)}</b>
+    <span class="why">Take it: ${esc(s.trigger||"not given")}</span>
+    <span class="why">Wrong when: ${esc(s.invalidation||"not given")}</span></div></div>`).join("");
+  const Q=w.questions||[];$("#secQs").hidden=!Q.length;
+  $("#qsList").innerHTML=Q.map(q=>`<li>${esc(q.q)}${q.why?`<span class="why">${esc(q.why)}</span>`:""}</li>`).join("");
+}
+$("#assignList").addEventListener("click",e=>{const b=e.target.closest(".box");if(!b)return;
+  DONE[b.dataset.id]=!DONE[b.dataset.id];LS.set("done",DONE);renderWeek()});
+
+/* ---------- insights ---------- */
+$$(".seg button").forEach(b=>b.addEventListener("click",()=>{
+  INSTAB=b.dataset.i;$$(".seg button").forEach(x=>x.setAttribute("aria-selected",x===b));renderInsights()}));
+function renderInsights(){
+  const w=week();
+  if(!w){$("#insBody").innerHTML=`<div class="empty"><b>Nothing yet</b>Load a call on the Week tab. Insights and jargon come from the same file.</div>`;return}
+  const list=INSTAB==="ideas"?(w.insights||[]):(w.glossary||[]);
+  if(!list.length){$("#insBody").innerHTML=`<div class="empty"><b>Not in this file</b>Older week files predate this section. Re-process the call to add it.</div>`;return}
+  $("#insBody").innerHTML=list.map(x=>`<div class="card">
+    ${INSTAB==="ideas"?`<h3>${esc(x.title)}</h3><p>${esc(x.body)}</p>`:`<div class="term">${esc(x.term)}</div><p>${esc(x.plain)}</p>`}
+    ${x.said?`<div class="said">“${esc(x.said)}”<em>${esc(x.at||"")}</em></div>`:""}</div>`).join("");
+}
+
+/* ---------- coach ---------- */
+const COACH_SYS=`You are a trading coach for a beginner. Your ONLY source is the mentor material below — transcripts and notes from calls this student actually attended.
+
+Rules you must not break:
+- Answer from the mentor's material. Quote him and give the timestamp.
+- If the material does not cover the question, say plainly that he has not covered it and suggest asking him. Do NOT fill the gap with general trading knowledge — that is the worst thing you can do here, because it puts words in his mouth.
+- Never tell the student to enter or exit a trade, and never predict a price. Explain what the mentor taught; the student decides.
+- If his statements conflict, say so rather than smoothing it over.
+- Be short. Two or three paragraphs. Plain language; define any jargon you use.`;
+
+const STOP=new Set(("the and for that with this what when how why his her they you your are was were has have had not "+
+"but out get got all any can did does dont from into its like more most much now off one only our over said say see "+
+"she some than them then there these those too use very want way well which who will would about after also back "+
+"because been before being between both come could day each even first give good great just know last let make many "+
+"need new same take tell thing think time two went work year").split(/\s+/));
+const norm=s=>(String(s).toLowerCase().match(/[a-z0-9$.]{3,}/g)||[]).filter(t=>!STOP.has(t));
+
+function chunks(){
+  const out=[];
+  CALLS.forEach(c=>{
+    const d=(c.call&&c.call.date)||"undated",t=(c.call&&c.call.title)||"call";
+    String(c._transcript||"").split(/\n{2,}/).forEach(par=>{
+      const m=par.match(/^\[([\d:]+)\]\s*([^:]{1,40}):\s*([\s\S]*)$/);
+      const at=m?m[1]:"",body=(m?m[3]:par).replace(/\s+/g," ").trim();
+      // window long turns so one three-minute answer can't win on word count alone
+      for(let i=0;i<body.length;i+=340){
+        const s=body.slice(i,i+460).trim();
+        if(s.length>70)out.push({d,t,at,s,kind:"said"});
+      }
+    });
+    ["assignments","rules","setups","insights","glossary","levels"].forEach(k=>(c[k]||[]).forEach(o=>{
+      const s=Object.values(o).filter(v=>typeof v==="string").join(" — ");
+      if(s.length>20)out.push({d,t,at:o.at||"",s,kind:k});
+    }));
+  });
+  return out;
+}
+function retrieve(q,n){
+  const cs=chunks();if(!cs.length)return[];
+  const df=new Map();
+  cs.forEach(c=>new Set(norm(c.s)).forEach(t=>df.set(t,(df.get(t)||0)+1)));
+  const N=cs.length,terms=[...new Set(norm(q))];
+  if(!terms.length)return[];
+  const scored=cs.map(c=>{
+    const words=norm(c.s),tf=new Map();
+    words.forEach(t=>tf.set(t,(tf.get(t)||0)+1));
+    let sc=0,hit=0;
+    terms.forEach(t=>{
+      const f=tf.get(t);if(!f)return;
+      hit++;
+      sc+=Math.log(1+N/(1+(df.get(t)||0)))*(1+Math.log(f));  // rare words count for more
+    });
+    if(!hit)return null;
+    sc/=Math.sqrt(Math.max(words.length,8));                  // long chunks don't win on bulk
+    sc*=hit/terms.length;                                     // reward covering the question
+    if(c.kind!=="said")sc*=1.25;                              // curated notes beat raw talk
+    return Object.assign({},c,{sc});
+  }).filter(Boolean).sort((a,b)=>b.sc-a.sc);
+  const top=scored.length?scored[0].sc:0;
+  if(top<0.38)return[];                                       // nothing relevant — let the Coach say so
+  return scored.filter(c=>c.sc>=Math.max(0.20,top*0.28)).slice(0,n||14);
+}
+function renderCoach(){
+  const n=CALLS.length;
+  $("#corpus").textContent=n?`Drawing on ${n} call${n>1?"s":""} — ${CALLS.map(c=>c.call?.date||"?").join(", ")}. It only knows what he said.`:"No calls loaded. The Coach only knows what your mentor actually said.";
+  $("#prompts").innerHTML=["What did he mean by exit liquidity?","Why ES and not NASDAQ?","How does he decide a short?","What's my homework?","Explain tick value"]
+    .map(p=>`<button data-q="${esc(p)}">${esc(p)}</button>`).join("");
+  $("#chat").innerHTML=CHAT.map(m=>m.role==="you"
+    ?`<div class="msg you">${esc(m.text)}</div>`
+    :`<div class="msg coach"><div class="b">${m.error?`<span class="errtxt">${esc(m.text)}</span>`
+      :m.text.split(/\n{2,}/).map(p=>`<p>${esc(p)}</p>`).join("")}</div>${
+      m.cites&&m.cites.length?`<div class="cites">${m.cites.map(c=>`<span class="cite">${esc(c)}</span>`).join("")}</div>`:""}</div>`).join("");
+}
+$("#prompts").addEventListener("click",e=>{const b=e.target.closest("[data-q]");if(b){$("#q").value=b.dataset.q;ask()}});
+async function ask(){
+  const el=$("#q"),q=el.value.trim();if(!q)return;
+  if(!CFG.claude){openSettings();return toast("The Coach needs a Claude API key")}
+  if(!CALLS.length)return toast("Load a call first — the Coach only knows what he said");
+  el.value="";el.style.height="auto";
+  CHAT.push({role:"you",text:q},{role:"coach",text:"thinking…"});
+  renderCoach();$("#send").disabled=true;
+  const hits=retrieve(q);
+  const ctx=hits.map(h=>`[${h.d}${h.at?" "+h.at:""} · ${h.kind}] ${h.s}`).join("\n\n").slice(0,60000);
+  try{
+    const a=await claude(COACH_SYS+"\n\n=== MENTOR MATERIAL ===\n"+ctx,q,1200);
+    CHAT[CHAT.length-1]={role:"coach",text:a,cites:[...new Set(hits.slice(0,3).map(h=>h.d))]};
+  }catch(e){CHAT[CHAT.length-1]={role:"coach",text:"Couldn't reach Claude: "+String(e.message).slice(0,110),error:true}}
+  $("#send").disabled=false;CHAT=CHAT.slice(-30);LS.set("chat",CHAT);renderCoach();
+}
+$("#send").addEventListener("click",ask);
+$("#q").addEventListener("input",e=>{e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px"});
+$("#q").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&window.innerWidth>=720){e.preventDefault();ask()}});
+
+/* ---------- journal ---------- */
+function renderJournal(){
+  TRADES.sort((a,b)=>(b.date+b.id).localeCompare(a.date+a.id));
+  $("#tradeCount").textContent=TRADES.length?`${TRADES.length} logged`:"";
+  const n=TRADES.filter(t=>t.date===today()).length,max=CFG.maxDay||1,g=$("#gate");
+  g.classList.toggle("hot",n>=max);
+  $("#gateB").textContent=n===0?`Nothing logged. Rule is ${max} a day — pick the best trade, not the first.`
+    :n<max?`${n} of ${max} logged.`:`${n} logged. The next one breaks your rule.`;
+  $("#tradeList").innerHTML=TRADES.length?TRADES.map(t=>{const p=Number(t.pnl)||0;
+    return `<div class="trade"><div class="hd">
+      <span class="sym">${esc(t.sym||"—")}</span><span class="dir">${esc(t.dir)} ×${esc(t.qty)}</span>
+      <span class="pnl ${p>=0?"up":"dn"}">${money(p)}<button class="x" data-del="${esc(t.id)}" aria-label="Delete">del</button></span>
+      <span class="when">${esc(t.date)} · ${esc(t.sess)}${t.in?` · ${esc(t.in)}→${esc(t.out||"?")}`:""}</span></div>
+      <div class="lab">Why I took it</div>${t.why?`<p>${esc(t.why)}</p>`:`<p class="none">Blank — nothing to defend on Friday.</p>`}
+      ${t.rev?`<div class="lab">Do differently</div><p>${esc(t.rev)}</p>`:""}</div>`}).join("")
+    :`<div class="empty"><b>Nothing logged</b>Every trade needs a written reason before you take it. The number is the easy part.</div>`;
+}
+$("#tradeList").addEventListener("click",e=>{const id=e.target.dataset&&e.target.dataset.del;if(!id)return;
+  if(!confirm("Delete this trade?"))return;TRADES=TRADES.filter(t=>t.id!==id);LS.set("trades",TRADES);renderJournal()});
+$("#addTradeBtn").addEventListener("click",()=>{$("#tDate").value=today();
+  ["tSym","tIn","tOut","tPnl","tWhy","tRev"].forEach(i=>$("#"+i).value="");$("#tQty").value=1;$("#dlgTrade").showModal()});
+$("#tCancel").addEventListener("click",()=>$("#dlgTrade").close());
+$("#tSave").addEventListener("click",()=>{
+  const why=$("#tWhy").value.trim();
+  if(!why&&!confirm("No reason written. Save it blank anyway?"))return;
+  TRADES.push({id:Date.now().toString(36),date:$("#tDate").value||today(),sym:$("#tSym").value.trim().toUpperCase(),
+    sess:$("#tSess").value,dir:$("#tDir").value,qty:$("#tQty").value||1,in:$("#tIn").value,out:$("#tOut").value,
+    pnl:parseFloat($("#tPnl").value)||0,why,rev:$("#tRev").value.trim()});
+  LS.set("trades",TRADES);renderJournal();$("#dlgTrade").close();toast("Logged")});
+/* ---- CSV import. Robinhood has no usable API, so this is the way in. ---- */
+let CSVROWS=[],CSVHEAD=[];
+const FIELDS=[["date","Date"],["sym","Instrument"],["dir","Direction"],["qty","Quantity"],
+              ["in","Entry price"],["out","Exit price"],["pnl","Profit / loss"],["why","Notes"]];
+const GUESS={date:/date|executed|settle|filled.*time|^time$/i,sym:/symbol|ticker|instrument|contract|product/i,
+  dir:/side|direction|action|trans.*code|buy.?sell|long.?short/i,qty:/qty|quantity|shares|contracts|size|units|lots/i,
+  in:/entry.*price|entry|open.*price|avg.*price|fill.*price|^price$/i,out:/exit|close.*price|closing.*price/i,
+  pnl:/realized|p.?\/?.?l\b|profit|net.*(amount|p)|gain|^amount$|proceeds/i,why:/note|reason|comment|memo|description/i};
+/* fields claim columns in this order, and a claimed column is off the table —
+   otherwise "Filled Time" gets taken as entry price and "Amount" as quantity */
+const GUESS_ORDER=["date","sym","dir","qty","in","out","pnl","why"];
+function autoMap(head){
+  const used=new Set(),m={};
+  GUESS_ORDER.forEach(k=>{
+    const i=head.findIndex((h,j)=>!used.has(j)&&GUESS[k].test(h));
+    m[k]=i; if(i>=0)used.add(i);
+  });
+  return m;
+}
+
+function parseCSV(t){
+  const rows=[];let row=[],cell="",q=false;
+  t=t.replace(/\r\n/g,"\n").replace(/\r/g,"\n");
+  for(let i=0;i<t.length;i++){
+    const c=t[i];
+    if(q){ if(c==='"'){ if(t[i+1]==='"'){cell+='"';i++} else q=false } else cell+=c; }
+    else if(c==='"')q=true;
+    else if(c===","){row.push(cell);cell=""}
+    else if(c==="\n"){row.push(cell);cell="";if(row.some(x=>x.trim()))rows.push(row);row=[]}
+    else cell+=c;
+  }
+  row.push(cell); if(row.some(x=>x.trim()))rows.push(row);
+  return rows;
+}
+function openCsv(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    const rows=parseCSV(String(r.result));
+    if(rows.length<2)return toast("That CSV has no rows");
+    CSVHEAD=rows[0].map(h=>h.trim());
+    CSVROWS=rows.slice(1).filter(x=>x.length>=CSVHEAD.length-1);
+    $("#csvCount").textContent=CSVROWS.length+" rows";
+    const opts=()=>`<option value="-1">— skip —</option>`+CSVHEAD.map((h,j)=>`<option value="${j}">${esc(h||"col "+(j+1))}</option>`).join("");
+    $("#csvMap").innerHTML=FIELDS.map(([k,lab])=>
+      `<div><label class="f" for="cm_${k}">${lab}</label><select class="f" id="cm_${k}" data-k="${k}">${opts()}</select></div>`).join("");
+    const auto=autoMap(CSVHEAD);
+    FIELDS.forEach(([k])=>{const el=$("#cm_"+k);if(el)el.value=String(auto[k])});
+    $("#csvMap").addEventListener("change",csvPreview);
+    csvPreview();
+    $("#dlgCsv").showModal();
+  };
+  r.readAsText(file);
+}
+function csvPick(){const m={};FIELDS.forEach(([k])=>{const el=$("#cm_"+k);m[k]=el?parseInt(el.value):-1});return m}
+function csvBuild(){
+  const m=csvPick(),out=[];
+  CSVROWS.forEach(r=>{
+    const g=k=>m[k]>=0?String(r[m[k]]||"").trim():"";
+    const raw=g("date"); if(!raw)return;
+    const d=new Date(raw);
+    if(isNaN(d))return;
+    const dir=/sell|short|sld|s$/i.test(g("dir"))?"Short":"Long";
+    out.push({id:"c"+Math.random().toString(36).slice(2,9),
+      date:d.toISOString().slice(0,10),sym:g("sym").toUpperCase(),sess:"New York",dir,
+      qty:parseFloat(g("qty"))||1,in:g("in").replace(/[$,]/g,""),out:g("out").replace(/[$,]/g,""),
+      pnl:parseFloat(g("pnl").replace(/[$,()]/g,""))*(/^\(|-/.test(g("pnl"))?-1:1)||0,
+      why:g("why"),rev:""});
+  });
+  return out;
+}
+function csvPreview(){
+  const b=csvBuild();
+  $("#csvPrev").textContent=b.length
+    ? b.slice(0,4).map(t=>`${t.date}  ${t.sym||"?"}  ${t.dir} x${t.qty}  ${money(t.pnl)}`).join("\n")+(b.length>4?`\n… ${b.length-4} more`:"")
+    : "No usable rows. Check the Date column mapping.";
+}
+$("#fCsv").addEventListener("change",e=>e.target.files[0]&&openCsv(e.target.files[0]));
+$("#csvCancel").addEventListener("click",()=>$("#dlgCsv").close());
+$("#csvGo").addEventListener("click",()=>{
+  const b=csvBuild(); if(!b.length)return toast("Nothing to import");
+  const seen=new Set(TRADES.map(t=>t.date+"|"+t.sym+"|"+t.pnl));
+  const fresh=b.filter(t=>!seen.has(t.date+"|"+t.sym+"|"+t.pnl));
+  TRADES=TRADES.concat(fresh);LS.set("trades",TRADES);renderJournal();$("#dlgCsv").close();
+  toast(`Imported ${fresh.length}${b.length-fresh.length?` · skipped ${b.length-fresh.length} duplicate`:""}`);
+});
+
+function buildRecap(){
+  const now=new Date(),d=(now.getDay()+6)%7,mon=new Date(now);mon.setDate(now.getDate()-d);
+  const from=mon.toISOString().slice(0,10),to=today();
+  const wk=TRADES.filter(t=>t.date>=from&&t.date<=to).sort((a,b)=>a.date.localeCompare(b.date));
+  const fmt=x=>new Date(x+"T12:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+  $("#recapRange").textContent=`${fmt(from)} – ${fmt(to)}`;
+  if(!wk.length){$("#recapOut").textContent="No trades this week.\n\nThat's a legitimate week. Say so, and say what you were waiting for.";$("#dlgRecap").showModal();return}
+  const net=wk.reduce((s,t)=>s+(Number(t.pnl)||0),0),wins=wk.filter(t=>Number(t.pnl)>0).length;
+  const days=[...new Set(wk.map(t=>t.date))],over=days.filter(x=>wk.filter(t=>t.date===x).length>(CFG.maxDay||1));
+  const blank=wk.filter(t=>!t.why).length,L=[];
+  L.push(`Week of ${fmt(from)} – ${fmt(to)}`);
+  L.push(`${wk.length} trade${wk.length>1?"s":""} over ${days.length} day${days.length>1?"s":""}. ${wins} win${wins===1?"":"s"}, ${wk.length-wins} loss${wk.length-wins===1?"":"es"}. Net ${money(net)}.`,"");
+  wk.forEach(t=>{L.push(`${fmt(t.date)} — ${t.sym||"?"} ${t.dir.toLowerCase()} ×${t.qty}${t.in?` @ ${t.in} → ${t.out||"?"}`:""}  ${money(Number(t.pnl)||0)}`);
+    L.push(`   Why: ${t.why||"*** not written down ***"}`);if(t.rev)L.push(`   Next time: ${t.rev}`);L.push("")});
+  L.push("Discipline check",`  Trade limit (${CFG.maxDay}/day): ${over.length?`broken on ${over.join(", ")}`:`kept all ${days.length} day${days.length>1?"s":""}`}`,
+    `  Reason written before entry: ${wk.length-blank} of ${wk.length}`);
+  $("#recapOut").textContent=L.join("\n");$("#dlgRecap").showModal();
+}
+$("#recapBtn").addEventListener("click",buildRecap);
+$("#rClose").addEventListener("click",()=>$("#dlgRecap").close());
+$("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("#recapOut").textContent);toast("Copied")}catch(e){toast("Select and copy manually")}});
+
+/* ---------- market ---------- */
+const BUILD="b7";
+const AV="https://www.alphavantage.co/query?";
+const ROUTINE=[
+ {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
+ {n:2,title:"One currency pair",src:"USD / JPY",calls:[{k:"jpy",fn:"CURRENCY_EXCHANGE_RATE&from_currency=USD&to_currency=JPY"}]},
+ {n:3,title:"Commodities",src:"ETF proxies, not the futures contract",calls:[{k:"USO",fn:"GLOBAL_QUOTE&symbol=USO"},{k:"UNG",fn:"GLOBAL_QUOTE&symbol=UNG"},{k:"SLV",fn:"GLOBAL_QUOTE&symbol=SLV"},{k:"CPER",fn:"GLOBAL_QUOTE&symbol=CPER"}]},
+ {n:4,title:"The indexes",src:"Did they finish below the open?",calls:[{k:"SPY",fn:"GLOBAL_QUOTE&symbol=SPY"},{k:"QQQ",fn:"GLOBAL_QUOTE&symbol=QQQ"},{k:"DIA",fn:"GLOBAL_QUOTE&symbol=DIA"}]},
+ {n:5,title:"Who reports this week",src:"Earnings move the index you trade",calls:[{k:"earn",fn:"EARNINGS_CALENDAR&horizon=3month",csv:true}]},
+ {n:6,title:"Your levels",src:"The part no API can do",manual:["Mark support and resistance for tomorrow","Convert those levels to your contract","Name the one trade you'd take, and the level that says you're wrong"]}];
+async function avFetch(fn,csv){
+  const url=AV+"function="+fn+"&apikey="+encodeURIComponent(CFG.key);
+  const name=fn.split("&")[0];
+  const res=await fetch(url);
+  if(!res.ok)throw new Error(name+": HTTP "+res.status);
+  const t=await res.text();
+  if(csv){if(t.trim().startsWith("{")){const j=JSON.parse(t);throw new Error(name+": "+(j.Information||j.Note||"blocked"))}return t}
+  let j;try{j=JSON.parse(t)}catch(e){throw new Error(name+": bad response")}
+  const m=j.Information||j.Note||j["Error Message"];
+  if(m)throw new Error(name+": "+m);
+  return j;
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function runRoutine(){
+  if(!CFG.key){openSettings();return toast("Add your free Alpha Vantage key")}
+  const btn=$("#runBtn");btn.disabled=true;btn.textContent="Running…";
+  const bar=$("#progBar");bar.hidden=false;
+  RUN={v:BUILD,at:new Date().toISOString(),data:{},errors:{}};
+  const all=ROUTINE.flatMap(s=>s.calls||[]);let i=0;
+  for(const c of all){
+    try{RUN.data[c.k]=await avFetch(c.fn,c.csv)}catch(e){RUN.errors[c.k]=e.message}
+    i++;bar.querySelector("i").style.width=(i/all.length*100)+"%";
+    LS.set("run",RUN);renderMarket();
+    if(i<all.length)await sleep(13000);
+  }
+  bar.hidden=true;btn.disabled=false;btn.textContent="Run the routine";
+  const bad=Object.keys(RUN.errors).length;
+  toast(bad?`Done — ${bad} of ${all.length} failed`:"Routine complete");renderMarket();
+}
+const num=v=>{const n=parseFloat(v);return isFinite(n)?n:null};
+const gq=k=>{const d=RUN&&RUN.data[k]&&RUN.data[k]["Global Quote"];return d?{price:num(d["05. price"]),open:num(d["02. open"]),chg:d["10. change percent"]}:null};
+const ty=k=>{const d=RUN&&RUN.data[k]&&RUN.data[k].data;if(!Array.isArray(d))return null;
+  const p=d.filter(x=>x.value!=="."&&isFinite(parseFloat(x.value)));return p.length?{v:num(p[0].value),prev:num(p[1]&&p[1].value),date:p[0].date}:null};
+const card=(k,v,s,cls)=>`<div class="read ${cls||""}"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>${s?`<div class="s ${cls==="trip"?"dn":""}">${esc(s)}</div>`:""}</div>`;
+const wait=(k,e)=>`<div class="read wait"><div class="k">${esc(k)}</div><div class="v">${e?"n/a":"—"}</div>${e?`<div class="s dn">${esc(String(e).slice(0,42))}</div>`:""}</div>`;
+
+function renderMarket(){
+  $("#keybar").innerHTML=CFG.key
+    ?`<div class="stamp">Connected · ends ${esc(CFG.key.slice(-4))} · build ${BUILD} · 11 calls a run, 25 a day free</div>`
+    :`<div class="stamp" style="color:var(--mark)">No market data key</div><p style="margin:8px 0 0;font-size:16px;color:var(--ink-2)">Get a free key at alphavantage.co and add it in Settings. Nothing below fills in until you do — this reads live data, it doesn't guess.</p>`;
+  $("#runStamp").textContent=RUN?"Last run "+new Date(RUN.at).toLocaleString():"Not run yet.";
+  $("#clearRunBtn").hidden=!RUN;
+  $("#steps").innerHTML=ROUTINE.map(s=>{
+    let b="";
+    if(s.manual){b=s.manual.map((m,i)=>`<div class="manual"><button class="box" aria-pressed="${!!DONE["m"+s.n+i]}" data-mid="m${s.n}${i}" aria-label="Done"><i></i></button><span>${esc(m)}</span></div>`).join("")}
+    else if(!RUN){b=`<div class="reads">${s.calls.map(c=>wait(c.k)).join("")}</div>`}
+    else if(s.n===1){
+      const a=ty("t10"),c2=ty("t2"),cs=[];
+      cs.push(a?card("10-year",a.v.toFixed(2)+"%",a.prev!=null?(a.v-a.prev>=0?"▲ ":"▼ ")+Math.abs(a.v-a.prev).toFixed(2):"",a.v>=CFG.ten?"trip":""):wait("10-year",RUN.errors.t10));
+      cs.push(c2?card("2-year",c2.v.toFixed(2)+"%"):wait("2-year",RUN.errors.t2));
+      if(a&&c2)cs.push(card("Curve",(a.v-c2.v).toFixed(2),(a.v-c2.v)<0?"inverted":"positive"));
+      b=`<div class="reads">${cs.join("")}</div>`;
+      if(a)b+=`<div class="verdict ${a.v<CFG.ten?"ok":""}">`+(a.v>=CFG.tenH?`Above <b>${CFG.tenH}</b> — your "market tumbles" level.`
+        :a.v>=CFG.ten?`Above <b>${CFG.ten}</b> — pressure on the market.`:`Below <b>${CFG.ten}</b>. No pressure from rates.`)
+        +` <span style="color:var(--ink-3)">Daily close ${esc(a.date)}, not intraday.</span></div>`;
+    }
+    else if(s.n===2){
+      const d=RUN.data.jpy&&RUN.data.jpy["Realtime Currency Exchange Rate"];
+      if(!d)b=`<div class="reads">${wait("USD/JPY",RUN.errors.jpy)}</div>`;
+      else{const v=num(d["5. Exchange Rate"]),tr=v>=CFG.jpy;
+        b=`<div class="reads">${card("USD/JPY",v.toFixed(2),String(d["6. Last Refreshed"]||"").slice(11,16)+" UTC",tr?"trip":"")}</div>`
+         +`<div class="verdict ${tr?"":"ok"}">`+(tr?`Over <b>${CFG.jpy}</b> — your sell signal.`:`Under ${CFG.jpy}, by ${(CFG.jpy-v).toFixed(2)}.`)+`</div>`}
+    }
+    else if(s.n===3||s.n===4){
+      const N=s.n===3?{USO:"Oil",UNG:"Nat gas",SLV:"Silver",CPER:"Copper"}:{SPY:"S&P 500",QQQ:"Nasdaq",DIA:"Dow"};
+      b=`<div class="reads">${s.calls.map(c=>{const q=gq(c.k);if(!q)return wait(N[c.k],RUN.errors[c.k]);
+        const p=parseFloat(String(q.chg).replace("%",""))||0;
+        return `<div class="read"><div class="k">${esc(N[c.k])}</div><div class="v">${q.price!=null?q.price.toFixed(2):"—"}</div><div class="s ${p>=0?"up":"dn"}">${p>=0?"▲":"▼"} ${Math.abs(p).toFixed(2)}%</div></div>`}).join("")}</div>`;
+      if(s.n===4){const qs=s.calls.map(c=>gq(c.k)).filter(Boolean);
+        if(qs.length){const bl=qs.filter(q=>q.price<q.open).length;
+          b+=`<div class="verdict ${bl===0?"ok":""}">`+(bl===qs.length?`<b>All ${qs.length} finished below the open.</b> Expect follow-through selling into the morning.`
+            :bl===0?`All ${qs.length} closed above the open.`:`${bl} of ${qs.length} finished below the open. Mixed.`)+`</div>`}}
+      if(s.n===3)b+=`<div class="verdict">ETFs that track the commodity — direction is reliable, the price is not the contract price.</div>`;
+    }
+    else if(s.n===5){
+      const csv=RUN.data.earn;
+      if(!csv)b=`<div class="reads">${wait("Earnings",RUN.errors.earn)}</div>`;
+      else{const wl=CFG.watch.split(",").map(x=>x.trim().toUpperCase()).filter(Boolean),end=new Date(Date.now()+8*864e5);
+        const rows=csv.split("\n").slice(1).map(l=>l.split(",")).filter(r=>r.length>3)
+          .map(r=>({sym:r[0].trim().toUpperCase(),name:r[1],date:r[2].trim()}))
+          .filter(r=>wl.indexOf(r.sym)>=0&&r.date>=today()&&new Date(r.date)<=end)
+          .sort((a,b)=>a.date.localeCompare(b.date));
+        b=rows.length?`<div class="earn">${rows.map(r=>`<div><span class="d">${esc(r.date)}</span><b>${esc(r.sym)}</b> ${esc(String(r.name||"").slice(0,24))}</div>`).join("")}</div>`
+          :`<div class="verdict">Nobody on your watchlist reports in 8 days.</div>`}
+    }
+    return `<div class="step"><div class="hd"><span class="num">${String(s.n).padStart(2,"0")}</span><h3>${esc(s.title)}</h3></div>
+      <div class="src">${esc(s.src)}</div><div class="bd">${b}</div></div>`}).join("");
+}
+$("#steps").addEventListener("click",e=>{const b=e.target.closest("[data-mid]");if(!b)return;
+  DONE[b.dataset.mid]=!DONE[b.dataset.mid];LS.set("done",DONE);renderMarket()});
+$("#runBtn").addEventListener("click",runRoutine);
+$("#clearRunBtn").addEventListener("click",()=>{RUN=null;LS.del("run");renderMarket();toast("Cleared — run it again")});
+
+/* ---------- settings ---------- */
+function openSettings(){
+  $("#sClaude").value=CFG.claude;$("#sKey").value=CFG.key;$("#sTen").value=CFG.ten;
+  $("#sTenH").value=CFG.tenH;$("#sJpy").value=CFG.jpy;$("#sMax").value=CFG.maxDay;$("#sWatch").value=CFG.watch;
+  $("#dlgSet").showModal();
+}
+$("#settingsBtn").addEventListener("click",openSettings);
+$("#sClose").addEventListener("click",()=>$("#dlgSet").close());
+$("#sSave").addEventListener("click",()=>{
+  CFG={claude:$("#sClaude").value.trim(),key:$("#sKey").value.trim(),
+    ten:parseFloat($("#sTen").value)||DEF.ten,tenH:parseFloat($("#sTenH").value)||DEF.tenH,
+    jpy:parseFloat($("#sJpy").value)||DEF.jpy,maxDay:parseInt($("#sMax").value)||1,watch:$("#sWatch").value};
+  LS.set("cfg",CFG);$("#dlgSet").close();renderAll();toast("Saved")});
+$("#sWipe").addEventListener("click",()=>{
+  if(!confirm("Erase every call, trade, setting and key from this browser?"))return;
+  ["cfg","calls","trades","done","run","tab","chat"].forEach(k=>LS.del(k));location.reload()});
+
+/* ---------- service worker ---------- */
+if("serviceWorker" in navigator && location.protocol==="https:"){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("sw.js").then(reg=>{
+      reg.addEventListener("updatefound",()=>{
+        const w=reg.installing; if(!w)return;
+        w.addEventListener("statechange",()=>{
+          // only nag when there was already a version installed
+          if(w.state==="installed" && navigator.serviceWorker.controller) toast("New version ready — reload to update");
+        });
+      });
+    }).catch(()=>{});
+  });
+}
+/* Offline is normal for this app, so say so rather than letting calls fail silently. */
+window.addEventListener("offline",()=>toast("Offline — homework and journal still work"));
+
+/* ---------- boot ---------- */
+function renderAll(){renderWeek();renderInsights();renderCoach();renderJournal();renderMarket()}
+(function(){
+  CFG=Object.assign({},DEF,LS.get("cfg",{}));
+  CALLS=LS.get("calls",[]);TRADES=LS.get("trades",[]);DONE=LS.get("done",{});
+  RUN=LS.get("run",null);CHAT=LS.get("chat",[]);
+  if(RUN&&(RUN.v!==BUILD||Date.now()-new Date(RUN.at).getTime()>20*36e5)){RUN=null;LS.del("run")}
+  const t=$$(".nav button").filter(x=>x.dataset.p===LS.get("tab","week"))[0];if(t)t.click();
+  renderAll();
+  autoWeek();
+})();
+
+/* If a week-latest.json is published alongside the app, pick it up automatically.
+   Silent when there isn't one, and never overwrites a call already loaded. */
+async function autoWeek(){
+  if(location.protocol==="file:")return;
+  try{
+    const res=await fetch("week-latest.json",{cache:"no-cache"});
+    if(!res.ok)return;
+    const j=await res.json();
+    if(!j.assignments&&!j.rules&&!j.insights)return;
+    const d=(j.call&&j.call.date)||"";
+    if(CALLS.some(c=>((c.call&&c.call.date)||"")===d))return;
+    addCall(j);
+    toast("Latest call loaded");
+  }catch(e){}
+}
+</script>
+</body>
+</html>

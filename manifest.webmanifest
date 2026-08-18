@@ -1,0 +1,36 @@
+{
+  "name": "Otto Trader",
+  "short_name": "Otto",
+  "description": "Your week's homework, the jargon decoded, a coach that only knows what your mentor said, your journal, and the pre-market routine.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0B0C0E",
+  "theme_color": "#0B0C0E",
+  "categories": [
+    "finance",
+    "education",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

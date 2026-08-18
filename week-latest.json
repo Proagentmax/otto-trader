@@ -1,0 +1,392 @@
+{
+  "call": {
+    "title": "Intro Call — Trading Day 1",
+    "date": "2026-08-17",
+    "duration": "43:43",
+    "mentor": "jason murray",
+    "students": [
+      "josh",
+      "Ifoma Pierre"
+    ]
+  },
+  "assignments": [
+    {
+      "id": "a1",
+      "task": "Email Jason which session you trade",
+      "detail": "Pick New York or Asia and keep it the same every day. Not both, not whichever you feel like.",
+      "for": "josh",
+      "due": "before next call",
+      "at": "14:29",
+      "quote": "Number one, your trading hours.",
+      "status": "open"
+    },
+    {
+      "id": "a2",
+      "task": "Email Jason whether you're on prop money, live money, or both",
+      "detail": "He says there are things you can do with live money that you can't do on an evaluation account, so he needs to know before he coaches the trades.",
+      "for": "josh",
+      "due": "before next call",
+      "at": "15:07",
+      "quote": "decide if you're trading just your prop account",
+      "status": "open"
+    },
+    {
+      "id": "a3",
+      "task": "Decide how you'll journal trades and tell him",
+      "detail": "Written, spreadsheet, chat, doesn't matter — pick one and use it every day.",
+      "for": "josh",
+      "due": "before next call",
+      "at": "16:32",
+      "quote": "How are you tracking your trades?",
+      "status": "open"
+    },
+    {
+      "id": "a4",
+      "task": "Send a weekly recap defending every trade you took",
+      "detail": "Not whether it won. Why you took it, and what mentally made you want to take it.",
+      "for": "josh",
+      "due": "end of each week",
+      "at": "16:52",
+      "quote": "you need to be able to defend every trade you take",
+      "status": "open"
+    },
+    {
+      "id": "a5",
+      "task": "Write what you want out of trading in the next 6 weeks",
+      "detail": "Jason asked Josh specifically for this one, separate from his dad.",
+      "for": "josh",
+      "due": "before next call",
+      "at": "17:44",
+      "quote": "I need to know what you want to accomplish in 6 weeks.",
+      "status": "open"
+    },
+    {
+      "id": "a6",
+      "task": "Learn the margin and tick value on whatever you trade",
+      "detail": "Micro ES is $1.25 a tick, full ES is $12.50. A $50k account holds roughly one full contract at about $30k margin. Be able to explain it out loud.",
+      "for": "josh",
+      "due": "before next call",
+      "at": "05:26",
+      "quote": "for your homework, I want you to understand margin",
+      "status": "open"
+    },
+    {
+      "id": "a7",
+      "task": "Mark support on the S&P 500 and convert it to the ES contract",
+      "detail": "Do it the night before, so you walk in with levels instead of looking for them live.",
+      "for": "josh",
+      "due": "nightly",
+      "at": "08:30",
+      "quote": "where's my support for the S&P 500?",
+      "status": "open"
+    }
+  ],
+  "rules": [
+    {
+      "rule": "One trade a day, or none.",
+      "why": "Pick the best trade available, not the trade you want to take. If you want action, go to Vegas — at least they give you a free room.",
+      "at": "24:10"
+    },
+    {
+      "rule": "One contract until you're consistent.",
+      "why": "Size up only once you can say out loud why you're taking each entry.",
+      "at": "25:20"
+    },
+    {
+      "rule": "Walk away from the laptop after you close — win or lose.",
+      "why": "His nephew turned $300 into $10,000 and then back into $300. The give-back happens after the win, not after the loss.",
+      "at": "26:44"
+    },
+    {
+      "rule": "Don't trade the first 30 minutes as a new trader.",
+      "why": "You have to learn patience. The initial gap-up is what traps new buyers.",
+      "at": "03:16"
+    },
+    {
+      "rule": "Be okay with a $200 day and a $2,000 day. Not a $10,000 day.",
+      "why": "At your account size a $10,000 day means you did something wrong.",
+      "at": "25:52"
+    }
+  ],
+  "setups": [
+    {
+      "name": "No new high after a gap up",
+      "trigger": "Price gaps up, fills the gap, then fails to make a new high. The big candle followed by a red candle with no new high is the short entry.",
+      "invalidation": "A close back above the pattern high — until then nobody is going long with size.",
+      "timeframe": "1h, with the weekly for context",
+      "at": "30:10",
+      "frame": "frames/3010_spx-1h-no-new-high.jpg"
+    },
+    {
+      "name": "Hold above the biggest candle",
+      "trigger": "Price comes back down, tests the large red candle and holds above it. That hold is the long confirmation.",
+      "invalidation": "Losing the low of that candle.",
+      "timeframe": "1h",
+      "at": "32:55",
+      "frame": "frames/3210_gap-filled-shorts-trapped.jpg"
+    }
+  ],
+  "levels": [
+    {
+      "instrument": "US 10Y",
+      "value": "4.7",
+      "meaning": "starts to put pressure on the market",
+      "at": "21:40"
+    },
+    {
+      "instrument": "US 10Y",
+      "value": "4.88",
+      "meaning": "the US stock market will start to tumble",
+      "at": "21:30"
+    },
+    {
+      "instrument": "USD/JPY",
+      "value": "160",
+      "meaning": "sell signal",
+      "at": "19:30"
+    },
+    {
+      "instrument": "SPX",
+      "value": "7745",
+      "meaning": "where it closed on 2026-08-17",
+      "at": "34:10"
+    },
+    {
+      "instrument": "SPX",
+      "value": "7760",
+      "meaning": "next downside target if 7771 does not hold",
+      "at": "34:40"
+    },
+    {
+      "instrument": "SPX",
+      "value": "7771",
+      "meaning": "the break he called out in the Discord",
+      "at": "34:15"
+    }
+  ],
+  "routine": [
+    {
+      "step": 1,
+      "what": "Bond market — US Treasury only. Watch whether the curve is flattening or rising.",
+      "source": "CNBC",
+      "at": "17:57"
+    },
+    {
+      "step": 2,
+      "what": "One forex pair: USD/JPY. Nothing else.",
+      "source": "CNBC",
+      "at": "19:10"
+    },
+    {
+      "step": 3,
+      "what": "Commodities — silver, copper, gas. Gas trending up is an inflationary tax on margins.",
+      "source": "CNBC",
+      "at": "20:23"
+    },
+    {
+      "step": 4,
+      "what": "The 10-year yield, because it's most correlated to mortgages.",
+      "source": "CNBC",
+      "at": "21:20"
+    },
+    {
+      "step": 5,
+      "what": "News, futures tab only. Skip forex, crypto, bonds, corporate bonds.",
+      "source": "TradingView",
+      "at": "22:30"
+    },
+    {
+      "step": 6,
+      "what": "Know who reports earnings this week — they move the index you trade.",
+      "source": "TradingView",
+      "at": "23:20"
+    }
+  ],
+  "admin": [
+    {
+      "item": "Discord invite pending — Jason is verifying the Chase payment and will send both links.",
+      "at": "09:41",
+      "status": "open"
+    },
+    {
+      "item": "Monday group call, 7am his time / 9am ET, 30 minutes before the open.",
+      "at": "11:59",
+      "status": "open"
+    },
+    {
+      "item": "New Thursday call, 5pm his time / 7pm ET.",
+      "at": "12:10",
+      "status": "open"
+    },
+    {
+      "item": "Jason texted a Robinhood referral link — futures, crypto and stock options in one account.",
+      "at": "41:20",
+      "status": "open"
+    }
+  ],
+  "questions": [
+    {
+      "q": "Which session is Josh actually picking — New York or Asia?",
+      "why": "Assignment 1 can't be answered by anyone else, and everything else keys off it."
+    },
+    {
+      "q": "Full ES or micro MES to start?",
+      "why": "Jason said trade ES and 'the little micros if you want.' At $12.50 vs $1.25 a tick that's a ten-fold difference in risk per trade."
+    },
+    {
+      "q": "Confirm the SPX levels are 7745 / 7760 / 7771.",
+      "why": "The transcript renders them as 77.45 and 77.60. The chart he shared reads 7,745.05 with marked levels at 7,763.11 and 7,784.55, so the 7,7xx scale is almost certainly right — but confirm before trading off them."
+    }
+  ],
+  "frames": [
+    {
+      "file": "frames/0220_ema-momentum-down.jpg",
+      "at": "02:20",
+      "caption": "The two indicators he allows: MapleStacks and EMAs. Short EMAs pointing down, the 100 flat — momentum to the downside."
+    },
+    {
+      "file": "frames/1930_usdjpy-the-one-pair.jpg",
+      "at": "19:30",
+      "caption": "The only forex pair he looks at. Over 160 is his sell signal."
+    },
+    {
+      "file": "frames/2040_commodities.jpg",
+      "at": "20:40",
+      "caption": "Commodities screen — silver, copper, gas."
+    },
+    {
+      "file": "frames/3010_spx-1h-no-new-high.jpg",
+      "at": "30:10",
+      "caption": "SPX 1h. The pattern that ends the run: two attempts at the high, no new high."
+    },
+    {
+      "file": "frames/3210_gap-filled-shorts-trapped.jpg",
+      "at": "32:10",
+      "caption": "Gap up, filled entirely, couldn't go higher. Shorts trapped below, longs trapped above."
+    },
+    {
+      "file": "frames/3305_bearish-engulfing.jpg",
+      "at": "33:05",
+      "caption": "Bearish engulfing candle at 7:30. Drop below it and the short is on."
+    }
+  ],
+  "glossary": [
+    {
+      "term": "Exit liquidity",
+      "plain": "The person on the other side of a smart trade. When a fund wants out of a big position, someone has to buy it — that someone is usually a retail trader chasing the move.",
+      "said": "take what somebody else does and make them what we call exit liquidity",
+      "at": "03:20"
+    },
+    {
+      "term": "Tick",
+      "plain": "The smallest price increment a contract moves. On full ES a tick is $12.50; on micro ES it's $1.25. Same chart, ten times the consequence.",
+      "said": "each tick is $1.25... if you're trading a big contract, they're $12.50",
+      "at": "04:45"
+    },
+    {
+      "term": "OCO order",
+      "plain": "One-cancels-the-other. You place a stop and a target together; whichever fills first automatically cancels the other. It's how you leave the desk without leaving the position unprotected.",
+      "said": "Oco is one cancels the other",
+      "at": "13:35"
+    },
+    {
+      "term": "Front month",
+      "plain": "The nearest-expiry contract. Most liquid, tightest spread, cheapest to trade.",
+      "said": "I'm assuming you're trading front month contract because they're less expensive",
+      "at": "03:40"
+    },
+    {
+      "term": "Eval / Trading Combine",
+      "plain": "The prop firm's audition. Hit a profit target under their risk rules and they hand you a funded account. Passing it is a consistency test, not a profit test.",
+      "said": "you need to make $3,000 in profit, and there is a computation on that",
+      "at": "06:00"
+    },
+    {
+      "term": "Trim",
+      "plain": "Taking partial profit while leaving the rest on. Reduces risk without giving up the whole move.",
+      "said": "we took a trim... Or what we call take profit, we call it trim",
+      "at": "34:40"
+    },
+    {
+      "term": "Gap",
+      "plain": "A price jump between one bar's close and the next bar's open, leaving empty space on the chart. A gap that fills and can't push higher is a failed gap.",
+      "said": "It gapped up, what happened? the gap failed",
+      "at": "01:29"
+    },
+    {
+      "term": "Bearish engulfing",
+      "plain": "A red candle whose body covers the previous green candle entirely. Buyers made a push and sellers erased it inside one bar.",
+      "said": "Bearish engulfing candle? Equals what?",
+      "at": "33:05"
+    },
+    {
+      "term": "EMA",
+      "plain": "Exponential moving average — a smoothed line weighted toward recent price. Short ones pointing down while a long one goes flat means momentum has turned before price has.",
+      "said": "When these are pointing down, That means this can continue down",
+      "at": "02:20"
+    },
+    {
+      "term": "Trapped",
+      "plain": "Traders on the wrong side who must exit to stop the bleeding. Their forced exits fuel the move against them — which is why price accelerates after a trap.",
+      "said": "They trapped the shorts here... Now I'm trapping the lungs up here",
+      "at": "32:18"
+    }
+  ],
+  "insights": [
+    {
+      "title": "The market is not neutral toward you",
+      "body": "His framing of the counterparty is deliberately unfriendly: the best-funded people in finance are on the other side, they don't know you and aren't there to give you anything. The consolation is asymmetry — you're small enough to take a ten-point win and leave, and they aren't.",
+      "said": "You're small, you're fast, so you can take money from them quickly",
+      "at": "24:40"
+    },
+    {
+      "title": "Volatility is not opportunity when you're new",
+      "body": "He calls MNQ the automatic money destroyer, and notes gold got contract-size restrictions at prop firms because people were blowing accounts on it. The point isn't that these instruments are bad — it's that tick value multiplies your mistakes at exactly the stage you're making the most of them.",
+      "said": "I call it the automatic money destroyer",
+      "at": "04:21"
+    },
+    {
+      "title": "Two indicators, on purpose",
+      "body": "The free TradingView account caps you at two indicators, and he treats that constraint as the lesson rather than a limitation. He says outright he can read the chart without them. The indicators are training wheels you should be able to take off.",
+      "said": "I don't have to be able to read a chart without this",
+      "at": "01:08"
+    },
+    {
+      "title": "The candle you want to screenshot is the one you should be selling",
+      "body": "The most exciting bar on the chart — the big green push — is usually the exhaustion, not the start. This is the single most compressed piece of chart-reading in the call.",
+      "said": "the candle that they want to take a picture of is the candle you should be selling",
+      "at": "30:30"
+    },
+    {
+      "title": "Paper money and real money are different skills",
+      "body": "His nephew turned roughly $10,000 into $100,000 in six weeks on a paper account, then couldn't make $20 on a live one. Simulator results tell you your read is right; they tell you nothing about whether you can hold the position.",
+      "said": "Paper money is not the same as real money",
+      "at": "28:20"
+    },
+    {
+      "title": "Why bonds come first, not the index",
+      "body": "Everything is priced off rates in a fiat system, so he reads the bond market before he looks at a single stock chart. He watches the 10-year specifically because it's the one most tied to mortgages, and therefore to the consumer.",
+      "said": "Everything in money deals with the bond market",
+      "at": "18:05"
+    },
+    {
+      "title": "Gas is a tax",
+      "body": "Rising energy costs compress corporate margins, and compressed margins pull the index down. It's a chain of reasoning, not a correlation he memorized — worth being able to reproduce rather than just recite.",
+      "said": "gas is nothing but a tax",
+      "at": "20:40"
+    },
+    {
+      "title": "Earnings outrank headlines",
+      "body": "He ignores news almost entirely, with one exception: a large-cap reporting. His stated hierarchy is that if Walmart falls, the market falls, and the only thing that would override it is something on the scale of a war ending, confirmed by both sides.",
+      "said": "if Walmart falls, the market falls",
+      "at": "23:40"
+    },
+    {
+      "title": "Consistency is the actual product",
+      "body": "The prop firm isn't buying big days — a $10,000 day at Josh's account size means something went wrong. Weekly expectations, not daily ones, because losing days are expected inside a winning week.",
+      "said": "there's gonna be days where you make a loss",
+      "at": "15:40"
+    }
+  ],
+  "_transcript": "[00:00] jason murray: Alright.\n\n[00:02] Ifoma Pierre: Alright, Jay, sorry about that.\n\n[00:04] jason murray: Alright, so this is QQQ… or NDX, or NASDAQ, right? So… When you look at QQQ, it's very easy to trade. If you look at index here, NASDAQ is very expensive to trade, okay? This is TradingView. If you notice, it's the same stuff as you're looking at with the top step. It's a chart, it's dark, and it has a bunch of indicators, right? Right. When you're trading futures, there's an indicator that's free that you want to add. There's a thing called MapleStacks. It's a friend of mine. If you'll notice, I'll go here to a 15-minute chart, because it's free. And I'll take this off, and it'll tell you, some things you may or may not know. New York or below, that's what this stands for. Yesterday's high. It gives indicators for long and short, they're not very reliable, but the thing I want you to see is the actual indications of the market. So right now, there's more bearish indicators than bullish. So, I don't have to be able to read a chart without this. So I can do this without the theme. I can look at my chart and say, okay. Here's my resistance here. Until it gets above there, I don't want to be long. I want to be what?\n\n[01:26] josh: Short.\n\n[01:29] jason murray: This right here is a gap, right? It gapped up, what happened? the gap failed. Is that bearish or bullish?\n\n[01:41] josh: That would be… Bearish?\n\n[01:45] jason murray: That area, yup. Not only bearish, but very bearish. So you're trading with a strategy, I'm assuming, which is like a modified, version of what we call… Retrace, reclaim, and then, some people call it recover, or some people call it, you know, long, or whatever. The thing I want you to get used to is two indicators. This one here is free. And then what we call moving averages here. So I'm gonna take the other stuff off. So that there's nothing else on the screen, because on a free account, you can only have two indicators. Okay? Yeah. This one right here is 3 EMA, this is, exponential moving average. When these are pointing down, That means this can continue down. If you notice, these are pointing down. And this one's flat. Guess which one's the longer one? The one that's flat. The hundred. The shorter ones are pointing down, so the momentum on this is now to the downside, not the upside. Okay? So we get the initial gap up, but we can't make a new high. See this? So, here's your problem. You get the initial gap up, and you think buy. Right? New traders don't trade with me for the first 30 minutes of the market open. Why? You have to learn patience. As a market maker, a fund manager, or anybody that's running money, We don't chase price. Okay? What we do is take what somebody else does and make them what we call exit liquidity. So instead of having to draw all these complicated boxes and do all this weird stuff, you have two indicators. Okay? Use the indicators, you can trade whatever contract you want. I'm assuming you're trading front month contract because they're less expensive, and you can only trade a certain amount of contracts. And instead of trading M&Q, or gold, which are the two of the most volatile to trade.\n\n[03:57] Ifoma Pierre: Detroit.\n\n[03:58] jason murray: And I want you to trade ES. And you can trade the little micros if you want for now, or minis. Whatever your account allows you.\n\n[04:06] josh: And ES is what again?\n\n[04:08] jason murray: ES is the S&P 500. Today, you said you traded, NASDAQ, right? Or QQQ, or M&Q, or whatever y'all guys call it?\n\n[04:20] josh: Yeah, I'm thankful.\n\n[04:21] jason murray: Yeah. I call it the automatic money destroyer. Especially when you're new. Yeah, because you gotta remember, when you're dealing with a real contract, how much does it move per… how many… if I get a quarter tick, how many dollars does that move?\n\n[04:39] josh: It's like, $50, no?\n\n[04:45] jason murray: Well, if you're trading M&Q, we're gonna trade ES. So, if you're trading a small one, each… each tick is $1.25. Okay? If you're trading a big contract, they're $12.50. Okay? In a $50,000 account, I'm assuming they have the same margin as everybody else. Guess what you're gonna be trading? One contract, because it's 30 grand. Yeah, $50,000 account. Yeah. So, if you got 30 grand and you get a 10-point move at $12.50 a tick. Do you need a lot of movement? It's 1250, right? Yeah. So, understanding the margin first, and being able to explain it, is what you're gonna do for your homework, and this will be recorded, so you can go back and replay it. You'll get tired of my voice, probably, but that's okay. But for your homework, I want you to understand margin. on what you're trading That's number one. Because if you don't know what you're trading, you don't know what to expect with the movement. So if I'm trading a gold, I think they put a restriction on gold, futures for prop firms, a lot of them, because they were blowing accounts like this. Because it's so volatile. In fact, I think they brought down the, contract size. That you can take from 5 to 3. And I think that's on top step, recently. So, at the end of the day, like, you want to trade something that's consistent, because that's what they require to pass their eval. So you need to make $3,000 in profit, and there is a computation on that to get your account to the next level. After you get it to the next level, then there's another level to get it actually funded live, where they're actually giving you a real account to trade. You can get payouts without having a live account. Okay? But to have, like… to get real payouts, you have to pass the eval. So, you can trade your own money, or you can trade their money, but at the end of the day. you've got to be consistent. So, part of consistency is understanding, okay, if I'm trading an ES Mini, it moves how much per tick? That's number one. then I need to be able to go to my chart here and say, okay. what does it look like on the chart? If I put up… it doesn't matter anything. If I put up Apple stock. you should be able to tell me the entry, regardless if you're trading futures, Apple, or Forex. Right? Should I be entering this stock? Well, it's flagging. But where is it flagging from? A downtrend. So, should I be in it? Probably not. Right? So, I can go in this quick and say, okay, I should be in this stock at $300, but I shouldn't be in this stock again, unless it gets up above 310. Which is where? Up here. That's where… and it's gapped. But I should be able to look at the actual tape. The chart, and be able to see it without having to look at the tape. Okay, so first, understanding what is market sentiment. And so I'm going to show you another screen that's also free. about CNBC.com. I don't use news, but do you see anything on here that's green?\n\n[08:07] josh: No.\n\n[08:08] jason murray: Alright, so everything on the major indexes were red today, right? Did they start off red? No. So, everything finished below the open. So that means, likely, you get more selling in the morning, right? Yes, you can just shake your head, yes. So, continuation down, right? to support. So what should you be doing tonight? For your homework. where's my support for the S&P 500? And then how does that equate to my, ES contract? So you should be able to go into Top Step, or Top View, or whatever it's called. And, find out where that support is. I can tell you on SPX where support is already. I can pull up the chart and tell you. Because I trade the index every day. And I look here? My support's down here, my support's up here, and it's already below the support I wanted here. So, it broke down for my 77, 60, and my 77 and 71. So we were short today while you were long. And then, the other thing is, you want to get familiar with this. This is our Discord. Are you in the Discord yet?\n\n[09:39] josh: No.\n\n[09:41] Ifoma Pierre: I didn't think we got the… we didn't get the invite yet.\n\n[09:45] jason murray: Okay, I need to check to see if your payment went through. But the Discord, you can tell here, we have all the stuff in here. So we play the SPX call here. It went up $250, we took a trim, and then we said what? Or we go to 77.60. Where is it at?\n\n[10:04] josh: Hmm.\n\n[10:06] jason murray: Below there. So we took the short, easy money. So all that is in our Discord, and you'll notice that part there, unless I'm out of town, Then what happens is, is that… No one else really talks in there. Because of all the call-outs. It's date and time stamped, so you can see it. So, I need to go through and see if you guys paid, because one of you, whoever paid from your email. You'll be able to get in automatically, because they'll send you the invite, and then the second person will need an invite. Because you're in a family, and they only recognize one account, so I manually invite the other person. So that way you know.\n\n[10:49] Ifoma Pierre: I can show you what I got. But I know it went through, and it's on some, Woo, Woo, Woo account.\n\n[10:58] jason murray: It's go, what?\n\n[10:59] josh: What?\n\n[10:59] jason murray: Yeah.\n\n[11:00] josh: True.\n\n[11:00] jason murray: Yeah, the payment processing.\n\n[11:03] Ifoma Pierre: Yeah, so I got in there, and it says everything is fine. So I don't have any… I didn't get, like, an invite for the Discord or anything. But like I said, this morning. Chase sent a message. So then I said, when I talk to you today. you know, verify for me, and then I… if I need to just go on the same link and do.\n\n[11:23] jason murray: What again?\n\n[11:24] Ifoma Pierre: So I don't want to do it again, and then it's… it gets…\n\n[11:27] jason murray: No, no, it's… it's, it's showing me that a payment went through. Like, a payment started? So, it'll tell me in the morning if it actually went through. I have the, thing here on my account.\n\n[11:41] Ifoma Pierre: Right. From…\n\n[11:41] jason murray: Pierre Omar.\n\n[11:42] Ifoma Pierre: Alright.\n\n[11:44] jason murray: Pierre a homeowner, Gina?\n\n[11:46] Ifoma Pierre: Yeah, PRWMs.gmail. That's me, I'm the one… Doing all the payments.\n\n[11:52] jason murray: Yeah, so I'll do that, and then I'll send him the invite to the actual Discord.\n\n[11:58] Ifoma Pierre: Okay.\n\n[11:59] jason murray: And then, on the Discord, we do calls on, Monday morning at 7. It'll be 9 o'clock your time. 30 minutes before the market opens, so you guys know up front. And then we're starting a call on Thursday. at, it's 5 p.m, so it'll be 7PM your time. So it'll be easy to remember. 9 and 7. I guess. It's easier for me to remember, because… I don't want to set them up, but we do that, and then the 299 group is gonna have another call on Saturdays. I haven't set it up yet. But because some of the 299 people Are making really good money. And they're ready to up their account size, or their, contract size. The other thing that we do, too, is we have you trade one contract at a time in the beginning. And the reason why is because we want you to become consistent. If you're trading stock options, that's different, because stock options, it'll be about your premium. So if you have $5,000 in an account, and you're trading $1,000, so if I add 5 fingers, I'm gonna trade $1,000, $1,000, $1,000, $1,000 five times. So that way, if I'm wrong, then I'm only down 20%. If I'm right, then the gain and the loss should be the same. And that way, you don't blow an account. It's been… I've started trading in August of 2005. I've never blown an account. I've traded forex, I've traded futures. Back in the day, they didn't have minis and micros. The future is when you got up, if you went to the restroom, and you didn't have an OCO order in, you could be bankrupt. Blow your account in seconds. Oco is one cancels the other, or one cancels one. So one goes through, the other one automatically cancels. So we used to have OCO orders back in the day. So, futures, we've started trading more, in the group, and the reason why is because a lot of people can't trade during the day, like me, because they don't do it for a living, they have other things they do. Yeah. So, 5 things I need from you. Are you ready? Number one, you're… Number one, your trading hours. What's recorded, so? And then I'm gonna go… Yeah, and then I'm gonna go back into the actual how you figure stuff out. Number one, your trading hours. When you actually trade. Should be the same time every day. If you're trading a Euro open, you're on your own. Like, London Open, I ain't up until 2 o'clock. But, normally futures traders with us either trade New York session or, Late in the afternoon, what's it called?\n\n[14:52] josh: Asia?\n\n[14:52] jason murray: Yeah, I call it China Session, but I know it's not the proper term. So decide if you're trading New York or if you're trading Asia, I guess is the right term. I call it China, but I know that's wrong. So let me know. Number two, decide if you're trading just your prop account. If you're trading live money, or if you're trading both. Because there's things you can do with live money that's different. You have to tell me now, these are things that… These are things I want you to email me.\n\n[15:26] josh: Okay.\n\n[15:27] jason murray: Yeah, that way you guys can actually talk through this, because it's important that you guys agree, because, you know, you have expectations, but we have weekly expectations for our group. I don't have day trading expectations for the group. Because there's gonna be days where you make a loss, and there's gonna be days where you make a gain, and at the end of the day, you should have a gain for the week. So, every Friday's payday. For the guys with larger accounts, we look at every third Friday as a payday. So, your account strategy's gonna be based on your income strategy, okay? So, I don't want you to put, implications on, each other in the beginning, because you're learning, so this first couple weeks is gonna be… You're gonna need to be able to tell your dad, like, what you're actually doing. Okay. And you're gonna practice by telling me. So… The third thing I need from you is a trading journal. So, how do you track your trades? Do you write them down? Do you put them in an Excel spreadsheet? Do you copy-paste them and put them into chat? How are you tracking your trades? Number 4, you need to be able to defend every trade you take. So at the end of the week, when we do the call, you have to send me a rundown of what you took and why you took it. And if I have a question when I go over it, like, hey, why did you take this? And you need to be able to tell me. It's not a right or wrong answer, it's like, the real question is, is why did I take it? What mentally made me want to take it? Is it I'm addicted to trading, I need a dopamine rush, you know, do I have ADHD? Have I been playing video games too long? I'm trying to make jokes, but my dad jokes suck. But anyway, whatever it is, like, you know, you need to be able to defend why you had taken a trade. The only way to do that is to be able to send it a recap at the end of the week. The last thing I want you to do, and this is something I want you to do on your own, Josh, this is something totally different from your dad. I want you to tell me what you want out of the trading over the next 6 weeks. Okay? I would give you a longer-term goal, but I know that you're not 30 yet, so… At the end of the day, I know 6 weeks is a long time, so… for me, it's like a drop in the bucket, but… I need to… I need to know what you want to accomplish in 6 weeks. Part of trading is actually showing you, how to have a bigger vision. Alright, so I'm gonna go back into my chart, and I'm gonna show you, for the recording. You're not gonna understand this, probably, but I want you to see for the recording what I look at in the morning when I trade, so you can see. I'm gonna walk you through it, so you can see the first things I look at. I gotta go to CNBC first. The first thing I look at is the bond market. The reason why I do is because we're in a fiat money system. Everything in money deals with the bond market, and I want to take a look at the rates on the bond market themselves. If something stands out, I only look at U.S. Treasury, too. I don't look at none of this other bullcrap, okay? I don't care about a German bun, I don't care about Italy, yadda yadda yadda. I may look at Japan, but most of the time, I'm looking here. And I want to see how this curve is flattening out, or how it's rising. If you don't know what I mean, you can just copy-paste it, throw it in the chat, and it can tell you. Okay, so that's the very first thing I look at. The next thing I do, I go over here, I look at Forex. I look at one pair. I don't care anything else about any other pair. All I care about is one pair. This pair right here. If this is green, it means that the U.S. Yen is doing what? working against the U.S. stock market. When this goes over $160, This is a sell signal to me. Okay, we're starting to get back over there. Over the last month, you'll see a tremendous drop, and the reason why is they came in and actually put in some kind of government intervention they continue to do in Japan, and if you notice, it always comes back up. This is very dramatic in the movement in the stock market when this happens. If you're trading Forex, and you see a move like this, you just lost a full account, or you just tripled your account. That's how big that move is, and up here is thousands of dollars, even though it's moved one… Eighth of a hundredth of a percent. Or 800 basis… 8 basis points. So the second thing I look at. I look at the bond market first, I look at the Japanese yen second. Then I look at my U.S. markets, and I look for what?\n\n[20:20] josh: the SMP, no?\n\n[20:23] jason murray: No, I go straight to commodities. I want to look at what's going on in silver. What's going on in copper? And what's going on over here with gas? If gas is trending up, it's putting inflationary pressures on the market that's taking out of the market money. It's… gas is nothing but a tax. So, at the end of the day, if you're being taxed more, then guess what happens? Margins on companies are less, and at the end of the day, if that happens, then the market's coming down. The 10-year is the yield I look for right now. Because it's most correlated to mortgages. So, if you don't look at any of the other bonds, and you don't know what you're looking at, look at this. If this, excuse me, gets above 4.88, then the U.S. stock market will start to tumble. 4.7 starts to put pressure on the market. When this went over 4.7 today, if you go in and check the time, once this crossed over, you'll start to see the stock market go straight down while this went straight up. They're directly correlated. So, bonds, forex, commodities, specifically oil and gas. and silver and gold, and then I look at the 10-year. That's all I look at on CNBC. I don't care anything else. I don't care what Donald Trump tweeted. I don't care about somebody's mama, I don't care who died. I don't… I could care less. Okay? I go back over here to TradingView. I click over here on my little, homepage. Pierre? There's one tab up here, and this is the same on a free account as it is on a paid account. There's a thing called News, I go over to Overview. You get Reuters and all kinds of other news channels, except for their proprietary stuff for free on this, trading platform. That's why I use it. It's the only reason why I use it. I go down here to stocks, I can click on this. For you, right here. Futures tab. Everything directly related to a futures, are here. Everything related to indexes will also deal with futures. Okay? Unless you're trading commodities. Forex you don't care about. Crypto, you don't care about. Government bonds, you don't care about. Corporate bonds, you don't care about. Last tab is stocks, and if you notice, this is updated all the time. So I check my news. Right here, if they're telling me Nike's at a 12-year low. What am I doing? I'm thinking about the consumer, and then I'm looking for news. Okay? I know Nike's, doing terrible, and I know who's reporting on Thursday, which is Walmart. Every week, you should know who's reporting earnings, because it moves the indexes that you trade. Walmart is a huge company, and they move the market. So if they tank earnings on Thursday morning, the U.S. stock market will drop. I don't care what news came out, I don't care… the only thing that would trump it is if Donald Trump says a war in Iran is… is over. Okay? And it would have to be, like, documented by Iran. Other than that, if Walmart falls, the market falls. Everything else in here, you'll see a bunch of jargon in here. Fed's next move, nobody cares, okay? Do you want to look for specific things that deal with the market itself? Top stories are always good. But at the end of the day, you can actually sort this. There's a ton of information on this site. I like looking at bonds, for me personally. This'll probably make a 20-something-year-old kid go to sleep, but for me, I like to look at it because stuff like this, especially from a company like Reuters, is gonna move the market. Most people are emotional as traders. So, for me, I don't read the FT… I don't read the, all the other stuff. I go through that same process every day. And it keeps me informed. I like to wake up… for you, you can wake up late, because you're on East Coast time. But I have to be up at 6 to get the markets, because everything's on Eastern Standard. So I have to be ready for a 7.30 open on Mountain Standard, and everything on your side is 9.30. You can go to the gym, you can text your girlfriend, you can have breakfast, and everything else, and the market still isn't open. But for me, I have to get up early. If you're gonna trade futures, New York session, 30 minutes before U.S. stock market opens, is some of the best price movement. So, if you don't remember anything about trading indexed futures, it's one of the best times to catch a 30 or 40-point move, and you're done for the day. Alright, 3 rules you're gonna wanna know. Ready? Number 1. Don't over-trade. Every day, you should have one trade or less. Pick the best trade, not the trade that you want to take. This is not gambling. If you want that, go to Vegas. They give you a free room, at least. Okay? One trade a day. You're brand new at this, you've got some of the best and brightest people in finance working against you. They're not there to help you. They don't like you. They don't know you, and they don't want to know you. Okay, they're not any… they're not your friend, and they're not there to give you anything. Okay? So understand that the system is set up to take money from you. You're small, you're fast, so you can take money from them quickly. Be okay with a 10-point win. You get a 10-point win on a full contract, you've got a good amount of money in your pocket. Okay? Once you get consistent, this is number two, once you get consistent, you can up your account size, or up your trading size, is probably the better way to say it. So you can up your trading size. Start with one contract, get it down pat. Where you can actually tell me why you're taking an ES future, long or short, at that time. Don't just arbitrarily… I'm in there. Okay. Glad you're in there. If the market's trending up, then likely you win. But the market's choppy like it is right now, you gotta pick your spots. We took a 15, one of the traders on the desk took a 15% win on Amazon. And that was, like, the highlight of the day for him. 15% is better than no percent, and it's better than losing money. So, be okay with a $200 day, be okay with a $2,000 day, but don't be okay with a $10,000 day. Right now, your account size is not there, so if you take $10,000 in profit, you're likely doing something wrong. If you take a $10,000 loss, then obviously they reset your account, probably, but… Alright? So, at the end of the day, learn consistency, and before you up your contract size. I don't know how long you've been trading, but at the end of the day, if you can't tell me what you're doing. Then… At the end of the day, like. You don't know yet. It's okay. The last rule, and this is my most important rule, If you lose, or if you win a lot, do what you did today. Walk away from the laptop. Go touch the grass. Go touch something, but don't touch the laptop again. Okay? And I've seen people… I was telling your, dad, I have a nephew, and he's a very good trader. But he's very cocky. He turned 300 into 10,000 in a couple weeks. Then he turned 10,000 into 300 in a couple weeks. Good thing he paid himself in between there, but he only paid himself 2 grand, so that means he lost 8 grand in a couple days. I've seen him turn a paper account like you're trading on. I've seen him turn a hundred, I think it was a little over $10,000 into $100,000 in 6 weeks. And then I've handed in my account, and I say, go ahead, have at it, I'm going to lunch. And he couldn't make 20 bucks. So… Paper money is not the same as real money. So, when you start trading real money, we're gonna trade stock options, you're gonna trade SPY, and you're gonna get in the reps. If you make 10 bucks, it's okay. But once you get those reps in, you'll understand, okay, this is what I can do. I can trade stock options when the market's open. I can trade futures at the Asia session. At 10… 10 p.m. Eastern Standard. Instead of playing whatever people do at 10 p.m. Right? And you can trade it for an hour, if there's a trade there, great, and if there's not, you walk away and go to sleep. But that's what I need from you, is your schedule. What are you gonna trade? And that way I can put it together. What questions do you have so far? I'm gonna go over a quick, candlestick formation, because I know our time is short. After you tell me, and then that's it. For today, at least.\n\n[29:27] josh: That's pretty much it. Like, when you say you only use, like, you only look for the support and the resistance. On the chart, you're doing that on the… Well, I see that 1 hour time frame.\n\n[29:41] jason murray: One hour is my, what do you call it? My standard for trading? But I always get contacts with a weekly. My favorite chart is a weekly chart. Weekly chart on SPY looks a lot different than the one hour. Look at this.\n\n[29:59] josh: Hmm.\n\n[30:01] jason murray: Yeah, it looks a lot different than this. I want to show you this pattern right here, this has been really common. Here? You'll notice… Our real resistance is right in here somewhere. Right? But you've had two attempts up here. When you see this pattern right here. That's the end of the run, until it gets above this pattern. I want you to know that up front. So many people miss this. They… the candle that they want to take a picture of is the candle you should be selling. When you see this candle, followed by a red candle, and no above or no new high, that's what we call it, I guess. See the new high attempt? There's your short entry. I don't need a class, I don't need a box, I don't need nothing else. I got the move, it came down, it tested this big red candle, it held, right? See that? So, it held above… So, guess what? We're off to the races, right? No new high equals what? short.\n\n[31:10] josh: Sure.\n\n[31:10] jason murray: Look at the short. Now we're filling this gap down, and we're likely to come to this gap here. Okay? I'm already out of the trade. This right here on a full ES contract? Is from here to here is 45 points. You do the math. One contract, can you walk away and smile at your dad? Yeah.\n\n[31:34] josh: So, at what point in there do you get, like. your confirmation that, okay, yeah… I know you said when you see that long… I know, I remember… okay, so to recheck what you said real quick, when you see the long candle going up. And then they're followed by, A short candle, and then it doesn't break that high. That's when… is that when you get your confirmation that it's, you're going short?\n\n[32:00] jason murray: See this right here? Is this a gap up, right?\n\n[32:05] josh: Yeah.\n\n[32:06] jason murray: What happened? Filled the whole gap, right? Gap up? Couldn't go higher, right? Come back down? They trapped the shorts here. Because the shorts are looking for, what, this low here.\n\n[32:18] josh: Dude.\n\n[32:19] jason murray: Massive candle, right? Now what are they gonna do? I've trapped the shorts down here. Now I'm trapping the lungs up here. They're like the longs re-enter here, and they don't get a continuation. So what do you get? You get this wick here, once you get this wick, you're out. Look at the times. What time is that?\n\n[32:42] josh: 7.30.\n\n[32:44] jason murray: Yup. Look at this time. Where's that red candle?\n\n[32:53] josh: 7.30?\n\n[32:55] jason murray: There you go, now you're starting to get the picture. They get the gap up, right? Bearish engulfing candle? Equals what? If we drop below this red candle, remember the confirmation was over here. Holding this is your confirmation long. Always look for the biggest candle on the 1 hour. All this box stuff and all that other crap, that's for people that are trading tick by tick. That's for people with massive accounts that have one-minute contracts, and they're taking 50 contracts of full. Cues. They're crackheads, what I call them. This is why most of them never win, and the couples that do win, you never hear from them. I don't trade like that. I'm looking for singles, doubles, I'm looking for consistency. This candle right here is my eyeball, it's my resistance here, all the way across the screen from that date, which is August 5th. No, 4th. Fifth. August 5th, all the way over here, it's support. Until it's not. So, even if you took this candle here, from $7.71, All the way down here, you got 25 points. And that's today alone. I was calling the 771 break on the Discord, right? Come on, Christmas.\n\n[34:25] Ifoma Pierre: Discord is what you use when you're trading during the day, like… If you…\n\n[34:30] jason murray: The discourse is how I communicate with everybody so they can hold me accountable, because it's date and time stamped. Yeah, and so I put everything in there. And so right here, we took the calls here, we took a bounce on SPX, which is very similar to trading a full contract. Got 250 bucks trimmed. Or what we call take profit, we call it trend. But right here, if it does not hold, we're going to where? 7760 is next. So that's 11 points right there. And then the other call-out was 745, which we closed at, 77.45. So you… you know those levels because you did your homework the day before. That's why he needs to go in and actually be able to chart the charts and say, okay, here's my support, here's my resistance. You need to be able to say, this candle here is my sell candle until I get above it. So, until I get above it, and he doesn't have to worry about swinging, because he's not swinging stock options, he's not swinging… he's using futures. So until it gets above this, nobody in the market is going long. Not with any kind of size. So, that's my resistance right there. This is my old support right here, which we broke today. Boop! And then everything from down here has filled this gap, and then the next likely place is back here. Which is this other red candle here, and this big hole right here. So I should be able to go in when I've got the market closed and say, okay, here's my levels for tomorrow. So, likely we start here tomorrow. The question is, do we come all the way down here? Or do we bounce here at this higher red candle, which would be over here? That candle area right there. This right here is how you chart. This is how you do levels. This box right here, to me. 3 contracts is worth how many points? 30 points times 3 is, what, 9 grand. Close to 10. So, those little areas is how you make your money with futures. You're not looking for, you know, marrying the stock and, you know, riding it up till it comes to an end. That's investing, that's a whole other class. Well, you got your homework. I wanted to show you some of this stuff, kind of go over what you're doing, let you see the difference in someone that is trading, for a living. And how we go through the trades. I don't look for a bunch of stocks. I have a watch list over here, as you see. There's a ton of them over here. Ask me how many of them I trade a day. Less than 5. And that's with a whole Discord group. I don't trade a bunch of stocks. I trade the index, because it's where you make the money. So yeah, the S&P, SPX calls was between $6 and $26 today. That's a $2,000 difference per contract. So, if you took 3 contracts alone, that's 6 grand. From the top to the bottom. Kinda crazy, huh? That's the kind of money that's available. All this stuff in the beginning is gonna seem like, drinking through a fire hose, but since you've been in a trading group, right, Josh? All this makes perfect sense, right?\n\n[38:08] Ifoma Pierre: So, let me tell you something. He'll tell you. He hasn't been in a trading group, you know, I think I'll mention, and I can let him talk for himself, too, but… because we're pretty close, but, you know, we talk. So, he'll tell you, a lot of what he did is self-taught. That's why I told him, I said. That his… he has a level of genius that if… he gets mentored correctly, he can excel faster, and that's why I jumped on this opportunity. He was not… he didn't want me to spend the money, because, you know, we're doing a bunch of different things, and I'm like, well, bro, like, I'm watching you do this on your own. I'm like, I'm finding the money, and we're gonna make it happen, so…\n\n[38:46] jason murray: That's a dad investing in his son.\n\n[38:49] Ifoma Pierre: Yeah, it's my god, so it's like, you know. So yeah, so I'm just letting you know, we're gonna do the homework together, like, you know, him and I talked about this, and at first it was kind of like… it was kind of like, you know, you do it, but then I'm like, I'm jumping in the boat with you, and And I'm gonna be right here with you, and we're gonna do it together, you know?\n\n[39:09] jason murray: Yeah, like I said, it's gonna seem like, another language in the beginning. But go through the recordings, you'll get tired of my voice. Until you've listened to it enough to where you're tired of hearing me talk, you haven't heard it enough. So… You wanna be tired of hearing me talk? There are other recordings in the Discord. Once we verify payment in the morning, then I'll send both links out. The other link should go out automatically, but if it hasn't, I'll manually push it out. Cause I, like you said, something happened with Chase, so I don't know…\n\n[39:42] Ifoma Pierre: Yeah, just… I have no issue with doing it over, it's just that I didn't get a notification, and if it doesn't clear on your end, because they sent me the notification and said, is this a payment? I said, yes. They said, okay, you might want to, to do it… to do it over.\n\n[39:58] jason murray: No, I know how Chase is… I know how Chase is, I worked there 3 years, so… I get it.\n\n[40:04] Ifoma Pierre: I remember that. Yes, either which way, I'm in, so just let me know, and let it.\n\n[40:12] jason murray: I'll let you guys know in the morning. This is our first, class. We do this once a week on live trade. So in between the times, if you've got questions on your homework, let me know. You can DM me in the Discord, or you can email me your homework. It's up to you. Do you have my… you have my email still in Former Ray.\n\n[40:30] Ifoma Pierre: Yeah, yeah, well, we've been communicating with it all the time, yeah, for sure.\n\n[40:33] jason murray: Yeah. You can always email me the homework, if you don't want to send it in the Discord. You can also ask questions in the Discord. I will tell you, not a lot of people talk in the Discord. I get most of the notifications on my phone from people directly. I don't know why, but it's the way people are. Remember to call on Monday, So that you know. And then, we're gonna start doing a Thursday call, too. It'll be at 5pm my time, 7pm your time. So, you can always tune into those, If we have live events that are recorded, I'll send you the recordings, unless you're in El Paso.\n\n[41:14] Ifoma Pierre: So the account to do this would be that one that you talked about? You can open.\n\n[41:20] jason murray: You can open Schwab, you can open Robinhood, I suggest, since he's, using futures to open Robinhood? Because I don't think Swap does it. I trade futures in my Robinhood. Let me send you an invite if you don't have one.\n\n[41:33] Ifoma Pierre: Yeah, I think… well, we'll discuss it, him and I'll lean to what he wants to do, but I know for a fact that we're not particularly married to… Any… You know, anything per se, you know?\n\n[41:46] jason murray: I mean, I like Swap for investing, but they don't do futures, so I do all the futures in the other account. I'm trying to find the, invite.\n\n[41:54] Ifoma Pierre: I think I have a… Just gonna ask you this question, because I have, two… two real… They gave me E-Trade? You know that? Yeah. Is that good? Oh, it's good.\n\n[42:07] jason murray: Nope. I haven't traded E-Trade in forever, man, to be honest with you. This one right here, I think, this one right here, I think, gives you 5 bucks, and me $5 if you open a fund account. There you go.\n\n[42:21] Ifoma Pierre: Which one? You just sent it to me? You texted or emailed?\n\n[42:23] jason murray: I texted to you.\n\n[42:25] Ifoma Pierre: Alright. Yeah, I'll use whatever. Whatever it is that you tell us to use, we'll use it.\n\n[42:31] jason murray: Yeah, because you can use limit… you can use limit orders on the, contracts. If you don't use… you don't want to use market orders. I'm with Robinhood, or anybody that clears like that.\n\n[42:40] Ifoma Pierre: So this account you sent me, this is the one account that we could do everything in, that we're going to be doing with you. I could set that up and connect the bank and everything, so it could be funded through that?\n\n[42:49] jason murray: Yep. Yeah, you can do futures, you can do crypto, and you can do stock options through here. So it's one of the few accounts where you can do all three. Unless you plan on… if you're planning on putting six figures in an account, let me know, I have a link for Interactive Brokers, they're the best, but… If you don't, it's not worth it.\n\n[43:06] Ifoma Pierre: I'm probably not gonna do six figures right away.\n\n[43:11] jason murray: I… like I said, I mean, at the end of the day, like. Robinhood, I think, is the best place to start. It's not the best place to finish, but it's a good place to start.\n\n[43:20] Ifoma Pierre: Does Robin is what you sent me?\n\n[43:22] jason murray: Yup.\n\n[43:22] Ifoma Pierre: Yeah, alright, cool. I'll say that.\n\n[43:25] jason murray: Good to talk to you. Josh, stay in contact, you can always text me with questions, you should have a ton of them after this conversation. And you will also find out that, a lot of people that are trading with you don't know what they're doing. I love you guys.\n\n[43:42] Ifoma Pierre: Appreciate you, man. Take care.\n\n"
+}
