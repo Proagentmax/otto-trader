@@ -365,6 +365,7 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
     </div>
     <div><label class="f" for="sWatch">Earnings watchlist</label><input class="f" id="sWatch" autocapitalize="characters">
       <p class="hint">Only these show. The full feed is ~1,800 companies that don't move the index.</p></div>
+    <p class="hint" id="verStamp" style="margin-top:26px;text-align:center"></p>
   </div>
   <div class="ft"><button class="btn danger" id="sWipe">Erase all</button><button class="btn" id="sClose">Close</button><button class="btn solid" id="sSave">Save</button></div>
 </dialog>
@@ -681,7 +682,9 @@ function retrieve(q,n){
 }
 function renderCoach(){
   const n=CALLS.length;
-  $("#corpus").textContent=n?`Drawing on ${n} call${n>1?"s":""} — ${CALLS.map(c=>c.call?.date||"?").join(", ")}. It only knows what he said.`:"No calls loaded. The Coach only knows what your mentor actually said.";
+  $("#corpus").textContent=n
+    ?`Drawing on ${n} call${n>1?"s":""}, newest ${CALLS[0].call?.date||"?"} · build ${BUILD}. It only knows what the club actually taught.`
+    :`No calls loaded · build ${BUILD}. The Coach only knows what your mentor actually said.`;
   $("#prompts").innerHTML=["What did he mean by exit liquidity?","Explain the four-stage cycle","When is a support level real?","Where does he say to put a stop?","What's my homework?"]
     .map(p=>`<button data-q="${esc(p)}">${esc(p)}</button>`).join("");
   $("#chat").innerHTML=CHAT.map(m=>m.role==="you"
@@ -848,7 +851,7 @@ $("#rClose").addEventListener("click",()=>$("#dlgRecap").close());
 $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("#recapOut").textContent);toast("Copied")}catch(e){toast("Select and copy manually")}});
 
 /* ---------- market ---------- */
-const BUILD="b7";
+const BUILD="b8";  // must match VERSION in sw.js — this is THE version number
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -985,7 +988,16 @@ if("serviceWorker" in navigator && location.protocol==="https:"){
 window.addEventListener("offline",()=>toast("Offline — homework and journal still work"));
 
 /* ---------- boot ---------- */
-function renderAll(){renderWeek();renderInsights();renderCoach();renderJournal();renderMarket()}
+/* The one place that proves a deploy landed. Two independent facts on one line:
+   the build number comes from index.html, the call count and newest date come
+   from brain-latest.json — so if either half is stale you can see which. */
+function brainStamp(){
+  const n=CALLS.length;
+  const newest=n?String(CALLS[0].call?.date||"?"):"—";
+  return "Otto Trader build "+BUILD+" · brain: "+(n?n+" call"+(n>1?"s":"")+", newest "+newest:"nothing loaded");
+}
+function renderVersion(){const el=$("#verStamp");if(el)el.textContent=brainStamp()}
+function renderAll(){renderWeek();renderInsights();renderCoach();renderJournal();renderMarket();renderVersion()}
 (function(){
   CFG=Object.assign({},DEF,LS.get("cfg",{}));
   CALLS=LS.get("calls",[]);TRADES=LS.get("trades",[]);DONE=LS.get("done",{});
