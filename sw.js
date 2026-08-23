@@ -2,7 +2,7 @@
    Network-first for anything that changes, cache-first only for static assets.
    A cache-first HTML strategy would pin users to an old build forever, which is
    exactly the failure we already hit once by hand. */
-const VERSION = 'otto-b7';
+const VERSION = 'otto-b8';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png',
@@ -36,9 +36,13 @@ self.addEventListener('fetch', e => {
   if (url.origin !== self.location.origin) return;
 
   const isDoc  = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
-  const isWeek = url.pathname.endsWith('week-latest.json');
+  // The corpus files must never go stale in an installed PWA: publishing a new
+  // call is the whole update mechanism, and a cache-first copy would freeze the
+  // brain at whatever Josh installed on day one.
+  const isData = url.pathname.endsWith('week-latest.json')
+              || url.pathname.endsWith('brain-latest.json');
 
-  if (isDoc || isWeek) {
+  if (isDoc || isData) {
     e.respondWith(
       fetch(req)
         .then(res => {

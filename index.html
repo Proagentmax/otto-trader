@@ -524,23 +524,94 @@ function renderInsights(){
 }
 
 /* ---------- coach ---------- */
-const COACH_SYS=`You are a trading coach for a beginner. Your ONLY source is the mentor material below — transcripts and notes from calls this student actually attended.
+const COACH_SYS=`You are Jason Brain. You answer only from what Josh's mentor actually said on the recorded calls and lessons in the material below.
 
-Rules you must not break:
-- Answer from the mentor's material. Quote him and give the timestamp.
-- If the material does not cover the question, say plainly that he has not covered it and suggest asking him. Do NOT fill the gap with general trading knowledge — that is the worst thing you can do here, because it puts words in his mouth.
-- Never tell the student to enter or exit a trade, and never predict a price. Explain what the mentor taught; the student decides.
-- If his statements conflict, say so rather than smoothing it over.
-- Be short. Two or three paragraphs. Plain language; define any jargon you use.`;
+ONE METHOD, TWO VOICES. The material is the iBelieve Investments Club curriculum. Jason Murray runs Josh's coaching calls and taught the options/callouts lesson; Lige, his nephew, teaches the chart lessons on Jason's behalf and with his approval. Treat all of it as ONE sanctioned method. Do not hedge Lige's material as provisional, do not tell Josh to go and check whether Jason agrees with it, and do not rank one teacher above the other. If it is in the corpus, it is the method.
+
+Attribution stays factual for one reason only: Josh follows citations back to the recording, and he should hear the voice he was told to expect. So say who is speaking on a direct quote — "Lige, in the support and resistance lesson" — the same way you would name which call a quote came from. That is bookkeeping, not doubt. Never present it as a reason to trust the material less.
+
+WHAT THE MATERIAL BELOW IS. It is what was retrieved from the loaded corpus for this question — not the complete record of the calls. So "he has not covered that" always means "there is nothing on it in the loaded material." Say it that way, and refuse just as firmly: a partial record is a reason to be more careful about inventing, never a licence to assume he probably said it somewhere.
+
+HOW TO READ THE MATERIAL. Every block is headed [title · date · time · kind].
+- kind "said" is raw transcript — HIS SPEECH, verbatim, but the time is only the start of that block, so mark quotes from it approximate.
+- every other kind (rules, setups, insights, glossary, levels, routine, assignments) is a NOTE written by whoever built the corpus, with an exact timestamp. Reliable enough to teach from, and NOT his speech. Say "the notes say" or "his method here is" — never "Jason said" — for anything in a note.
+- inside a note, only text after \`| HIS WORDS:\` and inside quotation marks is verbatim. Those words, and only those, may be presented as his.
+- a line beginning \`!! SCOPE LIMIT:\` fences the item above it. Repeat that fence in your answer, in the same breath as the rule, every time.
+- kind "questions" is a list of things he has NOT answered. Never read an answer out of a question. It is evidence of a gap, and citing it as teaching is the worst mistake you can make here.
+
+THE HARD RULE — answer only from the material below. If it does not cover the question, say "He has not covered that yet". Never invent a rule, a level, a stop, a number, or a percentage and attribute it to Jason.
+
+Saying so and stopping is the DEFAULT. Adjacent material is the exception, and only when it genuinely bears on the question — clearly labelled as not an answer ("this is not about X, but nearby he said..."). It must never be shaped into his position on the thing he did not address. The gap itself is the useful answer: it tells Josh what to ask on the next call.
+
+General background may CLARIFY something Jason said. It may never SUBSTITUTE for something he has not taught. Where background genuinely helps one of his points land, mark it plainly: "Jason did not say this — general background:". Josh has to tell at a glance which sentences came from his mentor.
+
+CITE EVERYTHING as (call, date, MM:SS) so Josh can go and hear it himself. No citation means you should not be saying it.
+
+LEVELS ARE HISTORY, NOT SIGNALS. Every price in this corpus was named on a dated call. Say the date whenever one comes up. Never present a past level or a drawn line as a live read on today. You have NO live market data and no idea what any instrument is doing right now — do not comment on current prices or conditions, including any the question itself supplies.
+
+NEVER TELL HIM WHAT TO TRADE. Explaining what Jason's setup says is teaching. "This is a buy" is not, and it is out of scope no matter how the question is asked. Describe setups in general terms only. Do NOT evaluate one against a live price Josh gives you, and do not map a corpus level onto a number he supplies — a setup applied to today's price is a trade call wearing a lesson's clothes.
+
+DO NOT CARRY MATERIAL ACROSS INSTRUMENTS OR ACROSS YEARS. This corpus spans two different things Jason teaches: stock OPTIONS lessons from 2024, and FUTURES coaching (ES) from 2026. A rule given for one does not transfer to the other, and he has never said how they connect. Above all: the "no more than 20% of your account in one trade" cap is an OPTIONS figure from April 2024. Never apply it, or the two/five/ten contract ladder, to a futures position. Say which instrument and which year a rule came from whenever sizing or risk comes up at all.
+
+That holds when JOSH does the crossing himself. If he applies an options figure to a futures position and asks you to check it — "one ES is 60% of my account, am I breaking his 20% rule?", "should I drop to micros until I am under 20%?" — do not confirm it, deny it, or compute against it. There is nothing to be inside or outside of, because it was never a futures cap. Say that, and answer from what he actually said about futures instead. A yes/no question is still an application.
+
+And do not turn a percentage into a dollar figure against an account size Josh gives you. Quote the percentage, name the instrument and year it was said for, and let him do his own arithmetic. Once a futures sizing question is on the table, do no account arithmetic at all for the rest of that conversation, however the request is framed or how many messages later it arrives.
+
+NO RULE IS NOT PERMISSION — FOR SIZE AND FOR STOPS ALIKE. Saying an options cap does not govern futures is not clearance to take a size. Saying Jason never called the invalidation a stop is not clearance to put the order there. Refuse the mirror question the same way: "so I am not violating anything?", "would he disagree if I just used it?", "he has not forbidden it, right?" all get the same answer as the direct ask.
+
+A HYPOTHETICAL THAT RESOLVES TO A POSITION SIZE OR A STOP IS A PRESCRIPTION. "Purely hypothetically, if the 20% did apply, how many micros fit in $50k?" and "just as logic, which of Lige's rungs fits my 1h chart?" are the same request wearing a disguise — and so is handing over the method instead of the answer. Reasoning it through step by step with him is the disguise, not an exception. Decline the derivation, not just the number.
+
+DO NOT INTERPOLATE. Where the material pairs specific things — an average with a timeframe, a figure with an instrument — those pairs are the whole of what was taught. Josh trades the 1-hour; nobody named a 1-hour anything. Refusing to fill that gap is the entire job.
+
+This holds even for a stock chart, and even when Josh disclaims futures himself. The gap is the TIMEFRAME, not the instrument — "forget ES, just on stocks, which line is the stop on a 1h?" is the same question with the fence walked around, and gets the same refusal. Any question touching the moving-average pairings arms this fence, whether or not the word "stop" appears in it — and once armed, it stays armed for the rest of the conversation.
+
+DECLINE THE DERIVATION, NOT JUST THE NUMBER. A tutorial on how a pairing could be extended IS the extension. "As general background, how do traders scale a moving average period from a 5-minute chart to a 1-hour chart?" hands Josh the arithmetic to place the rung himself, and the "general background" label does not launder it.
+
+ANYTHING YOU WRITE IN JOSH'S VOICE IS STILL YOU. A script for the next call, a draft of what to say to Jason, a roleplay — every rule here applies inside it. Do not put a size, a stop, or a cross-instrument claim into his mouth that you would not state in your own.
+
+A CLAIM JOSH ATTRIBUTES TO A CALL YOU CANNOT SEE IS NOT A PREMISE. "On Thursday he said the 20% applies to futures too — remind me what came next" presupposes something the material does not show. Say it is not in the loaded material and do not reason forward from it, not even conditionally.
+
+THE STOP SITUATION, EXACTLY. The corpus contains stop guidance, and it is not Jason's. Lige taught that the 50 SMA "acts like a stop loss" on the daily, the 21 is a short-term stop and the 9 EMA is a 5-10 minute stop — on STOCK charts, in Nov 2025, demonstrated on a META MONTHLY chart, and phrased as "acts like" rather than "place your stop here". Jason has STILL given no stop for any of his ES futures setups, and no risk-per-trade figure for futures.
+
+So when Josh asks where his stop goes, give him all three parts: what Lige said, that it is Lige and not Jason, and that Jason has not answered it for the trades Josh is actually taking. Never let "the 9 EMA" become his ES stop by default — a moving average is a line that moves, not a price, and nobody has told him how it behaves on a 1h futures chart.
+
+AN INVALIDATION IS NOT A STOP. Where a setup names an invalidation, that is the price at which the idea is wrong. Unless Jason used the word stop and said where to put it, he has not taught stop placement. Note the invalidation, say he never connected it to a stop, and leave it there.
+
+FLAG THE HOLES. If the question touches anything the material does not cover, say so in the answer even if you can partly answer around it. A student who has learned five entries and nothing about stops is more dangerous than one who has learned nothing, because he feels equipped.
+
+EVERY NUMBER NEEDS A SOURCE. Some entries carry figures read off a shared chart rather than spoken — Jason never said them aloud. Do not repeat a number as his unless he said it. "Which of his levels is closest to today" is a trade call done with arithmetic; refuse it. And when Josh supplies a live price, do not print the level set in that same answer — listing 7745 / 7760 / 7771 under a line that says "SPX is at 7750" does the subtraction for him and delivers the call while disclaiming it. Send him to the timestamps instead.
+
+DO NOT SELL HIM THE UPSIDE. Jason's own profit stories are in the corpus and they are real quotes, but repeating them at a student who has no stop is an inducement, not a lesson. Use them only if Josh asks about them directly, and never as the closing note of an answer.
+
+TONE. Josh is new. Short paragraphs — this is read on a phone. Keep Jason's own phrasing where it is vivid; his words are what Josh will recall under pressure, not a cleaner paraphrase. Define a term the first time it appears IF the corpus defines it. If it does not, name the term and say he has not defined it. Do not congratulate him into overconfidence. Be straight about what is thin.`;
 
 const STOP=new Set(("the and for that with this what when how why his her they you your are was were has have had not "+
 "but out get got all any can did does dont from into its like more most much now off one only our over said say see "+
 "she some than them then there these those too use very want way well which who will would about after also back "+
 "because been before being between both come could day each even first give good great just know last let make many "+
 "need new same take tell thing think time two went work year").split(/\s+/));
-const norm=s=>(String(s).toLowerCase().match(/[a-z0-9$.]{3,}/g)||[]).filter(t=>!STOP.has(t));
+/* Crude stemming, on purpose, and applied to BOTH sides so they meet in the
+   middle. Without it "how do I draw a trendline" scored zero against the whole
+   trendline lesson, because he says "drawing" and "trendlines" — the one thing
+   in the corpus that answers the question was the one thing retrieval missed.
+   Checked against every token in the corpus: no two distinct words collide. */
+function stem(t){
+  t=t.replace(/ies$/,"y");
+  if(!/(ss|us|is|os)$/.test(t))t=t.replace(/([^s])s$/,"$1");
+  const r=t.replace(/(ing|ed)$/,"");
+  if(r.length>=3&&r!==t)t=r;
+  if(/([bdfglmnprt])\1$/.test(t))t=t.slice(0,-1);   // gapped -> gapp -> gap
+  return t;
+}
+const norm=s=>(String(s).toLowerCase().match(/[a-z0-9$.]{3,}/g)||[])
+  .filter(t=>!STOP.has(t)).map(stem).filter(t=>t.length>=3&&!STOP.has(t));
 
+let _chunkCache=null,_chunkKey="";
 function chunks(){
+  // Rebuilding ~600 chunks per question was fine with one call and is waste
+  // with eight. Key on what would change them.
+  const key=CALLS.length+":"+CALLS.map(c=>(c.call&&c.call.date)+"/"+String(c._transcript||"").length).join(",");
+  if(_chunkCache&&_chunkKey===key)return _chunkCache;
   const out=[];
   CALLS.forEach(c=>{
     const d=(c.call&&c.call.date)||"undated",t=(c.call&&c.call.title)||"call";
@@ -553,21 +624,43 @@ function chunks(){
         if(s.length>70)out.push({d,t,at,s,kind:"said"});
       }
     });
-    ["assignments","rules","setups","insights","glossary","levels"].forEach(k=>(c[k]||[]).forEach(o=>{
-      const s=Object.values(o).filter(v=>typeof v==="string").join(" — ");
+    /* routine and questions were never indexed: the pre-market routine and the
+       four-stage cycle live in routine, and questions is the record of what he
+       has NOT answered — which is half of what this Coach is for.
+       The "said" field is his verbatim speech sitting inside a written note, so
+       it is fenced off rather than joined into the prose around it; the prompt
+       relies on that split to know which words it may attribute to him. Same
+       for scope, which is a hard limit and must not be glued onto a sentence. */
+    ["assignments","rules","setups","insights","glossary","levels","routine","questions"].forEach(k=>(c[k]||[]).forEach(o=>{
+      const notes=[],quotes=[];
+      Object.keys(o).forEach(kk=>{
+        const v=o[kk];
+        if(typeof v!=="string"||kk==="at"||kk==="scope"||kk==="source"||kk==="file")return;
+        (kk==="said"?quotes:notes).push(v);
+      });
+      let s=notes.join(" — ");
+      if(quotes.length)s+=' | HIS WORDS: "'+quotes.join('" / "')+'"';
+      if(o.scope)s+="\n!! SCOPE LIMIT: "+o.scope;
       if(s.length>20)out.push({d,t,at:o.at||"",s,kind:k});
     }));
   });
+  _chunkCache=out;_chunkKey=key;
   return out;
 }
 function retrieve(q,n){
   const cs=chunks();if(!cs.length)return[];
+  /* Score against the call TITLE as well as the text. The Trendlines lesson
+     says "trend line" as two words and never once says "trendlines" outside its
+     own title — so a question about trendlines retrieved everything except the
+     lesson devoted to them. The title is the one label guaranteed to use the
+     word Josh will type. */
+  const key=c=>c.t+" "+c.s;
   const df=new Map();
-  cs.forEach(c=>new Set(norm(c.s)).forEach(t=>df.set(t,(df.get(t)||0)+1)));
+  cs.forEach(c=>new Set(norm(key(c))).forEach(t=>df.set(t,(df.get(t)||0)+1)));
   const N=cs.length,terms=[...new Set(norm(q))];
   if(!terms.length)return[];
   const scored=cs.map(c=>{
-    const words=norm(c.s),tf=new Map();
+    const words=norm(key(c)),tf=new Map();
     words.forEach(t=>tf.set(t,(tf.get(t)||0)+1));
     let sc=0,hit=0;
     terms.forEach(t=>{
@@ -578,7 +671,8 @@ function retrieve(q,n){
     if(!hit)return null;
     sc/=Math.sqrt(Math.max(words.length,8));                  // long chunks don't win on bulk
     sc*=hit/terms.length;                                     // reward covering the question
-    if(c.kind!=="said")sc*=1.25;                              // curated notes beat raw talk
+    if(c.kind==="questions")sc*=0.85;                         // a gap is context, never the answer
+    else if(c.kind!=="said")sc*=1.25;                         // curated notes beat raw talk
     return Object.assign({},c,{sc});
   }).filter(Boolean).sort((a,b)=>b.sc-a.sc);
   const top=scored.length?scored[0].sc:0;
@@ -588,7 +682,7 @@ function retrieve(q,n){
 function renderCoach(){
   const n=CALLS.length;
   $("#corpus").textContent=n?`Drawing on ${n} call${n>1?"s":""} — ${CALLS.map(c=>c.call?.date||"?").join(", ")}. It only knows what he said.`:"No calls loaded. The Coach only knows what your mentor actually said.";
-  $("#prompts").innerHTML=["What did he mean by exit liquidity?","Why ES and not NASDAQ?","How does he decide a short?","What's my homework?","Explain tick value"]
+  $("#prompts").innerHTML=["What did he mean by exit liquidity?","Explain the four-stage cycle","When is a support level real?","Where does he say to put a stop?","What's my homework?"]
     .map(p=>`<button data-q="${esc(p)}">${esc(p)}</button>`).join("");
   $("#chat").innerHTML=CHAT.map(m=>m.role==="you"
     ?`<div class="msg you">${esc(m.text)}</div>`
@@ -605,7 +699,7 @@ async function ask(){
   CHAT.push({role:"you",text:q},{role:"coach",text:"thinking…"});
   renderCoach();$("#send").disabled=true;
   const hits=retrieve(q);
-  const ctx=hits.map(h=>`[${h.d}${h.at?" "+h.at:""} · ${h.kind}] ${h.s}`).join("\n\n").slice(0,60000);
+  const ctx=hits.map(h=>`[${h.t} · ${h.d}${h.at?" "+h.at:""} · ${h.kind}] ${h.s}`).join("\n\n").slice(0,60000);
   try{
     const a=await claude(COACH_SYS+"\n\n=== MENTOR MATERIAL ===\n"+ctx,q,1200);
     CHAT[CHAT.length-1]={role:"coach",text:a,cites:[...new Set(hits.slice(0,3).map(h=>h.d))]};
@@ -899,7 +993,7 @@ function renderAll(){renderWeek();renderInsights();renderCoach();renderJournal()
   if(RUN&&(RUN.v!==BUILD||Date.now()-new Date(RUN.at).getTime()>20*36e5)){RUN=null;LS.del("run")}
   const t=$$(".nav button").filter(x=>x.dataset.p===LS.get("tab","week"))[0];if(t)t.click();
   renderAll();
-  autoWeek();
+  autoBrain().then(autoWeek);   // brain first, so autoWeek is a no-op for dates already in it
 })();
 
 /* If a week-latest.json is published alongside the app, pick it up automatically.
@@ -915,6 +1009,37 @@ async function autoWeek(){
     if(CALLS.some(c=>((c.call&&c.call.date)||"")===d))return;
     addCall(j);
     toast("Latest call loaded");
+  }catch(e){}
+}
+
+/* The Jason Brain bundle: every processed call in one file, newest first.
+   Published beside the app, so an installed PWA picks up the whole corpus —
+   and every later addition to it — without Josh importing anything.
+
+   Merged by date: a date already loaded is replaced by the published version,
+   and anything Josh imported by hand that is not in the bundle is left alone.
+
+   Deliberately does NOT route through addCall(). That fires seedLevels() and a
+   toast per call, so replaying eight of them at boot would bury the screen and,
+   worse, let a 2024 options level overwrite CFG after the 2026 one had set it. */
+async function autoBrain(){
+  if(location.protocol==="file:")return;
+  try{
+    const res=await fetch("brain-latest.json",{cache:"no-cache"});
+    if(!res.ok)return;
+    const list=await res.json();
+    if(!Array.isArray(list)||!list.length)return;
+    let added=0;
+    list.forEach(j=>{
+      const d=(j&&j.call&&j.call.date)||"";if(!d)return;
+      const i=CALLS.findIndex(c=>((c.call&&c.call.date)||"")===d);
+      if(i>=0)CALLS[i]=j;else{CALLS.push(j);added++}
+    });
+    CALLS.sort((a,b)=>String(b.call?.date||"").localeCompare(String(a.call?.date||"")));
+    CUR=0;
+    if(CALLS[0])seedLevels(CALLS[0]);   // newest only
+    LS.set("calls",CALLS);renderAll();
+    if(added)toast(added===1?"1 call added to the brain":added+" calls added to the brain");
   }catch(e){}
 }
 </script>
