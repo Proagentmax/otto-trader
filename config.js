@@ -9,6 +9,6 @@
  * already switched on. It belongs in source; that is what it is for.
  */
 window.OTTO = {
-  url:  "https://xlyjjcrgnfcpdcysehsw.supabase.co",
-  anon: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhseWpqY3JnbmZjcGRjeXNlaHN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxMDc0MzYsImV4cCI6MjA5NTY4MzQzNn0.dQvAFBi8oHd8GfWIJ4t9bboRXCSG8CGGx3KQ9l5qW3c"
+  url:  "https://loykixugjltxukuvbbuf.supabase.co",
+  anon: "PASTE_YOUR_ANON_KEY_HERE"
 };
