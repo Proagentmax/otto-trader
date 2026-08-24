@@ -406,7 +406,10 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
     <div style="margin-bottom:20px">
       <label class="f" for="sProxy">Data proxy URL</label>
       <input class="f" id="sProxy" placeholder="https://otto-proxy.…workers.dev" autocomplete="off" spellcheck="false">
-      <p class="hint">Your Cloudflare Worker. It holds the market-data key server-side and feeds the morning bias. Without it the bias card stays off and the routine runs on Alpha Vantage as before.</p>
+      <p class="hint">Your Supabase Edge Function (or any proxy). It holds the market-data key server-side and feeds the morning bias. Without it the bias card stays off and the routine runs on Alpha Vantage as before.</p>
+      <label class="f" for="sProxyKey" style="margin-top:12px">Proxy key</label>
+      <input class="f" id="sProxyKey" placeholder="Supabase anon key — leave blank if not needed" type="password" autocomplete="off" spellcheck="false">
+      <p class="hint">Supabase functions want this; a Cloudflare Worker does not. The anon key is public by design — the real market-data key stays on the server.</p>
     </div>
     <div style="margin-bottom:20px">
       <label class="f" for="sKey">Alpha Vantage key</label>
@@ -445,7 +448,7 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
 <script>
 "use strict";
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
-const DEF={proxy:"",key:"",claude:"",ten:4.7,tenH:4.88,jpy:160,maxDay:1,watch:"WMT, TGT, HD, NVDA, COST"};
+const DEF={proxy:"",proxyKey:"",key:"",claude:"",ten:4.7,tenH:4.88,jpy:160,maxDay:1,watch:"WMT, TGT, HD, NVDA, COST"};
 let CFG={...DEF},CALLS=[],CUR=0,TRADES=[],DONE={},RUN=null,CHAT=[],INSTAB="ideas",BIASRUN=null;
 const NS="otto:";
 const LS={
@@ -1074,7 +1077,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="1.3.0";
+const BUILD="1.3.1";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -1194,7 +1197,11 @@ async function readMorning(){
   if(!CFG.proxy)return toast("Add your data proxy URL in Settings");
   const btn=$("#biasBtn");if(btn){btn.disabled=true;btn.textContent="Reading…"}
   try{
-    const r=await fetch(CFG.proxy.replace(/\/+$/,"")+"/?set=morning",{cache:"no-store"});
+    // Supabase Edge Functions want an Authorization header; a Cloudflare Worker
+    // does not. Sending it when it is set covers both without the app caring.
+    const h={};
+    if(CFG.proxyKey){h.authorization="Bearer "+CFG.proxyKey;h.apikey=CFG.proxyKey}
+    const r=await fetch(CFG.proxy.replace(/\/+$/,"")+"?set=morning",{cache:"no-store",headers:h});
     const j=await r.json();
     if(!j.ok)throw new Error(j.error||"proxy error");
     BIASRUN={at:new Date().toISOString(),served:j.served,quotes:j.quotes,source:j.source};
@@ -1300,7 +1307,7 @@ $("#clearRunBtn").addEventListener("click",()=>{RUN=null;LS.del("run");renderMar
 
 /* ---------- settings ---------- */
 function openSettings(){
-  $("#sProxy").value=CFG.proxy||"";
+  $("#sProxy").value=CFG.proxy||"";$("#sProxyKey").value=CFG.proxyKey||"";
   $("#sClaude").value=CFG.claude;$("#sKey").value=CFG.key;$("#sTen").value=CFG.ten;
   $("#sTenH").value=CFG.tenH;$("#sJpy").value=CFG.jpy;$("#sMax").value=CFG.maxDay;$("#sWatch").value=CFG.watch;
   $("#dlgSet").showModal();
@@ -1309,7 +1316,7 @@ $("#settingsBtn").addEventListener("click",openSettings);
 $("#sClose").addEventListener("click",()=>$("#dlgSet").close());
 $("#sSave").addEventListener("click",()=>{
   CFG={claude:$("#sClaude").value.trim(),key:$("#sKey").value.trim(),
-    proxy:$("#sProxy").value.trim().replace(/\/+$/,""),
+    proxy:$("#sProxy").value.trim().replace(/\/+$/,""),proxyKey:$("#sProxyKey").value.trim(),
     ten:parseFloat($("#sTen").value)||DEF.ten,tenH:parseFloat($("#sTenH").value)||DEF.tenH,
     jpy:parseFloat($("#sJpy").value)||DEF.jpy,maxDay:parseInt($("#sMax").value)||1,watch:$("#sWatch").value};
   LS.set("cfg",CFG);$("#dlgSet").close();renderAll();toast("Saved")});
