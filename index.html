@@ -136,6 +136,25 @@ select.f{appearance:none;background-image:linear-gradient(45deg,transparent 50%,
 .leg .rz{color:var(--ink-2);flex:1;line-height:1.35}
 .leg .ag{font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}
 .leg.old{opacity:.5}
+.gate2{position:fixed;inset:0;z-index:60;background:var(--bg);display:grid;place-items:center;padding:24px}
+/* Without this the class beats the hidden attribute and the overlay sits
+   invisible on top of the whole app, eating every tap. */
+.gate2[hidden]{display:none}
+.gate2 .gbox{width:100%;max-width:360px}
+.gate2 .gsub{color:var(--ink-2);font-size:14px;line-height:1.5;text-align:center;margin:0 0 22px}
+.gate2 .gmsg{font-size:13.5px;line-height:1.5;margin:12px 0 0;text-align:center;color:var(--ink-2);min-height:20px}
+.gate2 .gmsg.ok{color:var(--up)}
+.gate2 .gmsg.err{color:var(--down)}
+/* Coach answers are written as prose with structure. Render it. */
+.md h4{font-size:14.5px;font-weight:650;margin:16px 0 6px;letter-spacing:-.01em}
+.md p{margin:0 0 10px}
+.md ul{margin:0 0 10px;padding-left:20px}
+.md li{margin:0 0 5px}
+.md strong{font-weight:650;color:var(--ink)}
+.md code{font-family:var(--mono);font-size:13px;background:var(--surface-2);padding:1px 5px;border-radius:4px}
+.searching{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;
+  color:var(--ink-3);background:var(--surface-2);border:1px solid var(--rule);border-radius:6px;
+  padding:3px 8px;margin:0 6px 6px 0}
 .allclear{background:#0F1A10;border:1px solid #1E3A20;border-radius:var(--r);padding:20px 16px;text-align:center}
 .allclear b{display:block;color:var(--up);font-size:16px;font-weight:600;margin-bottom:3px}
 .allclear span{font-size:14px;color:var(--ink-2)}
@@ -399,17 +418,9 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
   <div class="grip"></div><div class="hd"><h3>Settings</h3></div>
   <div class="bd">
     <div style="margin-bottom:20px">
-      <label class="f" for="sClaude">Claude API key</label>
-      <input class="f" id="sClaude" placeholder="sk-ant-…" type="password" autocomplete="off" spellcheck="false">
-      <p class="hint">Powers the Coach and lets the app read raw transcripts itself. Without it, you can still load week files made in Claude. Stored only in this browser — don't enter it on a shared device.</p>
-    </div>
-    <div style="margin-bottom:20px">
-      <label class="f" for="sProxy">Data proxy URL</label>
-      <input class="f" id="sProxy" placeholder="https://otto-proxy.…workers.dev" autocomplete="off" spellcheck="false">
-      <p class="hint">Your Supabase Edge Function (or any proxy). It holds the market-data key server-side and feeds the morning bias. Without it the bias card stays off and the routine runs on Alpha Vantage as before.</p>
-      <label class="f" for="sProxyKey" style="margin-top:12px">Proxy key</label>
-      <input class="f" id="sProxyKey" placeholder="Supabase anon key — leave blank if not needed" type="password" autocomplete="off" spellcheck="false">
-      <p class="hint">Supabase functions want this; a Cloudflare Worker does not. The anon key is public by design — the real market-data key stays on the server.</p>
+      <p class="hint" style="margin-top:0">Signed in as <b id="sWho"></b>. Your homework, journal and Coach history live in your account — not on this device. Sign in anywhere and it follows you.</p>
+      <p class="hint">There are no API keys to enter. They live on the server, so they can be changed without touching a single phone.</p>
+      <button class="btn wide" id="sOut" style="margin-top:10px">Sign out</button>
     </div>
     <div style="margin-bottom:20px">
       <label class="f" for="sKey">Alpha Vantage key</label>
@@ -443,18 +454,113 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
   <div class="ft"><button class="btn" id="mailClose">Close</button><button class="btn" id="mailCopy" hidden>Copy</button><button class="btn solid" id="mailDo">Draft it</button></div>
 </dialog>
 
+<div class="gate2" id="gate2" hidden>
+  <div class="gbox">
+    <div class="brand" style="justify-content:center;margin-bottom:6px"><span class="dot"></span>Otto Trader</div>
+    <p class="gsub">Everything you do here is saved to your account, not to this phone. Sign in on any device and it&rsquo;s all there.</p>
+    <label class="f" for="gEmail">Your email</label>
+    <input class="f" id="gEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" spellcheck="false">
+    <button class="btn solid wide" id="gSend" style="margin-top:12px">Email me a sign-in link</button>
+    <p class="gmsg" id="gMsg"></p>
+    <p class="gsub" style="margin-top:18px;font-size:12.5px">No password. We send a link, you tap it, you&rsquo;re in.</p>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
+<script src="config.js"></script>
 <script>
 "use strict";
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
-const DEF={proxy:"",proxyKey:"",key:"",claude:"",ten:4.7,tenH:4.88,jpy:160,maxDay:1,watch:"WMT, TGT, HD, NVDA, COST"};
+const DEF={key:"",ten:4.7,tenH:4.88,jpy:160,maxDay:1,watch:"WMT, TGT, HD, NVDA, COST"};
 let CFG={...DEF},CALLS=[],CUR=0,TRADES=[],DONE={},RUN=null,CHAT=[],INSTAB="ideas",BIASRUN=null;
 const NS="otto:";
+
+/* Project address and the public anon key. They live in config.js — one small
+   file with two lines — so nobody ever has to edit this one. */
+const SB_URL  = (window.OTTO&&window.OTTO.url)  || "";
+const SB_ANON = (window.OTTO&&window.OTTO.anon) || "";
+
+/* ---------- session ----------
+   The only thing that stays on the device is the session token. Not data — a
+   token, the same as being logged in anywhere. Everything Josh actually owns
+   lives in Postgres. */
+const SESS={
+  get(){try{return JSON.parse(localStorage.getItem(NS+"sess")||"null")}catch(e){return null}},
+  set(v){try{v?localStorage.setItem(NS+"sess",JSON.stringify(v)):localStorage.removeItem(NS+"sess")}catch(e){}},
+};
+let USER=null;
+
+async function sbAuth(path,body){
+  const r=await fetch(SB_URL+"/auth/v1/"+path,{method:"POST",
+    headers:{"content-type":"application/json",apikey:SB_ANON},
+    body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(j.error_description||j.msg||j.error||("auth "+r.status));
+  return j;
+}
+/* Access tokens expire in an hour. Refresh before every call rather than
+   discovering it mid-request — a session that silently dies is exactly the
+   "it broke and I don't know why" this whole rebuild is meant to remove. */
+async function token(){
+  const s=SESS.get(); if(!s)return null;
+  if(s.expires_at && Date.now()/1000 < s.expires_at-90) return s.access_token;
+  try{
+    const j=await sbAuth("token?grant_type=refresh_token",{refresh_token:s.refresh_token});
+    const n={access_token:j.access_token,refresh_token:j.refresh_token,
+             expires_at:Math.floor(Date.now()/1000)+(j.expires_in||3600),user:j.user||s.user};
+    SESS.set(n);USER=n.user;return n.access_token;
+  }catch(e){SESS.set(null);USER=null;return null}
+}
+async function sbFetch(path,opts){
+  const t=await token(); if(!t)throw new Error("signed out");
+  const o=opts||{};
+  return fetch(SB_URL+"/rest/v1/"+path,Object.assign({},o,{headers:Object.assign(
+    {apikey:SB_ANON,authorization:"Bearer "+t,"content-type":"application/json"},o.headers||{})}));
+}
+
+/* ---------- state ----------
+   Supabase is the source of truth. localStorage is a disposable mirror kept for
+   one reason only: the app opens instantly and still reads on a bad signal.
+   Wipe it and nothing is lost. Writes go to the cloud debounced, so ticking six
+   homework items is one round trip, not six. */
+const MEM={};
+const DIRTY=new Set();
+let flushT=null,SYNCED=false;
+
 const LS={
-  get(k,f){try{const v=localStorage.getItem(NS+k);return v?JSON.parse(v):f}catch(e){return f}},
-  set(k,v){try{localStorage.setItem(NS+k,JSON.stringify(v))}catch(e){toast("Storage full or blocked")}},
-  del(k){try{localStorage.removeItem(NS+k)}catch(e){}}};
+  get(k,f){ if(k in MEM)return MEM[k];
+    try{const v=localStorage.getItem(NS+k);if(v!=null){MEM[k]=JSON.parse(v);return MEM[k]}}catch(e){}
+    return f },
+  set(k,v){ MEM[k]=v;
+    try{localStorage.setItem(NS+k,JSON.stringify(v))}catch(e){}
+    if(CLOUD_KEYS.has(k)){DIRTY.add(k);schedFlush()} },
+  del(k){ delete MEM[k];try{localStorage.removeItem(NS+k)}catch(e){} },
+};
+// Session tokens and the two device-local caches never travel.
+const CLOUD_KEYS=new Set(["done","trades","chat","mailans","cfg","tab"]);
+
+function schedFlush(){ clearTimeout(flushT); flushT=setTimeout(flush,1200) }
+async function flush(){
+  if(!DIRTY.size||!USER)return;
+  const rows=[...DIRTY].map(k=>({user_id:USER.id,key:k,value:MEM[k]===undefined?null:MEM[k]}));
+  DIRTY.clear();
+  try{
+    const r=await sbFetch("app_state",{method:"POST",
+      headers:{prefer:"resolution=merge-duplicates"},body:JSON.stringify(rows)});
+    if(!r.ok){rows.forEach(x=>DIRTY.add(x.key));schedFlush()}   // keep it queued, try again
+  }catch(e){rows.forEach(x=>DIRTY.add(x.key));}
+}
+async function pull(){
+  const r=await sbFetch("app_state?select=key,value");
+  if(!r.ok)throw new Error("pull "+r.status);
+  for(const row of await r.json()){
+    MEM[row.key]=row.value;
+    try{localStorage.setItem(NS+row.key,JSON.stringify(row.value))}catch(e){}
+  }
+  SYNCED=true;
+}
+window.addEventListener("beforeunload",()=>{ if(DIRTY.size)flush() });
 /* carry over anything saved before the rename so nobody re-enters their keys */
 (function migrate(){
   try{
@@ -486,7 +592,7 @@ function handleFile(file){
       if(!j.assignments&&!j.rules&&!j.insights)return toast("No call content in that file");
       return addCall(j);
     }
-    if(!CFG.claude){openSettings();return toast("Add a Claude API key to read raw transcripts")}
+    if(!USER)return toast("Sign in first");
     if(!/-->/.test(txt))return toast("That doesn't look like a VTT or SRT");
     toast("Reading the call — takes about a minute");
     try{addCall(await extractCall(txt,file.name))}
@@ -514,14 +620,20 @@ function seedLevels(j){
 }
 
 /* ---------- Claude ---------- */
+/* No Anthropic key in the browser. It lives as a Supabase secret, so rotating
+   it is one edit on the server and nothing on any device breaks. */
+async function fnUrl(fn){
+  const t=await token(); if(!t)throw new Error("signed out");
+  return {url:SB_URL+"/functions/v1/otto-proxy?fn="+fn,
+          headers:{apikey:SB_ANON,authorization:"Bearer "+t,"content-type":"application/json"}};
+}
 async function claude(system,user,maxTok){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
-    headers:{"content-type":"application/json","x-api-key":CFG.claude,
-      "anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:maxTok||4000,system,messages:[{role:"user",content:user}]})});
+  const {url,headers}=await fnUrl("write");
+  const res=await fetch(url,{method:"POST",headers,
+    body:JSON.stringify({system,user,max_tokens:maxTok||1200})});
   const j=await res.json();
-  if(j.error)throw new Error(j.error.message||"API error");
-  return (j.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+  if(!j.ok)throw new Error(j.error||"API error");
+  return j.text||"";
 }
 const EXTRACT_SYS=`You process recorded trading-mentorship calls into structured study material.
 
@@ -712,7 +824,7 @@ $("#mailDo").addEventListener("click",async()=>{
   const fields=$$("#mailQs textarea"),ans=LS.get("mailans",{});
   fields.forEach(f=>ans[f.dataset.k]=f.value.trim());
   LS.set("mailans",ans);
-  if(!CFG.claude){openSettings();return toast("The draft needs a Claude API key")}
+  if(!USER)return toast("Sign in first");
   const body=fields.map(f=>{
     const lab=f.previousElementSibling.textContent;
     return "Q: "+lab+"\nJosh's answer: "+(f.value.trim()||"(blank — still deciding)");
@@ -901,34 +1013,98 @@ function retrieve(q,n){
   if(top<0.38)return[];                                       // nothing relevant — let the Coach say so
   return scored.filter(c=>c.sc>=Math.max(0.20,top*0.28)).slice(0,n||14);
 }
+/* Jason's rules arrive as rules, not as one flattened block of prose. Small on
+   purpose — this renders what the Coach actually emits and nothing more. */
+function md(t){
+  const e=x=>x.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const inl=x=>e(x).replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>")
+                   .replace(/`([^`]+)`/g,"<code>$1</code>");
+  const out=[];let ul=false,para=[];
+  const shutP=()=>{if(para.length){out.push("<p>"+inl(para.join(" "))+"</p>");para=[]}};
+  const shutU=()=>{if(ul){out.push("</ul>");ul=false}};
+  for(const raw of String(t).split("\n")){
+    const line=raw.trim();
+    if(!line){shutP();shutU();continue}
+    const li=line.match(/^[-*\u2022]\s+(.*)$/), h=line.match(/^#{1,4}\s+(.*)$/);
+    if(li){shutP();if(!ul){out.push("<ul>");ul=true}out.push("<li>"+inl(li[1])+"</li>");continue}
+    shutU();
+    if(h){shutP();out.push("<h4>"+inl(h[1])+"</h4>");continue}
+    para.push(line);
+  }
+  shutP();shutU();
+  return out.join("");
+}
+
+function bubble(m){
+  if(m.role==="you")return `<div class="msg you">${esc(m.text)}</div>`;
+  const chips=(m.searches||[]).map(q=>`<span class="searching">searched: ${esc(q)}</span>`).join("");
+  const body=m.error?`<span class="errtxt">${esc(m.text)}</span>`
+    :(m.text?`<div class="md">${md(m.text)}</div>`:(m.streaming?`<span style="color:var(--ink-3)">thinking…</span>`:""));
+  return `<div class="msg coach"><div class="b">${chips}${body}</div>${
+    m.cites&&m.cites.length?`<div class="cites">${m.cites.map(c=>`<span class="cite">${esc(c)}</span>`).join("")}</div>`:""}</div>`;
+}
+
 function renderCoach(){
   const n=CALLS.length;
   $("#corpus").textContent=n
-    ?`Drawing on ${n} call${n>1?"s":""}, newest ${CALLS[0].call?.date||"?"} · v${BUILD}. It only knows what the club actually taught.`
-    :`No calls loaded · v${BUILD}. The Coach only knows what your mentor actually said.`;
+    ?`Drawing on ${n} call${n>1?"s":""}, newest ${CALLS[0].call?.date||"?"} · v${BUILD}. It looks things up in what the club actually taught.`
+    :`Loading the brain · v${BUILD}.`;
   $("#prompts").innerHTML=["What did he mean by exit liquidity?","Explain the four-stage cycle","When is a support level real?","Where does he say to put a stop?","What's my homework?"]
     .map(p=>`<button data-q="${esc(p)}">${esc(p)}</button>`).join("");
-  $("#chat").innerHTML=CHAT.map(m=>m.role==="you"
-    ?`<div class="msg you">${esc(m.text)}</div>`
-    :`<div class="msg coach"><div class="b">${m.error?`<span class="errtxt">${esc(m.text)}</span>`
-      :m.text.split(/\n{2,}/).map(p=>`<p>${esc(p)}</p>`).join("")}</div>${
-      m.cites&&m.cites.length?`<div class="cites">${m.cites.map(c=>`<span class="cite">${esc(c)}</span>`).join("")}</div>`:""}</div>`).join("");
+  $("#chat").innerHTML=CHAT.map(bubble).join("");
+  const c=$("#chat");c.scrollTop=c.scrollHeight;
+}
+// While streaming, only the last bubble changes. Re-rendering the whole log on
+// every token makes a phone stutter and loses the scroll position.
+let liveRAF=null;
+function renderLive(){
+  if(liveRAF)return;
+  liveRAF=requestAnimationFrame(()=>{
+    liveRAF=null;
+    const c=$("#chat"),last=c.lastElementChild;
+    if(!last)return renderCoach();
+    const tmp=document.createElement("div");tmp.innerHTML=bubble(CHAT[CHAT.length-1]);
+    c.replaceChild(tmp.firstElementChild,last);
+    c.scrollTop=c.scrollHeight;
+  });
 }
 $("#prompts").addEventListener("click",e=>{const b=e.target.closest("[data-q]");if(b){$("#q").value=b.dataset.q;ask()}});
+
 async function ask(){
   const el=$("#q"),q=el.value.trim();if(!q)return;
-  if(!CFG.claude){openSettings();return toast("The Coach needs a Claude API key")}
-  if(!CALLS.length)return toast("Load a call first — the Coach only knows what he said");
+  if(!USER)return toast("Sign in first");
   el.value="";el.style.height="auto";
-  CHAT.push({role:"you",text:q},{role:"coach",text:"thinking…"});
+  // history goes to the server, so "why does that matter" knows what "that" is.
+  const hist=CHAT.filter(m=>m.text&&!m.error)
+    .map(m=>({role:m.role==="you"?"user":"assistant",content:m.text}));
+  hist.push({role:"user",content:q});
+  CHAT.push({role:"you",text:q},{role:"coach",text:"",searches:[],streaming:true});
   renderCoach();$("#send").disabled=true;
-  const hits=retrieve(q);
-  const ctx=hits.map(h=>`[${h.t} · ${h.d}${h.at?" "+h.at:""} · ${h.kind}] ${h.s}`).join("\n\n").slice(0,60000);
+  const cur=CHAT[CHAT.length-1];
   try{
-    const a=await claude(COACH_SYS+"\n\n=== MENTOR MATERIAL ===\n"+ctx,q,1200);
-    CHAT[CHAT.length-1]={role:"coach",text:a,cites:[...new Set(hits.slice(0,3).map(h=>h.d))]};
-  }catch(e){CHAT[CHAT.length-1]={role:"coach",text:"Couldn't reach Claude: "+String(e.message).slice(0,110),error:true}}
-  $("#send").disabled=false;CHAT=CHAT.slice(-30);LS.set("chat",CHAT);renderCoach();
+    const {url,headers}=await fnUrl("chat");
+    const res=await fetch(url,{method:"POST",headers,body:JSON.stringify({messages:hist.slice(-20)})});
+    if(!res.ok||!res.body){
+      const j=await res.json().catch(()=>({}));
+      throw new Error(j.error||("HTTP "+res.status));
+    }
+    const rd=res.body.getReader(),dec=new TextDecoder();let buf="";
+    for(;;){
+      const {done,value}=await rd.read(); if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const parts=buf.split("\n\n");buf=parts.pop()||"";
+      for(const p of parts){
+        const line=p.split("\n").find(x=>x.startsWith("data: "));if(!line)continue;
+        let ev;try{ev=JSON.parse(line.slice(6))}catch(e){continue}
+        if(ev.t==="text"){cur.text+=ev.v;renderLive()}
+        else if(ev.t==="search"){cur.searches.push(ev.v);renderLive()}
+        else if(ev.t==="error"){cur.error=true;cur.text=ev.v}
+      }
+    }
+    if(!cur.text&&!cur.error){cur.text="No answer came back. Try asking again.";cur.error=true}
+  }catch(e){cur.error=true;cur.text="Couldn't reach the Coach: "+String(e.message).slice(0,120)}
+  cur.streaming=false;
+  $("#send").disabled=false;CHAT=CHAT.slice(-40);LS.set("chat",CHAT);renderCoach();
 }
 $("#send").addEventListener("click",ask);
 $("#q").addEventListener("input",e=>{e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px"});
@@ -1077,7 +1253,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="1.3.1";
+const BUILD="2.0.0";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -1194,14 +1370,11 @@ function biasFrom(q,served){
 }
 
 async function readMorning(){
-  if(!CFG.proxy)return toast("Add your data proxy URL in Settings");
+
   const btn=$("#biasBtn");if(btn){btn.disabled=true;btn.textContent="Reading…"}
   try{
-    // Supabase Edge Functions want an Authorization header; a Cloudflare Worker
-    // does not. Sending it when it is set covers both without the app caring.
-    const h={};
-    if(CFG.proxyKey){h.authorization="Bearer "+CFG.proxyKey;h.apikey=CFG.proxyKey}
-    const r=await fetch(CFG.proxy.replace(/\/+$/,"")+"?set=morning",{cache:"no-store",headers:h});
+    const {url,headers}=await fnUrl("market");
+    const r=await fetch(url,{cache:"no-store",headers});
     const j=await r.json();
     if(!j.ok)throw new Error(j.error||"proxy error");
     BIASRUN={at:new Date().toISOString(),served:j.served,quotes:j.quotes,source:j.source};
@@ -1212,7 +1385,7 @@ async function readMorning(){
 }
 function renderBias(){
   const box=$("#biasBox");if(!box)return;
-  if(!CFG.proxy){box.innerHTML="";return}
+  if(!USER){box.innerHTML="";return}
   if(!BIASRUN){
     box.innerHTML=`<div class="bias"><div class="lab">Morning bias</div>
       <div class="vd" style="font-size:17px">Not read yet</div>
@@ -1307,16 +1480,22 @@ $("#clearRunBtn").addEventListener("click",()=>{RUN=null;LS.del("run");renderMar
 
 /* ---------- settings ---------- */
 function openSettings(){
-  $("#sProxy").value=CFG.proxy||"";$("#sProxyKey").value=CFG.proxyKey||"";
-  $("#sClaude").value=CFG.claude;$("#sKey").value=CFG.key;$("#sTen").value=CFG.ten;
+  $("#sWho").textContent=(USER&&USER.email)||"—";
+  $("#sKey").value=CFG.key;$("#sTen").value=CFG.ten;
   $("#sTenH").value=CFG.tenH;$("#sJpy").value=CFG.jpy;$("#sMax").value=CFG.maxDay;$("#sWatch").value=CFG.watch;
   $("#dlgSet").showModal();
 }
 $("#settingsBtn").addEventListener("click",openSettings);
 $("#sClose").addEventListener("click",()=>$("#dlgSet").close());
+$("#sOut").addEventListener("click",()=>{
+  if(!confirm("Sign out? Your work is saved to your account — nothing is lost."))return;
+  SESS.set(null);USER=null;
+  // clear the mirror: it is a cache of one account's data and must not linger
+  Object.keys(localStorage).filter(k=>k.startsWith(NS)).forEach(k=>localStorage.removeItem(k));
+  location.reload();
+});
 $("#sSave").addEventListener("click",()=>{
-  CFG={claude:$("#sClaude").value.trim(),key:$("#sKey").value.trim(),
-    proxy:$("#sProxy").value.trim().replace(/\/+$/,""),proxyKey:$("#sProxyKey").value.trim(),
+  CFG={key:$("#sKey").value.trim(),
     ten:parseFloat($("#sTen").value)||DEF.ten,tenH:parseFloat($("#sTenH").value)||DEF.tenH,
     jpy:parseFloat($("#sJpy").value)||DEF.jpy,maxDay:parseInt($("#sMax").value)||1,watch:$("#sWatch").value};
   LS.set("cfg",CFG);$("#dlgSet").close();renderAll();toast("Saved")});
@@ -1360,15 +1539,77 @@ function stampVersion(){
     (CALLS.length?"":`<br><span style="color:var(--down)">brain not loaded</span>`);
 }
 function renderAll(){renderWeek();renderInsights();renderCoach();renderJournal();renderMarket();renderBias();renderVersion();stampVersion()}
-(function(){
+function hydrate(){
   CFG=Object.assign({},DEF,LS.get("cfg",{}));
   CALLS=LS.get("calls",[]);TRADES=LS.get("trades",[]);DONE=LS.get("done",{});
   RUN=LS.get("run",null);CHAT=LS.get("chat",[]);BIASRUN=LS.get("bias",null);
   if(RUN&&(RUN.v!==BUILD||Date.now()-new Date(RUN.at).getTime()>20*36e5)){RUN=null;LS.del("run")}
   migrateDone();
+}
+
+/* ---------- sign in ---------- */
+function showLogin(msg){
+  $("#gate2").hidden=false;
+  if(msg){const m=$("#gMsg");m.textContent=msg;m.className="gmsg err"}
+}
+$("#gSend").addEventListener("click",async()=>{
+  const email=$("#gEmail").value.trim(),m=$("#gMsg"),b=$("#gSend");
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){m.textContent="That doesn't look like an email address.";m.className="gmsg err";return}
+  b.disabled=true;b.textContent="Sending…";m.textContent="";m.className="gmsg";
+  try{
+    await sbAuth("otp",{email,options:{email_redirect_to:location.origin+location.pathname}});
+    m.textContent="Check "+email+". Tap the link on this device and you're in.";m.className="gmsg ok";
+    b.textContent="Sent — send again";
+  }catch(e){m.textContent=String(e.message).slice(0,140);m.className="gmsg err";b.textContent="Email me a sign-in link"}
+  b.disabled=false;
+});
+$("#gEmail").addEventListener("keydown",e=>{if(e.key==="Enter")$("#gSend").click()});
+
+/* The magic link comes back as #access_token=... Take it, store it, and strip
+   it from the address bar so the token is not sitting in history. */
+function claimHash(){
+  if(!location.hash.includes("access_token"))return false;
+  const p=new URLSearchParams(location.hash.slice(1));
+  const at=p.get("access_token"),rt=p.get("refresh_token");
+  if(!at||!rt)return false;
+  SESS.set({access_token:at,refresh_token:rt,
+    expires_at:Math.floor(Date.now()/1000)+parseInt(p.get("expires_in")||"3600",10)});
+  history.replaceState(null,"",location.pathname+location.search);
+  return true;
+}
+
+/* A magic link normally arrives as a fresh navigation, but not always — an
+   installed PWA can hand the hash to a page that is already running. Then boot
+   has been and gone and nobody claims the token. Catch that case too. */
+window.addEventListener("hashchange",()=>{ if(claimHash())location.reload() });
+
+(async function boot(){
+  if(!SB_ANON||SB_ANON.indexOf("PASTE")===0){
+    document.getElementById("gate2").hidden=false;
+    document.getElementById("gMsg").className="gmsg err";
+    document.getElementById("gMsg").textContent="config.js still has the placeholder in it. Paste the Supabase anon key there and push again.";
+    return;
+  }
+  claimHash();
+  hydrate();                                   // paint from the mirror straight away
   const t=$$(".nav button").filter(x=>x.dataset.p===LS.get("tab","week"))[0];if(t)t.click();
   renderAll();
-  autoBrain().then(autoWeek);   // brain first, so autoWeek is a no-op for dates already in it
+
+  const tok=await token();
+  if(!tok){showLogin();return}
+
+  // who are we — needed before anything can be written back
+  try{
+    const r=await fetch(SB_URL+"/auth/v1/user",{headers:{apikey:SB_ANON,authorization:"Bearer "+tok}});
+    if(r.ok){const u=await r.json();USER=u;const s=SESS.get();if(s){s.user=u;SESS.set(s)}}
+  }catch(e){}
+  if(!USER){showLogin("Couldn't confirm that session. Sign in again.");return}
+  $("#gate2").hidden=true;
+
+  try{ await pull(); hydrate(); renderAll(); }
+  catch(e){ toast("Offline — showing your last saved copy") }
+
+  autoBrain().then(autoWeek);
 })();
 
 /* If a week-latest.json is published alongside the app, pick it up automatically.
@@ -1400,9 +1641,13 @@ async function autoWeek(){
 async function autoBrain(){
   if(location.protocol==="file:")return;
   try{
-    const res=await fetch("brain-latest.json",{cache:"no-cache"});
+    // The corpus is Jason's paid material, so it is served to signed-in users
+    // from Supabase rather than published at a public URL.
+    const {url,headers}=await fnUrl("brain");
+    const res=await fetch(url,{headers});
     if(!res.ok)return;
-    const list=await res.json();
+    const j=await res.json();
+    const list=j&&j.calls;
     if(!Array.isArray(list)||!list.length)return;
     let added=0;
     list.forEach(j=>{
