@@ -43,7 +43,9 @@ h1,h2,h3{margin:0}
   padding:calc(env(safe-area-inset-top,0px) + 14px) var(--gut) 12px;display:flex;align-items:center;gap:12px}
 .brand{font-family:var(--disp);font-weight:700;font-size:18px;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
 .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--up);flex:none;box-shadow:0 0 10px rgba(0,200,5,.6)}
-.top .sub{font-size:11px;color:var(--ink-3);margin-left:auto;text-align:right;line-height:1.4;max-width:48%;letter-spacing:.01em}
+.top .sub{font-family:var(--mono);font-size:12px;color:var(--ink-3);margin-left:auto;
+  text-align:right;line-height:1.4;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.top .sub b{color:var(--ink-2);font-weight:600}
 .icon{width:var(--tap);height:var(--tap);display:grid;place-items:center;margin:-10px -10px -10px 0;color:var(--ink-2);flex:none}
 .icon svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7}
 
@@ -575,9 +577,14 @@ function migrateDone(){
 function renderWeek(){
   const w=week(),badge=$("#bWeek");
   $("#weekEmpty").hidden=!!w;$("#weekBody").hidden=!w;
-  if(!w){badge.hidden=true;$("#sub").textContent=new Date().toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});return}
+  if(!w){badge.hidden=true;stampVersion();return}
   const c=w.call||{};
-  $("#sub").innerHTML=esc(c.title||"Call")+"<br>"+esc(c.date||"");
+  stampVersion();
+  // the call name moves to the sections that are actually per-call; homework
+  // below is aggregated across every call and never belonged under one title
+  const from=esc(c.title||"Call")+" · "+esc(c.date||"");
+  $("#secRules").querySelector("h2").innerHTML=`Standing rules <span class="c">${from}</span>`;
+  $("#secSetups").querySelector("h2").innerHTML=`Setups taught <span class="c">${from}</span>`;
   const HW=allHomework(),
         open=HW.filter(h=>!DONE[h.key]),
         done=HW.filter(h=>DONE[h.key]),
@@ -861,8 +868,8 @@ function retrieve(q,n){
 function renderCoach(){
   const n=CALLS.length;
   $("#corpus").textContent=n
-    ?`Drawing on ${n} call${n>1?"s":""}, newest ${CALLS[0].call?.date||"?"} · build ${BUILD}. It only knows what the club actually taught.`
-    :`No calls loaded · build ${BUILD}. The Coach only knows what your mentor actually said.`;
+    ?`Drawing on ${n} call${n>1?"s":""}, newest ${CALLS[0].call?.date||"?"} · v${BUILD}. It only knows what the club actually taught.`
+    :`No calls loaded · v${BUILD}. The Coach only knows what your mentor actually said.`;
   $("#prompts").innerHTML=["What did he mean by exit liquidity?","Explain the four-stage cycle","When is a support level real?","Where does he say to put a stop?","What's my homework?"]
     .map(p=>`<button data-q="${esc(p)}">${esc(p)}</button>`).join("");
   $("#chat").innerHTML=CHAT.map(m=>m.role==="you"
@@ -1029,7 +1036,12 @@ $("#rClose").addEventListener("click",()=>$("#dlgRecap").close());
 $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("#recapOut").textContent);toast("Copied")}catch(e){toast("Select and copy manually")}});
 
 /* ---------- market ---------- */
-const BUILD="b9";  // must match VERSION in sw.js — this is THE version number
+/* THE version number. Bump it on EVERY deploy and keep sw.js's VERSION in step
+   ('otto-v1.2.9') — it is how a push is verified from the phone.
+     major  the app works differently enough that Josh would notice
+     minor  a new feature or tab
+     patch  fixes, copy, corpus wiring */
+const BUILD="1.2.9";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -1076,7 +1088,7 @@ const wait=(k,e)=>`<div class="read wait"><div class="k">${esc(k)}</div><div cla
 
 function renderMarket(){
   $("#keybar").innerHTML=CFG.key
-    ?`<div class="stamp">Connected · ends ${esc(CFG.key.slice(-4))} · build ${BUILD} · 11 calls a run, 25 a day free</div>`
+    ?`<div class="stamp">Connected · ends ${esc(CFG.key.slice(-4))} · v${BUILD} · 11 calls a run, 25 a day free</div>`
     :`<div class="stamp" style="color:var(--mark)">No market data key</div><p style="margin:8px 0 0;font-size:16px;color:var(--ink-2)">Get a free key at alphavantage.co and add it in Settings. Nothing below fills in until you do — this reads live data, it doesn't guess.</p>`;
   $("#runStamp").textContent=RUN?"Last run "+new Date(RUN.at).toLocaleString():"Not run yet.";
   $("#clearRunBtn").hidden=!RUN;
@@ -1172,10 +1184,16 @@ window.addEventListener("offline",()=>toast("Offline — homework and journal st
 function brainStamp(){
   const n=CALLS.length;
   const newest=n?String(CALLS[0].call?.date||"?"):"—";
-  return "Otto Trader build "+BUILD+" · brain: "+(n?n+" call"+(n>1?"s":"")+", newest "+newest:"nothing loaded");
+  return "Otto Trader v"+BUILD+" · brain: "+(n?n+" call"+(n>1?"s":"")+", newest "+newest:"nothing loaded");
 }
 function renderVersion(){const el=$("#verStamp");if(el)el.textContent=brainStamp()}
-function renderAll(){renderWeek();renderInsights();renderCoach();renderJournal();renderMarket();renderVersion()}
+/* Top right of every screen. Josh opens the app after a push and reads one line:
+   the version says the code landed, the call count says the brain landed. */
+function stampVersion(){
+  const n=CALLS.length;
+  $("#sub").innerHTML=`<b>v${BUILD}</b><br>${n?n+" call"+(n>1?"s":""):"no calls"}`;
+}
+function renderAll(){renderWeek();renderInsights();renderCoach();renderJournal();renderMarket();renderVersion();stampVersion()}
 (function(){
   CFG=Object.assign({},DEF,LS.get("cfg",{}));
   CALLS=LS.get("calls",[]);TRADES=LS.get("trades",[]);DONE=LS.get("done",{});
