@@ -2,9 +2,9 @@
    Network-first for anything that changes, cache-first only for static assets.
    A cache-first HTML strategy would pin users to an old build forever, which is
    exactly the failure we already hit once by hand. */
-const VERSION = 'otto-v2.0.0';
+const VERSION = 'otto-v2.0.1';
 const SHELL = [
-  './', './index.html', './config.js', './manifest.webmanifest',
+  './', './index.html', './manifest.webmanifest',   // config.js is deliberately NOT precached
   './icon-192.png', './icon-512.png',
   './icon-maskable-512.png', './apple-touch-icon.png'
 ];
@@ -34,6 +34,16 @@ self.addEventListener('fetch', e => {
   // Never touch the market data or Claude APIs — they must always hit the network,
   // and a cached quote is worse than no quote.
   if (url.origin !== self.location.origin) return;
+
+  // config.js decides WHICH BACKEND the whole app talks to. A stale copy points
+  // it at the wrong Supabase project — which is exactly the failure we hit, and
+  // it is invisible because everything still "works", just against the wrong
+  // database. Never cached, never stored, no fallback copy. If it cannot be
+  // fetched the app should fail loudly rather than quietly use an old address.
+  if (url.pathname.endsWith('config.js')) {
+    e.respondWith(fetch(req, { cache: 'no-store' }));
+    return;
+  }
 
   const isDoc  = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
   // The corpus files must never go stale in an installed PWA: publishing a new
