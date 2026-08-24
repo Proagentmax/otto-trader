@@ -568,21 +568,27 @@ const LS={
   del(k){ delete MEM[k];try{localStorage.removeItem(NS+k)}catch(e){} },
 };
 // Session tokens and the two device-local caches never travel.
-const CLOUD_KEYS=new Set(["done","trades","chat","mailans","cfg","tab"]);
+/* One shared workspace, not one per device. Ifoma and Josh are two people
+   looking at the same thing — the same ticks, the same journal, the same Coach
+   history. "bias" is in here too now: it costs one row and it means whoever
+   reads the morning first, both of them see it. */
+const CLOUD_KEYS=new Set(["done","trades","chat","mailans","cfg","tab","bias"]);
+// NOT "calls": the brain is ~200KB and already served from Supabase on every
+// load. Syncing it would write a 200KB row for something the server owns.
 
 function schedFlush(){ clearTimeout(flushT); flushT=setTimeout(flush,1200) }
 async function flush(){
   if(!DIRTY.size||!USER)return;
-  const rows=[...DIRTY].map(k=>({user_id:USER.id,key:k,value:MEM[k]===undefined?null:MEM[k]}));
+  const rows=[...DIRTY].map(k=>({key:k,value:MEM[k]===undefined?null:MEM[k]}));
   DIRTY.clear();
   try{
-    const r=await sbFetch("app_state",{method:"POST",
+    const r=await sbFetch("shared_state",{method:"POST",
       headers:{prefer:"resolution=merge-duplicates"},body:JSON.stringify(rows)});
     if(!r.ok){rows.forEach(x=>DIRTY.add(x.key));schedFlush()}   // keep it queued, try again
   }catch(e){rows.forEach(x=>DIRTY.add(x.key));}
 }
 async function pull(){
-  const r=await sbFetch("app_state?select=key,value");
+  const r=await sbFetch("shared_state?select=key,value");
   if(!r.ok)throw new Error("pull "+r.status);
   for(const row of await r.json()){
     MEM[row.key]=row.value;
@@ -1283,7 +1289,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.2.0";
+const BUILD="2.3.0";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},

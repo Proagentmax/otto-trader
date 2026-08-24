@@ -174,8 +174,18 @@ async function loadBrain(): Promise<any[]> {
       }
     }
   } catch (_) { /* fall through */ }
+  // Fallback to the public copy only while the table is still being filled.
+  // Once brain-latest.json is removed from the repo this path 404s, and that
+  // should be a loud error rather than a Coach that quietly knows nothing.
   const r = await fetch("https://proagentmax.github.io/otto-trader/brain-latest.json");
-  BRAIN = await r.json();
+  if (!r.ok) throw new Error("no corpus: brain_versions is empty and the public copy is gone");
+  const fallback = await r.json();
+  // A Coach that quietly knows nothing is worse than one that errors: it would
+  // answer "he never covered that" to every question and sound authoritative.
+  if (!Array.isArray(fallback) || !fallback.length) {
+    throw new Error("no corpus: the public copy is empty or malformed");
+  }
+  BRAIN = fallback;
   return BRAIN!;
 }
 
@@ -429,6 +439,35 @@ Deno.serve(async (req) => {
 
     if (fn === "brain") {
       return json({ ok: true, calls: await loadBrain() });
+    }
+
+    // One-shot: copy the corpus out of the public repo into Postgres, so
+    // Jason's transcripts stop being readable by anyone with the URL. Run once,
+    // then delete brain-latest.json from the repo. Idempotent — re-running just
+    // writes another version row, and the newest wins.
+    if (fn === "seed") {
+      const base = Deno.env.get("SUPABASE_URL");
+      const svc  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (!base || !svc) return json({ ok: false, error: "service role not available" }, 500);
+
+      const src = await fetch("https://proagentmax.github.io/otto-trader/brain-latest.json");
+      if (!src.ok) return json({ ok: false, error: "public copy not reachable (already deleted?)" }, 502);
+      const payload = await src.json();
+      if (!Array.isArray(payload) || !payload.length) {
+        return json({ ok: false, error: "that did not look like a corpus" }, 502);
+      }
+
+      const ins = await fetch(base + "/rest/v1/brain_versions", {
+        method: "POST",
+        headers: { apikey: svc, authorization: "Bearer " + svc,
+                   "content-type": "application/json", prefer: "return=representation" },
+        body: JSON.stringify({ notes: "seeded from the public repo copy", payload }),
+      });
+      if (!ins.ok) return json({ ok: false, error: "insert failed: " + (await ins.text()).slice(0, 200) }, 502);
+      const row = await ins.json();
+      BRAIN = null;                                   // drop the cached copy
+      return json({ ok: true, seeded: payload.length,
+                    version: Array.isArray(row) && row[0] ? row[0].version : null });
     }
 
     // A plain, non-streaming Claude call for the app's smaller jobs: drafting
