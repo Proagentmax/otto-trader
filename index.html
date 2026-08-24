@@ -109,6 +109,33 @@ select.f{appearance:none;background-image:linear-gradient(45deg,transparent 50%,
   border-radius:5px;background:var(--surface-2);color:var(--ink-3)}
 .tg.rec{background:rgba(0,200,5,.11);color:var(--up)}
 .tg.mail{background:rgba(255,80,0,.13);color:var(--down)}
+.bias{border-radius:var(--r);border:1px solid var(--rule);background:var(--surface);
+  padding:16px;margin-bottom:16px}
+.bias.bull{background:#0F1A10;border-color:#1E3A20}
+.bias.bear{background:#1B1210;border-color:#40201A}
+.bias.chop{background:#1B1808;border-color:#3D3410}
+.bias .lab{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:700;color:var(--ink-3)}
+.bias .vd{font-size:21px;font-weight:700;letter-spacing:-.025em;margin:7px 0 5px;line-height:1.2}
+.bias.bull .vd{color:var(--up)}
+.bias.bear .vd{color:var(--down)}
+.bias.chop .vd{color:#E8B10A}
+.bias .cov{font-size:13px;color:var(--ink-2);line-height:1.45}
+.bias .fence{margin-top:12px;padding-top:11px;border-top:1px solid var(--rule);
+  font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.bias .fence b{color:var(--ink);font-weight:600}
+.legs{margin-top:13px;display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);
+  border-radius:9px;overflow:hidden}
+.leg{background:var(--surface);display:flex;align-items:baseline;gap:9px;padding:9px 11px;font-size:13px}
+.leg .nm{font-weight:600;min-width:74px}
+.leg .mv{font-family:var(--mono);font-variant-numeric:tabular-nums;min-width:58px;text-align:right}
+/* Coloured by what the move MEANS, never by its sign. A 10Y yield printing
+   +1.20% is a rising number and a bearish event; painting it green because it
+   went up would teach Josh exactly the wrong reflex. Green = a rule fired for
+   him, orange = a rule fired against him, grey = no rule fired. */
+.leg .mv.up{color:var(--up)}.leg .mv.dn{color:var(--down)}.leg .mv.flat{color:var(--ink-2)}
+.leg .rz{color:var(--ink-2);flex:1;line-height:1.35}
+.leg .ag{font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}
+.leg.old{opacity:.5}
 .allclear{background:#0F1A10;border:1px solid #1E3A20;border-radius:var(--r);padding:20px 16px;text-align:center}
 .allclear b{display:block;color:var(--up);font-size:16px;font-weight:600;margin-bottom:3px}
 .allclear span{font-size:14px;color:var(--ink-2)}
@@ -320,6 +347,7 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
   </section>
 
   <section class="pane" id="p-market">
+    <div id="biasBox"></div>
     <div class="keybar" id="keybar"></div>
     <button class="btn solid wide" id="runBtn">Run the routine</button>
     <div class="bar" id="progBar" hidden><i></i></div>
@@ -376,6 +404,11 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
       <p class="hint">Powers the Coach and lets the app read raw transcripts itself. Without it, you can still load week files made in Claude. Stored only in this browser — don't enter it on a shared device.</p>
     </div>
     <div style="margin-bottom:20px">
+      <label class="f" for="sProxy">Data proxy URL</label>
+      <input class="f" id="sProxy" placeholder="https://otto-proxy.…workers.dev" autocomplete="off" spellcheck="false">
+      <p class="hint">Your Cloudflare Worker. It holds the market-data key server-side and feeds the morning bias. Without it the bias card stays off and the routine runs on Alpha Vantage as before.</p>
+    </div>
+    <div style="margin-bottom:20px">
       <label class="f" for="sKey">Alpha Vantage key</label>
       <input class="f" id="sKey" placeholder="market data key" autocomplete="off" spellcheck="false">
       <p class="hint">Free at alphavantage.co. 25 calls a day; the routine uses 11.</p>
@@ -412,8 +445,8 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
 <script>
 "use strict";
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
-const DEF={key:"",claude:"",ten:4.7,tenH:4.88,jpy:160,maxDay:1,watch:"WMT, TGT, HD, NVDA, COST"};
-let CFG={...DEF},CALLS=[],CUR=0,TRADES=[],DONE={},RUN=null,CHAT=[],INSTAB="ideas";
+const DEF={proxy:"",key:"",claude:"",ten:4.7,tenH:4.88,jpy:160,maxDay:1,watch:"WMT, TGT, HD, NVDA, COST"};
+let CFG={...DEF},CALLS=[],CUR=0,TRADES=[],DONE={},RUN=null,CHAT=[],INSTAB="ideas",BIASRUN=null;
 const NS="otto:";
 const LS={
   get(k,f){try{const v=localStorage.getItem(NS+k);return v?JSON.parse(v):f}catch(e){return f}},
@@ -1041,7 +1074,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="1.2.9";
+const BUILD="1.3.0";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -1085,6 +1118,128 @@ const ty=k=>{const d=RUN&&RUN.data[k]&&RUN.data[k].data;if(!Array.isArray(d))ret
   const p=d.filter(x=>x.value!=="."&&isFinite(parseFloat(x.value)));return p.length?{v:num(p[0].value),prev:num(p[1]&&p[1].value),date:p[0].date}:null};
 const card=(k,v,s,cls)=>`<div class="read ${cls||""}"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>${s?`<div class="s ${cls==="trip"?"dn":""}">${esc(s)}</div>`:""}</div>`;
 const wait=(k,e)=>`<div class="read wait"><div class="k">${esc(k)}</div><div class="v">${e?"n/a":"—"}</div>${e?`<div class="s dn">${esc(String(e).slice(0,42))}</div>`:""}</div>`;
+
+/* ---------- the morning bias ----------
+   Josh's ask: "instead of me determining the decision by myself." His own
+   intermarket sheet is the rulebook; every threshold below is tagged with the
+   row of that sheet it comes from.
+
+   Two things this deliberately does NOT do.
+   1. It never hides staleness. Josh's actual complaint was data two days old, so
+      a verdict computed from yesterday's close and shown in confident green
+      would be that same bug wearing a badge. Each leg carries its own age, and
+      conviction is gated on how many legs are genuinely fresh.
+   2. It is a PRE-OPEN PICTURE, not a signal. His sheet resolves to an entry at
+      the 9:30 opening range; Jason's rule is that a new trader does not trade
+      the first thirty minutes. Where they disagree the card shows both and
+      resolves neither. */
+const BIAS_RULES=[
+ {leg:"yield", when:p=>p>=0.60, side:-1, why:"10Y spiking. Higher discount rates compress tech multiples.", row:"matrix 1"},
+ {leg:"yield", when:p=>p<=-0.40, side:+1, why:"Yields easing. Relieves valuation pressure on growth.",      row:"matrix 2"},
+ {leg:"jpy",   when:p=>p<=-0.40, side:-1, why:"Yen strengthening — risk-off, carry-trade unwind.",           row:"matrix 3"},
+ {leg:"jpy",   when:p=>p>=0.15,  side:+1, why:"Dollar firm vs yen — healthy global liquidity.",              row:"matrix 4"},
+ {leg:"dollar",when:p=>p>=0.40,  side:-1, why:"Dollar surging. Tightens conditions, shrinks mega-cap earnings.",row:"matrix 5"},
+ {leg:"crude", when:p=>p>=2.00,  side:-1, why:"Energy shock. Headline inflation alarm lifts yields.",        row:"matrix 6"}
+];
+const FRESH_S=45*60;        // a leg older than this is not a read, it is history
+function biasFrom(q,served){
+  const age=k=>(q[k]&&q[k].at)?Math.max(0,served-q[k].at):null;
+  const pct=k=>(q[k]&&typeof q[k].pct==="number")?q[k].pct:null;
+  const live=k=>pct(k)!==null&&age(k)!==null&&age(k)<=FRESH_S;
+
+  const legs=["yield","jpy","dollar","crude","es","nq","ym"].map(k=>({
+    k,q:q[k],pct:pct(k),age:age(k),live:live(k),fired:[]
+  }));
+  const byKey=Object.fromEntries(legs.map(l=>[l.k,l]));
+  const fresh=legs.filter(l=>l.live).length;
+
+  let score=0;
+  BIAS_RULES.forEach(r=>{
+    const l=byKey[r.leg];
+    if(!l||!l.live||!r.when(l.pct))return;
+    score+=r.side;l.fired.push(r);
+  });
+
+  // index legs: alignment is conviction, divergence is chop (matrix 7 and 8)
+  const idx=["es","nq","ym"].map(k=>byKey[k]).filter(l=>l.live);
+  const sgn=v=>v>=0?1:-1;
+  const aligned=idx.length===3&&idx.every(l=>Math.abs(l.pct)>=0.25)&&
+                new Set(idx.map(l=>sgn(l.pct))).size===1?sgn(idx[0].pct):0;
+  const nq=byKey.nq,ym=byKey.ym;
+  const diverged=nq.live&&ym.live&&sgn(nq.pct)!==sgn(ym.pct)&&
+                 Math.abs(nq.pct)>=0.20&&Math.abs(ym.pct)>=0.20;
+  if(aligned)score+=aligned*2;
+
+  let verdict,tone,note;
+  if(fresh<2){
+    verdict="No read";tone="";note="Not enough fresh data to call anything. Nothing here is current enough to trade off.";
+  }else if(diverged){
+    verdict="Choppy — stand aside";tone="chop";
+    note="Nasdaq and Dow are pulling opposite ways. Your sheet calls that rotation, not entry: high risk of whipsaw.";
+  }else if(fresh>=5&&score>=3){
+    verdict="Leaning long";tone="bull";note="Macro and the indexes agree. Your sheet's high-conviction trend case.";
+  }else if(fresh>=5&&score<=-3){
+    verdict="Leaning short";tone="bear";note="Macro and the indexes agree to the downside.";
+  }else if(score>=2){
+    verdict="Mildly long — small size";tone="bull";note="Some tailwind, not the full picture. Your sheet says scalp-only when it looks like this.";
+  }else if(score<=-2){
+    verdict="Mildly short — small size";tone="bear";note="Some headwind, not the full picture.";
+  }else{
+    verdict="No edge";tone="";note="Nothing is lining up. That is a legitimate answer and it is most mornings.";
+  }
+  return {verdict,tone,note,legs,fresh,total:legs.length,score,diverged,aligned};
+}
+
+async function readMorning(){
+  if(!CFG.proxy)return toast("Add your data proxy URL in Settings");
+  const btn=$("#biasBtn");if(btn){btn.disabled=true;btn.textContent="Reading…"}
+  try{
+    const r=await fetch(CFG.proxy.replace(/\/+$/,"")+"/?set=morning",{cache:"no-store"});
+    const j=await r.json();
+    if(!j.ok)throw new Error(j.error||"proxy error");
+    BIASRUN={at:new Date().toISOString(),served:j.served,quotes:j.quotes,source:j.source};
+    LS.set("bias",BIASRUN);
+  }catch(e){toast("Bias: "+String(e.message).slice(0,70))}
+  if(btn){btn.disabled=false;btn.textContent="Read the morning"}
+  renderBias();
+}
+function renderBias(){
+  const box=$("#biasBox");if(!box)return;
+  if(!CFG.proxy){box.innerHTML="";return}
+  if(!BIASRUN){
+    box.innerHTML=`<div class="bias"><div class="lab">Morning bias</div>
+      <div class="vd" style="font-size:17px">Not read yet</div>
+      <div class="cov">Your intermarket sheet, computed. One request, about two seconds.</div>
+      <button class="btn wide solid" id="biasBtn" style="margin-top:12px">Read the morning</button></div>`;
+    return;
+  }
+  const b=biasFrom(BIASRUN.quotes,BIASRUN.served);
+  const mins=a=>a===null?"—":a<90?"now":a<5400?Math.round(a/60)+"m ago":Math.round(a/3600)+"h ago";
+  const legs=b.legs.map(l=>{
+    const p=l.pct;
+    const mv=p===null?"—":(p>0?"+":"")+p.toFixed(2)+"%";
+    const why=l.fired.length?l.fired.map(f=>f.why).join(" ")
+      :(l.live?"No rule fired at this size.":"Not current — no read from this one.");
+    // an index leg has no rule of its own; its meaning is the alignment check
+    const side=l.fired.length?l.fired[0].side
+      :(["es","nq","ym"].includes(l.k)&&l.live&&p!==null?(p>0?1:-1):0);
+    const cls=side>0?"up":side<0?"dn":"flat";
+    return `<div class="leg ${l.live?"":"old"}">
+      <span class="nm">${esc((l.q&&l.q.label)||l.k)}</span>
+      <span class="mv ${cls}">${esc(mv)}</span>
+      <span class="rz">${esc(why)}</span>
+      <span class="ag">${esc(mins(l.age))}</span></div>`;
+  }).join("");
+  box.innerHTML=`<div class="bias ${b.tone}">
+    <div class="lab">Morning bias · your checklist, not Jason's</div>
+    <div class="vd">${esc(b.verdict)}</div>
+    <div class="cov">${esc(b.note)}</div>
+    <div class="cov" style="margin-top:7px;color:var(--ink-3)">Read from ${b.fresh} of ${b.total} inputs${b.fresh<5?" — conviction needs 5":""}. ${b.diverged?"Index divergence overrides everything else.":b.aligned?"All three indexes aligned.":""}</div>
+    <div class="legs">${legs}</div>
+    <div class="fence"><b>Jason's rule stands over this.</b> As a new trader you don't trade the first thirty minutes — the gap up is what traps new buyers (Intro Call, 17 Aug 2026, 03:16). Your sheet resolves to an entry at the 9:30 opening range. They disagree, and this app won't pick for you. Ask him.</div>
+    <button class="btn wide" id="biasBtn" style="margin-top:12px">Read it again</button></div>`;
+}
+$("#biasBox").addEventListener("click",e=>{if(e.target.closest("#biasBtn"))readMorning()});
 
 function renderMarket(){
   $("#keybar").innerHTML=CFG.key
@@ -1145,6 +1300,7 @@ $("#clearRunBtn").addEventListener("click",()=>{RUN=null;LS.del("run");renderMar
 
 /* ---------- settings ---------- */
 function openSettings(){
+  $("#sProxy").value=CFG.proxy||"";
   $("#sClaude").value=CFG.claude;$("#sKey").value=CFG.key;$("#sTen").value=CFG.ten;
   $("#sTenH").value=CFG.tenH;$("#sJpy").value=CFG.jpy;$("#sMax").value=CFG.maxDay;$("#sWatch").value=CFG.watch;
   $("#dlgSet").showModal();
@@ -1153,12 +1309,13 @@ $("#settingsBtn").addEventListener("click",openSettings);
 $("#sClose").addEventListener("click",()=>$("#dlgSet").close());
 $("#sSave").addEventListener("click",()=>{
   CFG={claude:$("#sClaude").value.trim(),key:$("#sKey").value.trim(),
+    proxy:$("#sProxy").value.trim().replace(/\/+$/,""),
     ten:parseFloat($("#sTen").value)||DEF.ten,tenH:parseFloat($("#sTenH").value)||DEF.tenH,
     jpy:parseFloat($("#sJpy").value)||DEF.jpy,maxDay:parseInt($("#sMax").value)||1,watch:$("#sWatch").value};
   LS.set("cfg",CFG);$("#dlgSet").close();renderAll();toast("Saved")});
 $("#sWipe").addEventListener("click",()=>{
   if(!confirm("Erase every call, trade, setting and key from this browser?"))return;
-  ["cfg","calls","trades","done","run","tab","chat"].forEach(k=>LS.del(k));location.reload()});
+  ["cfg","calls","trades","done","run","tab","chat","bias","mailans","hwmig"].forEach(k=>LS.del(k));location.reload()});
 
 /* ---------- service worker ---------- */
 if("serviceWorker" in navigator && location.protocol==="https:"){
@@ -1190,14 +1347,16 @@ function renderVersion(){const el=$("#verStamp");if(el)el.textContent=brainStamp
 /* Top right of every screen. Josh opens the app after a push and reads one line:
    the version says the code landed, the call count says the brain landed. */
 function stampVersion(){
-  const n=CALLS.length;
-  $("#sub").innerHTML=`<b>v${BUILD}</b><br>${n?n+" call"+(n>1?"s":""):"no calls"}`;
+  // Version only. A status line that always says something is a line you stop
+  // reading — the second row appears only when the brain actually failed to load.
+  $("#sub").innerHTML=`<b>v${BUILD}</b>`+
+    (CALLS.length?"":`<br><span style="color:var(--down)">brain not loaded</span>`);
 }
-function renderAll(){renderWeek();renderInsights();renderCoach();renderJournal();renderMarket();renderVersion();stampVersion()}
+function renderAll(){renderWeek();renderInsights();renderCoach();renderJournal();renderMarket();renderBias();renderVersion();stampVersion()}
 (function(){
   CFG=Object.assign({},DEF,LS.get("cfg",{}));
   CALLS=LS.get("calls",[]);TRADES=LS.get("trades",[]);DONE=LS.get("done",{});
-  RUN=LS.get("run",null);CHAT=LS.get("chat",[]);
+  RUN=LS.get("run",null);CHAT=LS.get("chat",[]);BIASRUN=LS.get("bias",null);
   if(RUN&&(RUN.v!==BUILD||Date.now()-new Date(RUN.at).getTime()>20*36e5)){RUN=null;LS.del("run")}
   migrateDone();
   const t=$$(".nav button").filter(x=>x.dataset.p===LS.get("tab","week"))[0];if(t)t.click();
