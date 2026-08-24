@@ -9,6 +9,10 @@
  * already switched on. It belongs in source; that is what it is for.
  */
 window.OTTO = {
+  // Where sign-in links must come back to. Stated outright rather than
+  // derived from location, because a trailing slash or a stray path made
+  // Supabase fall back and drop "/otto-trader/" entirely.
+  site: "https://proagentmax.github.io/otto-trader/",
   url:  "https://loykixugjltxukuvbbuf.supabase.co",
   anon: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxveWtpeHVnamx0eHVrdXZiYnVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MzcxNTUsImV4cCI6MjEwMzExMzE1NX0.5hCDRTHK3yAKaKgXxrbb4ZE_joIHMT3AQ-OtyFBtl44"
 };

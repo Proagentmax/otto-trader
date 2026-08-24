@@ -480,6 +480,7 @@ const NS="otto:";
    file with two lines — so nobody ever has to edit this one. */
 const SB_URL  = (window.OTTO&&window.OTTO.url)  || "";
 const SB_ANON = (window.OTTO&&window.OTTO.anon) || "";
+const SB_SITE = (window.OTTO&&window.OTTO.site) || (location.origin+location.pathname);
 
 /* ---------- session ----------
    The only thing that stays on the device is the session token. Not data — a
@@ -1253,7 +1254,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.0.1";
+const BUILD="2.0.2";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -1557,7 +1558,7 @@ $("#gSend").addEventListener("click",async()=>{
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){m.textContent="That doesn't look like an email address.";m.className="gmsg err";return}
   b.disabled=true;b.textContent="Sending…";m.textContent="";m.className="gmsg";
   try{
-    await sbAuth("otp",{email,options:{email_redirect_to:location.origin+location.pathname}});
+    await sbAuth("otp",{email,options:{email_redirect_to:SB_SITE}});
     m.textContent="Check "+email+". Tap the link on this device and you're in.";m.className="gmsg ok";
     b.textContent="Sent — send again";
   }catch(e){m.textContent=String(e.message).slice(0,140);m.className="gmsg err";b.textContent="Email me a sign-in link"}
