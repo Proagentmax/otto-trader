@@ -10,5 +10,5 @@
  */
 window.OTTO = {
   url:  "https://loykixugjltxukuvbbuf.supabase.co",
-  anon: "PASTE_YOUR_ANON_KEY_HERE"
+  anon: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxveWtpeHVnamx0eHVrdXZiYnVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MzcxNTUsImV4cCI6MjEwMzExMzE1NX0.5hCDRTHK3yAKaKgXxrbb4ZE_joIHMT3AQ-OtyFBtl44"
 };
