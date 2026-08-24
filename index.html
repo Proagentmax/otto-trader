@@ -102,6 +102,27 @@ select.f{appearance:none;background-image:linear-gradient(45deg,transparent 50%,
 .task .m{font-size:11.5px;color:var(--ink-3);margin-top:8px;display:flex;gap:13px;flex-wrap:wrap}
 .task .m .who{color:var(--up)}
 .quote{color:var(--ink-2);font-size:14.5px;border-left:2px solid var(--surface-3);padding-left:11px;margin-top:8px;font-style:normal}
+.task .tags{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.tg{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 7px;
+  border-radius:5px;background:var(--surface-2);color:var(--ink-3)}
+.tg.rec{background:rgba(0,200,5,.11);color:var(--up)}
+.tg.mail{background:rgba(255,80,0,.13);color:var(--down)}
+.allclear{background:#0F1A10;border:1px solid #1E3A20;border-radius:var(--r);padding:20px 16px;text-align:center}
+.allclear b{display:block;color:var(--up);font-size:16px;font-weight:600;margin-bottom:3px}
+.allclear span{font-size:14px;color:var(--ink-2)}
+.mailbox{background:#1B1210;border:1px solid #40201A;border-radius:var(--r);padding:15px 16px;margin-bottom:18px}
+.mailbox b{font-size:15px;font-weight:600;display:block}
+.mailbox p{margin:5px 0 0;font-size:14px;color:var(--ink-2);line-height:1.45}
+.donewrap{margin-top:6px}
+.donehead{display:flex;align-items:center;gap:10px;padding:14px 0 4px;cursor:pointer;background:none;
+  border:0;width:100%;font:inherit;color:inherit}
+.donehead .l{font-size:11px;letter-spacing:.11em;text-transform:uppercase;font-weight:700;color:var(--ink-3)}
+.donehead .ln{flex:1;height:1px;background:var(--rule)}
+.donehead .cv{width:11px;height:11px;stroke:var(--ink-3);stroke-width:2.4;fill:none;transition:transform .25s}
+.donewrap[data-shut="1"] .cv{transform:rotate(-90deg)}
+.donewrap[data-shut="1"] .dlist{display:none}
+.draft{white-space:pre-wrap;font-size:14.5px;line-height:1.55;background:var(--surface-2);
+  border:1px solid var(--rule);border-radius:10px;padding:14px;color:var(--ink);max-height:44vh;overflow:auto}
 
 .item{display:flex;gap:13px;padding:14px 0;border-bottom:1px solid var(--rule)}
 .item:last-child{border-bottom:0}
@@ -370,6 +391,20 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
   <div class="ft"><button class="btn danger" id="sWipe">Erase all</button><button class="btn" id="sClose">Close</button><button class="btn solid" id="sSave">Save</button></div>
 </dialog>
 
+<dialog id="dlgMail">
+  <div class="grip"></div><div class="hd"><h3>Email Jason</h3></div>
+  <div class="bd">
+    <p class="hint" style="margin-top:0">He asked you these on the call. Answer them here and the Coach writes the email in your words — you read it, you send it.</p>
+    <div id="mailQs"></div>
+    <div id="mailOut" hidden style="margin-top:18px">
+      <label class="f">Draft</label>
+      <div class="draft" id="mailDraft"></div>
+      <p class="hint">Read it before you send it. Change anything that doesn't sound like you.</p>
+    </div>
+  </div>
+  <div class="ft"><button class="btn" id="mailClose">Close</button><button class="btn" id="mailCopy" hidden>Copy</button><button class="btn solid" id="mailDo">Draft it</button></div>
+</dialog>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -481,24 +516,109 @@ async function extractCall(vtt,name){
 }
 
 /* ---------- week ---------- */
+/* ---------- homework: one-time vs recurring ----------
+   Two of Jason's seven assignments never complete. a7 is nightly (mark support,
+   convert to ES) and a4 is weekly (recap every trade). The app used to treat all
+   seven identically, so ticking the nightly one on Monday retired the single
+   most profit-relevant habit he was given. One-time tasks now close for good;
+   recurring ones come back on their own schedule. */
+function hwKind(a){
+  if(a.repeat)return a.repeat;
+  const d=String(a.due||"").toLowerCase();
+  if(/night|daily|every day/.test(d))return "nightly";
+  if(/week/.test(d))return "weekly";
+  return "once";
+}
+/* The night's work prepares the NEXT session, so the nightly key rolls at the
+   close, not at midnight. Marking levels at 9pm Sunday satisfies Monday, and
+   Monday morning it still reads as done. */
+function sessionDate(){
+  const d=new Date();
+  if(d.getHours()>=16)d.setDate(d.getDate()+1);
+  return d.toISOString().slice(0,10);
+}
+function isoWeek(){
+  const d=new Date();d.setHours(0,0,0,0);
+  d.setDate(d.getDate()+4-(d.getDay()||7));                       // Thursday decides the year
+  const y0=new Date(d.getFullYear(),0,1);
+  return d.getFullYear()+"-W"+String(Math.ceil(((d-y0)/864e5+1)/7)).padStart(2,"0");
+}
+function hwKey(a,date){
+  const k=hwKind(a),base=date+"::"+a.id;
+  return k==="nightly"?base+"@"+sessionDate():k==="weekly"?base+"@"+isoWeek():base;
+}
+/* Homework is what Josh OWES, not what the call he happens to be reading said.
+   Aggregated across every loaded call so an open task can't vanish behind a
+   newer one; rules and setups stay per-call, because those are reference. */
+function allHomework(){
+  const out=[];
+  CALLS.forEach(c=>{
+    const d=(c.call&&c.call.date)||"";
+    (c.assignments||[]).forEach(a=>out.push({a,date:d,kind:hwKind(a),key:hwKey(a,d)}));
+  });
+  return out;
+}
+/* Old saves keyed homework by bare id ("a1"), which collides the moment a second
+   call also has an a1. Remap once, and leave the Market tab's own keys alone. */
+function migrateDone(){
+  let moved=0;
+  CALLS.forEach(c=>{
+    const d=(c.call&&c.call.date)||"";
+    (c.assignments||[]).forEach(a=>{
+      if(DONE[a.id]&&!DONE[hwKey(a,d)]){DONE[hwKey(a,d)]=true;delete DONE[a.id];moved++}
+    });
+  });
+  if(moved)LS.set("done",DONE);
+  return moved;
+}
+
 function renderWeek(){
   const w=week(),badge=$("#bWeek");
   $("#weekEmpty").hidden=!!w;$("#weekBody").hidden=!w;
   if(!w){badge.hidden=true;$("#sub").textContent=new Date().toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});return}
   const c=w.call||{};
   $("#sub").innerHTML=esc(c.title||"Call")+"<br>"+esc(c.date||"");
-  const A=w.assignments||[],open=A.filter(a=>!DONE[a.id]).length;
-  badge.hidden=!open;badge.textContent=open;
-  $("#assignCount").textContent=A.length?`${A.length-open}/${A.length} done`:"";
-  $("#assignList").innerHTML=A.length?A.map(a=>`
-    <div class="task ${DONE[a.id]?"done":""}">
-      <button class="box" aria-pressed="${!!DONE[a.id]}" data-id="${esc(a.id)}" aria-label="Done: ${esc(a.task)}"><i></i></button>
+  const HW=allHomework(),
+        open=HW.filter(h=>!DONE[h.key]),
+        done=HW.filter(h=>DONE[h.key]),
+        mails=open.filter(h=>h.kind==="once"&&h.a.channel==="email-jason");
+  badge.hidden=!open.length;badge.textContent=open.length;
+  $("#assignCount").textContent=HW.length?(open.length?`${open.length} due`:"all clear"):"";
+
+  const chip=h=>{
+    const k=h.kind;
+    return `<div class="tags">`+
+      `<span class="tg${k==="once"?"":" rec"}">${k==="once"?"one-time":k==="nightly"?"every night":"every week"}</span>`+
+      (h.a.channel==="email-jason"?`<span class="tg mail">email jason</span>`:"")+
+      (DONE[h.key]&&k!=="once"?`<span class="tg rec">back ${k==="nightly"?"tonight":"next week"}</span>`:"")+
+      `</div>`;
+  };
+  const row=h=>{const a=h.a;return `
+    <div class="task ${DONE[h.key]?"done":""}">
+      <button class="box" aria-pressed="${!!DONE[h.key]}" data-k="${esc(h.key)}" aria-label="Done: ${esc(a.task)}"><i></i></button>
       <div style="flex:1">
         <div class="t">${esc(a.task)}</div>
         ${a.detail?`<div class="d">${esc(a.detail)}</div>`:""}
         ${a.quote?`<div class="quote">${esc(a.quote)}</div>`:""}
-        <div class="m">${a.for?`<span class="who">${esc(a.for)}</span>`:""}${a.due?`<span>due ${esc(a.due)}</span>`:""}${a.at?`<span>${esc(a.at)}</span>`:""}</div>
-      </div></div>`).join(""):`<p style="color:var(--ink-2)">Nothing assigned on this call.</p>`;
+        ${chip(h)}
+        <div class="m">${a.at?`<span>${esc(a.at)}</span>`:""}<span>${esc(h.date)}</span></div>
+      </div></div>`};
+
+  // one-time first (they can actually be finished), then the recurring ones
+  const ordered=open.filter(h=>h.kind==="once").concat(open.filter(h=>h.kind!=="once"));
+  $("#assignList").innerHTML=
+    (!HW.length?`<p style="color:var(--ink-2)">Nothing assigned yet.</p>`:
+      (!open.length
+        ? `<div class="allclear"><b>All clear</b><span>Nothing due. The nightly and weekly ones come back on their own.</span></div>`
+        : (mails.length>1?`<div class="mailbox"><b>${mails.length} of these are one email</b>
+             <p>He asked them all on the same call. Answer them once and send it.</p>
+             <button class="btn wide solid" id="mailBtn" style="margin-top:12px">Draft my email to Jason</button></div>`:"")
+          + ordered.map(row).join("")))
+    + (done.length?`<div class="donewrap" data-shut="1" id="doneWrap">
+        <button class="donehead" id="doneHead" aria-expanded="false">
+          <svg class="cv" viewBox="0 0 12 12"><path d="M2 4.2 6 8.4 10 4.2"/></svg>
+          <span class="l">Done · ${done.length}</span><span class="ln"></span></button>
+        <div class="dlist">${done.map(row).join("")}</div></div>`:"");
   const R=w.rules||[];$("#secRules").hidden=!R.length;
   $("#rulesList").innerHTML=R.map((r,i)=>`<div class="item"><span class="n">${String(i+1).padStart(2,"0")}</span><div><span>${esc(r.rule)}</span>${r.why?`<span class="why">${esc(r.why)}</span>`:""}</div></div>`).join("");
   const S=w.setups||[];$("#secSetups").hidden=!S.length;
@@ -508,8 +628,64 @@ function renderWeek(){
   const Q=w.questions||[];$("#secQs").hidden=!Q.length;
   $("#qsList").innerHTML=Q.map(q=>`<li>${esc(q.q)}${q.why?`<span class="why">${esc(q.why)}</span>`:""}</li>`).join("");
 }
-$("#assignList").addEventListener("click",e=>{const b=e.target.closest(".box");if(!b)return;
-  DONE[b.dataset.id]=!DONE[b.dataset.id];LS.set("done",DONE);renderWeek()});
+$("#assignList").addEventListener("click",e=>{
+  if(e.target.closest("#mailBtn"))return openMail();
+  const h=e.target.closest("#doneHead");
+  if(h){const w=$("#doneWrap"),shut=w.dataset.shut==="1";
+    w.dataset.shut=shut?"0":"1";h.setAttribute("aria-expanded",String(shut));return}
+  const b=e.target.closest(".box");if(!b)return;
+  DONE[b.dataset.k]=!DONE[b.dataset.k];LS.set("done",DONE);renderWeek()});
+
+/* ---------- the email he owes Jason ----------
+   Four of the seven open assignments are one message. That is why all four are
+   still open: each is small, and none of them is a thing you sit down to do.
+   Deliberately NOT the Coach prompt — this writes in Josh's voice, so it is
+   fenced hard against putting any trading claim in his mouth. */
+const MAIL_SYS=`You are drafting a short email FROM Josh TO Jason Murray, his trading coach, answering questions Jason asked him on a call.
+
+- Write in Josh's voice: plain, direct, a beginner taking it seriously. Not corporate, not eager to please, no flattery.
+- Under 150 words. Jason reads this on a phone.
+- Answer only what he was asked, in the order given.
+- If an answer is blank or vague, say he is still deciding. Never invent one.
+- Add NOTHING about strategy, setups, position sizes, stops, levels, or what he plans to do in the market. This is an admin email, not a trading plan. If an answer strays into that, keep only the part that answers the question.
+- No subject line. Plain greeting, the answers, sign off as Josh.
+
+Return only the email body.`;
+
+function mailTasks(){
+  return allHomework().filter(h=>h.kind==="once"&&h.a.channel==="email-jason"&&!DONE[h.key]);
+}
+function openMail(){
+  const T=mailTasks(),saved=LS.get("mailans",{});
+  $("#mailQs").innerHTML=T.map((h,i)=>`<div style="margin-bottom:16px">
+    <label class="f" for="ma${i}">${esc(h.a.task)}</label>
+    <textarea class="f" id="ma${i}" rows="2" data-k="${esc(h.key)}" placeholder="${esc(h.a.detail||"")}">${esc(saved[h.key]||"")}</textarea>
+  </div>`).join("");
+  $("#mailOut").hidden=true;$("#mailCopy").hidden=true;$("#mailDo").textContent="Draft it";
+  $("#dlgMail").showModal();
+}
+$("#mailClose").addEventListener("click",()=>$("#dlgMail").close());
+$("#mailDo").addEventListener("click",async()=>{
+  const fields=$$("#mailQs textarea"),ans=LS.get("mailans",{});
+  fields.forEach(f=>ans[f.dataset.k]=f.value.trim());
+  LS.set("mailans",ans);
+  if(!CFG.claude){openSettings();return toast("The draft needs a Claude API key")}
+  const body=fields.map(f=>{
+    const lab=f.previousElementSibling.textContent;
+    return "Q: "+lab+"\nJosh's answer: "+(f.value.trim()||"(blank — still deciding)");
+  }).join("\n\n");
+  const btn=$("#mailDo");btn.disabled=true;btn.textContent="Writing…";
+  try{
+    const d=await claude(MAIL_SYS,body,700);
+    $("#mailDraft").textContent=d;$("#mailOut").hidden=false;$("#mailCopy").hidden=false;
+    btn.textContent="Redraft";
+  }catch(e){toast("Couldn't reach Claude: "+String(e.message).slice(0,60))}
+  btn.disabled=false;
+});
+$("#mailCopy").addEventListener("click",async()=>{
+  try{await navigator.clipboard.writeText($("#mailDraft").textContent);toast("Copied — send it, then tick them off")}
+  catch(e){toast("Select it and copy manually")}
+});
 
 /* ---------- insights ---------- */
 $$(".seg button").forEach(b=>b.addEventListener("click",()=>{
@@ -636,7 +812,9 @@ function chunks(){
       const notes=[],quotes=[];
       Object.keys(o).forEach(kk=>{
         const v=o[kk];
-        if(typeof v!=="string"||kk==="at"||kk==="scope"||kk==="source"||kk==="file")return;
+        if(typeof v!=="string")return;
+        // bookkeeping fields, not teaching — they only add noise to the scoring
+        if(/^(at|scope|source|file|id|for|status|channel|repeat)$/.test(kk))return;
         (kk==="said"?quotes:notes).push(v);
       });
       let s=notes.join(" — ");
@@ -851,7 +1029,7 @@ $("#rClose").addEventListener("click",()=>$("#dlgRecap").close());
 $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("#recapOut").textContent);toast("Copied")}catch(e){toast("Select and copy manually")}});
 
 /* ---------- market ---------- */
-const BUILD="b8";  // must match VERSION in sw.js — this is THE version number
+const BUILD="b9";  // must match VERSION in sw.js — this is THE version number
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -1003,6 +1181,7 @@ function renderAll(){renderWeek();renderInsights();renderCoach();renderJournal()
   CALLS=LS.get("calls",[]);TRADES=LS.get("trades",[]);DONE=LS.get("done",{});
   RUN=LS.get("run",null);CHAT=LS.get("chat",[]);
   if(RUN&&(RUN.v!==BUILD||Date.now()-new Date(RUN.at).getTime()>20*36e5)){RUN=null;LS.del("run")}
+  migrateDone();
   const t=$$(".nav button").filter(x=>x.dataset.p===LS.get("tab","week"))[0];if(t)t.click();
   renderAll();
   autoBrain().then(autoWeek);   // brain first, so autoWeek is a no-op for dates already in it
@@ -1049,6 +1228,7 @@ async function autoBrain(){
     });
     CALLS.sort((a,b)=>String(b.call?.date||"").localeCompare(String(a.call?.date||"")));
     CUR=0;
+    migrateDone();                      // calls that arrive with the brain need it too
     if(CALLS[0])seedLevels(CALLS[0]);   // newest only
     LS.set("calls",CALLS);renderAll();
     if(added)toast(added===1?"1 call added to the brain":added+" calls added to the brain");
