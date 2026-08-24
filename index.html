@@ -462,7 +462,15 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
     <input class="f" id="gEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" spellcheck="false">
     <button class="btn solid wide" id="gSend" style="margin-top:12px">Email me a sign-in link</button>
     <p class="gmsg" id="gMsg"></p>
-    <p class="gsub" style="margin-top:18px;font-size:12.5px">No password. We send a link, you tap it, you&rsquo;re in.</p>
+    <div id="gCodeWrap" style="margin-top:18px">
+      <label class="f" for="gCode">Paste the link from the email</label>
+      <textarea class="f" id="gCode" rows="3" spellcheck="false"
+                placeholder="Paste the whole link here — or a 6-digit code if the email has one"
+                style="font-family:var(--mono);font-size:12.5px"></textarea>
+      <button class="btn solid wide" id="gVerify" style="margin-top:10px">Sign in</button>
+      <p class="hint" style="margin-top:8px">If tapping the link lands you on a GitHub 404 page, that&rsquo;s fine &mdash; copy the address out of the browser bar and paste it here. The sign-in is inside that address.</p>
+    </div>
+    <p class="gsub" style="margin-top:18px;font-size:12.5px">No password. Type the code from the email &mdash; or tap the link in it, either works.</p>
   </div>
 </div>
 
@@ -500,6 +508,27 @@ async function sbAuth(path,body){
   if(!r.ok)throw new Error(j.error_description||j.msg||j.error||("auth "+r.status));
   return j;
 }
+/* No sign-in screen. The app asks Supabase for an anonymous session the first
+   time it runs and never mentions it again.
+
+   Why not skip auth entirely: the Edge Function holds the Claude and market-data
+   keys, and it only answers callers carrying a real session. The anon key is
+   published in config.js, so without this check anyone who found the repo could
+   spend those keys. An anonymous session costs the user nothing and keeps that
+   door shut. It also means every row is still owned by a user id, so row-level
+   security keeps working exactly as built.
+
+   The trade: identity is per device. Good enough while Josh uses one phone, and
+   Supabase can upgrade an anonymous user to an email one later WITHOUT losing
+   data — so the journal-follows-you-anywhere version stays available. */
+async function anonSession(){
+  const j=await sbAuth("signup",{});                 // no email, no password
+  if(!j.access_token)throw new Error(j.msg||"could not start a session");
+  const s={access_token:j.access_token,refresh_token:j.refresh_token,
+           expires_at:Math.floor(Date.now()/1000)+(j.expires_in||3600),user:j.user};
+  SESS.set(s);USER=j.user;return s.access_token;
+}
+
 /* Access tokens expire in an hour. Refresh before every call rather than
    discovering it mid-request — a session that silently dies is exactly the
    "it broke and I don't know why" this whole rebuild is meant to remove. */
@@ -1254,7 +1283,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.0.2";
+const BUILD="2.2.0";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -1559,12 +1588,66 @@ $("#gSend").addEventListener("click",async()=>{
   b.disabled=true;b.textContent="Sending…";m.textContent="";m.className="gmsg";
   try{
     await sbAuth("otp",{email,options:{email_redirect_to:SB_SITE}});
-    m.textContent="Check "+email+". Tap the link on this device and you're in.";m.className="gmsg ok";
-    b.textContent="Sent — send again";
+    m.textContent="Sent to "+email+". Type the 6-digit code from it below.";m.className="gmsg ok";
+    b.textContent="Send another";
+    $("#gCodeWrap").hidden=false;
   }catch(e){m.textContent=String(e.message).slice(0,140);m.className="gmsg err";b.textContent="Email me a sign-in link"}
   b.disabled=false;
 });
 $("#gEmail").addEventListener("keydown",e=>{if(e.key==="Enter")$("#gSend").click()});
+
+/* Codes, not links.
+   A magic link carries its destination baked in at send time, so a stale email
+   or a redirect rule that drops the sub-path lands you on a 404 with no way to
+   recover — which is exactly what happened, repeatedly. A six-digit code has no
+   destination at all. Nothing to redirect, nothing to go stale, and it works
+   even if the email is opened on a different device. */
+/* Takes whatever the email gave you.
+   A magic link has its destination baked in when it is sent, so a stale email
+   or a redirect rule that drops the sub-path leaves you on a 404 — with the
+   session sitting right there in the address bar, unusable. So: paste the
+   address in and the app lifts the tokens straight out of it. Works with links
+   sent before any of this was configured, and with a 6-digit code if the email
+   carries one. Nothing here depends on where a redirect points. */
+async function verifyCode(){
+  const raw=$("#gCode").value.trim(),email=$("#gEmail").value.trim();
+  const m=$("#gMsg"),b=$("#gVerify");
+  if(!raw){m.textContent="Paste the link from the email first.";m.className="gmsg err";return}
+  b.disabled=true;b.textContent="Checking…";
+
+  // A pasted address: the tokens live in the #fragment, sometimes the query.
+  if(/access_token=/.test(raw)){
+    try{
+      const q=new URLSearchParams(raw.slice(Math.max(raw.indexOf("#"),raw.indexOf("?"))+1));
+      const at=q.get("access_token"),rt=q.get("refresh_token");
+      if(!at||!rt)throw new Error("that link has no sign-in in it");
+      SESS.set({access_token:at,refresh_token:rt,
+        expires_at:Math.floor(Date.now()/1000)+parseInt(q.get("expires_in")||"3600",10)});
+      location.replace(SB_SITE);return;
+    }catch(e){
+      m.textContent=String(e.message).slice(0,140);m.className="gmsg err";
+      b.disabled=false;b.textContent="Sign in";return;
+    }
+  }
+
+  const code=raw.replace(/\D/g,"");
+  if(code.length!==6){
+    m.textContent="That doesn't look like a link or a 6-digit code.";m.className="gmsg err";
+    b.disabled=false;b.textContent="Sign in";return;
+  }
+  try{
+    const j=await sbAuth("verify",{type:"email",email,token:code});
+    if(!j.access_token)throw new Error("no session came back");
+    SESS.set({access_token:j.access_token,refresh_token:j.refresh_token,
+      expires_at:Math.floor(Date.now()/1000)+(j.expires_in||3600),user:j.user});
+    location.reload();
+  }catch(e){
+    m.textContent=String(e.message).slice(0,140);m.className="gmsg err";
+    b.disabled=false;b.textContent="Sign in";
+  }
+}
+$("#gVerify").addEventListener("click",verifyCode);
+$("#gCode").addEventListener("keydown",e=>{if(e.key==="Enter")verifyCode()});
 
 /* The magic link comes back as #access_token=... Take it, store it, and strip
    it from the address bar so the token is not sitting in history. */
@@ -1596,15 +1679,18 @@ window.addEventListener("hashchange",()=>{ if(claimHash())location.reload() });
   const t=$$(".nav button").filter(x=>x.dataset.p===LS.get("tab","week"))[0];if(t)t.click();
   renderAll();
 
-  const tok=await token();
-  if(!tok){showLogin();return}
+  let tok=await token();
+  if(!tok){
+    try{ tok=await anonSession() }
+    catch(e){ showLogin("Couldn't start a session: "+String(e.message).slice(0,90)); return }
+  }
 
   // who are we — needed before anything can be written back
   try{
     const r=await fetch(SB_URL+"/auth/v1/user",{headers:{apikey:SB_ANON,authorization:"Bearer "+tok}});
     if(r.ok){const u=await r.json();USER=u;const s=SESS.get();if(s){s.user=u;SESS.set(s)}}
   }catch(e){}
-  if(!USER){showLogin("Couldn't confirm that session. Sign in again.");return}
+  if(!USER){showLogin("Couldn't confirm that session. Reload to try again.");return}
   $("#gate2").hidden=true;
 
   try{ await pull(); hydrate(); renderAll(); }
