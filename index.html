@@ -235,6 +235,15 @@ select.f{appearance:none;background-image:linear-gradient(45deg,transparent 50%,
 .trade .lab{font-size:11px;letter-spacing:.02em;text-transform:uppercase;color:var(--ink-3);margin:13px 0 4px;font-weight:600}
 .trade p{margin:0;font-size:15px;line-height:1.5;color:var(--ink-2)}
 .trade p.none{color:var(--down);font-size:13.5px}
+.err{color:var(--down);font-size:13px;margin:7px 0 0;line-height:1.5;font-weight:600}
+.undef{border:1px solid var(--rule);border-left:3px solid var(--down);border-radius:0 var(--r) var(--r) 0;
+  padding:14px 16px;margin-bottom:16px;background:rgba(255,80,0,.07)}
+.undef .h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--down);margin-bottom:5px}
+.undef .b{font-size:14.5px;color:var(--ink-2);line-height:1.5}
+.trade.nodef{border-left:3px solid var(--down)}
+.fence.hot{border-color:var(--down);background:rgba(255,80,0,.10);color:var(--ink)}
+.defend{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--down);
+  background:none;border:1px solid var(--down);border-radius:6px;padding:6px 10px;margin-top:8px;cursor:pointer}
 .trade .x{font-size:11px;color:var(--ink-3);margin-left:10px;padding:6px}
 
 .step{border-bottom:1px solid var(--rule);padding:20px 0}
@@ -362,6 +371,7 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
       <label class="btn" for="fCsv">Import CSV</label>
       <input type="file" id="fCsv" accept=".csv,text/csv" hidden>
     </div>
+    <div id="undefBox" hidden></div>
     <div class="sec"><h2>Trades <span class="c" id="tradeCount"></span></h2><div id="tradeList"></div></div>
   </section>
 
@@ -391,11 +401,23 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
     <div style="margin-bottom:13px">
       <label class="f" for="tWhy">Why you took it</label>
       <textarea class="f" id="tWhy" rows="3" placeholder="What did you see? Which level? Why was this the best trade available, not just a trade?"></textarea>
-      <p class="hint">This is the field Jason will ask about on Friday.</p>
+      <p class="err" id="tWhyErr" hidden></p>
+      <p class="hint">This is the field Jason will ask about on Friday. A trade won't save without it.</p>
     </div>
     <div><label class="f" for="tRev">What you'd do differently</label><textarea class="f" id="tRev" rows="2"></textarea></div>
   </div>
   <div class="ft"><button class="btn" id="tCancel">Cancel</button><button class="btn solid" id="tSave">Save</button></div>
+</dialog>
+
+<dialog id="dlgWhy">
+  <div class="grip"></div><div class="hd"><h3>Defend this trade</h3><span class="stamp" id="wWhat"></span></div>
+  <div class="bd">
+    <label class="f" for="wWhy">Why you took it</label>
+    <textarea class="f" id="wWhy" rows="4" placeholder="What did you see? Which level? Why was this the best trade available, not just a trade?"></textarea>
+    <p class="err" id="wErr" hidden></p>
+    <p class="hint">Imported trades arrive with no reason. Jason's assignment is to defend every one.</p>
+  </div>
+  <div class="ft"><button class="btn" id="wCancel">Cancel</button><button class="btn solid" id="wSave">Save</button></div>
 </dialog>
 
 <dialog id="dlgRecap">
@@ -1147,6 +1169,19 @@ $("#q").addEventListener("input",e=>{e.target.style.height="auto";e.target.style
 $("#q").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&window.innerWidth>=720){e.preventDefault();ask()}});
 
 /* ---------- journal ---------- */
+/* ---- the reason gate ----
+   Jason's assignment is to defend every trade — not whether it won, why you
+   took it (a4, 16:52). A blank reason makes Friday's recap impossible to write,
+   so this is a wall, not a warning: there is no "save it blank anyway". The
+   reason IS the trade. CSV imports are the one way in without one; they land
+   undefended and are counted until Josh writes one. */
+const MIN_WHY=10;
+const undefended=t=>!(t.why&&t.why.trim().length>=MIN_WHY);
+function whyError(why){
+  return !why ? "Write why you took it. Jason asks about this one on Friday."
+       : why.length<MIN_WHY ? "That isn't a defence. Say what you saw and which level."
+       : "";
+}
 function renderJournal(){
   TRADES.sort((a,b)=>(b.date+b.id).localeCompare(a.date+a.id));
   $("#tradeCount").textContent=TRADES.length?`${TRADES.length} logged`:"";
@@ -1154,23 +1189,46 @@ function renderJournal(){
   g.classList.toggle("hot",n>=max);
   $("#gateB").textContent=n===0?`Nothing logged. Rule is ${max} a day — pick the best trade, not the first.`
     :n<max?`${n} of ${max} logged.`:`${n} logged. The next one breaks your rule.`;
-  $("#tradeList").innerHTML=TRADES.length?TRADES.map(t=>{const p=Number(t.pnl)||0;
-    return `<div class="trade"><div class="hd">
+  /* undefended count — derived, never stored, so writing a reason clears it */
+  const nd=TRADES.filter(undefended).length,ub=$("#undefBox");
+  ub.hidden=!nd;
+  if(nd)ub.innerHTML=`<div class="undef"><div class="h">${nd} undefended trade${nd>1?"s":""}</div>
+    <div class="b">${nd>1?"These have":"This one has"} no written reason — almost always a CSV import. Jason's assignment is to defend every trade, and Friday's recap reads from this field. Tap <b>Undefended</b> on any card below to write one.</div></div>`;
+  $("#tradeList").innerHTML=TRADES.length?TRADES.map(t=>{const p=Number(t.pnl)||0,ud=undefended(t);
+    return `<div class="trade${ud?" nodef":""}"><div class="hd">
       <span class="sym">${esc(t.sym||"—")}</span><span class="dir">${esc(t.dir)} ×${esc(t.qty)}</span>
       <span class="pnl ${p>=0?"up":"dn"}">${money(p)}<button class="x" data-del="${esc(t.id)}" aria-label="Delete">del</button></span>
       <span class="when">${esc(t.date)} · ${esc(t.sess)}${t.in?` · ${esc(t.in)}→${esc(t.out||"?")}`:""}</span></div>
       <div class="lab">Why I took it</div>${t.why?`<p>${esc(t.why)}</p>`:`<p class="none">Blank — nothing to defend on Friday.</p>`}
+      ${ud?`<button class="defend" data-why="${esc(t.id)}">Undefended · write the reason</button>`:""}
       ${t.rev?`<div class="lab">Do differently</div><p>${esc(t.rev)}</p>`:""}</div>`}).join("")
     :`<div class="empty"><b>Nothing logged</b>Every trade needs a written reason before you take it. The number is the easy part.</div>`;
 }
-$("#tradeList").addEventListener("click",e=>{const id=e.target.dataset&&e.target.dataset.del;if(!id)return;
+let WHYID=null;
+$("#tradeList").addEventListener("click",e=>{
+  const w=e.target.dataset&&e.target.dataset.why;
+  if(w){const t=TRADES.find(x=>x.id===w);if(!t)return;
+    WHYID=w;$("#wWhat").textContent=`${t.sym||"—"} · ${t.date}`;
+    $("#wWhy").value=t.why||"";$("#wErr").hidden=true;$("#dlgWhy").showModal();$("#wWhy").focus();return}
+  const id=e.target.dataset&&e.target.dataset.del;if(!id)return;
   if(!confirm("Delete this trade?"))return;TRADES=TRADES.filter(t=>t.id!==id);LS.set("trades",TRADES);renderJournal()});
-$("#addTradeBtn").addEventListener("click",()=>{$("#tDate").value=today();
+$("#wWhy").addEventListener("input",()=>{$("#wErr").hidden=true});
+$("#wCancel").addEventListener("click",()=>{WHYID=null;$("#dlgWhy").close()});
+$("#wSave").addEventListener("click",()=>{
+  const why=$("#wWhy").value.trim(),err=whyError(why);
+  if(err){const b=$("#wErr");b.textContent=err;b.hidden=false;$("#wWhy").focus();return}
+  const t=TRADES.find(x=>x.id===WHYID);
+  if(t){t.why=why;LS.set("trades",TRADES);renderJournal()}
+  WHYID=null;$("#dlgWhy").close();toast("Defended")});
+$("#addTradeBtn").addEventListener("click",()=>{$("#tDate").value=today();$("#tWhyErr").hidden=true;
   ["tSym","tIn","tOut","tPnl","tWhy","tRev"].forEach(i=>$("#"+i).value="");$("#tQty").value=1;$("#dlgTrade").showModal()});
 $("#tCancel").addEventListener("click",()=>$("#dlgTrade").close());
+$("#tWhy").addEventListener("input",()=>{$("#tWhyErr").hidden=true});
 $("#tSave").addEventListener("click",()=>{
   const why=$("#tWhy").value.trim();
-  if(!why&&!confirm("No reason written. Save it blank anyway?"))return;
+  const err=whyError(why);
+  if(err){const b=$("#tWhyErr");b.textContent=err;b.hidden=false;$("#tWhy").focus();return}
+  $("#tWhyErr").hidden=true;
   TRADES.push({id:Date.now().toString(36),date:$("#tDate").value||today(),sym:$("#tSym").value.trim().toUpperCase(),
     sess:$("#tSess").value,dir:$("#tDir").value,qty:$("#tQty").value||1,in:$("#tIn").value,out:$("#tOut").value,
     pnl:parseFloat($("#tPnl").value)||0,why,rev:$("#tRev").value.trim()});
@@ -1270,7 +1328,7 @@ function buildRecap(){
   if(!wk.length){$("#recapOut").textContent="No trades this week.\n\nThat's a legitimate week. Say so, and say what you were waiting for.";$("#dlgRecap").showModal();return}
   const net=wk.reduce((s,t)=>s+(Number(t.pnl)||0),0),wins=wk.filter(t=>Number(t.pnl)>0).length;
   const days=[...new Set(wk.map(t=>t.date))],over=days.filter(x=>wk.filter(t=>t.date===x).length>(CFG.maxDay||1));
-  const blank=wk.filter(t=>!t.why).length,L=[];
+  const blank=wk.filter(undefended).length,L=[];
   L.push(`Week of ${fmt(from)} – ${fmt(to)}`);
   L.push(`${wk.length} trade${wk.length>1?"s":""} over ${days.length} day${days.length>1?"s":""}. ${wins} win${wins===1?"":"s"}, ${wk.length-wins} loss${wk.length-wins===1?"":"es"}. Net ${money(net)}.`,"");
   wk.forEach(t=>{L.push(`${fmt(t.date)} — ${t.sym||"?"} ${t.dir.toLowerCase()} ×${t.qty}${t.in?` @ ${t.in} → ${t.out||"?"}`:""}  ${money(Number(t.pnl)||0)}`);
@@ -1289,7 +1347,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.3.0";
+const BUILD="2.4.0";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -1357,6 +1415,33 @@ const BIAS_RULES=[
  {leg:"crude", when:p=>p>=2.00,  side:-1, why:"Energy shock. Headline inflation alarm lifts yields.",        row:"matrix 6"}
 ];
 const FRESH_S=45*60;        // a leg older than this is not a read, it is history
+
+/* ---- the 9:30 conflict, on a clock ----
+   Three of Josh's four scenarios key off the 9:30 opening range. Jason's rule
+   is that a new trader does not trade the first thirty minutes. The card has
+   always carried that as standing text; between 9:30 and 10:00 ET it stops
+   being a footnote and says so in the present tense. Computed in New York time
+   explicitly — Josh's phone may be anywhere, the CME is not. */
+function nyNow(){
+  const f=new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",
+    hour12:false,weekday:"short",hour:"2-digit",minute:"2-digit"}).formatToParts(new Date());
+  const g=t=>f.find(x=>x.type===t).value;
+  return {wd:g("weekday"),min:(+g("hour"))*60+(+g("minute"))};
+}
+function standDown(){
+  const n=nyNow();
+  if(["Sat","Sun"].includes(n.wd))return null;
+  if(n.min>=9*60+30&&n.min<10*60)return "in";      // the window Jason fenced off
+  if(n.min>=8*60+45&&n.min<9*60+30)return "soon";  // his routine window
+  return null;
+}
+const FENCE=`<div class="fence"><b>Jason's rule stands over this.</b> As a new trader you don't trade the first thirty minutes — the gap up is what traps new buyers (Intro Call, 17 Aug 2026, 03:16). Your sheet resolves to an entry at the 9:30 opening range. They disagree, and this app won't pick for you. Ask him.</div>`;
+function fenceNow(){
+  const w=standDown();
+  if(w==="in")return `<div class="fence hot"><b>It's the first thirty minutes. Jason says stand down.</b> The gap up is what traps new buyers (Intro Call, 17 Aug 2026, 03:16). Your sheet wants the opening-range break right now — that is the one place it and your mentor flatly disagree. This app won't pick for you. Ask him.</div>`;
+  if(w==="soon")return `<div class="fence"><b>Read it now, act after 10:00.</b> Jason's rule: a new trader doesn't trade the first thirty minutes (Intro Call, 17 Aug 2026, 03:16). Your sheet resolves to an entry at the 9:30 opening range. They disagree, and this app won't pick for you. Ask him.</div>`;
+  return FENCE;
+}
 function biasFrom(q,served){
   const age=k=>(q[k]&&q[k].at)?Math.max(0,served-q[k].at):null;
   const pct=k=>(q[k]&&typeof q[k].pct==="number")?q[k].pct:null;
@@ -1426,6 +1511,7 @@ function renderBias(){
     box.innerHTML=`<div class="bias"><div class="lab">Morning bias</div>
       <div class="vd" style="font-size:17px">Not read yet</div>
       <div class="cov">Your intermarket sheet, computed. One request, about two seconds.</div>
+      ${fenceNow()}
       <button class="btn wide solid" id="biasBtn" style="margin-top:12px">Read the morning</button></div>`;
     return;
   }
@@ -1452,7 +1538,7 @@ function renderBias(){
     <div class="cov">${esc(b.note)}</div>
     <div class="cov" style="margin-top:7px;color:var(--ink-3)">Read from ${b.fresh} of ${b.total} inputs${b.fresh<5?" — conviction needs 5":""}. ${b.diverged?"Index divergence overrides everything else.":b.aligned?"All three indexes aligned.":""}</div>
     <div class="legs">${legs}</div>
-    <div class="fence"><b>Jason's rule stands over this.</b> As a new trader you don't trade the first thirty minutes — the gap up is what traps new buyers (Intro Call, 17 Aug 2026, 03:16). Your sheet resolves to an entry at the 9:30 opening range. They disagree, and this app won't pick for you. Ask him.</div>
+    ${fenceNow()}
     <button class="btn wide" id="biasBtn" style="margin-top:12px">Read it again</button></div>`;
 }
 $("#biasBox").addEventListener("click",e=>{if(e.target.closest("#biasBtn"))readMorning()});
