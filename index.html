@@ -594,7 +594,12 @@ const LS={
    looking at the same thing — the same ticks, the same journal, the same Coach
    history. "bias" is in here too now: it costs one row and it means whoever
    reads the morning first, both of them see it. */
-const CLOUD_KEYS=new Set(["done","trades","chat","mailans","cfg","tab","bias"]);
+const CLOUD_KEYS=new Set(["done","trades","chat","mailans","cfg","tab","bias","run"]);
+// "run" joined this set 25 Aug: the six-step routine's results were local-only,
+// so one device running it (burning up to 11 of the 25 free Alpha Vantage calls
+// a day) left every other device showing "not run yet" with no way to know it
+// had already happened. Same reasoning "bias" got added for earlier — whoever
+// reads it, everyone sees it — just never extended to this key.
 // NOT "calls": the brain is ~200KB and already served from Supabase on every
 // load. Syncing it would write a 200KB row for something the server owns.
 
@@ -1347,7 +1352,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.4.0";
+const BUILD="2.4.1";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
