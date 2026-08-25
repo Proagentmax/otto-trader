@@ -522,7 +522,7 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
 <script>
 "use strict";
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
-const DEF={key:"",ten:4.7,tenH:4.88,jpy:160,maxDay:1,watch:"WMT, TGT, HD, NVDA, COST"};
+const DEF={key:"",ten:4.7,tenH:4.88,jpy:160,maxDay:1,watch:"WMT, TGT, HD, NVDA, COST",avUsed:0,avDate:""};
 let CFG={...DEF},CALLS=[],CUR=0,TRADES=[],DONE={},RUN=null,CHAT=[],INSTAB="ideas",BIASRUN=null;
 const NS="otto:";
 
@@ -1372,7 +1372,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.4.4";
+const BUILD="2.4.5";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -1381,6 +1381,27 @@ const ROUTINE=[
  {n:4,title:"The indexes",src:"Did they finish below the open?",calls:[{k:"SPY",fn:"GLOBAL_QUOTE&symbol=SPY"},{k:"QQQ",fn:"GLOBAL_QUOTE&symbol=QQQ"},{k:"DIA",fn:"GLOBAL_QUOTE&symbol=DIA"}]},
  {n:5,title:"Who reports this week",src:"Earnings move the index you trade",calls:[{k:"earn",fn:"EARNINGS_CALENDAR&horizon=3month",csv:true}]},
  {n:6,title:"Your levels",src:"The part no API can do",manual:["Mark support and resistance for tomorrow","Convert those levels to your contract","Name the one trade you'd take, and the level that says you're wrong"]}];
+/* ---- Alpha Vantage's free-tier daily quota, tracked ----
+   No usage endpoint exists on the free plan, so this is our own count of
+   calls made THROUGH THIS APP, synced via cfg so every device and person
+   shares one true number instead of each device thinking it has its own
+   25. It can start wrong if the key was used outside the app (curl, testing,
+   a second device before this shipped) — the moment a real call comes back
+   with Alpha Vantage's own "you're out" message, that overrides our guess
+   immediately, so a wrong undercount self-corrects on the next attempt. */
+const AV_DAILY=25, AV_PER_RUN=11;
+const AV_LIMIT_RX=/rate limit is 25 requests per day/i;
+const avToday=()=>new Date().toISOString().slice(0,10);   // UTC calendar day
+function avSync(){ if(CFG.avDate!==avToday()){CFG.avDate=avToday();CFG.avUsed=0} }
+function avRemaining(){ avSync(); return Math.max(0,AV_DAILY-CFG.avUsed) }
+function avRunsLeft(){ return Math.floor(avRemaining()/AV_PER_RUN) }
+function avStamp(){
+  avSync();
+  const total=Math.floor(AV_DAILY/AV_PER_RUN),left=avRunsLeft();
+  if(left<=0)return `No runs left today · ${CFG.avUsed} of ${AV_DAILY} calls used · new key (different email) to run again`;
+  if(left===1)return `1 of ${total} runs left today — last one`;
+  return `${left} of ${total} runs left today`;
+}
 async function avFetch(fn,csv){
   const url=AV+"function="+fn+"&apikey="+encodeURIComponent(CFG.key);
   const name=fn.split("&")[0];
@@ -1396,12 +1417,23 @@ async function avFetch(fn,csv){
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function runRoutine(){
   if(!CFG.key){openSettings();return toast("Add your free Alpha Vantage key")}
+  avSync();
+  if(avRunsLeft()<1){
+    return toast(`No free calls left today (${CFG.avUsed} of ${AV_DAILY} used). Get a new key with a different email to run again.`);
+  }
+  if(avRunsLeft()===1)toast("Heads up — this is your last run for today");
   const btn=$("#runBtn");btn.disabled=true;btn.textContent="Running…";
   const bar=$("#progBar");bar.hidden=false;
   RUN={v:BUILD,at:new Date().toISOString(),data:{},errors:{}};
   const all=ROUTINE.flatMap(s=>s.calls||[]);let i=0;
   for(const c of all){
-    try{RUN.data[c.k]=await avFetch(c.fn,c.csv)}catch(e){RUN.errors[c.k]=e.message}
+    try{RUN.data[c.k]=await avFetch(c.fn,c.csv)}
+    catch(e){
+      RUN.errors[c.k]=e.message;
+      // ground truth from Alpha Vantage itself beats our own count
+      if(AV_LIMIT_RX.test(e.message))CFG.avUsed=AV_DAILY;
+    }
+    avSync();CFG.avUsed=Math.min(CFG.avUsed+1,AV_DAILY);LS.set("cfg",CFG);
     i++;bar.querySelector("i").style.width=(i/all.length*100)+"%";
     LS.set("run",RUN);renderMarket();
     if(i<all.length)await sleep(13000);
@@ -1570,9 +1602,10 @@ $("#biasBox").addEventListener("click",e=>{if(e.target.closest("#biasBtn"))readM
 
 function renderMarket(){
   $("#keybar").innerHTML=CFG.key
-    ?`<div class="stamp">Connected · ends ${esc(CFG.key.slice(-4))} · v${BUILD} · 11 calls a run, 25 a day free</div>`
+    ?`<div class="stamp">Connected · ends ${esc(CFG.key.slice(-4))} · v${BUILD} · ${esc(avStamp())}</div>`
     :`<div class="stamp" style="color:var(--mark)">No market data key</div><p style="margin:8px 0 0;font-size:16px;color:var(--ink-2)">Get a free key at alphavantage.co and add it in Settings. Nothing below fills in until you do — this reads live data, it doesn't guess.</p>`;
   $("#runStamp").textContent=RUN?"Last run "+new Date(RUN.at).toLocaleString():"Not run yet.";
+  if(CFG.key){const rb=$("#runBtn");rb.disabled=avRunsLeft()<1;rb.title=rb.disabled?"No free calls left today":""}
   $("#clearRunBtn").hidden=!RUN;
   $("#steps").innerHTML=ROUTINE.map(s=>{
     let b="";
