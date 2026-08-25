@@ -286,6 +286,17 @@ dialog .ft .btn{flex:1}
 pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pre-wrap;border:1px solid var(--rule);
   background:var(--bg);padding:15px;border-radius:var(--r);margin:0;color:var(--ink-2)}
 
+.updbar{position:fixed;inset:0;z-index:250;display:flex;align-items:flex-start;justify-content:center;
+  padding:18px;padding-top:calc(22px + var(--safe-t,0px));pointer-events:none}
+.updbar-card{pointer-events:auto;background:var(--up);color:#06210f;border-radius:20px;
+  padding:22px 28px;box-shadow:0 16px 44px rgba(0,0,0,.5);text-align:center;max-width:min(92vw,420px);
+  border:2px solid #06210f}
+.updbar-title{font-size:19px;font-weight:800;letter-spacing:-.01em;margin-bottom:6px}
+.updbar-ver{font-family:var(--mono);font-size:14.5px;font-weight:700;margin-bottom:6px;
+  background:rgba(6,33,15,.12);border-radius:8px;padding:3px 10px;display:inline-block}
+.updbar-sub{font-size:13px;font-weight:500;opacity:.85;margin-bottom:16px}
+.updbar button{background:#06210f;color:var(--up);border:none;border-radius:999px;
+  padding:11px 24px;font-size:14.5px;font-weight:800;cursor:pointer;width:100%}
 .toast{position:fixed;left:50%;bottom:calc(var(--nav) + var(--safe-b) + 18px);transform:translate(-50%,10px);
   background:var(--surface-3);color:var(--ink);font-size:14px;font-weight:500;padding:12px 18px;border-radius:999px;
   z-index:200;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:88vw;text-align:center;
@@ -318,6 +329,15 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
   <div class="sub" id="sub"></div>
   <button class="icon" id="settingsBtn" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9 4.6a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
 </header>
+
+<div class="updbar" id="updbar" hidden>
+  <div class="updbar-card">
+    <div class="updbar-title">Update ready</div>
+    <div class="updbar-ver" id="updbarVer">—</div>
+    <div class="updbar-sub">Same data, newer app. One tap, no re-login.</div>
+    <button id="updbarBtn">Refresh now</button>
+  </div>
+</div>
 
 <nav class="nav" role="tablist">
   <button role="tab" aria-selected="true" data-p="week"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Week<span class="badge" id="bWeek" hidden></span></button>
@@ -1352,7 +1372,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.4.1";
+const BUILD="2.4.3";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -1632,17 +1652,40 @@ $("#sWipe").addEventListener("click",()=>{
 
 /* ---------- service worker ---------- */
 if("serviceWorker" in navigator && location.protocol==="https:"){
+  const showUpdateBar=()=>{
+    const b=$("#updbar"); if(!b)return;
+    fetch("sw.js",{cache:"no-store"}).then(r=>r.text()).then(t=>{
+      const m=t.match(/VERSION\s*=\s*'otto-v([^']+)'/);
+      if(m)$("#updbarVer").textContent="v"+m[1];
+    }).catch(()=>{});
+    b.hidden=false;
+  };
   window.addEventListener("load",()=>{
     navigator.serviceWorker.register("sw.js").then(reg=>{
-      reg.addEventListener("updatefound",()=>{
-        const w=reg.installing; if(!w)return;
+      const flag=w=>{
+        if(!w)return;
         w.addEventListener("statechange",()=>{
-          // only nag when there was already a version installed
-          if(w.state==="installed" && navigator.serviceWorker.controller) toast("New version ready — reload to update");
+          // only nag when there was already a version installed — a first
+          // install has nothing to "update" from and should stay silent
+          if(w.state==="installed" && navigator.serviceWorker.controller) showUpdateBar();
         });
+      };
+      reg.addEventListener("updatefound",()=>flag(reg.installing));
+      // an already-open tab only rechecks when something asks it to — the
+      // 25 Aug incident was a tab that stayed open across a deploy and never
+      // got a look. Ask immediately, and again whenever the tab comes back
+      // into view, rather than waiting on the browser's own timing.
+      reg.update().catch(()=>{});
+      document.addEventListener("visibilitychange",()=>{
+        if(document.visibilityState==="visible")reg.update().catch(()=>{});
       });
+      // a worker already sitting in "waiting" when this tab loads (installed
+      // by a DIFFERENT tab moments earlier) needs the same banner — it will
+      // never fire "updatefound" here since the install already happened
+      if(reg.waiting && navigator.serviceWorker.controller) showUpdateBar();
     }).catch(()=>{});
   });
+  $("#updbarBtn").addEventListener("click",()=>location.reload());
 }
 /* Offline is normal for this app, so say so rather than letting calls fail silently. */
 window.addEventListener("offline",()=>toast("Offline — homework and journal still work"));
