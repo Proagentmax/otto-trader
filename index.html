@@ -1372,7 +1372,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.4.3";
+const BUILD="2.4.4";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -1816,7 +1816,10 @@ window.addEventListener("hashchange",()=>{ if(claimHash())location.reload() });
   }
   claimHash();
   hydrate();                                   // paint from the mirror straight away
-  const t=$$(".nav button").filter(x=>x.dataset.p===LS.get("tab","week"))[0];if(t)t.click();
+  // Market is the fixed landing screen — Josh's bias card and the journal
+  // gate are what matter every time the app opens, on any device. "tab" still
+  // syncs as people navigate (unchanged), it just isn't what boot reads.
+  const t=$$(".nav button").filter(x=>x.dataset.p==="market")[0];if(t)t.click();
   renderAll();
 
   let tok=await token();
