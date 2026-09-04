@@ -286,6 +286,7 @@ dialog .ft .btn{flex:1}
 pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pre-wrap;border:1px solid var(--rule);
   background:var(--bg);padding:15px;border-radius:var(--r);margin:0;color:var(--ink-2)}
 
+.updbar[hidden]{display:none}   /* the class below sets display:flex, which beats the hidden attribute — without this the card shows on every load */
 .updbar{position:fixed;inset:0;z-index:250;display:flex;align-items:flex-start;justify-content:center;
   padding:18px;padding-top:calc(22px + var(--safe-t,0px));pointer-events:none}
 .updbar-card{pointer-events:auto;background:var(--up);color:#06210f;border-radius:20px;
@@ -695,7 +696,7 @@ function addCall(j){
 }
 function seedLevels(j){
   (j.levels||[]).forEach(l=>{
-    const v=parseFloat(String(l.value).replace(/[^\d.]/g,""));if(!isFinite(v))return;
+    const v=parseFloat((String(l.value).match(/\d+(?:\.\d+)?/)||[""])[0]);if(!isFinite(v))return;   // first number only — "4.67 → 4.81" must not become 4.674.81
     const inst=(l.instrument||"").toLowerCase(),m=(l.meaning||"").toLowerCase();
     if(/10.?y|ten.?year|treasur/.test(inst)){/tumble|straight down|crash/.test(m)?CFG.tenH=v:CFG.ten=v}
     if(/jpy|yen/.test(inst))CFG.jpy=v;});
@@ -1372,7 +1373,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.4.5";
+const BUILD="2.4.6";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},

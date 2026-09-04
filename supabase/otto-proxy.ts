@@ -3,6 +3,8 @@
 //   ?fn=market   the morning bias quotes
 //   ?fn=chat     the Coach: Claude with a search tool over Jason's corpus, streamed
 //   ?fn=brain    the corpus itself, for the Week / Insights tabs
+//   ?fn=seed     write a new corpus version (GET copies the repo file, POST takes a JSON array)
+//   ?fn=write    plain Claude call for the app's small drafting jobs
 //
 // WHY IT ALL LIVES HERE
 // No API key ever reaches a device. Rotating a key is one edit in Supabase and
@@ -116,8 +118,14 @@ const SYMBOLS = [
 
 async function fetchQuotes(key: string) {
   const call = async (list: string[]) => {
+    // interval=1min matters: /quote's `timestamp` is the START of the last bar
+    // for the requested interval, and the default interval is 1day — so every
+    // equity leg reported 9:30:00 ET all session long while its price kept
+    // moving, and the app's 45-minute freshness gate expired at ~10:15 every
+    // day (found 25 Aug 2026, 10:28 ET). With 1-minute bars the field advances
+    // every minute; last_quote_at, when present, is better still.
     const url = "https://api.twelvedata.com/quote?symbol=" +
-      encodeURIComponent(list.join(",")) + "&apikey=" + encodeURIComponent(key);
+      encodeURIComponent(list.join(",")) + "&interval=1min&apikey=" + encodeURIComponent(key);
     const r = await fetch(url);
     if (!r.ok) throw new Error("provider HTTP " + r.status);
     const j = await r.json();
@@ -143,7 +151,7 @@ async function fetchQuotes(key: string) {
       price: isFinite(price) ? price : null,
       prev:  isFinite(prev)  ? prev  : null,
       pct:   isFinite(pct)   ? pct   : null,
-      at: q.timestamp ? Number(q.timestamp) : null,
+      at: q.last_quote_at ? Number(q.last_quote_at) : q.timestamp ? Number(q.timestamp) : null,
       exchangeOpen: q.is_market_open === true || q.is_market_open === "true",
     };
   }
@@ -450,9 +458,16 @@ Deno.serve(async (req) => {
       const svc  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
       if (!base || !svc) return json({ ok: false, error: "service role not available" }, 500);
 
-      const src = await fetch("https://proagentmax.github.io/otto-trader/brain-latest.json");
-      if (!src.ok) return json({ ok: false, error: "public copy not reachable (already deleted?)" }, 502);
-      const payload = await src.json();
+      // POST a JSON array of week files to seed directly; GET still copies the
+      // public repo file, for as long as that file exists.
+      let payload: any = null;
+      if (req.method === "POST") {
+        payload = await req.json().catch(() => null);
+      } else {
+        const src = await fetch("https://proagentmax.github.io/otto-trader/brain-latest.json");
+        if (!src.ok) return json({ ok: false, error: "public copy not reachable (already deleted?)" }, 502);
+        payload = await src.json();
+      }
       if (!Array.isArray(payload) || !payload.length) {
         return json({ ok: false, error: "that did not look like a corpus" }, 502);
       }
@@ -461,7 +476,7 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { apikey: svc, authorization: "Bearer " + svc,
                    "content-type": "application/json", prefer: "return=representation" },
-        body: JSON.stringify({ notes: "seeded from the public repo copy", payload }),
+        body: JSON.stringify({ notes: req.method === "POST" ? "seeded by POST" : "seeded from the public repo copy", payload }),
       });
       if (!ins.ok) return json({ ok: false, error: "insert failed: " + (await ins.text()).slice(0, 200) }, 502);
       const row = await ins.json();
