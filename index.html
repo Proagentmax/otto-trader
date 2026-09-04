@@ -161,7 +161,39 @@ select.f{appearance:none;background-image:linear-gradient(45deg,transparent 50%,
 .mailbox{background:#1B1210;border:1px solid #40201A;border-radius:var(--r);padding:15px 16px;margin-bottom:18px}
 .mailbox b{font-size:15px;font-weight:600;display:block}
 .mailbox p{margin:5px 0 0;font-size:14px;color:var(--ink-2);line-height:1.45}
-.donewrap{margin-top:6px}
+.donewrap,.acc{margin-top:6px}
+.acc{border-top:1px solid var(--rule)}
+.acc:first-child{border-top:0}
+.acchead{display:flex;align-items:center;gap:10px;padding:15px 0;cursor:pointer;background:none;border:0;width:100%;font:inherit;color:inherit;text-align:left}
+.acchead .l{font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--ink);flex:1;line-height:1.3}
+.acchead .l small{display:block;font-size:12px;font-weight:400;color:var(--ink-3);margin-top:2px}
+.acchead .k{font-size:12px;color:var(--ink-3);font-family:var(--mono)}
+.acchead .cv{width:11px;height:11px;stroke:var(--ink-3);stroke-width:2.4;fill:none;transition:transform .25s;flex:none}
+.acc[data-shut="1"] .cv{transform:rotate(-90deg)}
+.acc[data-shut="1"] .accbody{display:none}
+.accbody{padding-bottom:6px}
+.task .d,.task .quote,.task .m{display:none}
+.task.open .d,.task.open .quote{display:block}.task.open .m{display:flex}
+.task .t{cursor:pointer}
+.task .t .more{font-size:11px;color:var(--ink-3);font-weight:500;margin-left:6px;white-space:nowrap}
+.task.open .t .more{display:none}
+.grp{margin-bottom:4px}
+select.mini{font:inherit;font-size:12px;color:var(--ink-2);background:var(--surface);border:1px solid var(--surface-3);border-radius:8px;padding:5px 26px 5px 9px;appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);
+  background-position:calc(100% - 13px) 11px,calc(100% - 9px) 11px;background-size:4px 4px,4px 4px;background-repeat:no-repeat;max-width:60vw;text-overflow:ellipsis}
+.plan{border-radius:var(--r);border:1px solid var(--rule);background:var(--surface);padding:15px 16px;margin-bottom:14px}
+.plan .lab{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:700;color:var(--ink-3)}
+.plan .vd{font-size:19px;font-weight:700;letter-spacing:-.025em;margin:7px 0 5px;line-height:1.25}
+.plan.ok .vd{color:var(--up)}.plan.no .vd{color:var(--down)}.plan.wait .vd{color:#E8B10A}
+.plan .cov{font-size:13.5px;color:var(--ink-2);line-height:1.5}
+.plan .sum{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
+.plan .sum span{font-size:11.5px;font-weight:600;padding:4px 8px;border-radius:6px;background:var(--surface-2);color:var(--ink-2)}
+.plan .md{font-size:14.5px;line-height:1.55;color:var(--ink);margin-top:12px;border-top:1px solid var(--rule);padding-top:12px}
+.plan .row{display:flex;gap:8px;margin-top:12px}.plan .row .btn{flex:1}
+.plan .thumb{width:100%;border-radius:10px;margin-top:10px;border:1px solid var(--rule);display:block}
+.pimg{display:flex;align-items:center;gap:12px;border:1px dashed var(--surface-3);border-radius:10px;padding:12px;color:var(--ink-2);font-size:14px;cursor:pointer}
+.pimg img{width:64px;height:44px;object-fit:cover;border-radius:6px;background:var(--surface-2)}
+.pimg b{display:block;font-size:14px;color:var(--ink)}
 .donehead{display:flex;align-items:center;gap:10px;padding:14px 0 4px;cursor:pointer;background:none;
   border:0;width:100%;font:inherit;color:inherit}
 .donehead .l{font-size:11px;letter-spacing:.11em;text-transform:uppercase;font-weight:700;color:var(--ink-3)}
@@ -358,9 +390,12 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
     </div>
     <div id="weekBody" hidden>
       <div class="sec"><h2>Homework <span class="c" id="assignCount"></span></h2><div id="assignList"></div></div>
-      <div class="sec" id="secRules"><h2>Standing rules</h2><div id="rulesList"></div></div>
-      <div class="sec" id="secSetups"><h2>Setups taught</h2><div id="setupsList"></div></div>
-      <div class="sec" id="secQs"><h2>Ask before you act</h2><ul class="qs" id="qsList"></ul></div>
+      <div class="sec" id="secRef"><h2>From the call <span class="c"><select class="mini" id="refCall" aria-label="Which call"></select></span></h2>
+        <div class="acc" id="accRules" data-shut="1"><button class="acchead" data-acc="accRules" aria-expanded="false"><svg class="cv" viewBox="0 0 12 12"><path d="M2 4.2 6 8.4 10 4.2"/></svg><span class="l">Standing rules</span><span class="k" id="kRules"></span></button><div class="accbody" id="rulesList"></div></div>
+        <div class="acc" id="accSetups" data-shut="1"><button class="acchead" data-acc="accSetups" aria-expanded="false"><svg class="cv" viewBox="0 0 12 12"><path d="M2 4.2 6 8.4 10 4.2"/></svg><span class="l">Setups taught</span><span class="k" id="kSetups"></span></button><div class="accbody" id="setupsList"></div></div>
+        <div class="acc" id="accLevels" data-shut="1"><button class="acchead" data-acc="accLevels" aria-expanded="false"><svg class="cv" viewBox="0 0 12 12"><path d="M2 4.2 6 8.4 10 4.2"/></svg><span class="l">Levels he named <small>marks from that day, not live</small></span><span class="k" id="kLevels"></span></button><div class="accbody" id="levelsList"></div></div>
+        <div class="acc" id="accQs" data-shut="1"><button class="acchead" data-acc="accQs" aria-expanded="false"><svg class="cv" viewBox="0 0 12 12"><path d="M2 4.2 6 8.4 10 4.2"/></svg><span class="l">Ask before you act</span><span class="k" id="kQs"></span></button><div class="accbody"><ul class="qs" id="qsList"></ul></div></div>
+      </div>
       <label class="btn wide" for="fIn2">Add another call</label>
       <input type="file" id="fIn2" accept=".json,.vtt,.srt,.txt" hidden>
     </div>
@@ -397,6 +432,7 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
   </section>
 
   <section class="pane" id="p-market">
+    <div id="planBox"></div>
     <div id="biasBox"></div>
     <div class="keybar" id="keybar"></div>
     <button class="btn solid wide" id="runBtn">Run the routine</button>
@@ -406,6 +442,31 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
   </section>
 </main>
 
+<dialog id="dlgPlan">
+  <div class="grip"></div><div class="hd"><h3>Plan of attack</h3><span class="stamp">before the open</span></div>
+  <div class="bd">
+    <div class="grid g2" style="margin-bottom:12px">
+      <div><label class="f" for="pRead">Your read today</label><select class="f" id="pRead"><option>Bullish</option><option>Bearish</option><option>Choppy — stand aside</option><option>No edge yet</option></select></div>
+      <div><label class="f" for="pSym">Instrument</label><input class="f" id="pSym" placeholder="SPY" autocapitalize="characters" autocomplete="off"></div>
+    </div>
+    <div style="margin-bottom:12px"><label class="f" for="pWhy">Why — the three inputs</label>
+      <textarea class="f" id="pWhy" rows="2" placeholder="10-year, crude, USD/JPY. What are they doing and what does that mean for stocks?"></textarea></div>
+    <div class="grid g2" style="margin-bottom:12px">
+      <div><label class="f" for="pCat">Catalyst</label><input class="f" id="pCat" placeholder="What's the news on it?" autocomplete="off"></div>
+      <div><label class="f" for="pExp">Expiry</label><input class="f" id="pExp" placeholder="Tue 9/9" autocomplete="off"></div>
+      <div><label class="f" for="pIn">Entry level</label><input class="f" type="number" id="pIn" step="any" inputmode="decimal"></div>
+      <div><label class="f" for="pPT">PT</label><input class="f" type="number" id="pPT" step="any" inputmode="decimal"></div>
+      <div><label class="f" for="pWrong">I'm wrong at</label><input class="f" type="number" id="pWrong" step="any" inputmode="decimal"></div>
+      <div><label class="f" for="pSwing">Swing it?</label><select class="f" id="pSwing"><option>No — day trade</option><option>Yes — overnight</option></select></div>
+    </div>
+    <div style="margin-bottom:12px"><label class="f" for="pNotes">The plan</label>
+      <textarea class="f" id="pNotes" rows="4" placeholder="What has to happen before you click. What confirms it. Where you get out. What makes you do nothing."></textarea>
+      <p class="err" id="pErr" hidden></p></div>
+    <label class="pimg" for="pImg"><img id="pThumb" alt="" hidden><span><b id="pImgT">Add your marked-up chart</b>Screenshot of the chart you'd trade from. He reads it.</span></label>
+    <input type="file" id="pImg" accept="image/*" hidden>
+  </div>
+  <div class="ft"><button class="btn" id="pCancel">Cancel</button><button class="btn solid" id="pSave">Grade it</button></div>
+</dialog>
 <dialog id="dlgTrade">
   <div class="grip"></div><div class="hd"><h3>Log a trade</h3></div>
   <div class="bd">
@@ -524,7 +585,7 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
 "use strict";
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
 const DEF={key:"",ten:4.7,tenH:4.88,jpy:160,maxDay:1,watch:"WMT, TGT, HD, NVDA, COST",avUsed:0,avDate:""};
-let CFG={...DEF},CALLS=[],CUR=0,TRADES=[],DONE={},RUN=null,CHAT=[],INSTAB="ideas",BIASRUN=null;
+let CFG={...DEF},CALLS=[],CUR=0,TRADES=[],DONE={},RUN=null,CHAT=[],INSTAB="ideas",BIASRUN=null,PLANS=[];
 const NS="otto:";
 
 /* Project address and the public anon key. They live in config.js — one small
@@ -615,7 +676,9 @@ const LS={
    looking at the same thing — the same ticks, the same journal, the same Coach
    history. "bias" is in here too now: it costs one row and it means whoever
    reads the morning first, both of them see it. */
-const CLOUD_KEYS=new Set(["done","trades","chat","mailans","cfg","tab","bias","run"]);
+const CLOUD_KEYS=new Set(["done","trades","chat","mailans","cfg","tab","bias","run","plans"]);
+// "plans" (3 Sep 2026): the morning plan of attack and its grade. Text only —
+// the screenshot is graded server-side and never stored, so a plan is ~2KB.
 // "run" joined this set 25 Aug: the six-step routine's results were local-only,
 // so one device running it (burning up to 11 of the 25 free Alpha Vantage calls
 // a day) left every other device showing "not run yet" with no way to know it
@@ -806,17 +869,14 @@ function migrateDone(){
   return moved;
 }
 
+const WEEKUI={grp:{},task:{}};     // open/closed state for the accordions — per device, never synced
+const fmtDate=d=>{const m=String(d||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return d||"";
+  return new Date(+m[1],+m[2]-1,+m[3]).toLocaleDateString(undefined,{month:"short",day:"numeric"})};
 function renderWeek(){
   const w=week(),badge=$("#bWeek");
   $("#weekEmpty").hidden=!!w;$("#weekBody").hidden=!w;
   if(!w){badge.hidden=true;stampVersion();return}
-  const c=w.call||{};
   stampVersion();
-  // the call name moves to the sections that are actually per-call; homework
-  // below is aggregated across every call and never belonged under one title
-  const from=esc(c.title||"Call")+" · "+esc(c.date||"");
-  $("#secRules").querySelector("h2").innerHTML=`Standing rules <span class="c">${from}</span>`;
-  $("#secSetups").querySelector("h2").innerHTML=`Setups taught <span class="c">${from}</span>`;
   const HW=allHomework(),
         open=HW.filter(h=>!DONE[h.key]),
         done=HW.filter(h=>DONE[h.key]),
@@ -825,26 +885,39 @@ function renderWeek(){
   $("#assignCount").textContent=HW.length?(open.length?`${open.length} due`:"all clear"):"";
 
   const chip=h=>{
-    const k=h.kind;
+    const k=h.kind,due=h.a.due&&/^\d{4}-\d{2}-\d{2}/.test(h.a.due)?fmtDate(h.a.due.slice(0,10)):"";
     return `<div class="tags">`+
-      `<span class="tg${k==="once"?"":" rec"}">${k==="once"?"one-time":k==="nightly"?"every night":"every week"}</span>`+
+      `<span class="tg${k==="once"?"":" rec"}">${k==="once"?(due?"due "+esc(due):"one-time"):k==="nightly"?"every night":"every week"}</span>`+
       (h.a.channel==="email-jason"?`<span class="tg mail">email jason</span>`:"")+
       (DONE[h.key]&&k!=="once"?`<span class="tg rec">back ${k==="nightly"?"tonight":"next week"}</span>`:"")+
       `</div>`;
   };
-  const row=h=>{const a=h.a;return `
-    <div class="task ${DONE[h.key]?"done":""}">
+  // collapsed by default: the title is the task; detail and his words open on tap
+  const row=h=>{const a=h.a,op=!!WEEKUI.task[h.key];return `
+    <div class="task ${DONE[h.key]?"done":""}${op?" open":""}" data-tk="${esc(h.key)}">
       <button class="box" aria-pressed="${!!DONE[h.key]}" data-k="${esc(h.key)}" aria-label="Done: ${esc(a.task)}"><i></i></button>
       <div style="flex:1">
-        <div class="t">${esc(a.task)}</div>
+        <div class="t">${esc(a.task)}${a.detail||a.quote?`<span class="more">more</span>`:""}</div>
         ${a.detail?`<div class="d">${esc(a.detail)}</div>`:""}
         ${a.quote?`<div class="quote">${esc(a.quote)}</div>`:""}
         ${chip(h)}
         <div class="m">${a.at?`<span>${esc(a.at)}</span>`:""}<span>${esc(h.date)}</span></div>
       </div></div>`};
 
-  // one-time first (they can actually be finished), then the recurring ones
-  const ordered=open.filter(h=>h.kind==="once").concat(open.filter(h=>h.kind!=="once"));
+  // one group per call, newest first. Only the newest starts open — the point
+  // of the redesign: 20 open items across three calls is a wall, three headers
+  // with counts is a list.
+  const dates=[...new Set(open.map(h=>h.date))].sort().reverse();
+  const groups=dates.map((d,i)=>{
+    const items=open.filter(h=>h.date===d),
+          ordered=items.filter(h=>h.kind==="once").concat(items.filter(h=>h.kind!=="once")),
+          c=(CALLS.find(x=>(x.call&&x.call.date)===d)||{}).call||{},
+          shut=WEEKUI.grp[d]===undefined?(i>0):WEEKUI.grp[d];
+    return `<div class="acc grp" data-grp="${esc(d)}" data-shut="${shut?1:0}">
+      <button class="acchead" data-gh="${esc(d)}" aria-expanded="${!shut}"><svg class="cv" viewBox="0 0 12 12"><path d="M2 4.2 6 8.4 10 4.2"/></svg>
+        <span class="l">${esc(fmtDate(d))}<small>${esc((c.title||"Call").split(" — ")[0])}</small></span><span class="k">${items.length} due</span></button>
+      <div class="accbody">${ordered.map(row).join("")}</div></div>`}).join("");
+
   $("#assignList").innerHTML=
     (!HW.length?`<p style="color:var(--ink-2)">Nothing assigned yet.</p>`:
       (!open.length
@@ -852,28 +925,44 @@ function renderWeek(){
         : (mails.length>1?`<div class="mailbox"><b>${mails.length} of these are one email</b>
              <p>He asked them all on the same call. Answer them once and send it.</p>
              <button class="btn wide solid" id="mailBtn" style="margin-top:12px">Draft my email to Jason</button></div>`:"")
-          + ordered.map(row).join("")))
+          + groups))
     + (done.length?`<div class="donewrap" data-shut="1" id="doneWrap">
         <button class="donehead" id="doneHead" aria-expanded="false">
           <svg class="cv" viewBox="0 0 12 12"><path d="M2 4.2 6 8.4 10 4.2"/></svg>
           <span class="l">Done · ${done.length}</span><span class="ln"></span></button>
         <div class="dlist">${done.map(row).join("")}</div></div>`:"");
-  const R=w.rules||[];$("#secRules").hidden=!R.length;
-  $("#rulesList").innerHTML=R.map((r,i)=>`<div class="item"><span class="n">${String(i+1).padStart(2,"0")}</span><div><span>${esc(r.rule)}</span>${r.why?`<span class="why">${esc(r.why)}</span>`:""}</div></div>`).join("");
-  const S=w.setups||[];$("#secSetups").hidden=!S.length;
-  $("#setupsList").innerHTML=S.map(s=>`<div class="item"><span class="n">▸</span><div><b>${esc(s.name)}</b>
-    <span class="why">Take it: ${esc(s.trigger||"not given")}</span>
-    <span class="why">Wrong when: ${esc(s.invalidation||"not given")}</span></div></div>`).join("");
-  const Q=w.questions||[];$("#secQs").hidden=!Q.length;
+
+  // the reference block reads from ONE call, chosen here; homework above does not
+  const sel=$("#refCall");
+  sel.innerHTML=CALLS.map((c,i)=>`<option value="${i}"${i===CUR?" selected":""}>${esc(fmtDate(c.call&&c.call.date))} · ${esc(((c.call&&c.call.title)||"Call").split(" — ")[0].slice(0,34))}</option>`).join("");
+  const R=w.rules||[];$("#kRules").textContent=R.length;$("#accRules").hidden=!R.length;
+  $("#rulesList").innerHTML=R.map((r,i)=>`<div class="item"><span class="n">${String(i+1).padStart(2,"0")}</span><div><span>${esc(r.rule)}</span>${r.why?`<span class="why">${esc(r.why)}</span>`:""}${r.at?`<span class="why" style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3)">${esc(r.at)}</span>`:""}</div></div>`).join("");
+  const S=w.setups||[];$("#kSetups").textContent=S.length;$("#accSetups").hidden=!S.length;
+  $("#setupsList").innerHTML=S.map(x=>`<div class="item"><span class="n">▸</span><div><b>${esc(x.name)}</b>
+    <span class="why">Take it: ${esc(x.trigger||"not given")}</span>
+    <span class="why">Wrong when: ${esc(x.invalidation||"not given")}</span>${x.at?`<span class="why" style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3)">${esc(x.timeframe?x.timeframe+" · ":"")}${esc(x.at)}</span>`:""}</div></div>`).join("");
+  const L=w.levels||[];$("#kLevels").textContent=L.length;$("#accLevels").hidden=!L.length;
+  $("#levelsList").innerHTML=L.map(l=>`<div class="item"><span class="n" style="min-width:52px">${esc(l.value)}</span><div><b>${esc(l.instrument)}</b><span class="why">${esc(l.meaning)}</span>${l.at?`<span class="why" style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3)">${esc(l.at)}</span>`:""}</div></div>`).join("");
+  const Q=w.questions||[];$("#kQs").textContent=Q.length;$("#accQs").hidden=!Q.length;
   $("#qsList").innerHTML=Q.map(q=>`<li>${esc(q.q)}${q.why?`<span class="why">${esc(q.why)}</span>`:""}</li>`).join("");
 }
+$("#refCall").addEventListener("change",e=>{CUR=parseInt(e.target.value)||0;renderWeek();renderInsights()});
+$("#secRef").addEventListener("click",e=>{
+  const h=e.target.closest(".acchead");if(!h)return;
+  const a=h.closest(".acc"),shut=a.dataset.shut==="1";a.dataset.shut=shut?"0":"1";h.setAttribute("aria-expanded",String(shut))});
 $("#assignList").addEventListener("click",e=>{
   if(e.target.closest("#mailBtn"))return openMail();
   const h=e.target.closest("#doneHead");
   if(h){const w=$("#doneWrap"),shut=w.dataset.shut==="1";
     w.dataset.shut=shut?"0":"1";h.setAttribute("aria-expanded",String(shut));return}
-  const b=e.target.closest(".box");if(!b)return;
-  DONE[b.dataset.k]=!DONE[b.dataset.k];LS.set("done",DONE);renderWeek()});
+  const gh=e.target.closest("[data-gh]");
+  if(gh){const a=gh.closest(".acc"),shut=a.dataset.shut==="1";a.dataset.shut=shut?"0":"1";
+    WEEKUI.grp[gh.dataset.gh]=!shut;gh.setAttribute("aria-expanded",String(shut));return}
+  const b=e.target.closest(".box");
+  if(b){DONE[b.dataset.k]=!DONE[b.dataset.k];LS.set("done",DONE);renderWeek();return}
+  const t=e.target.closest(".task .t");
+  if(t){const tk=t.closest(".task"),k=tk.dataset.tk;WEEKUI.task[k]=!WEEKUI.task[k];tk.classList.toggle("open",WEEKUI.task[k])}
+});
 
 /* ---------- the email he owes Jason ----------
    Four of the seven open assignments are one message. That is why all four are
@@ -1373,7 +1462,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.4.6";
+const BUILD="2.5.0";
 const AV="https://www.alphavantage.co/query?";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
@@ -1449,6 +1538,102 @@ const ty=k=>{const d=RUN&&RUN.data[k]&&RUN.data[k].data;if(!Array.isArray(d))ret
   const p=d.filter(x=>x.value!=="."&&isFinite(parseFloat(x.value)));return p.length?{v:num(p[0].value),prev:num(p[1]&&p[1].value),date:p[0].date}:null};
 const card=(k,v,s,cls)=>`<div class="read ${cls||""}"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>${s?`<div class="s ${cls==="trip"?"dn":""}">${esc(s)}</div>`:""}</div>`;
 const wait=(k,e)=>`<div class="read wait"><div class="k">${esc(k)}</div><div class="v">${e?"n/a":"—"}</div>${e?`<div class="s dn">${esc(String(e).slice(0,42))}</div>`:""}</div>`;
+
+/* ---------- plan of attack ----------
+   Jason's fix for every bad trade on the record is the same: do the homework
+   BEFORE, so you have confidence DURING (3 Sep 2026, 54:15). This is the
+   homework as a form — read, the three inputs, catalyst, levels, expiry,
+   swing or not, and the marked-up chart — graded by Jason Brain against his
+   rules with citations. It grades the PROCESS. It never says buy, sell, size
+   or stop; the server prompt refuses those the same way the Coach does. */
+const todayPlan=()=>PLANS.find(p=>p.date===today())||null;
+function planTone(g){
+  const v=(g||"").split("\n").find(l=>/\*\*verdict/i.test(l))||"";
+  return /not (yet )?defended|stand down|do nothing|hands off/i.test(v)?"no":/defended/i.test(v)?"ok":"wait";
+}
+function renderPlan(){
+  const box=$("#planBox");if(!box)return;
+  if(!USER){box.innerHTML="";return}
+  const p=todayPlan();
+  if(!p){
+    box.innerHTML=`<div class="plan wait"><div class="lab">Plan of attack</div>
+      <div class="vd">Nothing written for today</div>
+      <div class="cov">Your read, the three inputs, the catalyst, your levels and your chart — graded against what he's taught, before you click anything.</div>
+      <button class="btn wide solid" id="planBtn" style="margin-top:12px">Write today's plan</button></div>`;
+    return;
+  }
+  const verdictLine=(p.grade||"").split("\n").find(l=>/\*\*verdict/i.test(l))||"";
+  const verdict=verdictLine.replace(/\*\*/g,"").replace(/^verdict:?\s*/i,"").trim()||(p.grade?"Graded":"Not graded");
+  const body=(p.grade||"").split("\n").filter(l=>!/\*\*verdict/i.test(l)).join("\n");
+  box.innerHTML=`<div class="plan ${planTone(p.grade)}"><div class="lab">Plan of attack · ${esc(fmtDate(p.date))}${p.hasImg?" · chart read":""}</div>
+    <div class="vd">${esc(verdict)}</div>
+    <div class="sum"><span>${esc(p.read)}</span><span>${esc(p.sym)}</span>${p.exp?`<span>exp ${esc(p.exp)}</span>`:""}${p.entry?`<span>in ${esc(p.entry)}</span>`:""}${p.pt?`<span>PT ${esc(p.pt)}</span>`:""}${p.wrong?`<span>wrong at ${esc(p.wrong)}</span>`:""}<span>${/yes/i.test(p.swing)?"swing":"day trade"}</span></div>
+    <div class="cov">${esc(p.notes)}</div>
+    ${p.error?`<div class="cov" style="color:var(--down);margin-top:8px">${esc(p.error)}</div>`:""}
+    ${body?`<div class="md">${md(body)}</div>`:""}
+    <div class="row"><button class="btn" id="planEdit">Edit &amp; regrade</button><button class="btn solid" id="planLog">Log the trade</button></div></div>`;
+}
+$("#planBox").addEventListener("click",e=>{
+  if(e.target.closest("#planBtn")||e.target.closest("#planEdit"))return openPlan();
+  if(e.target.closest("#planLog")){const p=todayPlan();$("#addTradeBtn").click();if(!p)return;
+    $("#tSym").value=p.sym||"";$("#tDir").value=/bear/i.test(p.read)?"Short":"Long";
+    if(p.entry)$("#tIn").value=p.entry;
+    $("#tWhy").value=`Plan: ${p.notes}`+(p.catalyst?` Catalyst: ${p.catalyst}.`:"")+(p.pt?` PT ${p.pt}`:"")+(p.wrong?`, wrong at ${p.wrong}.`:"");
+    $$(".nav button").find(b=>b.dataset.p==="journal").click();}
+});
+let PIMG=null;   // {media_type,data} for this dialog session only
+function openPlan(){
+  const p=todayPlan()||{};
+  $("#pRead").value=p.read||"Bullish";$("#pSym").value=p.sym||"";$("#pWhy").value=p.why||"";
+  $("#pCat").value=p.catalyst||"";$("#pExp").value=p.exp||"";$("#pIn").value=p.entry||"";
+  $("#pPT").value=p.pt||"";$("#pWrong").value=p.wrong||"";$("#pSwing").value=p.swing||"No — day trade";
+  $("#pNotes").value=p.notes||"";$("#pErr").hidden=true;
+  PIMG=null;$("#pThumb").hidden=true;$("#pImg").value="";$("#pImgT").textContent="Add your marked-up chart";
+  $("#dlgPlan").showModal();
+}
+/* phones hand over 3–5 MB screenshots; the model needs ~1400px, so shrink in
+   a canvas before it ever leaves the device */
+function shrinkImage(file){
+  return new Promise((res,rej)=>{
+    const img=new Image(),u=URL.createObjectURL(file);
+    img.onload=()=>{URL.revokeObjectURL(u);
+      const M=1400,r=Math.min(1,M/Math.max(img.width,img.height)),c=document.createElement("canvas");
+      c.width=Math.round(img.width*r);c.height=Math.round(img.height*r);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      const url=c.toDataURL("image/jpeg",.82);
+      res({media_type:"image/jpeg",data:url.split(",")[1],url})};
+    img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("not an image"))};
+    img.src=u});
+}
+$("#pImg").addEventListener("change",async e=>{
+  const f=e.target.files&&e.target.files[0];if(!f)return;
+  try{PIMG=await shrinkImage(f);const t=$("#pThumb");t.src=PIMG.url;t.hidden=false;
+    $("#pImgT").textContent="Chart attached — tap to change"}
+  catch(err){PIMG=null;toast("Couldn't read that image")}
+});
+$("#pCancel").addEventListener("click",()=>$("#dlgPlan").close());
+$("#pNotes").addEventListener("input",()=>{$("#pErr").hidden=true});
+$("#pSave").addEventListener("click",async()=>{
+  const plan={read:$("#pRead").value,sym:$("#pSym").value.trim().toUpperCase(),why:$("#pWhy").value.trim(),
+    catalyst:$("#pCat").value.trim(),exp:$("#pExp").value.trim(),entry:$("#pIn").value,pt:$("#pPT").value,
+    wrong:$("#pWrong").value,swing:$("#pSwing").value,notes:$("#pNotes").value.trim()};
+  const err=!plan.sym?"Which instrument? SPY, QQQ, or your one Mag-7 name."
+    :plan.notes.length<MIN_WHY?"Write the plan. What has to happen before you click?":"";
+  if(err){const b=$("#pErr");b.textContent=err;b.hidden=false;return}
+  const btn=$("#pSave");btn.disabled=true;btn.textContent="Grading…";
+  const prev=todayPlan();
+  const rec=Object.assign(prev||{id:Date.now().toString(36),date:today()},plan,{at:new Date().toISOString(),hasImg:!!PIMG,grade:prev&&prev.grade||"",error:""});
+  try{
+    const {url,headers}=await fnUrl("plan");
+    const res=await fetch(url,{method:"POST",headers,body:JSON.stringify({plan,image:PIMG?{media_type:PIMG.media_type,data:PIMG.data}:null})});
+    const j=await res.json();
+    if(!j.ok)throw new Error(j.error||"grading failed");
+    rec.grade=j.text||"";
+  }catch(e){rec.error="Not graded: "+String(e.message).slice(0,120)+". The plan is saved — tap Edit & regrade.";}
+  PLANS=PLANS.filter(p=>p.id!==rec.id);PLANS.unshift(rec);PLANS=PLANS.slice(0,60);LS.set("plans",PLANS);
+  btn.disabled=false;btn.textContent="Grade it";$("#dlgPlan").close();renderPlan();
+  toast(rec.error?"Saved, not graded":"Graded");
+});
 
 /* ---------- the morning bias ----------
    Josh's ask: "instead of me determining the decision by myself." His own
@@ -1742,11 +1927,11 @@ function stampVersion(){
   $("#sub").innerHTML=`<b>v${BUILD}</b>`+
     (CALLS.length?"":`<br><span style="color:var(--down)">brain not loaded</span>`);
 }
-function renderAll(){renderWeek();renderInsights();renderCoach();renderJournal();renderMarket();renderBias();renderVersion();stampVersion()}
+function renderAll(){renderWeek();renderInsights();renderCoach();renderJournal();renderMarket();renderPlan();renderBias();renderVersion();stampVersion()}
 function hydrate(){
   CFG=Object.assign({},DEF,LS.get("cfg",{}));
   CALLS=LS.get("calls",[]);TRADES=LS.get("trades",[]);DONE=LS.get("done",{});
-  RUN=LS.get("run",null);CHAT=LS.get("chat",[]);BIASRUN=LS.get("bias",null);
+  RUN=LS.get("run",null);CHAT=LS.get("chat",[]);BIASRUN=LS.get("bias",null);PLANS=LS.get("plans",[]);
   if(RUN&&(RUN.v!==BUILD||Date.now()-new Date(RUN.at).getTime()>20*36e5)){RUN=null;LS.del("run")}
   migrateDone();
 }

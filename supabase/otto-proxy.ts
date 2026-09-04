@@ -5,6 +5,7 @@
 //   ?fn=brain    the corpus itself, for the Week / Insights tabs
 //   ?fn=seed     write a new corpus version (GET copies the repo file, POST takes a JSON array)
 //   ?fn=write    plain Claude call for the app's small drafting jobs
+//   ?fn=plan     grade the morning plan of attack (text + optional chart screenshot)
 //
 // WHY IT ALL LIVES HERE
 // No API key ever reaches a device. Rotating a key is one edit in Supabase and
@@ -300,6 +301,61 @@ function alwaysOn(calls: any[]) {
   return L.join("\n");
 }
 
+/* ---------------------------------------------------------------- plan */
+
+/* Grades Josh's morning plan of attack against what Jason has taught. It
+   grades the PROCESS — did he do what Jason told him to do before clicking —
+   and it is bound by every refusal in the Coach prompt: no buy/sell, no size,
+   no stop, no live-price arithmetic, nothing carried across instruments or
+   years, nothing invented. Everything it praises or sends back must cite a
+   call and a timestamp. */
+const PLAN_SYS = `You are Jason Brain, grading Josh's PLAN OF ATTACK for today before the market opens. Josh is a beginner mentored by Jason Murray (iBelieve Investments Club). You have Jason's standing rules and setups in full below, plus material retrieved from the recorded calls, and possibly a screenshot of the chart Josh marked up.
+
+WHAT YOU ARE GRADING. Whether Josh did the homework Jason told him to do — not whether the trade will work. You have no live market data and no opinion on direction. Check his plan against what Jason actually said, item by item, and cite every item as (call, date, MM:SS). If Jason never addressed something, say "he has not covered that" — never fill the gap.
+
+THE CHECKLIST — use only the items the material supports, and quote his words where they are vivid:
+- The read: did Josh name the inputs Jason told him to check before the chart (the 10-year / cost of capital, crude / cost of transportation, USD/JPY / cost of currency) and say what they mean for stocks today?
+- The catalyst: is there more than one reason beyond the chart? Jason: one indicator is useless, three is workable, five you can take to the bank.
+- The instrument: is it SPY, QQQ, or one Mag-7 name — the three he allowed? Micron is off the list.
+- The entry: is it at a level Jason's method recognises — a reclaim, a held gap, a box drawn top-of-gap to support — with confirmation, or is it "before the level"? A box only a few dollars wide is not a trade; wait for the expansion.
+- The exit: is there a PT and an "I'm wrong at" level written BEFORE the trade? Note plainly that Jason has not taught stop placement; an invalidation is not a stop.
+- The expiry: after Wednesday, not this Friday's contract — Tuesday/Wednesday or next week.
+- Swinging: is he swinging into a binary event (NFP, earnings, the Fed)? Jason: never. Is he swinging at all when his rule right now is that his risk management IS not swinging?
+- The screenshot, if there is one: what timeframe is it, is it cluttered with the overlays Jason told him to strip (CBC, order-block detector, VWAP) when marking levels, are the box and lines drawn where his method puts them, and — above all — is a P&L / account panel visible? Jason's first change for Josh is to watch the chart and never the P&L. Say what you can and cannot see; do not guess at prices from a picture.
+- The mindset: does the plan read like a treasure hunt or like fear? Jason's words, not yours.
+
+FORMAT — plain markdown, phone-sized, in this order and nothing else:
+**Verdict:** one of "Defended — he'd let you take this", "Not yet defended — fix these first", or "Stand down today — this is a no-trade day by his rules". One sentence after it saying why.
+#### What lines up
+- bullet per item that matches his teaching, each with a citation
+#### What Jason would send back
+- bullet per item that misses, each with what he actually said and a citation
+#### Before the open, answer these
+- two or three questions Jason would ask him, in Jason's voice
+#### Not covered
+- anything the plan relies on that Jason has not taught (say "nothing" if none)
+
+HARD LINES. Never write "buy", "sell", "take it", "this is a long/short", a contract count, a dollar risk, or a stop price. Never say whether his level is right relative to where price is now. Never compare an options figure with a futures one or carry anything across years; repeat any !! SCOPE LIMIT you rely on. Never invent a rule. If the plan is thin, say so plainly; do not congratulate him into confidence. Keep it under 350 words.
+
+=== HIS RULES AND SETUPS, IN FULL ===
+{{RULES}}
+=== END ===
+
+=== RETRIEVED FROM THE CALLS FOR THIS PLAN ===
+{{MATERIAL}}
+=== END ===
+`;
+
+function planText(p: any) {
+  const f = (k: string, l: string) => p[k] ? `${l}: ${String(p[k]).slice(0, 600)}` : `${l}: (blank)`;
+  return [
+    f("read", "My read today"), f("why", "Why — the three inputs"), f("sym", "Instrument"),
+    f("catalyst", "Catalyst"), f("exp", "Expiry"), f("entry", "Entry level"), f("pt", "PT"),
+    f("wrong", "I'm wrong at"), f("swing", "Swing"), f("notes", "The plan"),
+    p.hasImage ? "A screenshot of my marked-up chart is attached." : "No screenshot attached.",
+  ].join("\n");
+}
+
 /* -------------------------------------------------------------------- chat */
 
 const TOOLS = [{
@@ -514,6 +570,51 @@ Deno.serve(async (req) => {
       if (j.error) return json({ ok: false, error: j.error.message || "API error" }, 502);
       return json({ ok: true, text: (j.content || []).filter((c: any) => c.type === "text")
                                     .map((c: any) => c.text).join("") });
+    }
+
+    // The morning plan of attack, graded. Non-streaming, optionally with a
+    // chart screenshot (base64). Same corpus, same refusals as the Coach.
+    if (fn === "plan") {
+      const apiKey = Deno.env.get("ANTHROPIC_KEY");
+      if (!apiKey) return json({ ok: false, error: "ANTHROPIC_KEY secret is not set" }, 500);
+      const b = await req.json().catch(() => ({}));
+      const plan = (b && b.plan) || {};
+      if (!plan.sym && !plan.notes) return json({ ok: false, error: "plan is empty" }, 400);
+      const img = b.image && typeof b.image.data === "string" && b.image.data.length > 100 ? b.image : null;
+      if (img && img.data.length > 6_000_000) return json({ ok: false, error: "image too large" }, 400);
+      const calls = await loadBrain();
+      const cs = chunksOf(calls);
+      // three searches, deliberately different wording — the plan's own words,
+      // the entry mechanics, and the standing risk rules — merged and deduped
+      const queries = [
+        `${plan.sym || ""} ${plan.notes || ""} ${plan.why || ""}`.slice(0, 400),
+        `${plan.sym || ""} entry level reclaim box gap confirmation first red candle expansion`,
+        "swing binary event NFP earnings expiry Friday Tuesday P&L chart catalyst indicators mindset",
+      ];
+      const seen = new Set<string>(); const hits: Chunk[] = [];
+      for (const q of queries) for (const h of search(cs, q, 10)) {
+        const k = h.d + "|" + h.at + "|" + h.s.slice(0, 50);
+        if (!seen.has(k)) { seen.add(k); hits.push(h); }
+      }
+      const sys = PLAN_SYS.replace("{{RULES}}", alwaysOn(calls))
+                          .replace("{{MATERIAL}}", hits.slice(0, 24).map(fmt).join("\n\n"));
+      const content: any[] = [];
+      if (img) content.push({ type: "image", source: { type: "base64",
+        media_type: /^image\/(jpeg|png|webp|gif)$/.test(img.media_type) ? img.media_type : "image/jpeg", data: img.data } });
+      content.push({ type: "text", text: planText({ ...plan, hasImage: !!img }) });
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({
+          model: MODEL, max_tokens: 1500,
+          system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }],
+          messages: [{ role: "user", content }],
+        }),
+      });
+      const j = await r.json();
+      if (j.error) return json({ ok: false, error: j.error.message || "API error" }, 502);
+      return json({ ok: true, text: (j.content || []).filter((c: any) => c.type === "text")
+                                    .map((c: any) => c.text).join(""), retrieved: hits.length });
     }
 
     if (fn === "chat") {
