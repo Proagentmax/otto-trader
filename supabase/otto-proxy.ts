@@ -6,6 +6,8 @@
 //   ?fn=seed     write a new corpus version (GET copies the repo file, POST takes a JSON array)
 //   ?fn=write    plain Claude call for the app's small drafting jobs
 //   ?fn=plan     grade the morning plan of attack (text + optional chart screenshot)
+//   ?fn=routine  the six-step morning routine, live (Treasury.gov, Yahoo, Nasdaq calendar)
+//   ?fn=news     'what's moving' — Claude with web search, for the catalyst box
 //
 // WHY IT ALL LIVES HERE
 // No API key ever reaches a device. Rotating a key is one edit in Supabase and
@@ -356,6 +358,127 @@ function planText(p: any) {
   ].join("\n");
 }
 
+/* ------------------------------------------------------------- routine */
+
+/* Jason's six-step morning routine (Intro Call, 17 Aug 2026, 17:57–23:20;
+   tightened 3 Sep 2026, 36:40) — the same six things, live, from sources that
+   don't need a key Josh has to paste:
+     bonds       Treasury.gov daily CSV (official closes for 10Y / 2Y / curve)
+                 + Yahoo ^TNX for the 10-year LIVE, intraday
+     USD/JPY     Yahoo JPY=X, spot
+     commodities Yahoo USO / UNG / SLV / CPER (ETF proxies, as before)
+     indexes     Yahoo SPY / QQQ / DIA with today's open, so "did they finish
+                 below the open" is answered from real prints
+     earnings    Nasdaq's calendar for the next 8 days, filtered to the watchlist
+   Yahoo's v8 chart endpoint and Nasdaq's calendar are public but unofficial;
+   every leg is fetched independently and reports its own error, so one source
+   going dark leaves five cards standing rather than none. Results are cached
+   in-memory for 45 s so a double tap (or two people) costs one fetch. */
+const UA = { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36",
+             "accept": "application/json,text/plain,*/*" };
+
+async function yq(sym: string) {
+  const r = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(sym) +
+                        "?range=1d&interval=5m", { headers: UA });
+  if (!r.ok) throw new Error("yahoo HTTP " + r.status);
+  const j = await r.json();
+  const res = j?.chart?.result?.[0];
+  if (!res?.meta) throw new Error(j?.chart?.error?.description || "no data");
+  const m = res.meta, q = res.indicators?.quote?.[0] || {};
+  const opens = (q.open || []).filter((x: any) => typeof x === "number");
+  const price = Number(m.regularMarketPrice), prev = Number(m.chartPreviousClose ?? m.previousClose);
+  return {
+    price: isFinite(price) ? price : null,
+    prev:  isFinite(prev)  ? prev  : null,
+    open:  opens.length ? Number(opens[0]) : null,
+    pct:   isFinite(price) && isFinite(prev) && prev ? ((price - prev) / prev) * 100 : null,
+    at:    m.regularMarketTime ? Number(m.regularMarketTime) : null,
+    state: m.marketState || null,
+  };
+}
+
+async function treasuryCloses() {
+  const y = new Date().getUTCFullYear();
+  const r = await fetch(`https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y}&page&_format=csv`, { headers: UA });
+  if (!r.ok) throw new Error("treasury HTTP " + r.status);
+  const lines = (await r.text()).trim().split(/\r?\n/);
+  const head = lines[0].split(",").map((h) => h.replace(/"/g, "").trim());
+  const i10 = head.indexOf("10 Yr"), i2 = head.indexOf("2 Yr");
+  if (i10 < 0 || i2 < 0 || lines.length < 3) throw new Error("treasury csv shape changed");
+  const row = (l: string) => { const c = l.split(","); const [mm, dd, yy] = c[0].split("/");
+    return { date: `${yy}-${mm}-${dd}`, t10: parseFloat(c[i10]), t2: parseFloat(c[i2]) }; };
+  const a = row(lines[1]), b = row(lines[2]);          // newest first
+  return { t10: a.t10, t2: a.t2, date: a.date, prev10: b.t10, prev2: b.t2, prevDate: b.date };
+}
+
+async function earningsAhead(watch: string[], days = 8) {
+  const want = new Set(watch.map((s) => s.toUpperCase()));
+  const out: any[] = [];
+  const dates: string[] = [];
+  for (let i = 0; i < days; i++) { const d = new Date(Date.now() + i * 864e5); dates.push(d.toISOString().slice(0, 10)); }
+  await Promise.all(dates.map(async (d) => {
+    try {
+      const r = await fetch("https://api.nasdaq.com/api/calendar/earnings?date=" + d, { headers: UA });
+      if (!r.ok) return;
+      const j = await r.json();
+      for (const row of (j?.data?.rows || [])) {
+        if (want.has(String(row.symbol).toUpperCase()))
+          out.push({ date: d, sym: row.symbol, name: row.name, time: row.time === "time-pre-market" ? "before open"
+                     : row.time === "time-after-hours" ? "after close" : "" });
+      }
+    } catch (_) { /* one day missing is not a failure */ }
+  }));
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+let NEWS_CACHE: { at: number; text: string } | null = null;
+let ROUTINE_CACHE: { at: number; key: string; body: any } | null = null;
+
+async function routine(watch: string[]) {
+  const key = watch.join(",");
+  if (ROUTINE_CACHE && ROUTINE_CACHE.key === key && Date.now() - ROUTINE_CACHE.at < 45_000) return ROUTINE_CACHE.body;
+  const errors: Record<string, string> = {};
+  const grab = async <T,>(k: string, f: () => Promise<T>): Promise<T | null> => {
+    try { return await f(); } catch (e) { errors[k] = String((e as Error).message ?? e).slice(0, 120); return null; }
+  };
+  const syms = ["USO", "UNG", "SLV", "CPER", "SPY", "QQQ", "DIA"];
+  const [tnx, jpy, tsy, earn, ...qs] = await Promise.all([
+    grab("t10live", () => yq("^TNX")),
+    grab("jpy", () => yq("JPY=X")),
+    grab("treasury", treasuryCloses),
+    grab("earn", () => earningsAhead(watch)),
+    ...syms.map((s) => grab(s, () => yq(s))),
+  ]);
+  const quotes: Record<string, any> = {};
+  syms.forEach((s, i) => { quotes[s] = qs[i]; });
+  const body = { ok: true, served: Math.floor(Date.now() / 1000), t10live: tnx, jpy, treasury: tsy, earnings: earn || [], quotes, errors };
+  ROUTINE_CACHE = { at: Date.now(), key, body };
+  return body;
+}
+
+/* "What's moving?" — the story behind the numbers, for the catalyst box.
+   Claude with web search, asked for five short lines with sources. This is
+   the one place the app goes to the open web, and it is for the WHY, never
+   for a number the cards already carry. */
+async function whatsMoving(apiKey: string) {
+  const day = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({
+      model: MODEL, max_tokens: 900,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
+      system: "You write a five-line pre-market brief for a beginner US day trader. Today is " + day + ". Search for what is moving US markets this morning, then answer in EXACTLY this markdown shape and nothing else:\n" +
+        "- **10-year:** one line — what it did and the reason given in the news\n- **Crude:** one line\n- **Dollar / yen:** one line\n- **Scheduled today:** the data releases or Fed speakers on today's calendar with times ET, or 'nothing major'\n- **Mag-7 with news:** which of Apple, Microsoft, NVIDIA, Amazon, Google, Meta, Tesla has a real catalyst today, one line each, max three\n" +
+        "Plain words, no advice, no predictions, no 'buy' or 'sell'. Each line under 30 words. End with a line 'Sources:' followed by the 2-4 URLs you used, one per line.",
+      messages: [{ role: "user", content: "What's moving US markets this morning?" }],
+    }),
+  });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message || "API error");
+  return (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("").trim();
+}
+
 /* -------------------------------------------------------------------- chat */
 
 const TOOLS = [{
@@ -615,6 +738,22 @@ Deno.serve(async (req) => {
       if (j.error) return json({ ok: false, error: j.error.message || "API error" }, 502);
       return json({ ok: true, text: (j.content || []).filter((c: any) => c.type === "text")
                                     .map((c: any) => c.text).join(""), retrieved: hits.length });
+    }
+
+    // Jason's six-step routine, live, no key on the device. ?watch=WMT,TGT,... for step 5.
+    if (fn === "routine") {
+      const watch = (new URL(req.url).searchParams.get("watch") || "").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 25);
+      return json(await routine(watch));
+    }
+
+    // The story behind the numbers — Claude with web search, cached 10 minutes.
+    if (fn === "news") {
+      const apiKey = Deno.env.get("ANTHROPIC_KEY");
+      if (!apiKey) return json({ ok: false, error: "ANTHROPIC_KEY secret is not set" }, 500);
+      if (NEWS_CACHE && Date.now() - NEWS_CACHE.at < 600_000) return json({ ok: true, text: NEWS_CACHE.text, at: NEWS_CACHE.at, cached: true });
+      const text = await whatsMoving(apiKey);
+      NEWS_CACHE = { at: Date.now(), text };
+      return json({ ok: true, text, at: NEWS_CACHE.at });
     }
 
     if (fn === "chat") {

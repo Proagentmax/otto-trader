@@ -191,8 +191,8 @@ select.mini{font:inherit;font-size:12px;color:var(--ink-2);background:var(--surf
 .plan .md{font-size:14.5px;line-height:1.55;color:var(--ink);margin-top:12px;border-top:1px solid var(--rule);padding-top:12px}
 .plan .row{display:flex;gap:8px;margin-top:12px}.plan .row .btn{flex:1}
 .plan .thumb{width:100%;border-radius:10px;margin-top:10px;border:1px solid var(--rule);display:block}
-.hint{display:none;font-size:13px;line-height:1.5;color:var(--ink-2);background:var(--surface-2);border-left:2px solid var(--up);border-radius:0 8px 8px 0;padding:8px 11px;margin:6px 0 2px}
-.hint b{color:var(--ink)}.hint i{font-style:normal;color:var(--ink-3);font-family:var(--mono);font-size:11px;display:block;margin-top:3px}
+.phint{display:none;font-size:13px;line-height:1.5;color:var(--ink-2);background:var(--surface-2);border-left:2px solid var(--up);border-radius:0 8px 8px 0;padding:8px 11px;margin:6px 0 2px}
+.phint b{color:var(--ink)}.phint i{font-style:normal;color:var(--ink-3);font-family:var(--mono);font-size:11px;display:block;margin-top:3px}
 label.f[data-h]{cursor:pointer}label.f[data-h]::after{content:" ?";color:var(--up);font-weight:700}
 .helpall{font-size:12px;color:var(--up);font-weight:600;margin-left:auto;background:none;border:0;padding:0;font:inherit;cursor:pointer}
 .pimg{display:flex;align-items:center;gap:12px;border:1px dashed var(--surface-3);border-radius:10px;padding:12px;color:var(--ink-2);font-size:14px;cursor:pointer}
@@ -443,6 +443,7 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
     <div class="bar" id="progBar" hidden><i></i></div>
     <div class="row" style="margin-top:10px;align-items:center"><span class="corpus" id="runStamp" style="margin:0;flex:1"></span><button class="btn" id="clearRunBtn" style="min-height:34px;font-size:10.5px;flex:0 0 auto">Clear</button></div>
     <div id="steps"></div>
+    <div id="newsBox"></div>
   </section>
 </main>
 
@@ -450,23 +451,23 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
   <div class="grip"></div><div class="hd"><h3>Plan of attack</h3><button class="helpall" id="pHelpAll" type="button">What do these boxes mean?</button></div>
   <div class="bd">
     <div class="grid g2" style="margin-bottom:12px">
-      <div><label class="f" for="pRead" data-h="pRead">Your read today</label><select class="f" id="pRead"><option>Bullish</option><option>Bearish</option><option>Choppy — stand aside</option><option>No edge yet</option></select><div class="hint" id="h_pRead"><b>Your read today.</b> Which way you think the market leans today, before you look at a chart. Bullish = up day, Bearish = down day, Choppy = the indexes disagree so you stand aside, No edge = nothing lines up so you do nothing. Jason: you got the sentiment right on Sep 3 — the read is the first thing he checks.<i>Impromptu Zoom · 2026-09-03 · 09:45</i></div></div>
-      <div><label class="f" for="pSym" data-h="pSym">Instrument</label><input class="f" id="pSym" placeholder="SPY" autocapitalize="characters" autocomplete="off"><div class="hint" id="h_pSym"><b>Instrument.</b> What you&#x27;re trading. Jason gave you three: SPY, QQQ, and ONE Mag-7 stock you pick (Tesla, NVIDIA, Google…). Micron is off your list.<i>Impromptu Zoom · 2026-09-03 · 23:20</i></div></div>
+      <div><label class="f" for="pRead" data-h="pRead">Your read today</label><select class="f" id="pRead"><option>Bullish</option><option>Bearish</option><option>Choppy — stand aside</option><option>No edge yet</option></select><div class="phint" id="h_pRead"><b>Your read today.</b> Which way you think the market leans today, before you look at a chart. Bullish = up day, Bearish = down day, Choppy = the indexes disagree so you stand aside, No edge = nothing lines up so you do nothing. Jason: you got the sentiment right on Sep 3 — the read is the first thing he checks.<i>Impromptu Zoom · 2026-09-03 · 09:45</i></div></div>
+      <div><label class="f" for="pSym" data-h="pSym">Instrument</label><input class="f" id="pSym" placeholder="SPY" autocapitalize="characters" autocomplete="off"><div class="phint" id="h_pSym"><b>Instrument.</b> What you&#x27;re trading. Jason gave you three: SPY, QQQ, and ONE Mag-7 stock you pick (Tesla, NVIDIA, Google…). Micron is off your list.<i>Impromptu Zoom · 2026-09-03 · 23:20</i></div></div>
     </div>
     <div style="margin-bottom:12px"><label class="f" for="pWhy" data-h="pWhy">Why — the three inputs</label>
-      <textarea class="f" id="pWhy" rows="2" placeholder="10-year, crude, USD/JPY. What are they doing and what does that mean for stocks?"></textarea><div class="hint" id="h_pWhy"><b>Why — the three inputs.</b> The three numbers Jason checks before the chart: the 10-year (cost of money — up is bad for stocks), crude oil (cost of transportation), and USD/JPY (a strong dollar against the yen is good for stocks). One line each: what it&#x27;s doing and what that means for today.<i>Impromptu Zoom · 2026-09-03 · 36:40 and 44:15</i></div></div>
+      <textarea class="f" id="pWhy" rows="2" placeholder="10-year, crude, USD/JPY. What are they doing and what does that mean for stocks?"></textarea><div class="phint" id="h_pWhy"><b>Why — the three inputs.</b> The three numbers Jason checks before the chart: the 10-year (cost of money — up is bad for stocks), crude oil (cost of transportation), and USD/JPY (a strong dollar against the yen is good for stocks). One line each: what it&#x27;s doing and what that means for today.<i>Impromptu Zoom · 2026-09-03 · 36:40 and 44:15</i></div></div>
     <div class="grid g2" style="margin-bottom:12px">
-      <div><label class="f" for="pCat" data-h="pCat">Catalyst</label><input class="f" id="pCat" placeholder="What's the news on it?" autocomplete="off"><div class="hint" id="h_pCat"><b>Catalyst.</b> The reason the stock would move TODAY that isn&#x27;t the chart — news, an event, rates. Jason: &quot;you need more than one catalyst. You can&#x27;t just look at a chart.&quot; Tesla had two on Sep 3: rates and the robotaxi event.<i>Impromptu Zoom · 2026-09-03 · 43:55</i></div></div>
-      <div><label class="f" for="pExp" data-h="pExp">Expiry</label><input class="f" id="pExp" placeholder="Tue 9/9" autocomplete="off"><div class="hint" id="h_pExp"><b>Expiry.</b> The day your option dies. Jason&#x27;s rule: after Wednesday, don&#x27;t buy this Friday&#x27;s contract — use Tuesday or Wednesday of next week, or next Friday if you can afford it. Friday&#x27;s contract on a Thursday is &quot;priced to die.&quot;<i>Impromptu Zoom · 2026-09-03 · 25:04; 2026-08-27 · 26:12</i></div></div>
-      <div><label class="f" for="pIn" data-h="pIn">Entry level</label><input class="f" type="number" id="pIn" step="any" inputmode="decimal"><div class="hint" id="h_pIn"><b>Entry level.</b> The exact price where you&#x27;d click. It should be a level from the method — the reclaim (like 768), the top of the gap holding, the box — not &quot;it&#x27;s going up.&quot; Jason: when you&#x27;re new you wait for confirmation, the retest that holds, then the move.<i>Impromptu Zoom · 2026-09-03 · 22:50 and 41:00</i></div></div>
-      <div><label class="f" for="pPT" data-h="pPT">PT</label><input class="f" type="number" id="pPT" step="any" inputmode="decimal"><div class="hint" id="h_pPT"><b>PT — price target.</b> Where you&#x27;re RIGHT. The price where you take your money. Write it before the trade, then watch the chart, not the account, until price gets there. Jason: &quot;stay on the chart, not your account, until it hits your PT.&quot;<i>Impromptu Zoom · 2026-09-03 · 06:57</i></div></div>
-      <div><label class="f" for="pWrong" data-h="pWrong">I'm wrong at</label><input class="f" type="number" id="pWrong" step="any" inputmode="decimal"><div class="hint" id="h_pWrong"><b>I&#x27;m wrong at.</b> Where you&#x27;re WRONG. The price that proves your idea didn&#x27;t work — and you get out, no arguing with it. Example: you&#x27;re long because it held the gap; if it drops back below the gap, your reason is gone, so that price is your &quot;wrong at.&quot; On Sep 3 you sold QQQ at 713 because the account showed red — you had no wrong-at written down, so fear picked it for you. PT and wrong-at both go on paper BEFORE you click. (Jason hasn&#x27;t taught where to put a stop order — this is the level where your reason stops being true.)<i>Impromptu Zoom · 2026-09-03 · 06:05, 22:50, 25:30</i></div></div>
-      <div><label class="f" for="pSwing" data-h="pSwing">Swing it?</label><select class="f" id="pSwing"><option>No — day trade</option><option>Yes — overnight</option></select><div class="hint" id="h_pSwing"><b>Swing it?.</b> Day trade = out by the close. Swing = holding overnight. Jason: never swing into a binary event (jobs report, earnings, the Fed) — you can&#x27;t trade while the news hits. And right now your risk management IS not swinging.<i>Impromptu Zoom · 2026-09-03 · 29:20 and 48:50</i></div></div>
+      <div><label class="f" for="pCat" data-h="pCat">Catalyst</label><input class="f" id="pCat" placeholder="What's the news on it?" autocomplete="off"><div class="phint" id="h_pCat"><b>Catalyst.</b> The reason the stock would move TODAY that isn&#x27;t the chart — news, an event, rates. Jason: &quot;you need more than one catalyst. You can&#x27;t just look at a chart.&quot; Tesla had two on Sep 3: rates and the robotaxi event.<i>Impromptu Zoom · 2026-09-03 · 43:55</i></div></div>
+      <div><label class="f" for="pExp" data-h="pExp">Expiry</label><input class="f" id="pExp" placeholder="Tue 9/9" autocomplete="off"><div class="phint" id="h_pExp"><b>Expiry.</b> The day your option dies. Jason&#x27;s rule: after Wednesday, don&#x27;t buy this Friday&#x27;s contract — use Tuesday or Wednesday of next week, or next Friday if you can afford it. Friday&#x27;s contract on a Thursday is &quot;priced to die.&quot;<i>Impromptu Zoom · 2026-09-03 · 25:04; 2026-08-27 · 26:12</i></div></div>
+      <div><label class="f" for="pIn" data-h="pIn">Entry level</label><input class="f" type="number" id="pIn" step="any" inputmode="decimal"><div class="phint" id="h_pIn"><b>Entry level.</b> The exact price where you&#x27;d click. It should be a level from the method — the reclaim (like 768), the top of the gap holding, the box — not &quot;it&#x27;s going up.&quot; Jason: when you&#x27;re new you wait for confirmation, the retest that holds, then the move.<i>Impromptu Zoom · 2026-09-03 · 22:50 and 41:00</i></div></div>
+      <div><label class="f" for="pPT" data-h="pPT">PT</label><input class="f" type="number" id="pPT" step="any" inputmode="decimal"><div class="phint" id="h_pPT"><b>PT — price target.</b> Where you&#x27;re RIGHT. The price where you take your money. Write it before the trade, then watch the chart, not the account, until price gets there. Jason: &quot;stay on the chart, not your account, until it hits your PT.&quot;<i>Impromptu Zoom · 2026-09-03 · 06:57</i></div></div>
+      <div><label class="f" for="pWrong" data-h="pWrong">I'm wrong at</label><input class="f" type="number" id="pWrong" step="any" inputmode="decimal"><div class="phint" id="h_pWrong"><b>I&#x27;m wrong at.</b> Where you&#x27;re WRONG. The price that proves your idea didn&#x27;t work — and you get out, no arguing with it. Example: you&#x27;re long because it held the gap; if it drops back below the gap, your reason is gone, so that price is your &quot;wrong at.&quot; On Sep 3 you sold QQQ at 713 because the account showed red — you had no wrong-at written down, so fear picked it for you. PT and wrong-at both go on paper BEFORE you click. (Jason hasn&#x27;t taught where to put a stop order — this is the level where your reason stops being true.)<i>Impromptu Zoom · 2026-09-03 · 06:05, 22:50, 25:30</i></div></div>
+      <div><label class="f" for="pSwing" data-h="pSwing">Swing it?</label><select class="f" id="pSwing"><option>No — day trade</option><option>Yes — overnight</option></select><div class="phint" id="h_pSwing"><b>Swing it?.</b> Day trade = out by the close. Swing = holding overnight. Jason: never swing into a binary event (jobs report, earnings, the Fed) — you can&#x27;t trade while the news hits. And right now your risk management IS not swinging.<i>Impromptu Zoom · 2026-09-03 · 29:20 and 48:50</i></div></div>
     </div>
     <div style="margin-bottom:12px"><label class="f" for="pNotes" data-h="pNotes">The plan</label>
-      <textarea class="f" id="pNotes" rows="4" placeholder="What has to happen before you click. What confirms it. Where you get out. What makes you do nothing."></textarea><div class="hint" id="h_pNotes"><b>The plan.</b> In plain words: what has to happen before you click, what confirms it, where you get out, and what makes you do nothing. Jason: &quot;the cool thing about trading is you need to find an excuse not to do anything.&quot; A plan you can defend is the whole point.<i>Impromptu Zoom · 2026-09-03 · 53:15 and 54:15</i></div>
+      <textarea class="f" id="pNotes" rows="4" placeholder="What has to happen before you click. What confirms it. Where you get out. What makes you do nothing."></textarea><div class="phint" id="h_pNotes"><b>The plan.</b> In plain words: what has to happen before you click, what confirms it, where you get out, and what makes you do nothing. Jason: &quot;the cool thing about trading is you need to find an excuse not to do anything.&quot; A plan you can defend is the whole point.<i>Impromptu Zoom · 2026-09-03 · 53:15 and 54:15</i></div>
       <p class="err" id="pErr" hidden></p></div>
-    <div class="hint" id="h_pImg" style="margin:0 0 8px"><b>Your chart.</b> A screenshot of the chart you'd actually trade from, with your levels drawn on it. Take the CBC, order-block and VWAP overlays off when you mark levels (he made you strip them on Aug 27), draw the box and the lines, and keep your account and P&amp;L out of the picture. He reads it like he reads it on the call.<i>Impromptu Zoom · 2026-08-27 · 40:47; 2026-09-03 · 06:57</i></div>
+    <div class="phint" id="h_pImg" style="margin:0 0 8px"><b>Your chart.</b> A screenshot of the chart you'd actually trade from, with your levels drawn on it. Take the CBC, order-block and VWAP overlays off when you mark levels (he made you strip them on Aug 27), draw the box and the lines, and keep your account and P&amp;L out of the picture. He reads it like he reads it on the call.<i>Impromptu Zoom · 2026-08-27 · 40:47; 2026-09-03 · 06:57</i></div>
     <label class="pimg" for="pImg"><img id="pThumb" alt="" hidden><span><b id="pImgT">Add your marked-up chart</b>Screenshot of the chart you'd trade from. He reads it.</span></label>
     <input type="file" id="pImg" accept="image/*" hidden>
   </div>
@@ -532,9 +533,8 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
       <button class="btn wide" id="sOut" style="margin-top:10px">Sign out</button>
     </div>
     <div style="margin-bottom:20px">
-      <label class="f" for="sKey">Alpha Vantage key</label>
-      <input class="f" id="sKey" placeholder="market data key" autocomplete="off" spellcheck="false">
-      <p class="hint">Free at alphavantage.co. 25 calls a day; the routine uses 11.</p>
+      <input class="f" id="sKey" type="hidden">
+      <p class="hint" style="margin-top:0">Market data needs no key any more — the routine and the bias card both read from the server.</p>
     </div>
     <div class="grid g2" style="margin-bottom:20px">
       <div><label class="f" for="sTen">10Y pressure</label><input class="f" type="number" step="any" id="sTen" inputmode="decimal"></div>
@@ -1467,80 +1467,59 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.5.0";
-const AV="https://www.alphavantage.co/query?";
+const BUILD="2.6.0";
 const ROUTINE=[
- {n:1,title:"The bond market",src:"US Treasury only",calls:[{k:"t10",fn:"TREASURY_YIELD&interval=daily&maturity=10year"},{k:"t2",fn:"TREASURY_YIELD&interval=daily&maturity=2year"}]},
- {n:2,title:"One currency pair",src:"USD / JPY",calls:[{k:"jpy",fn:"CURRENCY_EXCHANGE_RATE&from_currency=USD&to_currency=JPY"}]},
- {n:3,title:"Commodities",src:"ETF proxies, not the futures contract",calls:[{k:"USO",fn:"GLOBAL_QUOTE&symbol=USO"},{k:"UNG",fn:"GLOBAL_QUOTE&symbol=UNG"},{k:"SLV",fn:"GLOBAL_QUOTE&symbol=SLV"},{k:"CPER",fn:"GLOBAL_QUOTE&symbol=CPER"}]},
- {n:4,title:"The indexes",src:"Did they finish below the open?",calls:[{k:"SPY",fn:"GLOBAL_QUOTE&symbol=SPY"},{k:"QQQ",fn:"GLOBAL_QUOTE&symbol=QQQ"},{k:"DIA",fn:"GLOBAL_QUOTE&symbol=DIA"}]},
- {n:5,title:"Who reports this week",src:"Earnings move the index you trade",calls:[{k:"earn",fn:"EARNINGS_CALENDAR&horizon=3month",csv:true}]},
- {n:6,title:"Your levels",src:"The part no API can do",manual:["Mark support and resistance for tomorrow","Convert those levels to your contract","Name the one trade you'd take, and the level that says you're wrong"]}];
-/* ---- Alpha Vantage's free-tier daily quota, tracked ----
-   No usage endpoint exists on the free plan, so this is our own count of
-   calls made THROUGH THIS APP, synced via cfg so every device and person
-   shares one true number instead of each device thinking it has its own
-   25. It can start wrong if the key was used outside the app (curl, testing,
-   a second device before this shipped) — the moment a real call comes back
-   with Alpha Vantage's own "you're out" message, that overrides our guess
-   immediately, so a wrong undercount self-corrects on the next attempt. */
-const AV_DAILY=25, AV_PER_RUN=11;
-const AV_LIMIT_RX=/rate limit is 25 requests per day/i;
-const avToday=()=>new Date().toISOString().slice(0,10);   // UTC calendar day
-function avSync(){ if(CFG.avDate!==avToday()){CFG.avDate=avToday();CFG.avUsed=0} }
-function avRemaining(){ avSync(); return Math.max(0,AV_DAILY-CFG.avUsed) }
-function avRunsLeft(){ return Math.floor(avRemaining()/AV_PER_RUN) }
-function avStamp(){
-  avSync();
-  const total=Math.floor(AV_DAILY/AV_PER_RUN),left=avRunsLeft();
-  if(left<=0)return `No runs left today · ${CFG.avUsed} of ${AV_DAILY} calls used · new key (different email) to run again`;
-  if(left===1)return `1 of ${total} runs left today — last one`;
-  return `${left} of ${total} runs left today`;
-}
-async function avFetch(fn,csv){
-  const url=AV+"function="+fn+"&apikey="+encodeURIComponent(CFG.key);
-  const name=fn.split("&")[0];
-  const res=await fetch(url);
-  if(!res.ok)throw new Error(name+": HTTP "+res.status);
-  const t=await res.text();
-  if(csv){if(t.trim().startsWith("{")){const j=JSON.parse(t);throw new Error(name+": "+(j.Information||j.Note||"blocked"))}return t}
-  let j;try{j=JSON.parse(t)}catch(e){throw new Error(name+": bad response")}
-  const m=j.Information||j.Note||j["Error Message"];
-  if(m)throw new Error(name+": "+m);
-  return j;
-}
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+ {n:1,title:"The bond market",src:"US Treasury only — official closes, plus the 10-year live",calls:[{k:"t10"},{k:"t2"}]},
+ {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
+ {n:3,title:"Commodities",src:"ETF proxies, not the futures contract",calls:[{k:"USO"},{k:"UNG"},{k:"SLV"},{k:"CPER"}]},
+ {n:4,title:"The indexes",src:"Did they finish below the open?",calls:[{k:"SPY"},{k:"QQQ"},{k:"DIA"}]},
+ {n:5,title:"Who reports this week",src:"Earnings move the index you trade",calls:[{k:"earn"}]},
+ {n:6,title:"Your levels",src:"The part no data feed can do",manual:["Mark support and resistance for tomorrow","Convert those levels to your contract","Name the one trade you'd take, and the level that says you're wrong"]}];
+/* ---- the routine, live ----
+   Until 4 Sep 2026 this ran on Alpha Vantage from the browser: a key Josh had
+   to paste, 25 calls a day (two runs, shared by everyone), 13-second waits
+   between calls, and a Treasury series that was always a day behind. Now it is
+   one request to our own server (?fn=routine), which reads Treasury.gov for
+   the official 10Y/2Y closes, Yahoo for the live 10-year and every ETF, and
+   Nasdaq's calendar for earnings. No key, no quota, about two seconds.
+   RUN keeps its old shape so nothing below had to change. */
+const hhmm=t=>t?new Date(t*1000).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"})+" ET":"";   // market time, wherever the phone is
 async function runRoutine(){
-  if(!CFG.key){openSettings();return toast("Add your free Alpha Vantage key")}
-  avSync();
-  if(avRunsLeft()<1){
-    return toast(`No free calls left today (${CFG.avUsed} of ${AV_DAILY} used). Get a new key with a different email to run again.`);
-  }
-  if(avRunsLeft()===1)toast("Heads up — this is your last run for today");
-  const btn=$("#runBtn");btn.disabled=true;btn.textContent="Running…";
-  const bar=$("#progBar");bar.hidden=false;
-  RUN={v:BUILD,at:new Date().toISOString(),data:{},errors:{}};
-  const all=ROUTINE.flatMap(s=>s.calls||[]);let i=0;
-  for(const c of all){
-    try{RUN.data[c.k]=await avFetch(c.fn,c.csv)}
-    catch(e){
-      RUN.errors[c.k]=e.message;
-      // ground truth from Alpha Vantage itself beats our own count
-      if(AV_LIMIT_RX.test(e.message))CFG.avUsed=AV_DAILY;
-    }
-    avSync();CFG.avUsed=Math.min(CFG.avUsed+1,AV_DAILY);LS.set("cfg",CFG);
-    i++;bar.querySelector("i").style.width=(i/all.length*100)+"%";
-    LS.set("run",RUN);renderMarket();
-    if(i<all.length)await sleep(13000);
-  }
-  bar.hidden=true;btn.disabled=false;btn.textContent="Run the routine";
-  const bad=Object.keys(RUN.errors).length;
-  toast(bad?`Done — ${bad} of ${all.length} failed`:"Routine complete");renderMarket();
+  const btn=$("#runBtn");btn.disabled=true;btn.textContent="Reading…";
+  const bar=$("#progBar");bar.hidden=false;bar.querySelector("i").style.width="35%";
+  try{
+    const watch=CFG.watch.split(",").map(x=>x.trim().toUpperCase()).filter(Boolean);
+    const {url,headers}=await fnUrl("routine");
+    const r=await fetch(url+"&watch="+encodeURIComponent(watch.join(",")),{cache:"no-store",headers});
+    const j=await r.json();
+    if(!j.ok)throw new Error(j.error||"routine failed");
+    bar.querySelector("i").style.width="100%";
+    RUN={v:BUILD,at:new Date().toISOString(),served:j.served,live:j,data:{},errors:Object.assign({},j.errors||{})};
+    RUN.news=RUN.news||null;
+    LS.set("run",RUN);
+    const bad=Object.keys(RUN.errors).length;
+    toast(bad?`Read — ${bad} source${bad>1?"s":""} didn't answer`:"Routine read");
+  }catch(e){toast("Routine: "+String(e.message).slice(0,80))}
+  bar.hidden=true;btn.disabled=false;btn.textContent="Run the routine";renderMarket();
+}
+/* "What's moving?" — the story behind the numbers. Claude with web search on
+   the server, cached ten minutes there. Feeds the catalyst box on the plan. */
+async function whatsMoving(){
+  const b=$("#newsBtn");if(b){b.disabled=true;b.textContent="Searching…"}
+  try{
+    const {url,headers}=await fnUrl("news");
+    const r=await fetch(url,{cache:"no-store",headers});
+    const j=await r.json();
+    if(!j.ok)throw new Error(j.error||"no read");
+    if(!RUN)RUN={v:BUILD,at:new Date().toISOString(),data:{},errors:{}};
+    RUN.news={text:j.text,at:j.at||Date.now()};LS.set("run",RUN);
+  }catch(e){toast("What's moving: "+String(e.message).slice(0,80))}
+  renderMarket();
 }
 const num=v=>{const n=parseFloat(v);return isFinite(n)?n:null};
-const gq=k=>{const d=RUN&&RUN.data[k]&&RUN.data[k]["Global Quote"];return d?{price:num(d["05. price"]),open:num(d["02. open"]),chg:d["10. change percent"]}:null};
-const ty=k=>{const d=RUN&&RUN.data[k]&&RUN.data[k].data;if(!Array.isArray(d))return null;
-  const p=d.filter(x=>x.value!=="."&&isFinite(parseFloat(x.value)));return p.length?{v:num(p[0].value),prev:num(p[1]&&p[1].value),date:p[0].date}:null};
+const gq=k=>{const q=RUN&&RUN.live&&RUN.live.quotes&&RUN.live.quotes[k];return q&&q.price!=null?{price:q.price,open:q.open,prev:q.prev,chg:q.pct==null?"":q.pct.toFixed(2)+"%",at:q.at}:null};
+const ty=k=>{const t=RUN&&RUN.live&&RUN.live.treasury;if(!t)return null;
+  return k==="t10"?{v:t.t10,prev:t.prev10,date:t.date}:{v:t.t2,prev:t.prev2,date:t.date}};
 const card=(k,v,s,cls)=>`<div class="read ${cls||""}"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>${s?`<div class="s ${cls==="trip"?"dn":""}">${esc(s)}</div>`:""}</div>`;
 const wait=(k,e)=>`<div class="read wait"><div class="k">${esc(k)}</div><div class="v">${e?"n/a":"—"}</div>${e?`<div class="s dn">${esc(String(e).slice(0,42))}</div>`:""}</div>`;
 
@@ -1623,7 +1602,7 @@ $("#dlgPlan").addEventListener("click",e=>{
   // a hint born inside a half-width grid cell is moved out under the grid so it reads full width
   const show=(h,on)=>{if(!h)return;const g=h.closest(".grid");if(on&&g)g.insertAdjacentElement("afterend",h);h.style.display=on?"block":"none"};
   if(l){e.preventDefault();const h=$("#h_"+l.dataset.h);show(h,h&&h.style.display!=="block");return}
-  if(e.target.closest("#pHelpAll")){const hs=$$("#dlgPlan .hint"),open=hs.some(h=>h.style.display==="block");
+  if(e.target.closest("#pHelpAll")){const hs=$$("#dlgPlan .phint"),open=hs.some(h=>h.style.display==="block");
     hs.slice().reverse().forEach(h=>show(h,!open));$("#pHelpAll").textContent=open?"What do these boxes mean?":"Hide the explanations"}
 });
 $("#pNotes").addEventListener("input",()=>{$("#pErr").hidden=true});
@@ -1801,54 +1780,55 @@ function renderBias(){
 $("#biasBox").addEventListener("click",e=>{if(e.target.closest("#biasBtn"))readMorning()});
 
 function renderMarket(){
-  $("#keybar").innerHTML=CFG.key
-    ?`<div class="stamp">Connected · ends ${esc(CFG.key.slice(-4))} · v${BUILD} · ${esc(avStamp())}</div>`
-    :`<div class="stamp" style="color:var(--mark)">No market data key</div><p style="margin:8px 0 0;font-size:16px;color:var(--ink-2)">Get a free key at alphavantage.co and add it in Settings. Nothing below fills in until you do — this reads live data, it doesn't guess.</p>`;
-  $("#runStamp").textContent=RUN?"Last run "+new Date(RUN.at).toLocaleString():"Not run yet.";
-  if(CFG.key){const rb=$("#runBtn");rb.disabled=avRunsLeft()<1;rb.title=rb.disabled?"No free calls left today":""}
+  $("#keybar").innerHTML=`<div class="stamp">Jason's six steps · live from Treasury.gov, Yahoo and Nasdaq · v${BUILD}</div>`;
+  $("#runStamp").textContent=RUN&&RUN.live?"Read "+new Date(RUN.at).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"Not read yet — one tap, about two seconds.";
   $("#clearRunBtn").hidden=!RUN;
+  const nb=$("#newsBox");
+  if(nb){const n=RUN&&RUN.news;
+    nb.innerHTML=`<div class="plan wait" style="margin-top:14px"><div class="lab">What's moving · the story behind the numbers</div>`+
+      (n?`<div class="md" style="border:0;padding-top:4px;margin-top:4px">${md(n.text)}</div><div class="cov" style="color:var(--ink-3);margin-top:6px">Searched ${new Date(n.at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}. This is the news, not a signal — it fills your catalyst box, it doesn't pick your trade.</div>`
+        :`<div class="cov">The 10-year, crude, the yen, today's calendar and which Mag-7 name has news — searched and summarised in five lines, for the catalyst box on your plan.</div>`)+
+      `<button class="btn wide${n?"":" solid"}" id="newsBtn" style="margin-top:12px">${n?"Search again":"What's moving today?"}</button></div>`}
   $("#steps").innerHTML=ROUTINE.map(s=>{
     let b="";
     if(s.manual){b=s.manual.map((m,i)=>`<div class="manual"><button class="box" aria-pressed="${!!DONE["m"+s.n+i]}" data-mid="m${s.n}${i}" aria-label="Done"><i></i></button><span>${esc(m)}</span></div>`).join("")}
-    else if(!RUN){b=`<div class="reads">${s.calls.map(c=>wait(c.k)).join("")}</div>`}
+    else if(!RUN||!RUN.live){b=`<div class="reads">${s.calls.map(c=>wait(c.k)).join("")}</div>`}
     else if(s.n===1){
-      const a=ty("t10"),c2=ty("t2"),cs=[];
-      cs.push(a?card("10-year",a.v.toFixed(2)+"%",a.prev!=null?(a.v-a.prev>=0?"▲ ":"▼ ")+Math.abs(a.v-a.prev).toFixed(2):"",a.v>=CFG.ten?"trip":""):wait("10-year",RUN.errors.t10));
-      cs.push(c2?card("2-year",c2.v.toFixed(2)+"%"):wait("2-year",RUN.errors.t2));
-      if(a&&c2)cs.push(card("Curve",(a.v-c2.v).toFixed(2),(a.v-c2.v)<0?"inverted":"positive"));
+      const a=ty("t10"),c2=ty("t2"),L=RUN.live.t10live,cs=[];
+      // the live number leads; the official close sits beside it with its date
+      const live=L&&L.price!=null?L.price:null, ref=live!=null?live:(a?a.v:null);
+      if(live!=null)cs.push(card("10-year · live",live.toFixed(2)+"%",(L.prev!=null?(live-L.prev>=0?"▲ ":"▼ ")+Math.abs(live-L.prev).toFixed(2)+" · ":"")+hhmm(L.at),live>=CFG.ten?"trip":""));
+      cs.push(a?card(live!=null?"10-year · close":"10-year",a.v.toFixed(2)+"%",(a.prev!=null?(a.v-a.prev>=0?"▲ ":"▼ ")+Math.abs(a.v-a.prev).toFixed(2)+" · ":"")+esc(a.date.slice(5)),live==null&&a.v>=CFG.ten?"trip":""):wait("10-year close",RUN.errors.treasury));
+      cs.push(c2?card("2-year · close",c2.v.toFixed(2)+"%",c2.prev!=null?(c2.v-c2.prev>=0?"▲ ":"▼ ")+Math.abs(c2.v-c2.prev).toFixed(2):""):wait("2-year",RUN.errors.treasury));
+      if(a&&c2)cs.push(card("Curve · 10s−2s",(a.v-c2.v).toFixed(2),(a.v-c2.v)<0?"inverted":(a.prev!=null&&c2.prev!=null?((a.v-c2.v)>(a.prev-c2.prev)?"steepening":"flattening"):"positive")));
       b=`<div class="reads">${cs.join("")}</div>`;
-      if(a)b+=`<div class="verdict ${a.v<CFG.ten?"ok":""}">`+(a.v>=CFG.tenH?`Above <b>${CFG.tenH}</b> — your "market tumbles" level.`
-        :a.v>=CFG.ten?`Above <b>${CFG.ten}</b> — pressure on the market.`:`Below <b>${CFG.ten}</b>. No pressure from rates.`)
-        +` <span style="color:var(--ink-3)">Daily close ${esc(a.date)}, not intraday.</span></div>`;
+      if(ref!=null)b+=`<div class="verdict ${ref<CFG.ten?"ok":""}">`+(ref>=CFG.tenH?`Above <b>${CFG.tenH}</b> — your "market tumbles" level.`
+        :ref>=CFG.ten?`Above <b>${CFG.ten}</b> — pressure on the market.`:`Below <b>${CFG.ten}</b>. No pressure from rates.`)
+        +` <span style="color:var(--ink-3)">${live!=null?"Live yield, "+esc(hhmm(L.at))+"; closes are Treasury.gov, "+esc(a?a.date:"")+".":"Official close "+esc(a?a.date:"")+" — live yield unavailable right now."}</span></div>`;
     }
     else if(s.n===2){
-      const d=RUN.data.jpy&&RUN.data.jpy["Realtime Currency Exchange Rate"];
-      if(!d)b=`<div class="reads">${wait("USD/JPY",RUN.errors.jpy)}</div>`;
-      else{const v=num(d["5. Exchange Rate"]),tr=v>=CFG.jpy;
-        b=`<div class="reads">${card("USD/JPY",v.toFixed(2),String(d["6. Last Refreshed"]||"").slice(11,16)+" UTC",tr?"trip":"")}</div>`
+      const q=RUN.live.jpy;
+      if(!q||q.price==null)b=`<div class="reads">${wait("USD/JPY",RUN.errors.jpy)}</div>`;
+      else{const v=q.price,tr=v>=CFG.jpy;
+        b=`<div class="reads">${card("USD/JPY",v.toFixed(2),(q.prev!=null?(v-q.prev>=0?"▲ ":"▼ ")+Math.abs(v-q.prev).toFixed(2)+" · ":"")+hhmm(q.at),tr?"trip":"")}</div>`
          +`<div class="verdict ${tr?"":"ok"}">`+(tr?`Over <b>${CFG.jpy}</b> — your sell signal.`:`Under ${CFG.jpy}, by ${(CFG.jpy-v).toFixed(2)}.`)+`</div>`}
     }
     else if(s.n===3||s.n===4){
       const N=s.n===3?{USO:"Oil",UNG:"Nat gas",SLV:"Silver",CPER:"Copper"}:{SPY:"S&P 500",QQQ:"Nasdaq",DIA:"Dow"};
       b=`<div class="reads">${s.calls.map(c=>{const q=gq(c.k);if(!q)return wait(N[c.k],RUN.errors[c.k]);
         const p=parseFloat(String(q.chg).replace("%",""))||0;
-        return `<div class="read"><div class="k">${esc(N[c.k])}</div><div class="v">${q.price!=null?q.price.toFixed(2):"—"}</div><div class="s ${p>=0?"up":"dn"}">${p>=0?"▲":"▼"} ${Math.abs(p).toFixed(2)}%</div></div>`}).join("")}</div>`;
-      if(s.n===4){const qs=s.calls.map(c=>gq(c.k)).filter(Boolean);
+        return `<div class="read"><div class="k">${esc(N[c.k])}</div><div class="v">${q.price!=null?q.price.toFixed(2):"—"}</div><div class="s ${p>=0?"up":"dn"}">${p>=0?"▲":"▼"} ${Math.abs(p).toFixed(2)}% <span style="color:var(--ink-3)">· ${esc(hhmm(q.at))}</span></div></div>`}).join("")}</div>`;
+      if(s.n===4){const qs=s.calls.map(c=>gq(c.k)).filter(q=>q&&q.open!=null);
         if(qs.length){const bl=qs.filter(q=>q.price<q.open).length;
-          b+=`<div class="verdict ${bl===0?"ok":""}">`+(bl===qs.length?`<b>All ${qs.length} finished below the open.</b> Expect follow-through selling into the morning.`
-            :bl===0?`All ${qs.length} closed above the open.`:`${bl} of ${qs.length} finished below the open. Mixed.`)+`</div>`}}
+          b+=`<div class="verdict ${bl===0?"ok":""}">`+(bl===qs.length?`<b>All ${qs.length} are below the open.</b> Expect follow-through selling.`
+            :bl===0?`All ${qs.length} are above the open.`:`${bl} of ${qs.length} below the open. Mixed.`)+` <span style="color:var(--ink-3)">Against today's open while the session is on; the last session's once it's closed.</span></div>`}}
       if(s.n===3)b+=`<div class="verdict">ETFs that track the commodity — direction is reliable, the price is not the contract price.</div>`;
     }
     else if(s.n===5){
-      const csv=RUN.data.earn;
-      if(!csv)b=`<div class="reads">${wait("Earnings",RUN.errors.earn)}</div>`;
-      else{const wl=CFG.watch.split(",").map(x=>x.trim().toUpperCase()).filter(Boolean),end=new Date(Date.now()+8*864e5);
-        const rows=csv.split("\n").slice(1).map(l=>l.split(",")).filter(r=>r.length>3)
-          .map(r=>({sym:r[0].trim().toUpperCase(),name:r[1],date:r[2].trim()}))
-          .filter(r=>wl.indexOf(r.sym)>=0&&r.date>=today()&&new Date(r.date)<=end)
-          .sort((a,b)=>a.date.localeCompare(b.date));
-        b=rows.length?`<div class="earn">${rows.map(r=>`<div><span class="d">${esc(r.date)}</span><b>${esc(r.sym)}</b> ${esc(String(r.name||"").slice(0,24))}</div>`).join("")}</div>`
-          :`<div class="verdict">Nobody on your watchlist reports in 8 days.</div>`}
+      const rows=RUN.live.earnings;
+      if(!Array.isArray(rows))b=`<div class="reads">${wait("Earnings",RUN.errors.earn)}</div>`;
+      else b=rows.length?`<div class="earn">${rows.map(r=>`<div><span class="d">${esc(r.date.slice(5))}</span><b>${esc(r.sym)}</b> ${esc(String(r.name||"").slice(0,22))}${r.time?` <span style="color:var(--ink-3)">${esc(r.time)}</span>`:""}</div>`).join("")}</div>`
+          :`<div class="verdict">Nobody on your watchlist (${esc(CFG.watch)}) reports in the next 8 days.</div>`;
     }
     return `<div class="step"><div class="hd"><span class="num">${String(s.n).padStart(2,"0")}</span><h3>${esc(s.title)}</h3></div>
       <div class="src">${esc(s.src)}</div><div class="bd">${b}</div></div>`}).join("");
@@ -1856,6 +1836,7 @@ function renderMarket(){
 $("#steps").addEventListener("click",e=>{const b=e.target.closest("[data-mid]");if(!b)return;
   DONE[b.dataset.mid]=!DONE[b.dataset.mid];LS.set("done",DONE);renderMarket()});
 $("#runBtn").addEventListener("click",runRoutine);
+$("#newsBox").addEventListener("click",e=>{if(e.target.closest("#newsBtn"))whatsMoving()});
 $("#clearRunBtn").addEventListener("click",()=>{RUN=null;LS.del("run");renderMarket();toast("Cleared — run it again")});
 
 /* ---------- settings ---------- */
@@ -1946,7 +1927,7 @@ function hydrate(){
   CFG=Object.assign({},DEF,LS.get("cfg",{}));
   CALLS=LS.get("calls",[]);TRADES=LS.get("trades",[]);DONE=LS.get("done",{});
   RUN=LS.get("run",null);CHAT=LS.get("chat",[]);BIASRUN=LS.get("bias",null);PLANS=LS.get("plans",[]);
-  if(RUN&&(RUN.v!==BUILD||Date.now()-new Date(RUN.at).getTime()>20*36e5)){RUN=null;LS.del("run")}
+  if(RUN&&(RUN.v!==BUILD||!RUN.live||Date.now()-new Date(RUN.at).getTime()>20*36e5)){RUN=null;LS.del("run")}
   migrateDone();
 }
 
