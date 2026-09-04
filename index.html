@@ -219,6 +219,11 @@ label.f[data-h]{cursor:pointer}label.f[data-h]::after{content:" ?";color:var(--u
 .qs .why{color:var(--ink-2);font-size:14px;display:block;margin-top:3px}
 
 .msec{display:none}.msec.on{display:block}
+.mseg{position:sticky;top:var(--top-h,58px);z-index:35;background:var(--bg);padding:6px 0 10px;margin:-6px 0 12px;border-radius:0}
+.mseg::before{content:"";position:absolute;inset:0 -4px;background:var(--bg);z-index:-1}
+.mseg button{background:var(--surface);border:1px solid var(--rule);color:var(--ink-2)}
+.seg.mseg button[aria-selected=true]{background:var(--up);border-color:var(--up);color:#04140A;font-weight:700}
+@media (min-width:720px){.mseg{top:54px}}
 .mseg button .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--up);margin-left:5px;vertical-align:middle}
 .seg{display:flex;gap:4px;background:var(--surface);border:0;border-radius:999px;padding:4px;margin-bottom:18px}
 .seg button{flex:1;min-height:38px;border-radius:999px;font-size:13.5px;font-weight:600;letter-spacing:0;
@@ -1478,7 +1483,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.6.1";
+const BUILD="2.6.2";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only — official closes, plus the 10-year live",calls:[{k:"t10"},{k:"t2"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -1866,6 +1871,9 @@ function showMseg(k){
 }
 $("#mseg").addEventListener("click",e=>{const b=e.target.closest("[data-m]");if(b)showMseg(b.dataset.m)});
 showMseg(MSEG);
+/* the pill row sticks just under the header, whatever the phone's safe area makes the header */
+const setTopH=()=>{const h=$(".top");if(h&&getComputedStyle(h).position==="sticky")document.documentElement.style.setProperty("--top-h",h.offsetHeight+"px")};
+setTopH();window.addEventListener("resize",setTopH);
 let AUTO_T=0;
 function autoMarket(){
   if(!USER||Date.now()-AUTO_T<30000)return;AUTO_T=Date.now();
