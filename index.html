@@ -218,6 +218,8 @@ label.f[data-h]{cursor:pointer}label.f[data-h]::after{content:" ?";color:var(--u
 .qs li{margin-bottom:12px;font-size:15px}.qs li:last-child{margin-bottom:0}
 .qs .why{color:var(--ink-2);font-size:14px;display:block;margin-top:3px}
 
+.msec{display:none}.msec.on{display:block}
+.mseg button .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--up);margin-left:5px;vertical-align:middle}
 .seg{display:flex;gap:4px;background:var(--surface);border:0;border-radius:999px;padding:4px;margin-bottom:18px}
 .seg button{flex:1;min-height:38px;border-radius:999px;font-size:13.5px;font-weight:600;letter-spacing:0;
   text-transform:none;color:var(--ink-2)}
@@ -436,14 +438,22 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
   </section>
 
   <section class="pane" id="p-market">
-    <div id="planBox"></div>
-    <div id="biasBox"></div>
-    <div class="keybar" id="keybar"></div>
-    <button class="btn solid wide" id="runBtn">Run the routine</button>
-    <div class="bar" id="progBar" hidden><i></i></div>
-    <div class="row" style="margin-top:10px;align-items:center"><span class="corpus" id="runStamp" style="margin:0;flex:1"></span><button class="btn" id="clearRunBtn" style="min-height:34px;font-size:10.5px;flex:0 0 auto">Clear</button></div>
-    <div id="steps"></div>
-    <div id="newsBox"></div>
+    <div class="seg mseg" role="tablist" id="mseg">
+      <button role="tab" aria-selected="true" data-m="plan">Plan</button>
+      <button role="tab" aria-selected="false" data-m="bias">Bias</button>
+      <button role="tab" aria-selected="false" data-m="routine">Routine</button>
+      <button role="tab" aria-selected="false" data-m="news">Moving</button>
+    </div>
+    <div class="msec on" data-ms="plan"><div id="planBox"></div></div>
+    <div class="msec" data-ms="bias"><div id="biasBox"></div></div>
+    <div class="msec" data-ms="routine">
+      <div class="keybar" id="keybar"></div>
+      <button class="btn solid wide" id="runBtn">Run the routine</button>
+      <div class="bar" id="progBar" hidden><i></i></div>
+      <div class="row" style="margin-top:10px;align-items:center"><span class="corpus" id="runStamp" style="margin:0;flex:1"></span><button class="btn" id="clearRunBtn" style="min-height:34px;font-size:10.5px;flex:0 0 auto">Clear</button></div>
+      <div id="steps"></div>
+    </div>
+    <div class="msec" data-ms="news"><div id="newsBox"></div></div>
   </section>
 </main>
 
@@ -732,7 +742,8 @@ const week=()=>CALLS[CUR]||null;
 $$(".nav button").forEach(b=>b.addEventListener("click",()=>{
   $$(".nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
   $$(".pane").forEach(p=>p.classList.toggle("on",p.id==="p-"+b.dataset.p));
-  LS.set("tab",b.dataset.p);window.scrollTo(0,0);}));
+  LS.set("tab",b.dataset.p);window.scrollTo(0,0);
+  if(b.dataset.p==="market"&&typeof autoMarket==="function")autoMarket();}));
 
 /* ---------- intake ---------- */
 function handleFile(file){
@@ -1467,7 +1478,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.6.0";
+const BUILD="2.6.1";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only — official closes, plus the 10-year live",calls:[{k:"t10"},{k:"t2"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -1484,7 +1495,7 @@ const ROUTINE=[
    Nasdaq's calendar for earnings. No key, no quota, about two seconds.
    RUN keeps its old shape so nothing below had to change. */
 const hhmm=t=>t?new Date(t*1000).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"})+" ET":"";   // market time, wherever the phone is
-async function runRoutine(){
+async function runRoutine(quiet){
   const btn=$("#runBtn");btn.disabled=true;btn.textContent="Reading…";
   const bar=$("#progBar");bar.hidden=false;bar.querySelector("i").style.width="35%";
   try{
@@ -1498,8 +1509,8 @@ async function runRoutine(){
     RUN.news=RUN.news||null;
     LS.set("run",RUN);
     const bad=Object.keys(RUN.errors).length;
-    toast(bad?`Read — ${bad} source${bad>1?"s":""} didn't answer`:"Routine read");
-  }catch(e){toast("Routine: "+String(e.message).slice(0,80))}
+    if(!quiet||bad)toast(bad?`Read — ${bad} source${bad>1?"s":""} didn't answer`:"Routine read");
+  }catch(e){if(!quiet)toast("Routine: "+String(e.message).slice(0,80))}
   bar.hidden=true;btn.disabled=false;btn.textContent="Run the routine";renderMarket();
 }
 /* "What's moving?" — the story behind the numbers. Claude with web search on
@@ -1726,8 +1737,7 @@ function biasFrom(q,served){
   return {verdict,tone,note,legs,fresh,total:legs.length,score,diverged,aligned};
 }
 
-async function readMorning(){
-
+async function readMorning(quiet){
   const btn=$("#biasBtn");if(btn){btn.disabled=true;btn.textContent="Reading…"}
   try{
     const {url,headers}=await fnUrl("market");
@@ -1736,7 +1746,7 @@ async function readMorning(){
     if(!j.ok)throw new Error(j.error||"proxy error");
     BIASRUN={at:new Date().toISOString(),served:j.served,quotes:j.quotes,source:j.source};
     LS.set("bias",BIASRUN);
-  }catch(e){toast("Bias: "+String(e.message).slice(0,70))}
+  }catch(e){if(!quiet)toast("Bias: "+String(e.message).slice(0,70))}
   if(btn){btn.disabled=false;btn.textContent="Read the morning"}
   renderBias();
 }
@@ -1753,6 +1763,11 @@ function renderBias(){
   }
   const b=biasFrom(BIASRUN.quotes,BIASRUN.served);
   const mins=a=>a===null?"—":a<90?"now":a<5400?Math.round(a/60)+"m ago":Math.round(a/3600)+"h ago";
+  // before the bell six of seven legs are last night's close, so "No read" is
+  // the honest answer — say so, and point at the two inputs that ARE live
+  const ny=nyNow(),preopen=!["Sat","Sun"].includes(ny.wd)&&ny.min<9*60+30,closed=["Sat","Sun"].includes(ny.wd)||ny.min>=16*60;
+  const whyNoRead=b.fresh<2?(preopen?`Before 9:30 the stock and bond legs are last night's 4:00 close — this card wakes up at the bell and refreshes itself. Until then the 10-year live and USD/JPY in the Routine are your read.`
+    :closed?`Market's closed; these are the last session's prints.`:``):``;
   const legs=b.legs.map(l=>{
     const p=l.pct;
     const mv=p===null?"—":(p>0?"+":"")+p.toFixed(2)+"%";
@@ -1772,6 +1787,7 @@ function renderBias(){
     <div class="lab">Morning bias · your checklist, not Jason's</div>
     <div class="vd">${esc(b.verdict)}</div>
     <div class="cov">${esc(b.note)}</div>
+    ${whyNoRead?`<div class="cov" style="margin-top:7px">${esc(whyNoRead)}</div>`:""}
     <div class="cov" style="margin-top:7px;color:var(--ink-3)">Read from ${b.fresh} of ${b.total} inputs${b.fresh<5?" — conviction needs 5":""}. ${b.diverged?"Index divergence overrides everything else.":b.aligned?"All three indexes aligned.":""}</div>
     <div class="legs">${legs}</div>
     ${fenceNow()}
@@ -1836,6 +1852,27 @@ function renderMarket(){
 $("#steps").addEventListener("click",e=>{const b=e.target.closest("[data-mid]");if(!b)return;
   DONE[b.dataset.mid]=!DONE[b.dataset.mid];LS.set("done",DONE);renderMarket()});
 $("#runBtn").addEventListener("click",runRoutine);
+/* ---- the Market tab in four sections, and it refreshes itself ----
+   Ifoma, 4 Sep: "the homepage is way too long" and "do I have to click read
+   again?" One pill row; the section you left is the one you come back to
+   (per device, never synced — lesson 7). Opening the tab re-reads the bias
+   card when it is older than 10 minutes and the routine when older than 15,
+   quietly. The buttons stay for a deliberate re-read. */
+let MSEG=(()=>{try{return localStorage.getItem(NS+"mseg")||"plan"}catch(e){return "plan"}})();
+function showMseg(k){
+  MSEG=k;try{localStorage.setItem(NS+"mseg",k)}catch(e){}
+  $$("#mseg button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.m===k)));
+  $$(".msec").forEach(x=>x.classList.toggle("on",x.dataset.ms===k));
+}
+$("#mseg").addEventListener("click",e=>{const b=e.target.closest("[data-m]");if(b)showMseg(b.dataset.m)});
+showMseg(MSEG);
+let AUTO_T=0;
+function autoMarket(){
+  if(!USER||Date.now()-AUTO_T<30000)return;AUTO_T=Date.now();
+  const age=t=>t?Date.now()-new Date(t).getTime():Infinity;
+  if(age(BIASRUN&&BIASRUN.at)>10*60e3)readMorning(true);
+  if(age(RUN&&RUN.at)>15*60e3)runRoutine(true);
+}
 $("#newsBox").addEventListener("click",e=>{if(e.target.closest("#newsBtn"))whatsMoving()});
 $("#clearRunBtn").addEventListener("click",()=>{RUN=null;LS.del("run");renderMarket();toast("Cleared — run it again")});
 
@@ -2054,6 +2091,8 @@ window.addEventListener("hashchange",()=>{ if(claimHash())location.reload() });
   catch(e){ toast("Offline — showing your last saved copy") }
 
   autoBrain().then(autoWeek);
+  autoMarket();                                // the landing tab reads itself; no tap needed
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")autoMarket()});
 })();
 
 /* If a week-latest.json is published alongside the app, pick it up automatically.

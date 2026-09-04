@@ -470,7 +470,7 @@ async function whatsMoving(apiKey: string) {
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
       system: "You write a five-line pre-market brief for a beginner US day trader. Today is " + day + ". Search for what is moving US markets this morning, then answer in EXACTLY this markdown shape and nothing else:\n" +
         "- **10-year:** one line — what it did and the reason given in the news\n- **Crude:** one line\n- **Dollar / yen:** one line\n- **Scheduled today:** the data releases or Fed speakers on today's calendar with times ET, or 'nothing major'\n- **Mag-7 with news:** which of Apple, Microsoft, NVIDIA, Amazon, Google, Meta, Tesla has a real catalyst today, one line each, max three\n" +
-        "Plain words, no advice, no predictions, no 'buy' or 'sell'. Each line under 30 words. End with a line 'Sources:' followed by the 2-4 URLs you used, one per line.",
+        "Plain words, no advice, no predictions, no 'buy' or 'sell'. DO NOT STATE ANY PRICE, YIELD OR PERCENTAGE — the app's own cards carry the live numbers and a stale figure from an article would contradict them; give direction and the reason only ('up after the jobs report beat', not '4.74%'). Each line under 30 words. End with a line 'Sources:' followed by the 2-4 URLs you used, one per line.",
       messages: [{ role: "user", content: "What's moving US markets this morning?" }],
     }),
   });
