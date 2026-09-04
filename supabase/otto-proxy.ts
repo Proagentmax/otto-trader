@@ -118,14 +118,8 @@ const SYMBOLS = [
 
 async function fetchQuotes(key: string) {
   const call = async (list: string[]) => {
-    // interval=1min matters: /quote's `timestamp` is the START of the last bar
-    // for the requested interval, and the default interval is 1day — so every
-    // equity leg reported 9:30:00 ET all session long while its price kept
-    // moving, and the app's 45-minute freshness gate expired at ~10:15 every
-    // day (found 25 Aug 2026, 10:28 ET). With 1-minute bars the field advances
-    // every minute; last_quote_at, when present, is better still.
     const url = "https://api.twelvedata.com/quote?symbol=" +
-      encodeURIComponent(list.join(",")) + "&interval=1min&apikey=" + encodeURIComponent(key);
+      encodeURIComponent(list.join(",")) + "&apikey=" + encodeURIComponent(key);
     const r = await fetch(url);
     if (!r.ok) throw new Error("provider HTTP " + r.status);
     const j = await r.json();
@@ -136,6 +130,7 @@ async function fetchQuotes(key: string) {
   const fx   = SYMBOLS.filter((s) => s.kind === "fx").map((s) => s.sym);
   const [a, b] = await Promise.all([call(etfs), fx.length ? call(fx) : {}]);
   const raw: Record<string, any> = { ...a, ...b };
+  const now = Math.floor(Date.now() / 1000);
 
   const out: Record<string, unknown> = {};
   for (const s of SYMBOLS) {
@@ -146,13 +141,24 @@ async function fetchQuotes(key: string) {
       ? ((price - prev) / prev) * 100 : parseFloat(q.percent_change);
     if (!isFinite(pct)) pct = NaN;
     if (s.invert && isFinite(pct)) pct = -pct;   // IEF rises when yields fall
+    const exchangeOpen = q.is_market_open === true || q.is_market_open === "true";
+    // FRESHNESS. /quote's `timestamp` is the START of the last bar for the
+    // requested interval, and the default is 1day — so every equity leg read
+    // 9:30:00 ET all session long while its price kept moving, and the app's
+    // 45-minute gate expired at ~10:15 every day (found 25 Aug 2026, 10:28 ET).
+    // Asking for 1min bars fixes the stamp but breaks previous_close (it
+    // becomes the previous MINUTE) and doubles the credit spend past the free
+    // tier's 8/min (both found 3 Sep 2026). So: while the exchange reports
+    // open, the quote's price IS live and the stamp is now; when closed, the
+    // bar timestamp stands, and pre-open the card correctly reads stale.
+    const bar = q.last_quote_at ? Number(q.last_quote_at) : q.timestamp ? Number(q.timestamp) : null;
     out[s.key] = {
       label: s.label, via: s.via, symbol: s.sym,
       price: isFinite(price) ? price : null,
       prev:  isFinite(prev)  ? prev  : null,
       pct:   isFinite(pct)   ? pct   : null,
-      at: q.last_quote_at ? Number(q.last_quote_at) : q.timestamp ? Number(q.timestamp) : null,
-      exchangeOpen: q.is_market_open === true || q.is_market_open === "true",
+      at: exchangeOpen ? now : bar,
+      exchangeOpen,
     };
   }
   return out;
