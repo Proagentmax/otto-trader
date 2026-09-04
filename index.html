@@ -191,6 +191,10 @@ select.mini{font:inherit;font-size:12px;color:var(--ink-2);background:var(--surf
 .plan .md{font-size:14.5px;line-height:1.55;color:var(--ink);margin-top:12px;border-top:1px solid var(--rule);padding-top:12px}
 .plan .row{display:flex;gap:8px;margin-top:12px}.plan .row .btn{flex:1}
 .plan .thumb{width:100%;border-radius:10px;margin-top:10px;border:1px solid var(--rule);display:block}
+.hint{display:none;font-size:13px;line-height:1.5;color:var(--ink-2);background:var(--surface-2);border-left:2px solid var(--up);border-radius:0 8px 8px 0;padding:8px 11px;margin:6px 0 2px}
+.hint b{color:var(--ink)}.hint i{font-style:normal;color:var(--ink-3);font-family:var(--mono);font-size:11px;display:block;margin-top:3px}
+label.f[data-h]{cursor:pointer}label.f[data-h]::after{content:" ?";color:var(--up);font-weight:700}
+.helpall{font-size:12px;color:var(--up);font-weight:600;margin-left:auto;background:none;border:0;padding:0;font:inherit;cursor:pointer}
 .pimg{display:flex;align-items:center;gap:12px;border:1px dashed var(--surface-3);border-radius:10px;padding:12px;color:var(--ink-2);font-size:14px;cursor:pointer}
 .pimg img{width:64px;height:44px;object-fit:cover;border-radius:6px;background:var(--surface-2)}
 .pimg b{display:block;font-size:14px;color:var(--ink)}
@@ -443,25 +447,26 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
 </main>
 
 <dialog id="dlgPlan">
-  <div class="grip"></div><div class="hd"><h3>Plan of attack</h3><span class="stamp">before the open</span></div>
+  <div class="grip"></div><div class="hd"><h3>Plan of attack</h3><button class="helpall" id="pHelpAll" type="button">What do these boxes mean?</button></div>
   <div class="bd">
     <div class="grid g2" style="margin-bottom:12px">
-      <div><label class="f" for="pRead">Your read today</label><select class="f" id="pRead"><option>Bullish</option><option>Bearish</option><option>Choppy — stand aside</option><option>No edge yet</option></select></div>
-      <div><label class="f" for="pSym">Instrument</label><input class="f" id="pSym" placeholder="SPY" autocapitalize="characters" autocomplete="off"></div>
+      <div><label class="f" for="pRead" data-h="pRead">Your read today</label><select class="f" id="pRead"><option>Bullish</option><option>Bearish</option><option>Choppy — stand aside</option><option>No edge yet</option></select><div class="hint" id="h_pRead"><b>Your read today.</b> Which way you think the market leans today, before you look at a chart. Bullish = up day, Bearish = down day, Choppy = the indexes disagree so you stand aside, No edge = nothing lines up so you do nothing. Jason: you got the sentiment right on Sep 3 — the read is the first thing he checks.<i>Impromptu Zoom · 2026-09-03 · 09:45</i></div></div>
+      <div><label class="f" for="pSym" data-h="pSym">Instrument</label><input class="f" id="pSym" placeholder="SPY" autocapitalize="characters" autocomplete="off"><div class="hint" id="h_pSym"><b>Instrument.</b> What you&#x27;re trading. Jason gave you three: SPY, QQQ, and ONE Mag-7 stock you pick (Tesla, NVIDIA, Google…). Micron is off your list.<i>Impromptu Zoom · 2026-09-03 · 23:20</i></div></div>
     </div>
-    <div style="margin-bottom:12px"><label class="f" for="pWhy">Why — the three inputs</label>
-      <textarea class="f" id="pWhy" rows="2" placeholder="10-year, crude, USD/JPY. What are they doing and what does that mean for stocks?"></textarea></div>
+    <div style="margin-bottom:12px"><label class="f" for="pWhy" data-h="pWhy">Why — the three inputs</label>
+      <textarea class="f" id="pWhy" rows="2" placeholder="10-year, crude, USD/JPY. What are they doing and what does that mean for stocks?"></textarea><div class="hint" id="h_pWhy"><b>Why — the three inputs.</b> The three numbers Jason checks before the chart: the 10-year (cost of money — up is bad for stocks), crude oil (cost of transportation), and USD/JPY (a strong dollar against the yen is good for stocks). One line each: what it&#x27;s doing and what that means for today.<i>Impromptu Zoom · 2026-09-03 · 36:40 and 44:15</i></div></div>
     <div class="grid g2" style="margin-bottom:12px">
-      <div><label class="f" for="pCat">Catalyst</label><input class="f" id="pCat" placeholder="What's the news on it?" autocomplete="off"></div>
-      <div><label class="f" for="pExp">Expiry</label><input class="f" id="pExp" placeholder="Tue 9/9" autocomplete="off"></div>
-      <div><label class="f" for="pIn">Entry level</label><input class="f" type="number" id="pIn" step="any" inputmode="decimal"></div>
-      <div><label class="f" for="pPT">PT</label><input class="f" type="number" id="pPT" step="any" inputmode="decimal"></div>
-      <div><label class="f" for="pWrong">I'm wrong at</label><input class="f" type="number" id="pWrong" step="any" inputmode="decimal"></div>
-      <div><label class="f" for="pSwing">Swing it?</label><select class="f" id="pSwing"><option>No — day trade</option><option>Yes — overnight</option></select></div>
+      <div><label class="f" for="pCat" data-h="pCat">Catalyst</label><input class="f" id="pCat" placeholder="What's the news on it?" autocomplete="off"><div class="hint" id="h_pCat"><b>Catalyst.</b> The reason the stock would move TODAY that isn&#x27;t the chart — news, an event, rates. Jason: &quot;you need more than one catalyst. You can&#x27;t just look at a chart.&quot; Tesla had two on Sep 3: rates and the robotaxi event.<i>Impromptu Zoom · 2026-09-03 · 43:55</i></div></div>
+      <div><label class="f" for="pExp" data-h="pExp">Expiry</label><input class="f" id="pExp" placeholder="Tue 9/9" autocomplete="off"><div class="hint" id="h_pExp"><b>Expiry.</b> The day your option dies. Jason&#x27;s rule: after Wednesday, don&#x27;t buy this Friday&#x27;s contract — use Tuesday or Wednesday of next week, or next Friday if you can afford it. Friday&#x27;s contract on a Thursday is &quot;priced to die.&quot;<i>Impromptu Zoom · 2026-09-03 · 25:04; 2026-08-27 · 26:12</i></div></div>
+      <div><label class="f" for="pIn" data-h="pIn">Entry level</label><input class="f" type="number" id="pIn" step="any" inputmode="decimal"><div class="hint" id="h_pIn"><b>Entry level.</b> The exact price where you&#x27;d click. It should be a level from the method — the reclaim (like 768), the top of the gap holding, the box — not &quot;it&#x27;s going up.&quot; Jason: when you&#x27;re new you wait for confirmation, the retest that holds, then the move.<i>Impromptu Zoom · 2026-09-03 · 22:50 and 41:00</i></div></div>
+      <div><label class="f" for="pPT" data-h="pPT">PT</label><input class="f" type="number" id="pPT" step="any" inputmode="decimal"><div class="hint" id="h_pPT"><b>PT — price target.</b> Where you&#x27;re RIGHT. The price where you take your money. Write it before the trade, then watch the chart, not the account, until price gets there. Jason: &quot;stay on the chart, not your account, until it hits your PT.&quot;<i>Impromptu Zoom · 2026-09-03 · 06:57</i></div></div>
+      <div><label class="f" for="pWrong" data-h="pWrong">I'm wrong at</label><input class="f" type="number" id="pWrong" step="any" inputmode="decimal"><div class="hint" id="h_pWrong"><b>I&#x27;m wrong at.</b> Where you&#x27;re WRONG. The price that proves your idea didn&#x27;t work — and you get out, no arguing with it. Example: you&#x27;re long because it held the gap; if it drops back below the gap, your reason is gone, so that price is your &quot;wrong at.&quot; On Sep 3 you sold QQQ at 713 because the account showed red — you had no wrong-at written down, so fear picked it for you. PT and wrong-at both go on paper BEFORE you click. (Jason hasn&#x27;t taught where to put a stop order — this is the level where your reason stops being true.)<i>Impromptu Zoom · 2026-09-03 · 06:05, 22:50, 25:30</i></div></div>
+      <div><label class="f" for="pSwing" data-h="pSwing">Swing it?</label><select class="f" id="pSwing"><option>No — day trade</option><option>Yes — overnight</option></select><div class="hint" id="h_pSwing"><b>Swing it?.</b> Day trade = out by the close. Swing = holding overnight. Jason: never swing into a binary event (jobs report, earnings, the Fed) — you can&#x27;t trade while the news hits. And right now your risk management IS not swinging.<i>Impromptu Zoom · 2026-09-03 · 29:20 and 48:50</i></div></div>
     </div>
-    <div style="margin-bottom:12px"><label class="f" for="pNotes">The plan</label>
-      <textarea class="f" id="pNotes" rows="4" placeholder="What has to happen before you click. What confirms it. Where you get out. What makes you do nothing."></textarea>
+    <div style="margin-bottom:12px"><label class="f" for="pNotes" data-h="pNotes">The plan</label>
+      <textarea class="f" id="pNotes" rows="4" placeholder="What has to happen before you click. What confirms it. Where you get out. What makes you do nothing."></textarea><div class="hint" id="h_pNotes"><b>The plan.</b> In plain words: what has to happen before you click, what confirms it, where you get out, and what makes you do nothing. Jason: &quot;the cool thing about trading is you need to find an excuse not to do anything.&quot; A plan you can defend is the whole point.<i>Impromptu Zoom · 2026-09-03 · 53:15 and 54:15</i></div>
       <p class="err" id="pErr" hidden></p></div>
+    <div class="hint" id="h_pImg" style="margin:0 0 8px"><b>Your chart.</b> A screenshot of the chart you'd actually trade from, with your levels drawn on it. Take the CBC, order-block and VWAP overlays off when you mark levels (he made you strip them on Aug 27), draw the box and the lines, and keep your account and P&amp;L out of the picture. He reads it like he reads it on the call.<i>Impromptu Zoom · 2026-08-27 · 40:47; 2026-09-03 · 06:57</i></div>
     <label class="pimg" for="pImg"><img id="pThumb" alt="" hidden><span><b id="pImgT">Add your marked-up chart</b>Screenshot of the chart you'd trade from. He reads it.</span></label>
     <input type="file" id="pImg" accept="image/*" hidden>
   </div>
@@ -1612,6 +1617,15 @@ $("#pImg").addEventListener("change",async e=>{
   catch(err){PIMG=null;toast("Couldn't read that image")}
 });
 $("#pCancel").addEventListener("click",()=>$("#dlgPlan").close());
+/* every label is a "?" — tap it for what the box means and where Jason said it */
+$("#dlgPlan").addEventListener("click",e=>{
+  const l=e.target.closest("label[data-h]");
+  // a hint born inside a half-width grid cell is moved out under the grid so it reads full width
+  const show=(h,on)=>{if(!h)return;const g=h.closest(".grid");if(on&&g)g.insertAdjacentElement("afterend",h);h.style.display=on?"block":"none"};
+  if(l){e.preventDefault();const h=$("#h_"+l.dataset.h);show(h,h&&h.style.display!=="block");return}
+  if(e.target.closest("#pHelpAll")){const hs=$$("#dlgPlan .hint"),open=hs.some(h=>h.style.display==="block");
+    hs.slice().reverse().forEach(h=>show(h,!open));$("#pHelpAll").textContent=open?"What do these boxes mean?":"Hide the explanations"}
+});
 $("#pNotes").addEventListener("input",()=>{$("#pErr").hidden=true});
 $("#pSave").addEventListener("click",async()=>{
   const plan={read:$("#pRead").value,sym:$("#pSym").value.trim().toUpperCase(),why:$("#pWhy").value.trim(),
