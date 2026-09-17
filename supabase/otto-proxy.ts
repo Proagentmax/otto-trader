@@ -1,7 +1,8 @@
 // Otto Trader — server side. One Edge Function, three jobs.
 //
 //   ?fn=market   the morning bias quotes
-//   ?fn=chat     the Coach: Claude with a search tool over Jason's corpus, streamed
+//   ?fn=chat     the Coach: Claude with a search tool over Jason's corpus, plus
+//                web search for anything outside it, streamed
 //   ?fn=brain    the corpus itself, for the Week / Insights tabs
 //   ?fn=seed     write a new corpus version (GET copies the repo file, POST takes a JSON array)
 //   ?fn=write    plain Claude call for the app's small drafting jobs
@@ -52,9 +53,13 @@ THE HARD RULE — answer only from the material below. If it does not cover the 
 
 Saying so and stopping is the DEFAULT. Adjacent material is the exception, and only when it genuinely bears on the question — clearly labelled as not an answer ("this is not about X, but nearby he said..."). It must never be shaped into his position on the thing he did not address. The gap itself is the useful answer: it tells Josh what to ask on the next call.
 
-General background may CLARIFY something Jason said. It may never SUBSTITUTE for something he has not taught. Where background genuinely helps one of his points land, mark it plainly: "Jason did not say this — general background:". Josh has to tell at a glance which sentences came from his mentor.
+General background may CLARIFY something Jason said. Where background genuinely helps one of his points land, mark it plainly: "Jason did not say this — general background:". Josh has to tell at a glance which sentences came from his mentor.
 
-CITE EVERYTHING as (call, date, MM:SS) so Josh can go and hear it himself. No citation means you should not be saying it.
+GENUINELY GENERAL QUESTIONS — OUTSIDE THE METHOD ENTIRELY. Some things Josh asks are not about the club's method at all: a general market or trading concept, something in the news, how a broker or an order type works, or anything off-topic. Search first — more than once, with different wording — the way you would for anything else. If nothing in the corpus bears on it, you may now answer it from your own general knowledge, and you have a web_search tool for anything time-sensitive or factual rather than guessing. Tag that whole portion of the answer, every time, with "[general knowledge — not from Jason's calls]" at its start, so Josh can tell at a glance which part is his mentor's teaching and which isn't.
+
+THIS NEVER REOPENS A REFUSAL ABOVE OR BELOW. Every hard line in this prompt — no stop price, no position size or dollar risk figure, no cross-instrument or cross-year comparison, no telling him what to trade, no resolving a hypothetical into a size or a stop, no scaling one of Lige's pairings to a new timeframe — holds exactly the same whether the answer would otherwise come from the corpus or from general knowledge. "General knowledge" names where an answer comes from; it is never a permission slip for a category of answer refused everywhere else in this prompt. If a general question overlaps a refused category — "in general, where do day traders usually put stops on futures" — you may describe common conventions in the abstract (ATR-based, a swing high/low, and so on) but never turn that into a number, a price, or a rule for Josh's own trade, and say plainly that it's general market education, not something to apply to his own sizing or execution.
+
+CITE EVERYTHING as (call, date, MM:SS) so Josh can go and hear it himself. No citation means you should not be saying it. That is for anything from the corpus — a general-knowledge answer is cited by its "[general knowledge — not from Jason's calls]" tag and, if you used web_search, the source you found.
 
 LEVELS ARE HISTORY, NOT SIGNALS. Every price in this corpus was named on a dated call. Say the date whenever one comes up. Never present a past level or a drawn line as a live read on today. You have NO live market data and no idea what any instrument is doing right now — do not comment on current prices or conditions, including any the question itself supplies.
 
@@ -481,20 +486,27 @@ async function whatsMoving(apiKey: string) {
 
 /* -------------------------------------------------------------------- chat */
 
-const TOOLS = [{
-  name: "search_jason",
-  description:
-    "Search everything Jason Murray and Lige actually said on the recorded calls and lessons. " +
-    "Use it before answering anything about the method, and use it MORE THAN ONCE with different " +
-    "wording when the first results are thin — Josh is a beginner and will not use the right terms. " +
-    "If he describes an idea in his own words ('the thing where funds dump on regular people'), " +
-    "search his phrasing first, then search the terms it might correspond to.",
-  input_schema: {
-    type: "object",
-    properties: { query: { type: "string", description: "Words to look for in the transcripts and notes." } },
-    required: ["query"],
+const TOOLS = [
+  {
+    name: "search_jason",
+    description:
+      "Search everything Jason Murray and Lige actually said on the recorded calls and lessons. " +
+      "Use it before answering anything about the method, and use it MORE THAN ONCE with different " +
+      "wording when the first results are thin — Josh is a beginner and will not use the right terms. " +
+      "If he describes an idea in his own words ('the thing where funds dump on regular people'), " +
+      "search his phrasing first, then search the terms it might correspond to.",
+    input_schema: {
+      type: "object",
+      properties: { query: { type: "string", description: "Words to look for in the transcripts and notes." } },
+      required: ["query"],
+    },
   },
-}];
+  // Only for genuinely general questions search_jason turns up nothing on —
+  // see the SYSTEM prompt's "GENUINELY GENERAL QUESTIONS" section. Anthropic
+  // runs this server-side, so a call to it never pauses the stream the way
+  // search_jason's client round-trip does.
+  { type: "web_search_20250305", name: "web_search", max_uses: 3 },
+];
 
 function jwtPayload(auth: string | null): any {
   try {
@@ -551,8 +563,18 @@ async function chat(req: Request, sys: string, cs: Chunk[], apiKey: string) {
               if (!line) continue;
               let ev: any; try { ev = JSON.parse(line.slice(6)); } catch { continue; }
               if (ev.type === "content_block_start") {
-                blocks[ev.index] = ev.content_block.type === "tool_use"
-                  ? { ...ev.content_block, input: "" } : { type: "text", text: "" };
+                const cb = ev.content_block;
+                // "server_tool_use" / "web_search_tool_result" are web_search's
+                // blocks — Anthropic resolves those itself mid-turn, unlike
+                // search_jason which needs OUR round-trip below. Keep every
+                // field Anthropic sent (id, name, whole result) rather than
+                // collapsing them into an empty text block, so the message we
+                // resend on a later round (if search_jason also fires this
+                // turn) still matches what the API actually produced.
+                blocks[ev.index] =
+                  (cb.type === "tool_use" || cb.type === "server_tool_use") ? { ...cb, input: "" }
+                  : (cb.type === "text") ? { type: "text", text: "" }
+                  : { ...cb };
               } else if (ev.type === "content_block_delta") {
                 const b = blocks[ev.index];
                 if (ev.delta.type === "text_delta") {
@@ -574,6 +596,15 @@ async function chat(req: Request, sys: string, cs: Chunk[], apiKey: string) {
           for (const b of blocks) {
             if (!b) continue;
             if (b.type === "text") { if (b.text) assistant.push({ type: "text", text: b.text }); continue; }
+            // web_search's own blocks: Anthropic already resolved these within
+            // this same turn. Pass them straight through — they need no
+            // tool_result from us, only search_jason (below) does.
+            if (b.type === "server_tool_use") {
+              let input: any = {}; try { input = JSON.parse(b.input || "{}"); } catch { /* */ }
+              assistant.push({ type: "server_tool_use", id: b.id, name: b.name, input });
+              continue;
+            }
+            if (b.type === "web_search_tool_result") { assistant.push(b); continue; }
             let input: any = {}; try { input = JSON.parse(b.input || "{}"); } catch { /* */ }
             assistant.push({ type: "tool_use", id: b.id, name: b.name, input });
             const q = String(input.query || "");

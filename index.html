@@ -421,7 +421,10 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
   </section>
 
   <section class="pane" id="p-coach">
-    <div class="corpus" id="corpus"></div>
+    <div class="row" style="align-items:center">
+      <div class="corpus" id="corpus" style="margin:0;flex:1"></div>
+      <button class="btn" id="clearChatBtn" style="min-height:34px;font-size:10.5px;flex:0 0 auto">Clear</button>
+    </div>
     <div class="prompts" id="prompts"></div>
     <div class="chat" id="chat"></div>
     <div class="ask">
@@ -1301,6 +1304,9 @@ async function ask(){
   $("#send").disabled=false;CHAT=CHAT.slice(-40);LS.set("chat",CHAT);renderCoach();
 }
 $("#send").addEventListener("click",ask);
+$("#clearChatBtn").addEventListener("click",()=>{
+  CHAT=[];LS.set("chat",CHAT);renderCoach();toast("Conversation cleared");
+});
 $("#q").addEventListener("input",e=>{e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px"});
 $("#q").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&window.innerWidth>=720){e.preventDefault();ask()}});
 
@@ -1483,7 +1489,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.6.2";
+const BUILD="2.6.3";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only — official closes, plus the 10-year live",calls:[{k:"t10"},{k:"t2"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
