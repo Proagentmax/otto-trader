@@ -151,6 +151,9 @@ select.f{appearance:none;background-image:linear-gradient(45deg,transparent 50%,
 .md ul{margin:0 0 10px;padding-left:20px}
 .md li{margin:0 0 5px}
 .md strong{font-weight:650;color:var(--ink)}
+.md em{font-style:italic;color:var(--ink-2)}
+.md blockquote{margin:0 0 10px;padding:1px 0 1px 12px;border-left:2px solid var(--surface-3);color:var(--ink-2);font-style:italic}
+.md hr{border:none;border-top:1px solid var(--surface-2);margin:14px 0}
 .md code{font-family:var(--mono);font-size:13px;background:var(--surface-2);padding:1px 5px;border-radius:4px}
 .searching{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;
   color:var(--ink-3);background:var(--surface-2);border:1px solid var(--rule);border-radius:6px;
@@ -1215,6 +1218,7 @@ function retrieve(q,n){
 function md(t){
   const e=x=>x.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
   const inl=x=>e(x).replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>")
+                   .replace(/\*([^*]+)\*/g,"<em>$1</em>")
                    .replace(/`([^`]+)`/g,"<code>$1</code>");
   const out=[];let ul=false,para=[];
   const shutP=()=>{if(para.length){out.push("<p>"+inl(para.join(" "))+"</p>");para=[]}};
@@ -1222,6 +1226,12 @@ function md(t){
   for(const raw of String(t).split("\n")){
     const line=raw.trim();
     if(!line){shutP();shutU();continue}
+    // a bare separator line — "---", "- - -", "***", "___" — is a divider,
+    // never a bullet. Check this BEFORE the list regex, or "- - -" gets read
+    // as a one-item list with content "- -".
+    if(/^(?:-\s*){3,}$|^(?:\*\s*){3,}$|^(?:_\s*){3,}$/.test(line)){shutP();shutU();out.push("<hr>");continue}
+    const bq=line.match(/^>\s?(.*)$/);
+    if(bq){shutP();shutU();out.push("<blockquote>"+inl(bq[1])+"</blockquote>");continue}
     const li=line.match(/^[-*\u2022]\s+(.*)$/), h=line.match(/^#{1,4}\s+(.*)$/);
     if(li){shutP();if(!ul){out.push("<ul>");ul=true}out.push("<li>"+inl(li[1])+"</li>");continue}
     shutU();
@@ -1489,7 +1499,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.6.5";
+const BUILD="2.6.6";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only — official closes, plus the 10-year live",calls:[{k:"t10"},{k:"t2"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
