@@ -15,7 +15,10 @@
 // nothing on any phone breaks. And the Coach's retrieval loop cannot run in a
 // browser — it needs several round trips to Claude before it has an answer.
 //
-// Secrets required:  TD_KEY  (twelvedata.com)   ANTHROPIC_KEY  (console.anthropic.com)
+// Secrets required:  ANTHROPIC_KEY  (console.anthropic.com)
+// TD_KEY is no longer used — ?fn=market moved to Yahoo (yq()) on 18 Sep 2026,
+// same free source ?fn=routine already used. See "Bug confirmed, 18 Sep 2026"
+// in the project deploy-state doc for why.
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -124,52 +127,42 @@ const SYMBOLS = [
   { key: "ym",     sym: "DIA",     kind: "etf", label: "Dow",     via: "DIA (proxy for YM)" },
 ];
 
-async function fetchQuotes(key: string) {
-  const call = async (list: string[]) => {
-    const url = "https://api.twelvedata.com/quote?symbol=" +
-      encodeURIComponent(list.join(",")) + "&apikey=" + encodeURIComponent(key);
-    const r = await fetch(url);
-    if (!r.ok) throw new Error("provider HTTP " + r.status);
-    const j = await r.json();
-    if (j.code && j.message) throw new Error(j.message);
-    return list.length === 1 ? { [list[0]]: j } : j;
+let MARKET_CACHE: { at: number; body: any } | null = null;
+
+// TwelveData's free tier caps at 8 credits/minute and this route's 7-symbol
+// batch already spent them all — any second call in the same window (a second
+// tap, a second device, Claude probing this route to debug something else)
+// tipped it into "provider HTTP 429" (found 18 Sep 2026, user-visible toast).
+// Moved onto the same free Yahoo chart endpoint ?fn=routine already uses —
+// no shared quota to exhaust. See the project deploy-state doc.
+async function fetchQuotes() {
+  if (MARKET_CACHE && Date.now() - MARKET_CACHE.at < 20_000) return MARKET_CACHE.body;
+
+  const YSYM: Record<string, string> = {
+    yield: "IEF", jpy: "JPY=X", dollar: "UUP", crude: "USO", es: "SPY", nq: "QQQ", ym: "DIA",
   };
-  const etfs = SYMBOLS.filter((s) => s.kind === "etf").map((s) => s.sym);
-  const fx   = SYMBOLS.filter((s) => s.kind === "fx").map((s) => s.sym);
-  const [a, b] = await Promise.all([call(etfs), fx.length ? call(fx) : {}]);
-  const raw: Record<string, any> = { ...a, ...b };
-  const now = Math.floor(Date.now() / 1000);
+  const errors: Record<string, string> = {};
+  const grab = async <T,>(k: string, f: () => Promise<T>): Promise<T | null> => {
+    try { return await f(); } catch (e) { errors[k] = String((e as Error).message ?? e); return null; }
+  };
 
   const out: Record<string, unknown> = {};
-  for (const s of SYMBOLS) {
-    const q = raw[s.sym];
-    if (!q || q.status === "error" || q.close == null) { out[s.key] = null; continue; }
-    const price = parseFloat(q.close), prev = parseFloat(q.previous_close);
-    let pct = (isFinite(price) && isFinite(prev) && prev)
-      ? ((price - prev) / prev) * 100 : parseFloat(q.percent_change);
-    if (!isFinite(pct)) pct = NaN;
-    if (s.invert && isFinite(pct)) pct = -pct;   // IEF rises when yields fall
-    const exchangeOpen = q.is_market_open === true || q.is_market_open === "true";
-    // FRESHNESS. /quote's `timestamp` is the START of the last bar for the
-    // requested interval, and the default is 1day — so every equity leg read
-    // 9:30:00 ET all session long while its price kept moving, and the app's
-    // 45-minute gate expired at ~10:15 every day (found 25 Aug 2026, 10:28 ET).
-    // Asking for 1min bars fixes the stamp but breaks previous_close (it
-    // becomes the previous MINUTE) and doubles the credit spend past the free
-    // tier's 8/min (both found 3 Sep 2026). So: while the exchange reports
-    // open, the quote's price IS live and the stamp is now; when closed, the
-    // bar timestamp stands, and pre-open the card correctly reads stale.
-    const bar = q.last_quote_at ? Number(q.last_quote_at) : q.timestamp ? Number(q.timestamp) : null;
+  await Promise.all(SYMBOLS.map(async (s) => {
+    const q = await grab(s.key, () => yq(YSYM[s.key]));
+    if (!q) { out[s.key] = null; return; }
+    let pct = q.pct;
+    if (s.invert && pct != null && isFinite(pct)) pct = -pct;   // IEF rises when yields fall
     out[s.key] = {
       label: s.label, via: s.via, symbol: s.sym,
-      price: isFinite(price) ? price : null,
-      prev:  isFinite(prev)  ? prev  : null,
-      pct:   isFinite(pct)   ? pct   : null,
-      at: exchangeOpen ? now : bar,
-      exchangeOpen,
+      price: q.price, prev: q.prev, pct,
+      at: q.at,
+      exchangeOpen: q.state === "REGULAR",
     };
-  }
-  return out;
+  }));
+
+  const body = { quotes: out, errors };
+  MARKET_CACHE = { at: Date.now(), body };
+  return body;
 }
 
 /* ------------------------------------------------------------------- brain */
@@ -655,10 +648,9 @@ Deno.serve(async (req) => {
 
   try {
     if (fn === "market") {
-      const key = Deno.env.get("TD_KEY");
-      if (!key) return json({ ok: false, error: "TD_KEY secret is not set" }, 500);
-      return json({ ok: true, source: "twelvedata", served: Math.floor(Date.now() / 1000),
-                    quotes: await fetchQuotes(key) });
+      const { quotes, errors } = await fetchQuotes();
+      return json({ ok: true, source: "yahoo", served: Math.floor(Date.now() / 1000),
+        quotes, errors });
     }
 
     if (fn === "brain") {

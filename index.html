@@ -1489,7 +1489,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.6.4";
+const BUILD="2.6.5";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"US Treasury only — official closes, plus the 10-year live",calls:[{k:"t10"},{k:"t2"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -1764,19 +1764,23 @@ async function readMorning(quiet){
 function renderBias(){
   const box=$("#biasBox");if(!box)return;
   if(!USER){box.innerHTML="";return}
+  // six of seven legs only print while the NYSE is trading — outside that
+  // window "Read it again" can only ever come back "No read," so the button
+  // itself says so instead of inviting a tap that just wastes a check
+  const ny=nyNow(),preopen=!["Sat","Sun"].includes(ny.wd)&&ny.min<9*60+30,closed=["Sat","Sun"].includes(ny.wd)||ny.min>=16*60;
+  const btnOff=preopen||closed,btnCopy=preopen?"Reads open at 9:30 AM ET":closed?"Market closed — reads open 9:30 AM ET":null;
   if(!BIASRUN){
     box.innerHTML=`<div class="bias"><div class="lab">Morning bias</div>
       <div class="vd" style="font-size:17px">Not read yet</div>
-      <div class="cov">Your intermarket sheet, computed. One request, about two seconds.</div>
+      <div class="cov">Your intermarket sheet, computed. One request, about two seconds.${btnOff?" Best 9:30 AM–4:00 PM ET, weekdays.":""}</div>
       ${fenceNow()}
-      <button class="btn wide solid" id="biasBtn" style="margin-top:12px">Read the morning</button></div>`;
+      <button class="btn wide solid" id="biasBtn" style="margin-top:12px"${btnOff?" disabled":""}>${btnCopy||"Read the morning"}</button></div>`;
     return;
   }
   const b=biasFrom(BIASRUN.quotes,BIASRUN.served);
   const mins=a=>a===null?"—":a<90?"now":a<5400?Math.round(a/60)+"m ago":Math.round(a/3600)+"h ago";
   // before the bell six of seven legs are last night's close, so "No read" is
   // the honest answer — say so, and point at the two inputs that ARE live
-  const ny=nyNow(),preopen=!["Sat","Sun"].includes(ny.wd)&&ny.min<9*60+30,closed=["Sat","Sun"].includes(ny.wd)||ny.min>=16*60;
   const whyNoRead=b.fresh<2?(preopen?`Before 9:30 the stock and bond legs are last night's 4:00 close — this card wakes up at the bell and refreshes itself. Until then the 10-year live and USD/JPY in the Routine are your read.`
     :closed?`Market's closed; these are the last session's prints.`:``):``;
   const legs=b.legs.map(l=>{
@@ -1802,7 +1806,7 @@ function renderBias(){
     <div class="cov" style="margin-top:7px;color:var(--ink-3)">Read from ${b.fresh} of ${b.total} inputs${b.fresh<5?" — conviction needs 5":""}. ${b.diverged?"Index divergence overrides everything else.":b.aligned?"All three indexes aligned.":""}</div>
     <div class="legs">${legs}</div>
     ${fenceNow()}
-    <button class="btn wide" id="biasBtn" style="margin-top:12px">Read it again</button></div>`;
+    <button class="btn wide" id="biasBtn" style="margin-top:12px"${btnOff?" disabled":""}>${btnCopy||"Read it again"}</button></div>`;
 }
 $("#biasBox").addEventListener("click",e=>{if(e.target.closest("#biasBtn"))readMorning()});
 
