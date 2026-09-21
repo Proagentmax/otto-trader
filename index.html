@@ -1499,9 +1499,9 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.6.6";
+const BUILD="2.6.7";
 const ROUTINE=[
- {n:1,title:"The bond market",src:"US Treasury only — official closes, plus the 10-year live",calls:[{k:"t10"},{k:"t2"}]},
+ {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
  {n:3,title:"Commodities",src:"ETF proxies, not the futures contract",calls:[{k:"USO"},{k:"UNG"},{k:"SLV"},{k:"CPER"}]},
  {n:4,title:"The indexes",src:"Did they finish below the open?",calls:[{k:"SPY"},{k:"QQQ"},{k:"DIA"}]},
@@ -1840,7 +1840,7 @@ function renderMarket(){
       const live=L&&L.price!=null?L.price:null, ref=live!=null?live:(a?a.v:null);
       if(live!=null)cs.push(card("10-year · live",live.toFixed(2)+"%",(L.prev!=null?(live-L.prev>=0?"▲ ":"▼ ")+Math.abs(live-L.prev).toFixed(2)+" · ":"")+hhmm(L.at),live>=CFG.ten?"trip":""));
       cs.push(a?card(live!=null?"10-year · close":"10-year",a.v.toFixed(2)+"%",(a.prev!=null?(a.v-a.prev>=0?"▲ ":"▼ ")+Math.abs(a.v-a.prev).toFixed(2)+" · ":"")+esc(a.date.slice(5)),live==null&&a.v>=CFG.ten?"trip":""):wait("10-year close",RUN.errors.treasury));
-      cs.push(c2?card("2-year · close",c2.v.toFixed(2)+"%",c2.prev!=null?(c2.v-c2.prev>=0?"▲ ":"▼ ")+Math.abs(c2.v-c2.prev).toFixed(2):""):wait("2-year",RUN.errors.treasury));
+      // 2-year tile removed 21 Sep 2026 (Ifoma) — the 10s−2s curve tile below still uses the 2Y close.
       if(a&&c2)cs.push(card("Curve · 10s−2s",(a.v-c2.v).toFixed(2),(a.v-c2.v)<0?"inverted":(a.prev!=null&&c2.prev!=null?((a.v-c2.v)>(a.prev-c2.prev)?"steepening":"flattening"):"positive")));
       b=`<div class="reads">${cs.join("")}</div>`;
       if(ref!=null)b+=`<div class="verdict ${ref<CFG.ten?"ok":""}">`+(ref>=CFG.tenH?`Above <b>${CFG.tenH}</b> — your "market tumbles" level.`

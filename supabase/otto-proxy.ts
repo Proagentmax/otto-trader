@@ -331,7 +331,12 @@ function planText(p: any) {
    tightened 3 Sep 2026, 36:40) — the same six things, live, from sources that
    don't need a key Josh has to paste:
      bonds       Treasury.gov daily CSV (official closes for 10Y / 2Y / curve)
-                 + Yahoo ^TNX for the 10-year LIVE, intraday
+                 + TradingView TVC:US10Y for the 10-year LIVE (24h — the
+                   same Tradeweb-style number CNBC/TradingView show pre-market),
+                   falling back to Yahoo ^TNX (CBOE, cash hours only) if that
+                   fails. Switched 21 Sep 2026: ^TNX sat on Friday's 2:59 PM
+                   print until ~8:20 AM Monday while CNBC already showed the
+                   overnight move.
      USD/JPY     Yahoo JPY=X, spot
      commodities Yahoo USO / UNG / SLV / CPER (ETF proxies, as before)
      indexes     Yahoo SPY / QQQ / DIA with today's open, so "did they finish
@@ -361,6 +366,39 @@ async function yq(sym: string) {
     pct:   isFinite(price) && isFinite(prev) && prev ? ((price - prev) / prev) * 100 : null,
     at:    m.regularMarketTime ? Number(m.regularMarketTime) : null,
     state: m.marketState || null,
+  };
+}
+
+/* The 10-year, live, around the clock. TradingView's public scanner endpoint
+   (the same one its own site polls) carries TVC:US10Y — the Tradeweb-style
+   cash yield — with a real update time, and it moves overnight and
+   pre-market. Yahoo's ^TNX is CBOE's index and only prints during cash hours,
+   so before ~8:20 AM ET it still shows the previous close, which is exactly
+   what Ifoma caught on 21 Sep (app 5.00 @ Fri 2:59 PM vs CNBC 4.947 @ 8:00
+   AM). Same shape as yq() so the client needs no change.
+   prev = close[1] (the previous session's close), so the arrow is "since
+   yesterday's close" the same way CNBC shows it. */
+async function tvYield10() {
+  const r = await fetch("https://scanner.tradingview.com/global/scan", {
+    method: "POST",
+    headers: { ...UA, "content-type": "application/json", "origin": "https://www.tradingview.com", "referer": "https://www.tradingview.com/" },
+    body: JSON.stringify({ symbols: { tickers: ["TVC:US10Y"], query: { types: [] } },
+                           columns: ["close", "close[1]", "update_time", "open"] }),
+  });
+  if (!r.ok) throw new Error("tradingview HTTP " + r.status);
+  const j = await r.json();
+  const d = j?.data?.[0]?.d;
+  if (!Array.isArray(d) || typeof d[0] !== "number") throw new Error("tradingview: no US10Y row");
+  const price = Number(d[0]), prev = Number(d[1]), at = Number(d[2]), open = Number(d[3]);
+  if (!isFinite(price) || price <= 0 || price > 25) throw new Error("tradingview: bad yield " + d[0]);
+  return {
+    price,
+    prev:  isFinite(prev) ? prev : null,
+    open:  isFinite(open) ? open : null,
+    pct:   isFinite(prev) && prev ? ((price - prev) / prev) * 100 : null,
+    at:    isFinite(at) ? at : Math.floor(Date.now() / 1000),
+    state: "24h",
+    source: "tradingview",
   };
 }
 
@@ -410,7 +448,10 @@ async function routine(watch: string[]) {
   };
   const syms = ["USO", "UNG", "SLV", "CPER", "SPY", "QQQ", "DIA"];
   const [tnx, jpy, tsy, earn, ...qs] = await Promise.all([
-    grab("t10live", () => yq("^TNX")),
+    grab("t10live", async () => {
+      try { return await tvYield10(); }
+      catch (e) { errors.t10live_tv = String((e as Error).message ?? e).slice(0, 120); return { ...(await yq("^TNX")), source: "cboe" }; }
+    }),
     grab("jpy", () => yq("JPY=X")),
     grab("treasury", treasuryCloses),
     grab("earn", () => earningsAhead(watch)),
