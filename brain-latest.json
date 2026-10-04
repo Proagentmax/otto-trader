@@ -1,6 +1,1216 @@
 [
   {
     "call": {
+      "title": "Resistance vs Support Entries, Gap Failures & the MU Put Review",
+      "date": "2026-10-01",
+      "duration": "62:29",
+      "mentor": "jason murray",
+      "students": [
+        "Josh",
+        "Ifoma Pierre"
+      ],
+      "source": "Zoom My Notes transcript (attendee side). Timestamps are Zoom transcript time — Ifoma's Fathom recording (fathom.video/share/xi9zAkY4ZxMfv9AUskd_UnxSzbGyx6dE) runs ~40–60s earlier. Cross-checked against the Fathom transcript. Jason hosted, so no frames."
+    },
+    "assignments": [
+      {
+        "id": "a1",
+        "task": "Research ZETA — what's going on with the company and why its chart looks different.",
+        "detail": "It's more than doubled in about six months. Jason wants to mark ~33.50 and be involved if it gets above that. Report back what you find.",
+        "for": "Josh",
+        "due": "before next call",
+        "at": "35:53",
+        "quote": "So that should be your homework. What's going on with this stock?",
+        "status": "open"
+      },
+      {
+        "id": "a2",
+        "task": "Bring your trading activity to the next call — your five biggest wins and five biggest losses.",
+        "detail": "Everything you made and lost money on, with the five biggest of each, so the three of you can go over them.",
+        "for": "Josh",
+        "due": "next call",
+        "at": "59:34",
+        "quote": "all the ones you lost on. But the five biggest",
+        "status": "open"
+      },
+      {
+        "id": "a3",
+        "task": "Before you trade, send Jason your levels AND the action you'll take at each.",
+        "detail": "Not just the lines on the chart — what you will do there. That's how he'll know you're learning.",
+        "for": "Josh",
+        "due": "ongoing — before each trading day",
+        "at": "62:15",
+        "quote": "not just the levels ... send me what the action is",
+        "status": "open"
+      },
+      {
+        "id": "a4",
+        "task": "Take Jason's chart quiz when he texts it.",
+        "detail": "He'll text example charts; reply with the action you'd take on each, without anyone looking over your shoulder. (Not Saturday — he's opening a church.)",
+        "for": "Josh",
+        "due": "when received",
+        "at": "60:46",
+        "quote": "talk to me about the actions you would take",
+        "status": "open"
+      }
+    ],
+    "rules": [
+      {
+        "rule": "Enter shorts at resistance. Support is where you cover, not where you enter.",
+        "why": "Josh was entering where Jason was covering — waiting for confirmation at support means the play is already over.",
+        "at": "04:53",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "rule": "Have your zones marked before the move — don't wait until the play is over to enter it.",
+        "why": "The entry is at the zone; confirmation after the fact is too late.",
+        "at": "13:49",
+        "scope": "General trading mindset — not instrument-specific."
+      },
+      {
+        "rule": "Take profit at the first target, keep a runner for an extra dollar, and stop out the runner if it doesn't come.",
+        "why": "Bank the move at TP1; the runner is a bonus.",
+        "at": "13:20",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "rule": "In this rate environment, play rejections more often than support bounces.",
+        "why": "Rates are repricing the market, the Mag 7 look toppy, and without rate relief a big correction is likely.",
+        "at": "34:08",
+        "scope": "!! SCOPE LIMIT: Jason's macro read on 1 Oct 2026 — a dated view, not a permanent rule."
+      },
+      {
+        "rule": "A double top on the daily means scalps only — no new swing longs; close same day.",
+        "why": "Price failed to make a new high.",
+        "at": "28:00",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "rule": "Below a big gap that has never been recovered, don't buy to swing — move on to the next stock.",
+        "why": "It keeps rejecting the same area (his TSLA example, gap from July/August).",
+        "at": "33:41",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "rule": "Don't trade a stock that just reported earnings without reading the report.",
+        "why": "MU's report was a massive beat — a reason to look for a way to buy it, not short it.",
+        "at": "40:07",
+        "scope": "General trading mindset — not instrument-specific."
+      },
+      {
+        "rule": "Right after earnings, hands off until full U.S. volume (after the Euro close) — unless you're playing the gap rejection he called.",
+        "why": "Post-earnings price is too wild to read until volume arrives.",
+        "at": "07:11",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "rule": "Never put ~40% of your account into one trade.",
+        "why": "A lotto is a small loss you can absorb; 40% of the account in one trade is 'crazy'.",
+        "at": "52:06",
+        "scope": "!! SCOPE LIMIT: 2026 stock options, Josh's own account (1 Oct 2026). Not a percentage cap Jason taught — he called 40% crazy but gave no number to use instead. Do not convert to a sizing rule or carry to futures or the April 2024 20% cap."
+      },
+      {
+        "rule": "Before taking a 'big boy' trade, message Jason first.",
+        "why": "A trade that size relative to your account deserves a second look.",
+        "at": "49:22",
+        "scope": "General trading mindset — not instrument-specific."
+      },
+      {
+        "rule": "Short-dated options after earnings need a big, fast move — don't give yourself only ~48 hours.",
+        "why": "Options have to be right on time and price; theta burns the premium while you wait.",
+        "at": "46:59",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "rule": "Don't short a stock in an uptrend just because it reached a sell zone — take profit instead.",
+        "why": "The sell zone in an uptrend is where longs take profit, not where shorts start.",
+        "at": "56:24",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "rule": "Baby gaps matter less than big gaps.",
+        "why": "Big unfilled gaps are where the real rejections happen.",
+        "at": "22:52",
+        "scope": "General trading mindset — not instrument-specific."
+      },
+      {
+        "rule": "Don't get lost trying to be a perfect chartist — pick the points that matter and talk yourself through them.",
+        "why": "Drawing lines all day isn't the job; deciding what to do is.",
+        "at": "34:23",
+        "scope": "General trading mindset — not instrument-specific."
+      },
+      {
+        "rule": "When a downtrending name pumps into resistance, short the pump.",
+        "why": "His IBM example: a sudden pump in a downtrend, straight into massive resistance, got rejected.",
+        "at": "37:03",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      }
+    ],
+    "setups": [
+      {
+        "name": "Resistance rejection short, cover at support (MU)",
+        "trigger": "Price rallies into resistance / the gap with sellers visible and fails — that's the short. A failed retest of the previous close is the second-chance entry. Cover into support (1028–1033).",
+        "invalidation": "A one-hour candle close above the gap/flip zone — then it's a flip-zone long.",
+        "timeframe": "15m / 1h",
+        "at": "02:31",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "name": "Flip zone (MU)",
+        "trigger": "One-hour candle close above the gap area he calls the flip zone → go long.",
+        "invalidation": "not given",
+        "timeframe": "1h",
+        "at": "06:55",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "name": "Gap failure short (SPY)",
+        "trigger": "Price comes back to test the big gap from below and fails. Take profit on shorts at 760–758.",
+        "invalidation": "not given",
+        "timeframe": "daily / 1h",
+        "at": "19:58",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "name": "Short the pump, then flip (IBM)",
+        "trigger": "Downtrending name pumps into massive resistance — short it. At the first take profit, if support holds, flip to the long side for the bounce.",
+        "invalidation": "not given",
+        "timeframe": "10m",
+        "at": "37:03",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "name": "Call credit spread at a sell zone (NVDA)",
+        "trigger": "Price in a red sell zone after hitting 230: sell the 232.50 calls and buy the 237.50 calls.",
+        "invalidation": "not given — he noted NVDA is only a scalp until it clears the 4-hour all-clear zone. Strikes need confirming (see questions).",
+        "timeframe": "1h / 4h",
+        "at": "14:14",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "name": "Hammer at resistance, confirm on failure",
+        "trigger": "Wait for the hammer (inverted at resistance = indication down); take confirmation when the next push fails.",
+        "invalidation": "A break back above previous support — then it's going higher.",
+        "timeframe": "intraday",
+        "at": "57:47",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "name": "Hold stock, sell premium while it dampens (META)",
+        "trigger": "Long stock in an uptrend that's chopping in a zone — sell premium against it. Wants a close above ~730–740 to add; areas of interest 680 and 615 if it leaves the zone.",
+        "invalidation": "A break of the triangle → go short.",
+        "timeframe": "1h / 4h",
+        "at": "08:59",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep, 24 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      }
+    ],
+    "levels": [
+      {
+        "instrument": "MU",
+        "value": "1,028–1,033",
+        "meaning": "Support he flagged the week before; held 'very nicely'. Cover zone for shorts, accumulation zone for bounces. 'It's not arbitrary' — lines up across the screen.",
+        "at": "04:07",
+        "scope": "!! SCOPE LIMIT: live mark on the 1 Oct 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "MU",
+        "value": "1,054",
+        "meaning": "The day's open. Staying below favors puts; holding above is trouble for them.",
+        "at": "43:28",
+        "scope": "!! SCOPE LIMIT: live mark on the 1 Oct 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "MU",
+        "value": "1,050",
+        "meaning": "'10.50 is the bottom or the top' on the Unusual Whales view — where positioning was concentrated.",
+        "at": "44:39",
+        "scope": "!! SCOPE LIMIT: live mark on the 1 Oct 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "MU (Josh's position)",
+        "value": "1,020 put, exp 10/5, paid $15.79",
+        "meaning": "Breakeven ~1,004 at expiry. Jason: less than a 20% chance to be right; the contracts likely go to ~$8 if price bounces to the red zone.",
+        "at": "42:42",
+        "scope": "!! SCOPE LIMIT: Josh's own trade on 1 Oct 2026 — a review example, not a setup or a level to reuse."
+      },
+      {
+        "instrument": "META",
+        "value": "680 / 615 / 730 / 737 / 740 / 744–745",
+        "meaning": "680 and 615 = areas of interest if it leaves the zone; wants a close above 730 (ideally 740); 737 = zone to close shorts; 745 = his upper target (reached 744).",
+        "at": "10:15",
+        "scope": "!! SCOPE LIMIT: live mark on the 1 Oct 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "NVDA",
+        "value": "230 / 233 / 235",
+        "meaning": "Hit 230 that day; 233 the recent high; can only swing above 235 — below that, scalps only.",
+        "at": "29:51",
+        "scope": "!! SCOPE LIMIT: live mark on the 1 Oct 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "unnamed — 'one of my favorite plays' (see questions)",
+        "value": "404 / 412 / 430 / 440",
+        "meaning": "404 and 412 = buy zones; 430 = all clear; 440 = where he wants to be.",
+        "at": "17:21",
+        "scope": "!! SCOPE LIMIT: live mark on the 1 Oct 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "SPY",
+        "value": "760 / 758",
+        "meaning": "Gap failure at 760 resistance; 760–758 = take profit on shorts.",
+        "at": "20:03",
+        "scope": "!! SCOPE LIMIT: live mark on the 1 Oct 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "MSFT",
+        "value": "520",
+        "meaning": "Wants it above 520 at least (Josh had marked 513–514 / 519).",
+        "at": "31:03",
+        "scope": "!! SCOPE LIMIT: live mark on the 1 Oct 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "AAPL (Josh's read)",
+        "value": "338–340",
+        "meaning": "Josh's bounce area under a daily double top — scalp long only, no swings.",
+        "at": "27:45",
+        "scope": "!! SCOPE LIMIT: live mark on the 1 Oct 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "GOOGL (Josh's read)",
+        "value": "320 / 365 / 380",
+        "meaning": "Josh: 320 support, 365 resistance, needs above 380 to go long. Jason: weaker than the other three.",
+        "at": "31:40",
+        "scope": "!! SCOPE LIMIT: live mark on the 1 Oct 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "ZETA",
+        "value": "33.50",
+        "meaning": "Mark it; if it gets above, Jason wants to be involved.",
+        "at": "35:53",
+        "scope": "!! SCOPE LIMIT: live mark on the 1 Oct 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      }
+    ],
+    "routine": [
+      {
+        "step": 1,
+        "what": "Before trading a name, check whether it just reported and read the report.",
+        "source": "earnings report",
+        "at": "40:07"
+      },
+      {
+        "step": 2,
+        "what": "Mark zones in advance: resistance (entry for shorts), support (cover), flip zone, all-clear zone, take profit 1 and 2.",
+        "source": "charts",
+        "at": "13:49"
+      },
+      {
+        "step": 3,
+        "what": "Check the gaps on the 1-hour and daily — big gap or baby gap, above or below price.",
+        "source": "charts",
+        "at": "05:27"
+      },
+      {
+        "step": 4,
+        "what": "Check the macro inputs — 10-year, yen, oil and gas — and VIX.",
+        "source": "TradingView / Trading Economics",
+        "at": "51:04"
+      },
+      {
+        "step": 5,
+        "what": "Send Jason your levels and the action you'll take at each.",
+        "source": "text to Jason",
+        "at": "62:15"
+      }
+    ],
+    "admin": [
+      {
+        "item": "Jason set an MU alert and said he'd text Josh updates through the day.",
+        "at": "52:14",
+        "status": "done (1 Oct)"
+      },
+      {
+        "item": "Jason will text example charts as a quiz — not Saturday (opening a church).",
+        "at": "60:46",
+        "status": "open"
+      },
+      {
+        "item": "Ifoma asked to start reviewing the losing trades with Jason — becomes the 5 wins / 5 losses review.",
+        "at": "52:54",
+        "status": "open"
+      },
+      {
+        "item": "Josh's MU 1,020 put expires Mon 10/5. Jason's last word: if you get a $15 drop, take whatever you can.",
+        "at": "60:19",
+        "status": "open — expires 10/5"
+      }
+    ],
+    "questions": [
+      {
+        "q": "Which stock is 'one of my favorite plays' with the 404 / 412 / 430 / 440 zones?",
+        "why": "Never named on the audio in either transcript. The context mentions big tech, Micron earnings and Amgen, but none is clearly the chart."
+      },
+      {
+        "q": "NVDA spread strikes: 232.50 / 237.50, or something else?",
+        "why": "Zoom heard 'sell the 2 32 50 calls and buy the 2 37 50s'; Fathom heard '230, 250 calls and 230, 750s'. Zoom's reading makes sense as a call credit spread — confirm."
+      },
+      {
+        "q": "What's the 'Amgen is a biotech' reasoning for selling ahead of Micron earnings?",
+        "why": "Garbled in both transcripts — the if/then about Micron and Amgen doesn't parse."
+      },
+      {
+        "q": "'Come back into that 5%' — 5% on the 10-year?",
+        "why": "Said while looking at the 10-year monthly chart; the exact level isn't stated."
+      },
+      {
+        "q": "'Rates are up 10 times what they were in 2021' — which rate?",
+        "why": "Not specified (fed funds vs 10-year)."
+      },
+      {
+        "q": "What should Josh use for position size instead?",
+        "why": "Jason said 40% of the account in one trade is crazy but didn't give a number to use. No 2026 options sizing cap is on record."
+      }
+    ],
+    "frames": [],
+    "glossary": [
+      {
+        "term": "TrendSpider",
+        "plain": "A paid charting platform Jason uses alongside the free TradingView.",
+        "said": "I'm gonna jump over to, uh, TrendSpider later",
+        "at": "02:20"
+      },
+      {
+        "term": "Cover",
+        "plain": "Close a short position by buying it back — where you take profit on a short.",
+        "said": "Here's where you cover",
+        "at": "02:57"
+      },
+      {
+        "term": "IV (implied volatility)",
+        "plain": "How much movement the options market expects; high IV makes options expensive.",
+        "said": "couldn't get in because of IV or spread",
+        "at": "03:27"
+      },
+      {
+        "term": "Spread (bid-ask)",
+        "plain": "The gap between the buy and sell price on an option; wide spreads make getting in costly.",
+        "said": "because of IV or spread",
+        "at": "03:27"
+      },
+      {
+        "term": "Chop / seesaw",
+        "plain": "Price swinging back and forth in a range with no clear direction — where traders get 'chopped up'.",
+        "said": "This is where people get chopped up",
+        "at": "03:51"
+      },
+      {
+        "term": "Order block",
+        "plain": "A zone where heavy buying or selling happened before and is likely to show up again.",
+        "said": "And now we have what? An order block here",
+        "at": "04:24"
+      },
+      {
+        "term": "Flip zone",
+        "plain": "A level that, once price closes above it (on the 1-hour), flips the bias from short to long.",
+        "said": "Your flip zone is what I call it in the chat",
+        "at": "06:55"
+      },
+      {
+        "term": "Accumulation zone",
+        "plain": "An area where buyers are quietly building positions — a place for bounce plays, not shorts.",
+        "said": "We're coming into your accumulation zone",
+        "at": "07:07"
+      },
+      {
+        "term": "Dampening",
+        "plain": "Price chopping back and forth to drain volatility out after a big move — lessening the move.",
+        "said": "Dampening simply means this is going to go back and forth",
+        "at": "08:07"
+      },
+      {
+        "term": "Euro close",
+        "plain": "When European markets close (late morning ET); U.S. volume takes over after it.",
+        "said": "it's not even Euro closed yet",
+        "at": "07:11"
+      },
+      {
+        "term": "Hedge",
+        "plain": "A position that offsets risk on another — Jason sells premium against his long META stock.",
+        "said": "So I hedge this and these are my hedge zones",
+        "at": "08:59"
+      },
+      {
+        "term": "Sell premium",
+        "plain": "Sell options to collect their price, profiting as they lose value over time.",
+        "said": "we sell premium against the stock",
+        "at": "09:20"
+      },
+      {
+        "term": "Passive flows",
+        "plain": "Steady buying from index funds and ETFs that must hold the biggest stocks regardless of price.",
+        "said": "these get passive flows because they're ... MAG7",
+        "at": "11:04"
+      },
+      {
+        "term": "All-clear zone",
+        "plain": "The level above which it's safe to go long or swing; below it you only scalp.",
+        "said": "I already have my all clear zone up here marked",
+        "at": "11:40"
+      },
+      {
+        "term": "Take profit 1 / 2 (TP1, TP2)",
+        "plain": "Staged exits — sell part at the first target, more at the second.",
+        "said": "Second cover or take profit one, take profit two",
+        "at": "13:36"
+      },
+      {
+        "term": "Runner",
+        "plain": "The small part of a position you keep after taking profit, to catch extra movement.",
+        "said": "keep your runners to see if you can get an extra buck",
+        "at": "13:20"
+      },
+      {
+        "term": "Stop out",
+        "plain": "Exit at your planned stop when the trade doesn't work.",
+        "said": "If you can't, then you just stop out",
+        "at": "13:25"
+      },
+      {
+        "term": "Credit spread (call)",
+        "plain": "Sell one call and buy a higher-strike call; you collect money up front and profit if the stock stays below the lower strike.",
+        "said": "Sell the 2 32 50 calls and buy the 2 37 50s",
+        "at": "14:14"
+      },
+      {
+        "term": "Scalp vs swing",
+        "plain": "A scalp is opened and closed the same day; a swing is held overnight or longer.",
+        "said": "we can't swing, we can only take what? Scalps",
+        "at": "29:58"
+      },
+      {
+        "term": "Bearish engulfing",
+        "plain": "A red candle whose body fully covers the prior green candle — sellers took over.",
+        "said": "you got a bearish engulfing here",
+        "at": "18:58"
+      },
+      {
+        "term": "Topping formation",
+        "plain": "A chart shape showing upward momentum stalling — often before a drop.",
+        "said": "a topping formation here on the daily",
+        "at": "18:58"
+      },
+      {
+        "term": "Gap failure",
+        "plain": "Price comes back to a gap and can't get through it — a short signal.",
+        "said": "A gap failure",
+        "at": "19:58"
+      },
+      {
+        "term": "Baby gap vs big gap",
+        "plain": "Small gaps carry less weight than large unfilled gaps when deciding where price will react.",
+        "said": "baby gaps are not as important as massive gaps",
+        "at": "22:52"
+      },
+      {
+        "term": "Basis points (bp)",
+        "plain": "Hundredths of a percent — 125 bp = 1.25 percentage points.",
+        "said": "we're up 125 basis points",
+        "at": "22:08"
+      },
+      {
+        "term": "Inverted hammer / hammer",
+        "plain": "A candle with a long wick on one side and a small body — at a top it hints at reversal down; at a bottom, reversal up.",
+        "said": "Inverted hammer signals possible top",
+        "at": "22:31"
+      },
+      {
+        "term": "Double top",
+        "plain": "Price hits the same high twice and can't break through — sign of resistance and a likely move down.",
+        "said": "A double top",
+        "at": "25:57"
+      },
+      {
+        "term": "Toppy",
+        "plain": "Looking like it's near a top — stretched and running out of buyers.",
+        "said": "It's very toppy right now",
+        "at": "33:49"
+      },
+      {
+        "term": "Correction",
+        "plain": "A market drop of roughly 10% or more from a recent high.",
+        "said": "The market's gonna go through a massive correction",
+        "at": "34:01"
+      },
+      {
+        "term": "Santa Claus rally",
+        "plain": "The tendency for stocks to rise in the last weeks of the year.",
+        "said": "fat man rally or Santa Claus rally",
+        "at": "20:59"
+      },
+      {
+        "term": "Expiration / strike",
+        "plain": "Expiration = the date the option dies; strike = the price it's based on (Josh: 1,020 strike, 10/5 expiration).",
+        "said": "10-5 expiration, which is 4 days away",
+        "at": "41:55"
+      },
+      {
+        "term": "Breakeven",
+        "plain": "Where the stock must be at expiry for the option to pay back its cost — for a put, strike minus premium paid.",
+        "said": "Where does MU have to be for you to make a profit?",
+        "at": "42:53"
+      },
+      {
+        "term": "Theta",
+        "plain": "Time decay — options lose value every day just from the clock running.",
+        "said": "there's this thing called Theta? ... you lose",
+        "at": "58:29"
+      },
+      {
+        "term": "VIX",
+        "plain": "The market's 'fear gauge' — expected volatility on the S&P 500. Rising VIX is good for puts.",
+        "said": "VIX is coming up, that's good for puts",
+        "at": "54:05"
+      },
+      {
+        "term": "Big boy trade",
+        "plain": "A position large relative to your account — worth checking with Jason first.",
+        "said": "if you're taking a big boy trade like this",
+        "at": "49:22"
+      }
+    ],
+    "insights": [
+      {
+        "title": "Where I'm covering, you're entering",
+        "body": "Josh waits for confirmation at support before shorting, but support is where the short is already over. The entry is at resistance; support is the exit.",
+        "said": "where I'm covering, you're trying to enter",
+        "at": "04:53"
+      },
+      {
+        "title": "Right action, wrong side",
+        "body": "Taking action at a key point was correct; the direction was backward. The zone Josh shorted was a buy zone for calls.",
+        "said": "It was the right action, but the wrong side",
+        "at": "57:27"
+      },
+      {
+        "title": "Fundamentals beat chart bias after earnings",
+        "body": "A massive earnings beat is a reason to look for a way to buy, not short. The crowd on X shorting it was a contrarian tell.",
+        "said": "why would you play a stock that just had earnings without looking",
+        "at": "40:07"
+      },
+      {
+        "title": "Rates are repricing everything",
+        "body": "Rates up ~10x since 2021 and 125 bp in six months is forcing a repricing. The Mag 7 look toppy, so the edge is in rejections, not bounces — until rates get relief.",
+        "said": "You can't have rates this high and not",
+        "at": "20:26"
+      },
+      {
+        "title": "Options give you two ways to be wrong",
+        "body": "A ~48-hour contract after earnings has to be right on direction and timing at once, and theta bills you while you wait.",
+        "said": "you need to be right on the time and the price",
+        "at": "46:59"
+      },
+      {
+        "title": "Levels aren't arbitrary",
+        "body": "The numbers he gives line up across the screen and across timeframes — that's why 1,028–1,033 held on MU a week later.",
+        "said": "it's not like I throw arbitrary numbers out",
+        "at": "60:19"
+      },
+      {
+        "title": "Pick the points that matter",
+        "body": "Being a perfect chartist isn't the goal. Find the few points that change the decision (double top, big gap, all-clear) and talk yourself through the action.",
+        "said": "I don't want you to get so much lost in trying to be a perfect chartist",
+        "at": "34:23"
+      },
+      {
+        "title": "Learn to fish: scan the names that move",
+        "body": "When an unfamiliar name pumps (IBM), ask why and check where it's pumping into. That's how you find the next play yourself.",
+        "said": "you're learning to fish, you gotta learn to fish",
+        "at": "37:19"
+      },
+      {
+        "title": "A lotto loss is small; 40% is reckless",
+        "body": "Jason's own failed lotto cost about $100. Putting 40% of an account into one short-dated trade is a different category of risk.",
+        "said": "taking, you know, 40% of your account size into a trade is crazy",
+        "at": "52:06"
+      },
+      {
+        "title": "October: rough early, strong late",
+        "body": "Seasonally October starts weak and finishes strong into the year-end rally — and this year the midterms may flip control without changing the rate policy that's driving prices.",
+        "said": "October, which is typically a rough month in the beginning",
+        "at": "20:51"
+      }
+    ],
+    "_transcript": "[00:06] jason murray: Can you hear me now?\n\n[00:08] Ifoma Pierre: Yes, sir.\n\n[00:09] jason murray: What's up, brother?\n\n[00:10] Ifoma Pierre: Man, having the time of my life, man. That's great, man. Always nice to see you, bro.\n\n[00:17] jason murray: the… Thanks, bro. I just got back in town. I've been out of town for a while. So…\n\n[00:26] Ifoma Pierre: Yeah, because you you went to your father, right?\n\n[00:29] jason murray: I was with my dad, and then we have a church conference, and then I didn't go to the, uh… Church conference in Florida because it's gone too many days.\n\n[00:40] Ifoma Pierre: Okay.\n\n[00:42] jason murray: Well, my wife didn't get a chance to go with me, she had jury duty. So I didn't want to be away from it.\n\n[00:47] Ifoma Pierre: Busy week, man.\n\n[00:49] jason murray: Yeah, I didn't want to be away from her forever. So.\n\n[00:53] Ifoma Pierre: Man, I'm about to be away from mines for the longest we have ever been away from in 25 years we've been married.\n\n[00:53] jason murray: Again. Jeez.\n\n[01:02] Ifoma Pierre: And remember, I told you about the the green card situation. So she haven't seen her. She haven't seen her her parents in.\n\n[01:09] jason murray: Yep.\n\n[01:11] Ifoma Pierre: in 22 years.\n\n[01:14] jason murray: Smoke.\n\n[01:14] Ifoma Pierre: So… so, uh, I'm sending her home, and I told her, I said, I'm buying you a one-way ticket, means that… You only get to come back when you burnt out.\n\n[01:24] jason murray: Oh, wow.\n\n[01:25] Ifoma Pierre: Because, you know, you know, my story's funny. Remember, I told you I married her 6 months after I met her.\n\n[01:31] jason murray: Yes.\n\n[01:32] Ifoma Pierre: And then after that, we left, and she never seen her father since. We had this guy.\n\n[01:35] jason murray: Well, I…\n\n[01:37] Ifoma Pierre: You know? And then, um, we've been one big family since, so I'm excited to send her back home, bro, because it's… 2022, 23 years is a long time.\n\n[01:48] jason murray: Mm-hmm. That's crazy.\n\n[01:50] Ifoma Pierre: Yeah.\n\n[01:52] jason murray: That is a long time.\n\n[01:52] Ifoma Pierre: All right. It's a very long time.\n\n[01:53] jason murray: Okay. I'm gonna jump in. I'm gonna jump into it, man, since you guys are recording stuff, too.\n\n[01:56] Ifoma Pierre: Hi, Max. Yes. Yeah. Okay.\n\n[02:01] jason murray: Let me turn. Can I turn? Oh, I can't turn that off. Because I need to keep the sound on. I was trying to keep, I have a bunch of people pinging me. Oh, I need to share my screen. Let's go. All right, so share this. Let's go. All right, so let's start with MU since you had a question. Um, this is a free version of TradingView. I'm gonna jump over to, uh, TrendSpider later too. I'm on the recording so you can see it. Are you with us, Josh?\n\n[02:30] Josh: Yeah.\n\n[02:31] jason murray: All right, let me show you how to do this. All right, so here we go. Opening candle right here, right? Uh, trying to find out what it's gonna do. Comes up here and tests this, uh… Resistance area here. This is your short signal here. See the sellers? Comes exactly to the top. 1, 2, 3, 4… there's no way for this to fall through, especially with a rate environment.\n\n[02:49] Josh: Mmhm.\n\n[02:57] jason murray: So easy short here back to test this right here. And then I like it coming into this area. Here's where you cover. So a nice easy 8 to 10 point move with the volatility the way it was. It's easier just to stay short. And I'll go over that here in a second. It test, uh, comes all the way down here, tests this area here. And then comes back up and tests previous close, right?\n\n[03:27] Josh: Mmhm.\n\n[03:27] jason murray: Fails there. If you missed your short and you couldn't get in because of IV or spread, that's your second chance at an entry. Comes back down, fails this area of support here. Comes down and tests this again and does what? Comes right back up and fails at this. So it's doing kind of like a seesaw here, right?\n\n[03:50] Josh: Yeah.\n\n[03:51] jason murray: Right. This is where people get chopped up or where people have a hard time. So you mark your your points here. My point wasn't up at the very top. So if I mark mine, my points are here. Right?\n\n[04:04] Josh: Mmhm.\n\n[04:05] jason murray: For my short. If you're coming down here, remember the 1030 area, 1033 I told you about before? Long last week, week before last on MU. Guess where it held?\n\n[04:13] Josh: Yeah.\n\n[04:17] jason murray: 1030. It's a 1028 to 1033 held it very nicely.\n\n[04:24] Josh: Mm.\n\n[04:24] jason murray: And now we have what? An order block here. 15 minute.\n\n[04:28] Josh: Yeah.\n\n[04:29] jason murray: You can see the sellers up here a lot more, uh, clearly. And you can see the huge rejection area here. This is massive sellers, this red on top of red. Even somebody as colorblind as I am can see it's red. Um, so this is not your buy area, this is your short area. So if you wanted to know where your short is, it's there. It's not wait till it gets back here to support. Um, to try to get confirmation. So that's what you're doing incorrectly. Your add too short, or your short cover area, is where you're trying to enter. So where I'm covering, you're trying to enter, and that's not how you play it. So, the candles up here, it's hard to play. The volatility's super wild. I had closed my longs yesterday. Uh, for a small loss on my, um… Lotto play? For continuation, because at the end of the day, it did not hold the previous close. And we had what? Still below gap. One, two gaps here, right? So if you come out to your one hour, you see the gaps?\n\n[05:31] Josh: Mm-hmm.\n\n[05:33] jason murray: Where is it rejected day? Right around the gap area. And right now, it's forming another topping formation here. So your short area now is down here. So previous support is now resistance confirmed, and now it's compressing, or what we call dampening volatility, to try to find some type of range. Between here. Let me draw for you so you can see them. We'll find some type of range between that 1028. And kind of this area here. See how you got all this little mess here?\n\n[06:08] Josh: Yeah.\n\n[06:08] jason murray: Kind of here and here. This is more of your accumulation area than your short area. If you're going to play a bounce. So, it's… this right here is just change of perspective on how you see it. You're looking for confirmations on shorts. When your confirmation is up here at resistance. So see the massive resistance. This is where doing your homework is important before you trade a stock. So, if I come in here, you don't have all of this, but if you notice. Here these are only 2 candles in to today on the 1 h chart. So you have all of this over here already. So if you've got 1, 2 gaps here and in a gap that is never closed up here, then you know this is your key area. Your flip zone is what I call it in the chat. So if we can get above that area, it's a flip zone long, and I would actually be long if we get a one hour candle close above there. We're coming into your accumulation zone right now. But again, this is, this is hands off, um, right now, just had earnings. It's going to take, it's not even Euro closed yet. So this is gonna take past your close, get full US market volume. Uh, to play the stock. Unless you played a resistance rejection here at Gap. Which was the play this morning?\n\n[07:32] Josh: Mmhm.\n\n[07:33] jason murray: So what you need to do is let this one play out, let it fill out. It's zone and it's likely to be somewhere in here or start accumulation zone up here. So remember how we drew bands to help you because it's what you were used to? It's either going to stay in this accumulation zone or in this one.\n\n[07:51] Josh: Yeah.\n\n[07:55] jason murray: And I like it. I mean, the guidance was great, earnings was great, but the chart itself is not signaling long or short. Remembering what I told you guys yesterday, that we're dampening. Dampening simply means this is going to go back and forth to pull the volatility out. Dampening means to lessen the move or lessen the blow. Depending on what you're using. In this case, it's less than a move, and it's been really choppy, it's been really ugly.\n\n[08:16] Josh: Mmhm.\n\n[08:23] jason murray: At the end of the day, unless you're in stock, you're losing on the stock a lot of times or selling. Premium. So, I'm not a big fan of purchasing this here. Um, I do like it around that 1033 area. I would have taken calls there. But other than that, I wouldn't. So, and it would have been just a scalp. Let's go over Dale real quick. No, it wasn't Dale, it was Meta that you said.\n\n[08:51] Josh: Yeah.\n\n[08:52] jason murray: Let's go over Meta. All right, so Meta, look at my zones here. They're already drawn out. I already have this. I've been playing this. I have a stock position in this long. So I hedge this and these are my hedge zones. So my accumulation is here. My cell's here. Right now, you could technically put a line a little lower. Um, around in here. See how there's a little gap here? It's baby gap.\n\n[09:20] Josh: Yes.\n\n[09:20] jason murray: And then, we're at the bottom here of this zone. It's rejecting the bottom of resistance, which means the balances are weak. And again, it's playing that dampening mode here. And so we sell premium against the stock. Uh, to collect that premium. It's still in a nice uptrend here. I don't know if I get a 4-hour on this, but I'm gonna go to TrendSpider. See, we're still in a nice 4. Uh, trend line. We got one going down and it continues to try to break. And we got a massive trend line here going up. So it's coming to an inflection point. This is going to make a move likely next week, um, as early as tomorrow. If it comes out of this zone, you got two areas of interest. Hopefully you can see this. One here. And one at the top of the gap. See that?\n\n[10:14] Josh: Mm.\n\n[10:15] jason murray: All right, so 680, 615. Um, right now, I want to see it above that 6, or excuse me, 740 area, and I want to see it close basically above where we are right now. At least 730 would be better. I do. If I'm in stock, I don't have to worry about premium bleeding away. But it's not a cheap stock to own. It's very expensive. So as long as it's below this gap here, which is your key. I don't know if I can even draw an arrow. Yeah, I can still draw an arrow. As long as below this gap here, you're good to go. As far as, like holding the stock. But you can't add to your position. So you really need it up here somewhere. I'd like to see, like I said, above 730. Kind of in this area here. And it'd be nice to start filling this gap to the right side. Remember, these get passive flows because they're what they call MAG7, so at the end of the day, I'm not worried about it dying unless it breaks a triangle. If it breaks a triangle, I just go short. Pretty simple. So meta is right there again. It's hard to play this. Spy calls or accused calls this morning. I called out, easy scalp here. Nice rejection. Um, as well. So if you see here, nice play this morning, got a little pop and straight into this resistance zone here. And straight back down. If you notice, I already have my all clear zone up here marked. And, uh, ready to go. So, if it gets back above there, I'm all clear and I'm going long. If it doesn't. I just stay short, play the calls to the long side. And like I said, for you guys and gals, you can play it both ways. We didn't quite get to 745. We got to 744. You see there.\n\n[12:04] Josh: Mmhm.\n\n[12:04] jason murray: So, we only got a dollar out of it, which is really 50 bucks only, which kind of sucks, but… You get what you get, and then it's a lot better play on the way down on the rejection. So you have to decide what you're going to play. If you notice. So here. Remember how I tell you to pick three stocks? Right there is my resistance zone here. So if it breaks I can go to 745. That was my key. To get an extra dollar to go up this higher zone. But it rejected at the first zone. So that's my take profit one. Take profit two, and this is my all clear, which would be buy higher, which kind of sucks, but that would be where we are. And that's only us expecting to fill this ugly wick.\n\n[12:52] Josh: Mm-hmm.\n\n[12:52] jason murray: So, in this case, it's not happening. So, again. This is not your buy zone. This is your sell zone. What we call take profit. Now, some people will be like, hey, I need a short. No. You're coming into what? Support. So this is where you close shorts, not open them. So, right here at 737, that's your zone to close. And you can keep your runners to see if you can get an extra buck, right? Kind of like the same play here. Take your profit here. Keep your runner. See if you can get an extra dollar. If you can't, then you just stop out. Same thing here. Cover. Second cover or take profit one, take profit two. But your zone to enter is right here. This is your short zone. Or we call take profit. Okay, so don't wait until the play is over to try to enter the play. You have to have your zones marked and ready to go. Let's go over NVIDIA, because NVIDIA hit 230 today. And watch the price action here on Nvidia. See this cell zone?\n\n[14:08] Josh: Yeah.\n\n[14:08] jason murray: Kind of kind of red, right?\n\n[14:11] Josh: Mmhm.\n\n[14:11] jason murray: So what's an easy play? Sell the 2 32 50 calls and buy the 2 37 50s.\n\n[14:14] Josh: So…\n\n[14:19] jason murray: Right? Super easy to play.\n\n[14:21] Josh: Hmm.\n\n[14:24] jason murray: So what is it doing right now? It's bouncing off a previous day close. And so is that my short zone or my take profit? It's my take profit on shorts, but it's also an entry long.\n\n[14:33] Josh: And take profit.\n\n[14:38] jason murray: What are we looking for? Back to 2:30. It has to take profit one. Take profit two. Take profit three. And then you have to go to the one hour to see your clear zone is way up here. That'd probably be better on the four. Yep. So see your clear zone up here? This year, all clear. On a 4 hour.\n\n[15:05] Josh: Hmm.\n\n[15:05] jason murray: So until you get above there. You're only scalping. Tracking so far?\n\n[15:17] Josh: Yeah, it makes sense.\n\n[15:19] jason murray: Alright, let's go through another one, and I want you to walk me through it as we go through it, okay?\n\n[15:24] Josh: Mmhm.\n\n[15:24] jason murray: I'm gonna still drive, since you're recording, but also walk me through it. This is one of my favorite plays. As you can tell, I already got my all clear zone marked right.\n\n[15:34] Josh: Mmhm.\n\n[15:35] jason murray: Okay. Where's my take profit? Hopefully you can see this pretty obvious.\n\n[15:41] Josh: Okay. It'll be…\n\n[15:48] jason murray: Kind of already marked, kind of already marked for you, right?\n\n[15:49] Josh: Let's see.\n\n[15:53] jason murray: See that?\n\n[15:53] Josh: Hmm.\n\n[15:55] jason murray: Yep. So now we're coming into a short zone, or are we coming into a support?\n\n[16:02] Josh: Um, support?\n\n[16:04] jason murray: All right, let's mark it. Where's it at?\n\n[16:09] Josh: uh… like, 404?\n\n[16:13] jason murray: Remember I told you to find the big ugly candle or the big gold one? Here we go. There's the ugly candle. Kind of matches the real gold candle where it rejected before it came back above. So guess what we did yesterday? We sold. Our position. Right? My long-term position, I took off half. Uh, my short term position I took off all. Why?\n\n[16:42] Josh: Um… Just to see if it'll touch the take profit.\n\n[16:47] jason murray: No. So we had a we're going into. Big data, right? And we have Micron earnings after the bell, so I'm like, if Micron takes off and Amgen is a. Um, biotech, then it's gonna fly, right? But if Micron doesn't take off. and Amgen is biotech, then what's going to happen? It's got to come back to support.\n\n[17:13] Josh: Down.\n\n[17:16] jason murray: It's not going to sell off completely, but it's got to come back down here. So I've got a 404 and a 412 buy zone, right? These are my buy zones. This is my all clear for longs. To here, and then we get all clear back up here.\n\n[17:36] Josh: Hmm.\n\n[17:36] jason murray: Remember how I told you I wanted 440? I don't know if you remember that conversation, but I wanted 440. That's where I want to be. But we have to get clear first, which is at 4:30, basically. See this mess right here?\n\n[17:50] Josh: Yeah.\n\n[17:51] jason murray: There. Big ugly candles where we pull back to. And how do we know what's going on? Because it what? Gapped down on a daily. And now it's a lot easier to see right here. Right now I feel like I'm open up the cheat sheet right. See how we know now?\n\n[18:13] Josh: Yeah, square.\n\n[18:15] jason murray: Yeah, very easy to see. Came down. Held support down here. Made a support line, so we had buyers, so we had to push it up. Held this support. Came up to the top of the gap, went through the baby gap. Couldn't get to the big boy. First rejection has to bring you back to where? support. Ugly candle, bottom of the gap, test, bounce back up, retest gap. Okay, so likely sometime next week, this could retest a gap. As long as it doesn't just fall through.\n\n[18:55] Josh: Mmm.\n\n[18:58] jason murray: So you got a bearish engulfing here, you got a topping formation here on the daily for me, at the gap. And so now you've got to come down. The only way to erase this is some kind of news that comes in. But as far as charts go, this is definitely a sell at this point. Okay.\n\n[19:16] Josh: Mmhm.\n\n[19:17] jason murray: Very clear signal. Right. Let's go over spy. Kind of easy to see what's going on here, right? OK, it's coming back to test what 760. There we go. resistance. And where? We're below the gap, right? Is this a baby gap or a big gap?\n\n[19:50] Josh: It's a big gap.\n\n[19:52] jason murray: Yep. So this is what we call a gap what? Got Phil.\n\n[19:56] Josh: Gap up. Oh.\n\n[19:58] jason murray: A gap failure. So this has to come down here. Hmm. Okay. 760 to 758. How much is your take profit on shorts? How do we know this is a short? Remember I told you guys earlier, last, late last week, early this week, stay short, stay short. Why? Because the rates are going to cause repricing in the stock market. You can't have rates this high. And, not rates are up ten times what they were in 2021. It's 2026. It's only been five years. We have a global bond sell-off, as they call it on Trading Economics, and when they posted that today, that lets me know that we're reaching a period to where we're reaching a top on rates short-term. Umm, which just happens to coincide with what?\n\n[20:48] Josh: Mm.\n\n[20:51] jason murray: support here on the market, and guess what we're going into? October, which is typically a rough month in the beginning. And a very good month towards the end, going into what they always refer to is a fat man rally or Santa Claus rally. Right.\n\n[21:09] Josh: When you say rough, you mean like… Oh.\n\n[21:13] jason murray: Ugly.\n\n[21:15] Josh: Oh.\n\n[21:15] jason murray: Yeah, not good. Yeah. Rough as in not, not favorable. Yep. So, kind of cool, kind of not cool, but very easy, very clear signals. So, let's go to the tenure, and then I'm going to give you the driver's seat to, um… Kinda like, show me what you learned. Right, here we go on rates, right?\n\n[21:38] Josh: Mmhm.\n\n[21:38] jason murray: Let me go out here to the, uh… Higher time frame. Oops, need one more. Right, so we started drawing the monthly chart here. We as in me, myself, and I. All right, so inflection point is right where that big arrow is. And we are above or below the inflection point.\n\n[22:01] Josh: Both.\n\n[22:02] jason murray: Yeah. So let's count it out here. We got a bottom here back in March. And in less than 6 months, or right at 6 months, we're up 125 basis points. Is that a lot?\n\n[22:19] Josh: It's huge.\n\n[22:21] jason murray: Massive. So it's repricing everything. Right, so this is a inverted hammer, right? Inverted hammer signals possible top. Gap here. So if we fill this gap down, what happens?\n\n[22:40] Josh: It's a gap fill.\n\n[22:42] jason murray: And we got to come back into that 5%. Is it a big gap or a baby gap?\n\n[22:48] Josh: Um, looks small.\n\n[22:50] jason murray: Yeah, it's a baby gap. So baby gaps are not as important as massive gaps. Okay. So this one's not that important, but it is important. It could cause us to allow markets to cool somewhat. In other words, we could get a rally going into the end of the year into what, event do we have coming up?\n\n[23:14] Josh: Um, at the end of the month is, um, midterms.\n\n[23:18] jason murray: Yeah. So do you think people like Republicans right now?\n\n[23:23] Josh: No.\n\n[23:23] jason murray: Even Republicans don't like Republicans. Yep. OK, so that's the key. If Republicans don't like Republicans right now. then it likely flips control, which makes the US a divided nation again as far as control. But it doesn't change policy. Policy right now is what repricing the capital. So, with all that being said, now that you've had your, uh, college-style lecture, uh, I'm gonna turn over the mic to you, so that you can actually show me, uh, a setup on a couple stocks, and walk me through, so I understand you learn. Very similar to what we did when you first started. Except for this time, you should be able to give us a little more clarity than you did the first time. So, I'm gonna go ahead and stop my share. Oh, actually, I'm not sharing anymore, huh? Yeah, I'm not.\n\n[24:24] Josh: You see? Do you see my screen?\n\n[24:31] jason murray: Yep. Let me turn this so I can see your screen better.\n\n[24:33] Josh: Alright, well…\n\n[24:37] jason murray: Where's my phone? Did you fall asleep during the lecture? All right, let's go over to Apple.\n\n[24:43] Josh: No.\n\n[24:45] jason murray: So did you kind of already have it pulled up? Rawr. Cool. There you go. All right, let's take off your indicators. Bruno? And let's draw some lines. Let's go to a. Let's take your, watch list off. Completely. And let's see what you know.\n\n[25:20] Josh: Alright. So, let's see on the weekly. Hmm… I'm sorry on a daily. Um, on a daily… Um, over here, it rejects… it rejected a lot, so that'll be… Um, the point where I see that a lot of sellers are…\n\n[25:48] jason murray: What's that called?\n\n[25:50] Josh: Um, is it sense? Resistance?\n\n[25:57] jason murray: Well, a double top.\n\n[26:00] Josh: Oh, because, um, this right here, or over here, unless…\n\n[26:05] jason murray: Because you had a point on the chart that's equal, that wasn't able to push through. Yep. So is that important?\n\n[26:16] Josh: Yeah, because that indicates, um, that I failed to make a new high.\n\n[26:19] jason murray: Okay.\n\n[26:21] Josh: So…\n\n[26:21] jason murray: Okay.\n\n[26:23] Josh: It's likely to go short. So then, yeah, that's that on the hour… I mean, the daily. I'll keep looking. This will be an area of support that's right above. Um, offer this candle, small gap.\n\n[26:44] jason murray: Okay.\n\n[26:48] Josh: I'll put that there. Um, and then I'll go to, like, the lower time frame. Mm-mm-mm-mm. Put this up right here. Um, okay, so… now… I would say this is another area of resistance.\n\n[27:25] jason murray: So how do we play this?\n\n[27:28] Josh: How do we play as I'm going?\n\n[27:28] jason murray: Yeah, you can draw charts. You can draw charts all day in the lines. That's cool. But we got a double top on the daily.\n\n[27:34] Josh: Okay.\n\n[27:37] jason murray: What are we doing?\n\n[27:41] Josh: Um, it's coming to this point of support right here, so… If it doesn't follow through, then we're going to look for a bounce to this level and then another one to right here in between 338 to 340.\n\n[27:56] jason murray: So we have the ability to scalp long. But we have no ability to take on new long positions that we're swinging, right? Because we have a double top. So.\n\n[28:14] Josh: Explain that again.\n\n[28:16] jason murray: A double top. On a chart.\n\n[28:18] Josh: No, I know what you said, so when you said the ability to go long, but not…\n\n[28:19] jason murray: Yes.\n\n[28:24] Josh: Short, because of a double top?\n\n[28:27] jason murray: The ability to go long, but not the ability to swing long.\n\n[28:32] Josh: Mm.\n\n[28:32] jason murray: In other words, everything that we're playing, we're closing out same day.\n\n[28:37] Josh: Yeah.\n\n[28:38] jason murray: Thank you. Yep.\n\n[28:39] Josh: Okay, because the double, yeah, okay, now I understand what you said. Okay.\n\n[28:43] jason murray: Yep. So that's the key. Let's go to another chart. So I know Apple is what? A big part of the NASDAQ, a big part of the SPY, and a big part of the DAO. Right? Let's go to. Let's go back to Nvidia.\n\n[28:55] Josh: Hmm?\n\n[29:07] jason murray: Alright, let's see what's going on. Let's go to the weekly here, you're.\n\n[29:22] Josh: Um, yeah, it's coming close… well, it was basically at the… Top at 2:30.\n\n[29:30] jason murray: So, it's starting to do what?\n\n[29:33] Josh: Um… Showed some resistance at that point. Because it reached here to 33, so…\n\n[29:38] jason murray: Yes.\n\n[29:42] Josh: Now we're starting to, like, fight. Um, to see if I can make a…\n\n[29:46] jason murray: So if we… A new high, right?\n\n[29:49] Josh: Yeah.\n\n[29:51] jason murray: So if we can't get above 235. Then this is another one where we can only swing. If it's above that point, we can't swing, we can only take what? Scalps.\n\n[30:05] Josh: On the, um… on the… intraday, or…\n\n[30:09] jason murray: Yeah, entry day only, so we're closing before the end of the day.\n\n[30:14] Josh: Got it.\n\n[30:15] jason murray: Microsoft?\n\n[30:16] Josh: But…\n\n[30:20] jason murray: I'm going somewhere with it. I want you to see it, but I want you to walk me through.\n\n[30:24] Josh: Mm. Um, I would say it already double-topped there, which led to this movement.\n\n[30:32] jason murray: Yep.\n\n[30:33] Josh: Now it's, uh… I don't know if this would be considered a double top, being that it broke past the handle.\n\n[30:40] jason murray: April, uh-huh.\n\n[30:43] Josh: But now it's below. So, I would say that around this area.\n\n[30:47] jason murray: Yes.\n\n[30:49] Josh: would be, um… the point that I want to look at. Like, 513, 514. to see if it could close above it, preferably above 519. to go…\n\n[31:03] jason murray: Yeah, you want, yeah, you want it above 520 at least. Let's go to Google.\n\n[31:21] Josh: Google, uh… Hmm. Also, over here would be… Um, area of support.\n\n[31:31] jason murray: Right.\n\n[31:33] Josh: Um, 320.\n\n[31:35] jason murray: Good.\n\n[31:35] Josh: Um, as of right now, I would say here. 365? Basically. Would be, uh, area of resistance. Um, it's kinda sandwiched in the middle. So… not really a clear indication. It would have to go above here for me to try to go along. So, here. Um, yeah, 380. And I would have to go…\n\n[32:06] jason murray: So this one looks, this one looks weaker than the other three already, right? Let's go to Tesla.\n\n[32:06] Josh: Below it. Oh… This one… Add a double tap here. went to that, um… Hmm, looks kinda weird. Alright, um… This would be area of support. Still holding from over here. Maybe like right there. And then… Yeah, actually. Okay. And then, um… I would say… The next big, um, resistance is somewhere… In here…\n\n[33:15] jason murray: So it's below gap and it looks worse than the others too, right?\n\n[33:19] Josh: Yeah, I would say it's right here, though.\n\n[33:22] jason murray: So go to your big green candle to your left. Before you get higher? Go to the left a little more. A little more. Way more. Yep. See that? See that gap? Is that a big gap?\n\n[33:31] Josh: This one? Yeah.\n\n[33:36] jason murray: Is it below or above?\n\n[33:36] Josh: No. It's below.\n\n[33:40] jason murray: Right. So can we buy that one and swing it?\n\n[33:43] Josh: No.\n\n[33:45] jason murray: Alright, so you're starting to get the picture, the MAX 7 is what? It's very toppy right now, the market's getting weaker, rates are getting higher, so if we don't start getting some kind of relief in rates. Then what's gonna happen? The market's gonna go through a massive correction. So should we be looking to buy stuff right away every day?\n\n[34:01] Josh: Um… No.\n\n[34:08] jason murray: So we should be playing rejections more often than we're playing support bounces. Right?\n\n[34:17] Josh: Yeah.\n\n[34:18] jason murray: Right? That's a point of the exercise, but I want you to be able to see it when you're pulling it up. So I don't want you to get so much lost in trying to be a perfect chartist. Pick out the points on the chart. That make a difference and then talk yourself through it. This right here is below the massive gap there. What's the date on it? Oh, it's back in July or August. Has never recovered. Had two massive candles down. Still rejecting the same area. I don't want to play the stock. I'm moving to the next one.\n\n[34:44] Josh: Yep.\n\n[34:49] jason murray: Right? Let's go to another stock here that you might not trade a lot. Let's type in ZETA.\n\n[35:04] Josh: Hmm.\n\n[35:08] jason murray: What's going on here?\n\n[35:11] Josh: Coming to this area here again that I was back at 2024.\n\n[35:12] jason murray: Thank you. It's having a massive move up, right?\n\n[35:20] Josh: Yeah.\n\n[35:21] jason murray: It's more than doubled in the last, what? Six months.\n\n[35:27] Josh: Yeah.\n\n[35:29] jason murray: So should I be looking at what's going on with this one?\n\n[35:35] Josh: You said, should you be looking at?\n\n[35:36] jason murray: Yeah, sure. Yeah.\n\n[35:38] Josh: Um… okay. Yeah, because it jumped, um, in August.\n\n[35:40] jason murray: Okay.\n\n[35:47] Josh: So when you say, should I be looking at it, does that mean, like, research in the, like, what's going on with the company itself?\n\n[35:48] jason murray: So, fix this. Good. Yeah, I want to know, because I want to mark that mark up there around $33.50, and if it gets above that, then I want to be involved. You already missed the major move. Even though it was called out in the group, but now it's like, what are we going to do next? And so we want to know what's going on with it. So that should be your homework. What's going on with this stock. Cause that chart looks different than the others, right?\n\n[36:17] Josh: Yeah.\n\n[36:18] jason murray: Okay. Yeah, so let's take a look at that one. You want to take a look at another one? Yeah, let's type in IBM.\n\n[36:26] Josh: This one. Oof. It's like the opposite. Failed to make a, um, a new high.\n\n[36:42] jason murray: Let's go to the 10 minute. Now let's go to the 10 minute.\n\n[36:42] Josh: Around here. Yup.\n\n[36:49] jason murray: Whoa.\n\n[36:53] Josh: Alright.\n\n[36:54] jason murray: See a massive pump.\n\n[36:55] Josh: She's. Yeah.\n\n[36:59] jason murray: So when you see something that's in a downtrend right.\n\n[36:59] Josh: This…\n\n[37:03] jason murray: And you see a massive pump, what do you do?\n\n[37:08] Josh: Um… look into it.\n\n[37:11] jason murray: Okay. Yeah, you want to short that.\n\n[37:15] Josh: Oh, short the pump?\n\n[37:17] jason murray: Yeah, sure. Because now it's coming in well, now it's coming in the sport, but, like, these are things, like, where you're learning to fish, you gotta learn to fish. So if you see a name that you haven't seen in a while, like this morning when I got up. I'm like, what's going on with IB. Why is it doing a massive pump? Oh, by the way, it's coming into a massive resistance. Um, maybe I should short this at the beginning of the day.\n\n[37:46] Josh: Over here.\n\n[37:48] jason murray: Yes. So see how I came right up to that resistance line and got smoked?\n\n[37:54] Josh: Yeah, I'm gonna try it again. These two can…\n\n[37:57] jason murray: Yeah, now it's coming… now it's coming back into support. Now we're gonna see if it holds support. If it holds support, then we gotta do what? It's got a bounce.\n\n[38:05] Josh: Oh. Yes.\n\n[38:08] jason murray: Yeah, so we can play both sides. So this is an example of how I tell you we're going to play both sides. Maybe I'm called short here, but likely we can go the other way. So what happens is, once we get to that first take profit, we're looking to flip that trade to the other side. So this is where things get more complicated.\n\n[38:28] Josh: Okay. Yeah, I get that part. I think the part that I really got stuck at, specifically with MU today, is like, all right, cool, we have our support here.\n\n[38:34] jason murray: I'll send it back to you. The country. Good work, man.\n\n[38:43] Josh: um now we're looking for the next move right.\n\n[38:46] jason murray: Perfect.\n\n[38:47] Josh: So… for me, like, I would look for my entry on a 10-minute and a 5-minute.\n\n[38:53] jason murray: Go to go to MU. Cause you would likely make the same mistake there.\n\n[39:01] Josh: So I'll just replay exactly what I did and you'll see where I'm at. So… Um… I didn't trade the first 15 minutes, I was just letting the market do its thing.\n\n[39:10] jason murray: I think… Right.\n\n[39:15] Josh: It didn't really go below this one with this candle, so I didn't take it. The next 15, it went below there. I think the low for the day was right here, yeah. And then I was like, cool. So it went below the low for the 15.\n\n[39:22] jason murray: Okay. Thank you. Yeah. Yeah.\n\n[39:32] Josh: um… for the opening 15 minutes, and it went below this level that I marked here. So I'm like, alright, cool.\n\n[39:34] jason murray: I've been experiencing some discomfort in my throat.\n\n[39:39] Josh: I'm going in.\n\n[39:40] jason murray: I did it.\n\n[39:41] Josh: So I went in, and you can see where it's at now. So that's why I went in the chat, and I was just like…\n\n[39:47] jason murray: But.\n\n[39:48] Josh: Like, I don't know what I was… what I did wrong with that play. I felt like, you know, I was confident in it. I didn't see an order block.\n\n[39:50] jason murray: I'll be looking forward to that. Thank you very much.\n\n[39:55] Josh: On the other time frames, anything…\n\n[39:58] jason murray: But did you see that? Did you see the earnings report?\n\n[39:58] Josh: Um, it's actually a gap. Um… I didn't double check it.\n\n[40:07] jason murray: Yeah. So why would you play a stock that just had earnings without looking at the report?\n\n[40:08] Josh: No.\n\n[40:13] jason murray: That report was a massive beat. It wasn't a small one, it was massive.\n\n[40:14] Josh: Hmm.\n\n[40:18] jason murray: So, I would be looking for a way to buy this company right now, not a way to sort it. And in fact, that was my disposition, because I go through X this morning, like, super early, and a lot of people are gonna sort MU, and da-da-da-da-da. I'm like, probably not. Most of the time the guys are not very smart. So. When I look at MU, let me pull up my chart again.\n\n[40:43] Ifoma Pierre: So we are holding a position in that right now. What do we do? We just wait.\n\n[40:48] jason murray: Um, what, what position are you holding? Let's go over the position. But, like, here?\n\n[40:52] Josh: Um…\n\n[40:53] Ifoma Pierre: Yeah, pull up the pull up the the Robin. So you could see what you could tell them.\n\n[40:59] Josh: No, I could tell them it was a 10-5 expiration date at, um…\n\n[41:00] Ifoma Pierre: Yeah, thank you.\n\n[41:05] Josh: 10, 20. That was my… that was a contract, that's it.\n\n[41:08] jason murray: Hold on a second. You took what?\n\n[41:15] Josh: Um…\n\n[41:15] jason murray: 10… 10-5? So 10-5 expiration, so Mondays?\n\n[41:20] Josh: Yeah, yeah, um, next week. Next week… that's… that's Monday?\n\n[41:24] jason murray: All right, cool.\n\n[41:25] Josh: Yes.\n\n[41:26] jason murray: Yeah, let me pull up one of these accounts for you. So I can get a live picture there. Hold on, I'm having to log in. To one of my brokerages here. Uh, let's see here. MU. So, you got 10-5 expiration, which is 4 days away. And what strike price do you have?\n\n[42:04] Josh: 10:20.\n\n[42:06] jason murray: And I'm assuming I put…\n\n[42:08] Josh: Yeah, good, sorry.\n\n[42:12] jason murray: Um, what'd you pay for it?\n\n[42:14] Josh: Oh… I don't know if you can see my screen because it's on another screen. Um, I paid… Does it tell you in the, um…\n\n[42:36] jason murray: Yeah, so cost basis at the bottom.\n\n[42:42] Josh: Oh, I bought it at, um, $15.79.\n\n[42:43] jason murray: Okay. Oh, wow. So, if you paid $16 for it. And it's a 10-20 strike. Where does MU have to be for you to make a profit?\n\n[43:01] Josh: um… 10… 10.\n\n[43:07] jason murray: Net, 10:04. So 16 minus 10 20 is 10 0 4. What was the opening price?\n\n[43:17] Josh: Opening price was… 6.58.\n\n[43:28] jason murray: Oh, I was talking about further stock. It's 1054.\n\n[43:31] Josh: Oh, oh, sorry.\n\n[43:34] jason murray: So it's above opening price, and it's starting to trend up. It's holding this red. Am I sure? Share my screen. Hold on a second.\n\n[43:47] Josh: What's up, Shannon?\n\n[43:55] jason murray: Can you see it?\n\n[43:57] Josh: Yeah.\n\n[43:58] jason murray: All right, so let's go here. See this?\n\n[44:02] Josh: Mm-hmm.\n\n[44:04] jason murray: Until that breaks… You're stuck. below opening price. So it's dampening. So let's take a look at it in unusual wells. Merry Christmas. So Spy is pumping the jam. Alright. So you got 10 fifties, the bottom or the top. You got some. Premium here is negative. I don't have anybody that short dated, though. Alright, so your concentration right now is right here. In the middle.\n\n[45:13] Josh: Mmhm.\n\n[45:19] jason murray: So, if I go down here… You got less than a 20% chance to be right. And if I'm down here, it's even worse. Daily gags. The camera… Volume, contracts, calls… 980 put. We're only 70 cent though. Thousand plus. So yeah, you're gonna have to watch this and and see if it's gonna break here. So that means you entered down here somewhere.\n\n[46:12] Josh: Yeah, I entered on… Basically, at that… at 10.36. We're, we're.\n\n[46:19] jason murray: So, this is… This is likely to come up here. These contracts will likely go to 8 bucks, maybe less. And if it rejects here, it can come all the way down here. But you may have to wait all day to see if this works or not. So, as long as it's holding this candle right here… Your puts are in trouble. So I can tell you it's not going much higher, but that doesn't mean your puts are going to be valuable. If that makes sense.\n\n[46:57] Josh: Yeah.\n\n[46:59] jason murray: Because you need to be… when you buy options, you need to be right on the time and the price, and if you gave yourself basically 48 hours to be right. And… you're gonna have to, uh… Be right in a major way. And so, with options… On a company that just reported, you don't want to be involved right away unless you're playing a zone that I called out earlier that I showed you. The rejection zone is this is a support zone here.\n\n[47:32] Josh: Mm-hmm.\n\n[47:32] jason murray: Your rejection zone, if you remember, is back up at the gap. Which is right in here somewhere. So I think we're looking at the 15 minute, yeah. So it's below previous day close. It's below the open that favors you. But until it breaks that candle, it's just marking premium. You may actually make money on this trade. I'm not saying you won't. But you won't know until later on, and I don't know how much premium you're gonna burn on that way down. As far as counting the clock down. I don't know if that makes sense, because if this thing bounces right here, it's going to come up up to that red zone.\n\n[48:06] Josh: Yeah.\n\n[48:12] jason murray: Which is $8 higher, which is likely $400 off your contract. So, again… If you're playing earnings, you've got to play the rejection zone. Which is up here. You don't wait till it comes down here into support. So this is not your buy zone for shorts, which is likely where you bought. That's your buy zone for calls. So you had the right thought process just flipped around backwards. You had the right thought process as far as taking action, but you had the wrong. Um, action. That's a buy zone, not a short zone. And on the 1 hour, it challenges this gap. If it breaks this gap. Those puts are going to zero. My inclination this morning was to buy calls on this, uh, later in the day. Because the report was so good. I mean, the report on that stock was great. So. Yeah, if you're taking a big boy trade like this, you might want to message me before you take it. This isn't like a, uh… A small trade to take for your account size. And MU has not exactly been your friend. If you remember.\n\n[49:38] Josh: Yeah.\n\n[49:40] jason murray: Yeah, that's why we were trading, like, indexes. So you're gonna have to… I hate this stupid thing, but… So, if this holds right here, you could be good to go, but you're gonna have to keep an eye on this, and you're gonna have to take the risk. But right now, it's inching up. So, do you see my screen still?\n\n[50:02] Josh: Yeah, I see your screen.\n\n[50:04] jason murray: This right here is your moment of truth. If it continues to reject, you're going to make money. Because it should come back down here, and then back down here. I don't know how much money you'll make or if you'll make, you know, most of your money back that you lost. But, um, it'll turn out in your favor. If it stays below 1054. and gets down to 1033, and takes this area out, then you'll make a lot of money. But if it doesn't, you're gonna lose a lot of money.\n\n[50:32] Ifoma Pierre: Where does it need to be for us to just break even, like, just to come out?\n\n[50:38] jason murray: It depends on how much premium's being burned, because he only has a 2-day contract. This contract's only good for tomorrow and Monday. The good part for him is, is that, you know, he has earnings, um, that just happen. So you can have an outsized move. Let me see what the tenure is doing to. It's not a trade I would have taken. Nor is it a trade I called out. Um, treasuries are actually showing favorable for stocks right now. Yen is not showing favorable, so… oil and gas is not showing favorable. So… There's still favor in short. So, yeah, I mean, it's… it's coming down. We just need to break that support. It's just the wrong entry and the wrong play. Um, you're right about taking action, no, that was an action point, it's just the wrong action. Yep. That'd be a lot better to text me and say, hey, I'm thinking about taking MU. Like, hey, they just had earnings and they blew it away. Maybe leave it alone for a little bit. Because I literally told you, I was in a contract yesterday, too. on the long side, and I was planning on swinging it, and I looked at it, and I was like, no, it's not breaking my point, I gotta get out. So… I had a lotto, but I only lost, like, 100 bucks. I was planning on swinging it into earnings. But a lot of those different than taking, you know, 40% of your account size into a trade is crazy. So, let's do this. Um, I'm gonna put an alert on here. Uh, to see what the stock does, to kind of, like, help you along throughout the day. Um, I have a ton of meetings, but I'll have the alert set where I can text you. Um, but let's not trade, you know, 40% of your account at one point. You can always trade, you know, indexes and things like that, or something that has, like, you know, a lower premium. How much money is in the account, Josh?\n\n[52:42] Josh: Like two.\n\n[52:44] Ifoma Pierre: Yeah, we got we we. And and that's the next thing, too. I think I think we're going to have to like cause one of the things like we we've been losing. A couple. And, like, how you were able to analyze this trade, I think we may have to have… The ones that we… lost on what happened. Because obviously, if we didn't bring this up, we would not have learned what we learned.\n\n[53:09] jason murray: Right.\n\n[53:09] Ifoma Pierre: What we thought, so I think we need to start analyzing these shit, because we've been, we've been taking a beating. Um… And yeah, so it's it's it's down. It's down to 2. Now we go up. Now it's down to 2, and. you know. So it's. We need to start analyzing what we do now.\n\n[53:25] jason murray: So, how much… how much cash do you have to invest?\n\n[53:32] Ifoma Pierre: Wait a minute.\n\n[53:32] Josh: Oh.\n\n[53:33] jason murray: On the account like how much cash is in there.\n\n[53:34] Josh: I left a note.\n\n[53:35] Ifoma Pierre: Oh.\n\n[53:36] Josh: Hold on.\n\n[53:43] Ifoma Pierre: It's about 1,000 or like 1,800 or something like that, I don't think.\n\n[53:46] Josh: 500.\n\n[53:47] Ifoma Pierre: Five.\n\n[53:50] jason murray: So you still have enough to make another trade. On something, but you have to enter it. the right way.\n\n[53:58] Josh: No.\n\n[53:58] jason murray: Before we get off, let's see if there's anything moving. All right, VIX is coming up, that's good for puts. See, I was challenging that line right there.\n\n[54:15] Josh: Yeah.\n\n[54:20] jason murray: You want to pray that it goes the other way. Right now, it's not going the right way. See how this is going here?\n\n[54:45] Josh: Mm-hmm.\n\n[54:46] jason murray: You want to buy or short? or buy or sell.\n\n[54:50] Josh: Um… bye.\n\n[54:54] jason murray: Yeah, 'cause it's coming in resistance. So you can see that, right?\n\n[54:59] Josh: There.\n\n[54:59] jason murray: That's the exact opposite of what you did with MU. MU was doing this and you went in and shorted it. So that way you can see it so that you can see. That you're right, but you're not right. Look at this. That's my… all clear, right?\n\n[55:19] Josh: Mm-hmm.\n\n[55:20] jason murray: Coming right into support. If it breaks that support, then it's coming down, right? Or if it doesn't, it's coming back up. So you saw that. So that means you can see. What about this?\n\n[55:38] Josh: It toppled after yesterday. Um, making a new hire.\n\n[55:45] jason murray: This is resistance, right?\n\n[55:48] Josh: Yeah.\n\n[55:49] jason murray: So it could bounce tomorrow, right?\n\n[55:52] Josh: There.\n\n[55:54] jason murray: Do I want to play it? It's not clear there.\n\n[55:56] Josh: No.\n\n[56:01] jason murray: Buy or sell?\n\n[56:04] Josh: Um, so…\n\n[56:08] jason murray: Yeah, leave alone. The signal was long, right? Massive uptrend.\n\n[56:21] Josh: Mm-hmm.\n\n[56:21] jason murray: And now we're coming into a, cell zone. Let's just take profit. You shouldn't be shorting that either, because it's in what? An uptrend. Alright, so we're at 1050. We're holding the flip zone. We're really gonna need this to come sell off at the end of the day. It's coming up to test previous, uh… To the test, they open at 10:54. See that?\n\n[57:05] Josh: No.\n\n[57:07] jason murray: The good part is it's still rejected in this area. The bad part is, is this is a… Hammer. And the support. So you wanted to break this. This could happen for you. I pray it does. But it's not the right entry. It was the right action, but the wrong side of the action.\n\n[57:33] Josh: Mm. So when it hits the… when it hits the support in a time like that, then that would…\n\n[57:36] jason murray: See you soon. Go ahead.\n\n[57:42] Josh: mean to just watch for the next candle and not act on that candle or.\n\n[57:47] jason murray: Yeah, wait for it to make this this hammer right here. That's a hammer. That's an indication. See the hammer the other way.\n\n[57:55] Josh: There.\n\n[57:56] jason murray: Indication down. So I take the hammer this way down. Then I got confirmation right here, when it failed here, for short. But then see how it's retesting this previous support. If this breaks above previous support, this thing's going higher. Your puts will go to zero. If this breaks this trend line here and comes down. And this likely takes all day, which sucks because it's. It's what, 12 over there? It's going to be two before this resolves.\n\n[58:28] Josh: Yeah.\n\n[58:29] jason murray: Well, the bad part is, remember on the contracts, there's this thing called Theta? Well, you lose, you lose even though you're not losing.\n\n[58:34] Josh: Yeah.\n\n[58:39] jason murray: And so I don't like this short, but it could play out. But you're gonna have to watch it like a hawk. See it right there?\n\n[58:49] Josh: Mm-hmm.\n\n[58:51] jason murray: Yeah, I mean, I'm praying that it comes down for you. If it gets a 3% down day, you're going to make some money, hopefully. There we go. Testing it.\n\n[59:01] Josh: Mmhm.\n\n[59:08] jason murray: Um, so let's have a game plan for next call. Um, I'm gonna mark this on my chart, so I normally watch Micron anyway. But next call, um, I want you to have your trading activity out, Josh. Oh, I don't even have my camera on, sorry. I had turned it off. I want you to have your trading activity out. All the things that you've made money on, all the ones you lost on. But the five biggest.\n\n[59:36] Josh: Losses and wins?\n\n[59:38] jason murray: Yeah, the five biggest, and that way we can go over them.\n\n[59:39] Josh: Okay.\n\n[59:44] jason murray: Okay.\n\n[59:45] Josh: Alright.\n\n[59:45] jason murray: But, um… The positive is you're taking action. The thing is, you have to take the right action. So again, support bottom of a gap here. See this?\n\n[59:59] Josh: Mmhm.\n\n[60:00] jason murray: They didn't even touch the gap. That's a… that's a bounce play, not a… not a negative. The cool part is, it could come give you a chance to get out. So if it gets there… remember I told you 1033?\n\n[60:13] Josh: Yeah.\n\n[60:13] jason murray: It's not… it's not arbitrary. See how this matches up across the screen?\n\n[60:18] Josh: Mm-hmm.\n\n[60:19] jason murray: Yeah, it's not like I throw arbitrary numbers out. So if you get a $15 drop here, take advantage of it. Whatever you can get out of it, take it. Because it's not the right entry or the right play.\n\n[60:31] Ifoma Pierre: Yeah.\n\n[60:32] jason murray: Yeah, so pray you get favor because right now that, I mean, that's not a strategy, but right now, I mean, that's where you're, where you're at.\n\n[60:33] Ifoma Pierre: Let me…\n\n[60:33] Josh: Yes.\n\n[60:43] jason murray: Um, but yeah, let's do that. What I'll try to do… well, I can't do it on Saturday, because I'll be in, uh… we're opening a church Saturday. Um. I'll text you some things, like some examples of charts. Um, that way you can see and you can talk to me about the actions you would take.\n\n[60:57] Josh: Mmm.\n\n[61:02] jason murray: Kind of like a quiz. And that way, you can take that quiz without, like, anybody looking over your shoulder. And let us know what you would play. This will let me know if you're actually learning.\n\n[61:14] Josh: Okay.\n\n[61:18] jason murray: Okay.\n\n[61:20] Josh: Sounds good.\n\n[61:20] Ifoma Pierre: Thanks, Will.\n\n[61:22] jason murray: Alright, well, I mean, it's not all lost. I mean, at the end of the day, like, this could still turn in your favor. You're just gonna have to watch it.\n\n[61:29] Ifoma Pierre: I got a…\n\n[61:29] jason murray: And you're gonna have to be really willing to make an action. Go ahead.\n\n[61:34] Ifoma Pierre: No, see, I had about 2 more big prayers that I was saving for a big occasion. So I'm gonna use one of it for him today, you know.\n\n[61:44] jason murray: Oh.\n\n[61:44] Ifoma Pierre: I got one in my… I got two in out of pocket. I'm gonna use the one in the right side today, so we'll see.\n\n[61:50] jason murray: Well, prayerfully, you know. They get some favor, it's not, like, all lost, this isn't, like, a great play, but it's not, like, you know, broken yet, so… And you've got a ton of resistance up here, so it's in your. The. Alright, guys.\n\n[62:08] Ifoma Pierre: Appreciate you, brother.\n\n[62:08] jason murray: Enjoy your weekend. Great hearing from you. And do your homework, Josh, before you get into the market. Send me your level… send me your levels you're actually gonna… not just the levels, like, on your chart, but send me what the action is you're gonna take.\n\n[62:15] Josh: Oh, well.\n\n[62:22] jason murray: All right, and that'll help us to know that you're learning.\n\n[62:27] Josh: All right. I will. Thank you."
+  },
+  {
+    "call": {
+      "title": "Sector Flow, Macro Backdrop & Mag-7 Health Check",
+      "date": "2026-09-24",
+      "duration": "42:36",
+      "mentor": "jason murray",
+      "students": [
+        "Josh",
+        "Ifoma Pierre"
+      ],
+      "source": "Jason's Zoom cloud recording transcript (GMT20260924-150626). Timestamps are recording time; the meeting started ~4:50 earlier, before recording began. No video access (Jason hosted), so no frames."
+    },
+    "assignments": [
+      {
+        "id": "a1",
+        "task": "Break down the sector ETFs into their holdings.",
+        "detail": "Take the 10–11 sector ETF tickers from his sector-flow screen, put them into an AI chat, get the underlying holdings of each, rank the holdings by best in sector, then check their charts. Do 2–3 sectors a week, not all at once — the goal is to learn how the market is built, not to become an analyst.",
+        "for": "Josh",
+        "due": "ongoing — 2–3 sectors per week",
+        "at": "05:41",
+        "quote": "put them in chat and tell them to give you the underlying holdings",
+        "status": "open"
+      },
+      {
+        "id": "a2",
+        "task": "Learn to see the take-profit areas on a bounce (NVDA: take 1, take 2, take 3).",
+        "detail": "He marked three areas on NVIDIA's bounce and said being able to see these is part of the homework.",
+        "for": "Josh",
+        "due": "ongoing",
+        "at": "12:33",
+        "quote": "you need to be able to see this. This is part of your homework",
+        "status": "open"
+      },
+      {
+        "id": "a3",
+        "task": "Mark the key levels on your Mag-7 charts.",
+        "detail": "Support, gap resistance and rejection areas on each Mag-7 name — they move the market, so they are your read on market health.",
+        "for": "Josh",
+        "due": "ongoing",
+        "at": "22:08",
+        "quote": "you want to mark these on your chart, especially for the Mach 7",
+        "status": "open"
+      },
+      {
+        "id": "a4",
+        "task": "Study the short 'cinematic' stock piece Jason sends.",
+        "detail": "He'll send it to Josh before he posts it — a couple of stocks to pull up, tied to how tokenization changes markets.",
+        "for": "Josh",
+        "due": "when received",
+        "at": "37:19",
+        "quote": "I'm gonna send you a little, cinematic thing with a couple stocks",
+        "status": "open"
+      },
+      {
+        "id": "a5",
+        "task": "Hunt for downside candidates — names structurally broken by policy.",
+        "detail": "Look for stocks in downtrends because of Fed rate policy, administration policy or tax-code changes (his example: certain autos no longer 100% deductible). If you don't follow the reasoning, put it into an AI tool and have it show you the opportunities.",
+        "for": "Josh",
+        "due": "ongoing",
+        "at": "36:31",
+        "quote": "look for opportunities to the downside, things that are structurally broken",
+        "status": "open"
+      }
+    ],
+    "rules": [
+      {
+        "rule": "Set weekly goals, never daily goals.",
+        "why": "A daily goal makes a new trader feel pressure and trade on days when the setups are not the best.",
+        "at": "13:17",
+        "scope": "General trading mindset — not instrument-specific."
+      },
+      {
+        "rule": "Once you've made what you need, stop for the day.",
+        "why": "There's no reason to keep looking for trades after you've taken the house — play the next day and go do something productive.",
+        "at": "13:03",
+        "scope": "General trading mindset — not instrument-specific."
+      },
+      {
+        "rule": "Trade less, and keep trading effectively.",
+        "why": "He's giving more homework specifically so Josh trades less; after two or three good trades, stop.",
+        "at": "12:50",
+        "scope": "General trading mindset — not instrument-specific."
+      },
+      {
+        "rule": "Don't trade inside a trap zone (a gap 'hole' where price can't decide).",
+        "why": "Those zones eat your premium. Wait for the gap to break lower or pop above it.",
+        "at": "16:00",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "rule": "Don't play lottos right away — set them up (a 'constructive lotto').",
+        "why": "A lotto is set up at a support/order block where the area should hold, low cost and low risk.",
+        "at": "10:54",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "rule": "Because you're new, use the following week's expiration.",
+        "why": "Costs a little more, but gives the trade time.",
+        "at": "11:04",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "rule": "Seasonally, September expectations should be to sell, not buy first.",
+        "why": "Nothing on the September seasonality chart is green.",
+        "at": "07:15",
+        "scope": "!! SCOPE LIMIT: Jason's macro read on 24 Sep 2026 — a dated view of the rate/policy backdrop, not a permanent rule."
+      },
+      {
+        "rule": "A stock being in a structural downtrend doesn't mean you short it tomorrow — wait for a bounce, then take it back down.",
+        "why": "Shorting into the low is not the best move.",
+        "at": "35:14",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "rule": "Never bet against Microsoft except short-term.",
+        "why": "His long-term view of the company.",
+        "at": "16:38",
+        "scope": "Jason's stated view on one name (24 Sep 2026), not a general rule."
+      }
+    ],
+    "setups": [
+      {
+        "name": "Constructive lotto off an order block (NVDA)",
+        "trigger": "After a steep drop, price holds the safety area / order block and doesn't gap below it. Late in the day, take a low-cost call for a swing into the next day (he named a 225 or 222.50 call), targeting the gap around 222.",
+        "invalidation": "Price breaks the area ('if this breaks, no bueno').",
+        "timeframe": "4h / 1h",
+        "at": "10:25",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "name": "Trap zone — wait it out (NVDA 220–225)",
+        "trigger": "Only trade once price breaks down out of the gap hole or pops above the top (~225).",
+        "invalidation": "not given — the setup is to stand aside while price is inside the zone.",
+        "timeframe": "daily",
+        "at": "15:51",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "name": "No-buy zone until weekly close (MSFT)",
+        "trigger": "Above ~500 is a sell zone; 515–520 is no-touch, no-buy until Microsoft closes a week above it. Weekly 350–370 is an accumulate area.",
+        "invalidation": "A weekly close above the 515–520 zone changes the read.",
+        "timeframe": "weekly",
+        "at": "17:27",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "name": "Mag-7 market-health trigger (TSLA)",
+        "trigger": "Consistent closes above ~385 → Tesla goes higher and likely brings the market with it.",
+        "invalidation": "Back into the gap around 369 → can go back down.",
+        "timeframe": "daily",
+        "at": "22:06",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "name": "Structural-downtrend short on a bounce",
+        "trigger": "Name in a downtrend on every timeframe because of rate/tax policy; let it bounce, then play it back down (buy puts).",
+        "invalidation": "not given",
+        "timeframe": "all timeframes",
+        "at": "34:43",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      },
+      {
+        "name": "Consolidation range (AAPL)",
+        "trigger": "Buy zone at support until it isn't; resistance at the high from the 17 Sep tokenization announcement. Wait for a break out of or down from the zone.",
+        "invalidation": "not given",
+        "timeframe": "daily",
+        "at": "20:21",
+        "scope": "!! SCOPE LIMIT: 2026 stock options (this call, 27 Aug, 3 Sep, 17 Sep). Do not carry to ES futures or to the April 2024 options ladder/20% cap."
+      }
+    ],
+    "levels": [
+      {
+        "instrument": "unconfirmed — likely MU (see questions)",
+        "value": "1,060 / 1,069.73 / 1,072",
+        "meaning": "1,060 resistance zone right before the gap; ~1,070 (1,069.73) candle; 1,072 previous close. Major sellers above.",
+        "at": "08:51",
+        "scope": "!! SCOPE LIMIT: live mark on the 24 Sep 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "NVDA",
+        "value": "220.54 / 223 / 225",
+        "meaning": "Gap bottom ~220.54 (he marked 220.61 but thinks it's .54); gap around 223; gap continues to ~225. 220–225 = trap zone.",
+        "at": "15:20",
+        "scope": "!! SCOPE LIMIT: live mark on the 24 Sep 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "NVDA",
+        "value": "222 (gap) — 225 / 222.50 calls",
+        "meaning": "Constructive-lotto target and the call strikes he named.",
+        "at": "10:42",
+        "scope": "!! SCOPE LIMIT: live mark on the 24 Sep 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "MSFT",
+        "value": "500 / 515–520 (517) / 350–370",
+        "meaning": "Above 500 = sell zone; 515–520 no-touch until a weekly close above; 350–370 weekly accumulate.",
+        "at": "17:27",
+        "scope": "!! SCOPE LIMIT: live mark on the 24 Sep 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "TSLA",
+        "value": "315 / 369 / 385 / 397",
+        "meaning": "315 support; 369 gap (bearish if it comes back in); 385 where it keeps rejecting (consistent closes above = bullish); 397 (~400) gap resistance.",
+        "at": "21:53",
+        "scope": "!! SCOPE LIMIT: live mark on the 24 Sep 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "GOOGL",
+        "value": "343 / 320–315 / 300–288",
+        "meaning": "Below VWAP and below 343 resistance; should connect around 320/315; could come down to 300 or 288. Holding 320 = something to work with.",
+        "at": "22:49",
+        "scope": "!! SCOPE LIMIT: live mark on the 24 Sep 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "META",
+        "value": "740 / 770",
+        "meaning": "Wants it to hold ~740 into the monthly close; he sold his position at 770.",
+        "at": "25:12",
+        "scope": "!! SCOPE LIMIT: live mark on the 24 Sep 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "CLEAR (identity verification)",
+        "value": "13% of float short; 4.4x multiple",
+        "meaning": "Short interest he called substantial — price suppressed rather than broken; identity verification trades at a 4.4x multiple vs how he thinks it should be valued.",
+        "at": "30:56",
+        "scope": "!! SCOPE LIMIT: live mark on the 24 Sep 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "Tech sector (advance/decline)",
+        "value": "2.17 to 1.8",
+        "meaning": "Red on the day but fairly neutral — not skewed to the downside.",
+        "at": "06:30",
+        "scope": "!! SCOPE LIMIT: live mark on the 24 Sep 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      },
+      {
+        "instrument": "unnamed rate-sensitive stock (see questions)",
+        "value": "$183 (Aug 2024) → $130 (Jul 2025)",
+        "meaning": "Example of a structural downtrend from rates; could take out that low.",
+        "at": "36:00",
+        "scope": "!! SCOPE LIMIT: live mark on the 24 Sep 2026 chart (2026 stock-options frame) — dated, not standing price structure. Never present as a current level."
+      }
+    ],
+    "routine": [
+      {
+        "step": 1,
+        "what": "Check sector flow — which sector ETFs are green vs red, and whether the green ones are defensive.",
+        "source": "his sector-flow screen / Discord tools",
+        "at": "00:32"
+      },
+      {
+        "step": 2,
+        "what": "Check seasonality for the month.",
+        "source": "seasonality chart",
+        "at": "06:57"
+      },
+      {
+        "step": 3,
+        "what": "Run a Mag-7 health check — mark support, gaps and rejection areas on each.",
+        "source": "charts",
+        "at": "22:08"
+      },
+      {
+        "step": 4,
+        "what": "For an unfamiliar name, ask an AI chatbot to explain the company in plain terms, then check short interest, flow and strikes.",
+        "source": "AI chatbot / Unusual Whales",
+        "at": "26:43"
+      }
+    ],
+    "admin": [
+      {
+        "item": "Discord: type /help for ~9 pages of commands (volume and flow tools) Jason suggests using.",
+        "at": "05:08",
+        "status": "open"
+      },
+      {
+        "item": "Jason to send Josh the 'cinematic' stock piece before posting it.",
+        "at": "37:19",
+        "status": "open"
+      },
+      {
+        "item": "Ifoma offered to send Jason the Otto Trader app.",
+        "at": "30:00",
+        "status": "open"
+      },
+      {
+        "item": "Unusual Whales enterprise account is not needed for an individual trader — Jason has it for the Discord.",
+        "at": "04:47",
+        "status": "info"
+      }
+    ],
+    "questions": [
+      {
+        "q": "Which stock is the 1,060 / 1,069.73 / 1,072 chart?",
+        "why": "It comes right after he's talking about J&J, but J&J doesn't trade anywhere near 1,060. The levels fit MU (on the 1 Oct call MU traded 1,028–1,054), but the ticker is never said on the audio."
+      },
+      {
+        "q": "The 13% short interest and 'price suppressed, not fundamentally broken' — is that Okta or CLEAR?",
+        "why": "Zoom's AI summary says Okta. In the transcript he starts on Okta, then switches to CLEAR (airport / identity verification) before giving the short-interest figure. This file assigns it to CLEAR."
+      },
+      {
+        "q": "NVDA gap: is the target 222 or 222.66, and is the bottom 220.54 or 220.61?",
+        "why": "He says '220, 266' then '222', and 'I marked 61, but I think it's 54.'"
+      },
+      {
+        "q": "Which stock went from $183 (Aug 2024) to $130 (Jul 2025)?",
+        "why": "His structural-downtrend example — never named on audio."
+      },
+      {
+        "q": "What are the actual numbers for the AAPL buy zone and the 17 Sep resistance?",
+        "why": "He pointed at the chart but didn't say them; no video access to read them."
+      },
+      {
+        "q": "'Policy norm' vs 'restrictive' — which is it?",
+        "why": "He says policy has moved to a norm that's supposed to be not restrictive, and also that rates have become restrictive. His reconciliation (restrictive compared to the loose money we're used to) is in insights."
+      }
+    ],
+    "frames": [],
+    "glossary": [
+      {
+        "term": "Sector ETF",
+        "plain": "A fund that holds the stocks of one slice of the economy (tech, health care, energy…), so its price tracks how that sector is doing.",
+        "said": "Those are ETFs that kind of track these sectors",
+        "at": "00:43"
+      },
+      {
+        "term": "Sector flow",
+        "plain": "Which sectors money is moving into and out of today — green sectors are getting buyers, red ones sellers.",
+        "said": "here's your sector flow",
+        "at": "00:32"
+      },
+      {
+        "term": "Fiat money system",
+        "plain": "Money that isn't backed by gold or anything physical — its value rests on government and debt. His point: everything runs on borrowing, so interest rates drive everything.",
+        "said": "Fiat money system, everything's based on debt",
+        "at": "01:31"
+      },
+      {
+        "term": "Restrictive (rates)",
+        "plain": "Interest rates high enough to slow borrowing and the economy down.",
+        "said": "rates become restrictive",
+        "at": "01:37"
+      },
+      {
+        "term": "Loose money / policy norm",
+        "plain": "Loose = rates kept low compared with growth, so money is cheap. Policy norm = rates roughly in line with growth. Moving from loose to norm feels restrictive because we're used to cheap money.",
+        "said": "rates were low compared to growth",
+        "at": "02:07"
+      },
+      {
+        "term": "Defensive sectors",
+        "plain": "Sectors people still spend on in a slowdown — consumer staples, health care, communications (and utilities). Money hides there when it's nervous.",
+        "said": "Healthcare is a defensive sector",
+        "at": "02:34"
+      },
+      {
+        "term": "Consumer staples",
+        "plain": "Companies selling things people need no matter what — groceries, soap, basic household goods.",
+        "said": "Consumer staples are things that people need",
+        "at": "02:34"
+      },
+      {
+        "term": "De-risking",
+        "plain": "Investors selling riskier holdings and moving toward safer ones.",
+        "said": "when the markets are starting to de-risk or sell off",
+        "at": "02:53"
+      },
+      {
+        "term": "Bellwether / safety play",
+        "plain": "A bellwether is a stock that signals a trend. A safety play is where money goes when people don't know what to buy — J&J is his example.",
+        "said": "when people don't know what to buy, they buy J&J",
+        "at": "03:55"
+      },
+      {
+        "term": "Dividend",
+        "plain": "Cash a company pays its shareholders regularly, part of why defensive stocks attract money.",
+        "said": "pays a great dividend",
+        "at": "04:05"
+      },
+      {
+        "term": "Unusual Whales",
+        "plain": "A paid options-flow and volume data service; Jason has the enterprise version for his Discord.",
+        "said": "an enterprise account at Unusual Wells",
+        "at": "04:47"
+      },
+      {
+        "term": "Advance/decline",
+        "plain": "How many stocks (or how much premium) are rising versus falling in a group — a breadth check.",
+        "said": "advanced decline premiums on these here",
+        "at": "06:22"
+      },
+      {
+        "term": "Seasonality",
+        "plain": "How the market has tended to behave in a given month historically.",
+        "said": "Seasonality. You can see in September",
+        "at": "06:57"
+      },
+      {
+        "term": "Order block / safety area",
+        "plain": "A price zone where big buyers or sellers stepped in before, which tends to act as support or resistance again.",
+        "said": "this safety area, or this order block",
+        "at": "10:25"
+      },
+      {
+        "term": "Lotto / constructive lotto",
+        "plain": "A cheap, far-out option that pays big if it works and usually expires worthless. 'Constructive' = set up deliberately at a level that should hold, not a random gamble.",
+        "said": "a constructive lotto. ... This is how you set them up",
+        "at": "10:54"
+      },
+      {
+        "term": "Take 1 / take 2 / take 3",
+        "plain": "Staged take-profit targets — sell part of a position at each level.",
+        "said": "take 1, take 2, take 3",
+        "at": "12:33"
+      },
+      {
+        "term": "Taken the house",
+        "plain": "Made your profit for the period — time to stop.",
+        "said": "once you've taken the house",
+        "at": "13:03"
+      },
+      {
+        "term": "Trap zone / eat-your-premium zone",
+        "plain": "A price gap or range where the stock chops back and forth; option buyers lose value to time while waiting.",
+        "said": "These zones are what we call trap zones",
+        "at": "16:00"
+      },
+      {
+        "term": "Gap continuation",
+        "plain": "When one price gap follows another in the same direction, extending the move.",
+        "said": "this gap is a continuation play of this gap",
+        "at": "15:09"
+      },
+      {
+        "term": "Weekly close",
+        "plain": "Where price finishes on the last trading day of the week — he uses it to confirm a level is truly broken.",
+        "said": "until Microsoft closes the week above that area",
+        "at": "18:02"
+      },
+      {
+        "term": "Triple bottom",
+        "plain": "Price tests the same low three times and holds — often a base for buyers.",
+        "said": "accumulation off of a massive, triple bottom",
+        "at": "18:13"
+      },
+      {
+        "term": "Accumulation vs distribution",
+        "plain": "Accumulation = big money quietly buying; distribution = big money quietly selling.",
+        "said": "This isn't distribution like some of the other things",
+        "at": "24:50"
+      },
+      {
+        "term": "Asymmetrical triangle",
+        "plain": "A narrowing price pattern with uneven sides; price usually breaks out of it one way or the other.",
+        "said": "We're starting to form an asymmetrical triangle",
+        "at": "08:33"
+      },
+      {
+        "term": "Rising wedge",
+        "plain": "Price climbing inside narrowing lines; usually bearish eventually — 'bullish until it's not.'",
+        "said": "It's bullish until it's not",
+        "at": "21:27"
+      },
+      {
+        "term": "Mag 7",
+        "plain": "The seven giant tech stocks (Apple, Microsoft, Nvidia, Alphabet, Amazon, Meta, Tesla) that move the indexes.",
+        "said": "these are your Mach 7. These kind of give you the health",
+        "at": "22:36"
+      },
+      {
+        "term": "VWAP",
+        "plain": "Volume-weighted average price — the average price paid today, weighted by volume. Above it = buyers in control; below = sellers.",
+        "said": "back below VWAP here",
+        "at": "22:49"
+      },
+      {
+        "term": "Short interest / % of float",
+        "plain": "How many shares are sold short, as a share of tradeable shares. High short interest can force a sharp rally when shorts buy back.",
+        "said": "13% of the float",
+        "at": "30:51"
+      },
+      {
+        "term": "Multiple",
+        "plain": "What investors pay relative to a company's sales or earnings — a higher multiple means they value it more.",
+        "said": "4.4 time multiple",
+        "at": "33:15"
+      },
+      {
+        "term": "Tokenization",
+        "plain": "Representing stocks and other assets as digital tokens, which he expects will lead to 24-hour markets.",
+        "said": "Tokenization's gonna change how we look at markets",
+        "at": "37:01"
+      },
+      {
+        "term": "Capex",
+        "plain": "Capital expenditure — money a company spends on long-term assets like rigs, plants or data centers.",
+        "said": "the capex on that",
+        "at": "40:02"
+      },
+      {
+        "term": "Buy puts",
+        "plain": "Buy options that gain value when a stock falls — how you profit from the downside.",
+        "said": "That means buy puts in English",
+        "at": "36:24"
+      }
+    ],
+    "insights": [
+      {
+        "title": "Read the backdrop before the chart",
+        "body": "The sector board only makes sense once you know the system runs on debt. When rates turn restrictive, rate-sensitive sectors can't rally and money hides in defensives — that's what decides which stocks are worth trading.",
+        "said": "it's easy to understand if you know the backdrop",
+        "at": "01:26"
+      },
+      {
+        "title": "Green only in defensives is a warning, not a buy signal",
+        "body": "The index was red while staples, health care and communications were green. That's money de-risking, and it should shape security selection.",
+        "said": "there are sectors ... that are green, but they're all defensive",
+        "at": "03:20"
+      },
+      {
+        "title": "Restrictive is relative to what we're used to",
+        "body": "Rates are roughly in line with growth now, but after years of cheap money that feels restrictive and signals a slowdown.",
+        "said": "now rates are moving in line with growth, which would signal a slowdown",
+        "at": "02:07"
+      },
+      {
+        "title": "Price a company for what it is, not what people see",
+        "body": "CLEAR is priced like an airport-membership company; he sees identity infrastructure. When the market changes how it values a company, the multiple can rerate — that's where 10x returns come from.",
+        "said": "price things out based on what they really are",
+        "at": "32:04"
+      },
+      {
+        "title": "Daily goals make you trade bad setups",
+        "body": "A daily number creates pressure to trade on days when the setups aren't there. Weekly goals remove that pressure; nobody has daily bills.",
+        "said": "never have a daily goal, have a weekly goal",
+        "at": "13:34"
+      },
+      {
+        "title": "Focus on learning, not on how good you're doing",
+        "body": "More homework is meant to keep Josh's head on the process instead of his streak — he's seen people turn $300 into $10,000 and back.",
+        "said": "take 300 to 10,000 and take 10,000 at $300",
+        "at": "14:02"
+      },
+      {
+        "title": "Both sides of the field pay",
+        "body": "Structural downtrends caused by rates and tax policy are as tradeable as uptrends. Learn to find the downside opportunities, not just the bounces.",
+        "said": "look for opportunities on both sides of the playing field",
+        "at": "37:31"
+      },
+      {
+        "title": "Options make you right on two things",
+        "body": "With stock you only need to be right on price. With options you need price and timing, which is why longer-term conviction plays may belong in shares.",
+        "said": "with options, you have to be right on time and price",
+        "at": "31:49"
+      },
+      {
+        "title": "AI demand pushes up the price of capital",
+        "body": "The AI build-out needs huge amounts of power and capital, so demand for money stays high — rates, oil and gas, and the cost of living are headed higher, not lower.",
+        "said": "the more demand on capital, the higher the price",
+        "at": "39:09"
+      },
+      {
+        "title": "Broaden, then focus",
+        "body": "The homework widens the view on purpose so it can later be concentrated into a few names — sunlight warms, but focused through a magnifying glass it starts a fire.",
+        "said": "The sun by itself can warm you. If you focus it",
+        "at": "37:50"
+      }
+    ],
+    "_transcript": "[00:00] Ifoma Pierre: Yeah, man, cause he's been… been, Up since! You've been up since. That was one of the best meetings, because since, since after that meeting. He hasn't been down, you've been… He's shooting from the hip.\n\n[00:12] jason murray: Yeah, it's a lot easier to, To move with speed than it is to… you know, put yourself to sleep trying to analyze. Today I'm gonna move at a little different speed, just to kind of give you an overview of things first. Yeah. And then we'll jump into, to some other things. But I want to give you some context. So, here's your sector flow. So, the markets and the economy in the U.S. are made up of sectors. And so, to understand that, can you see the screen?\n\n[00:42] Josh: Yeah, because you disagree.\n\n[00:43] jason murray: Alright, so you see those tickers to the left? Those are, ETFs. That kind of track these sectors as best as they can at this point. So, right now, if you'll notice the sectors that are up, there's 3 of them. And everything else is red. I want you to tell me what that means, if you know, and if you don't, I'll just start explaining.\n\n[01:10] Josh: I mean… Put simply, it's just that those, like… those… sectors are just doing well. Like, I don't know. I feel like it's pretty simple to understand, unless it's something else that I'm not…\n\n[01:26] jason murray: So, it's, it's easy to understand if you know the backdrop. Fiat money system, everything's based on debt. in the United States. With that being said, if interest rates become restrictive, which at this point they have become restrictive on the U.S. economy. Then it's gonna be hard for these sectors down here at the bottom to rally. Okay? Especially real estate. Real estate, I'm surprised it's not more red. To be honest with you, but it also has dropped quite a bit already. So, even though financials make their money on spreads, it's harder for them to lend if the economy's slowing. So, we've moved into what they call a policy norm, which is supposed to be not restrictive, but you gotta remember, we were what we call Loose with money or capital. And what that means in English is that rates were low. Compared to growth, and now rates are moving in line with growth, which would signal a slowdown. So, and if you notice, Consumer Staples just went green. Consumer staples are things that people need. Communications pay a great dividend. Healthcare is a defensive sector, as well as communication is staples. And energy is not normally defensive. This will actually, at some point, go red. if we continue to weaken in the U.S. economy. Okay, it's not normally… A sector that would be up when the markets are starting to de-risk or sell off. In the write-up this morning, I added volume to the analysis, so you can see when the rates are restrictive. The volume is also restrictive, and the markets are red overall. If you'll notice, the S&P 500 is what I'm discussing. It's red. Although there are sectors in the S&P 500 that are green, but they're all defensive. You need to know this, because this'll help you with security selection going forward. It's a reason why, if you pull up Johnson & Johnson, I have Dale up. Because I'm starting a position in Dell. On this pullback, if you notice, Johnson & Johnson pushed up, hit a high. And now, it's coming back down to test the breakout. To recover volume-weighted average price, and which it's doing right now.\n\n[03:53] Josh: Hmm.\n\n[03:55] jason murray: Johnson & Johnson is considered the bellwether of safety plays. In plain English, that means that when people don't know what to buy, they buy J&J.\n\n[04:05] Josh: Wow.\n\n[04:05] jason murray: Everybody uses it, pays a great dividend. And it's kind of hard to go wrong with J&J when you don't know where to put your money. And that's literally what's happening. It's a consumer staples stock, and it continues to lead because it's in consumer staples and healthcare. So, people use J&J products that are staples, and people use it that are in healthcare with their drug sector. So… When you're looking at your plays, you need to keep these things in mind. So, overall sectors are super…\n\n[04:40] Josh: before.\n\n[04:41] jason murray: You would want to take out… you want to take, those ETFs into account. Because you don't have the system, and nor am I telling you to spend, you know, a ton of money to have an enterprise account at Unusual Wells. I wouldn't if I was an individual trader. I have it for the Discord, and if you notice, there's a ton of tools that I showed you, how to access this week with the, backslash help button. All that's, part of what we pay for. To help people, so they have access. To that volume, and those volume indicators. So… You have 9 pages of, what we call commands, and those are things I suggest that you use. And there are things that we can go over here in a few. But I wanted to show you this first, so you can see how the economy's broken down. From a stock market selection type point of view. So, for your homework and your recorded line, those individual tickers there, if you'll notice, I think there's 10 of them, or 11. Just put them in chat and tell them to give you the underlying holdings of each one. You can do it individually, and then have it rank those holdings. By sector, as far as, like, what's best in sector. And then you can go through and look at your charts and see how they're performing. I would suggest you do 2 or 3 sectors like this a week. I'm not suggesting you do this all at once, you're not trying to become an analyst, I just want you to get familiar with how the market itself works. So… Have you noticed they have an advanced decline premiums on these here? So right now, bullish for XLC. And if I come down here, although this is red, it's fairly neutral, if you look at technology. 2.17 to 1.8, so… very, much… Not skewed to the downside. So, this is sectors. Super important for you to know. You have the recorded lines so you can see them. Seasonality. You can see in September, is anything on that chart green?\n\n[07:04] Josh: No.\n\n[07:06] jason murray: Okay. I'm colorblind, or color deficient, as they say. Even I can tell this is all one color, and it's not green. Okay? So, at the end of the day, your expectations shouldn't be to buy first, your expectations should be to sell. Why? Because, seasonally speaking, that's the play. Have you noticed, there's certain stocks, like we called out here, Pltr… Meta, all these players here. They're up. Right? And if you notice, we've been calling some of these out. I haven't played, Google, but I played LMT, I played Meta, and I played PLTR. So now if you look at the losers, you can kind of see that, too. So, Hood and Coin, they're part of my winners, but they've already ran because of the Securities Tokenization Act that was released on the 17th. of this month, I think about a week ago, so they're starting to pull back, right? And because interest rates are now restrictive. So, J&J's coming back to test this little area here. This is showing me that there should be risk re-entering the market, because it's defensive. So I can come here and see. On the 1 hour, We're starting a trend, right? Up. See this? It's kind of stuck. We're starting to form an asymmetrical triangle. We're starting to trend up from the bottom. And we're gonna probably take a shot at this gap tomorrow. Or later today. We've already taken kind of a couple shots at it and missed.\n\n[08:50] Josh: Yeah.\n\n[08:51] jason murray: So I'd kind of put it there, 1,060, kind of a resistance zone right before the gap. About a thousand… what is this, 70-ish area up here, when you get to that candle? Yep, 69.73 is pretty close. Good enough for government work, is what they say. I'd give it all the way up to 1072, that previous close. So, I know we have a major sellers up here, so for some reason, we got really… Bullish, then this would be taken out. So right now… What do we say, constructively speaking. The market is trying to form a base here and get used to higher interest rates. And then we should be able to test this across some of the major players in the area, so let's go to the biggest one. And see if we're kind of seeing the same format, and we're not. Hmm… What does that say?\n\n[09:50] Josh: I'm not sure.\n\n[09:52] jason murray: So it's a… Security selection's gonna be key. Right? So we're above where we were last week, right? Oops, let me go the 4-hour here, it's a little easier to see. We're above where we were last week, right? Where above this gap? And… Remember that ugly red candle from last week?\n\n[10:13] Josh: Yeah.\n\n[10:15] jason murray: end of August? Yeah, so we're retesting that area right now, currently. Remember, a steep drop equals what?\n\n[10:23] Josh: Steep up incline.\n\n[10:25] jason murray: Correct. So, if we don't gap below this safety area, or this order block, as some people call it. Then what happens? We have to bounce, so this might be a good play to look at towards the end of the day for a swing into tomorrow, a low-risk trade. Into Friday. Low cost, low risk, shoot for 222. Or whatever this gap is, yeah, 220, 266. Take a 225 call or something, 222.50? And, play it through and see if you can have a what? A constructive lotto. So remember how I told you we don't play lottoes right away? This is how you set them up. Since you're new, you want to take a look at the following week, right? So you would have to spend a little bit more money to be involved in that trade. But this area should hold, and you might be able to get a play closer to the end of the day, I think it's… Yeah, we still got… Quite a few hours here in the market. I keep forgetting on the East Coast, because I wake up super early, no matter where I'm at, and, like, I've been up working for, like, 4 hours. It feels like it's a lot later, I'm like, it's not noon?\n\n[11:35] Ifoma Pierre: He's loud.\n\n[11:35] jason murray: is envy.\n\n[11:36] Ifoma Pierre: Because I told him, I said… what time zone I'm in, I'm up at 4 o'clock. So sometimes it's 1 o'clock. You know, there, but it's 4 o'clock here. I told him, I said, you know, this is what I'm telling him, I said, as entrepreneurs. By the time it gets to 11 o'clock, we already have the day of work already done, so…\n\n[11:57] jason murray: Yeah. No, that's very much true. My uncle used to tell me, I'd call him, and he's like. What are you doing? I said, I already had 3 meetings already. I'm like, it's 9 o'clock, how does it even work? I'm up on here sleeping, that's how that works. Oh, okay. So yeah, it'll allow me to learn to be more productive, because when you're young. You can get up a lot earlier, and it not take a toll on you. When you get older, if you're not used to it, it will take a toll on you, but if you're used to it, it doesn't.\n\n[12:31] Ifoma Pierre: Norm.\n\n[12:33] jason murray: So, it's normal to me, and it's normal to your dad. So, there's your 3 areas on NVIDIA when it bounces, kind of gives you take 1, take 2, take 3, right? So, you need to be able to see this. This is part of your homework, too. I'm giving you a lot more homework this week. Because I want you to trade… I want you to trade less… And continue to trade effectively. So, like, the other day, when you're trying to trade after you made 2 or 3 good trades, I'm like, stop. Even percentage-wise, like, once you've taken the house. You just leave it alone. You play the next day. You go and do something else productive. No reason to continue to, look for opportunities once you've played and made the money you need to. So I want you to have weekly goals, I don't like daily goals, especially for new traders, because you feel the pressure. And you try to trade on days when their setups are not the best, and so I want you to get away from that right away. So, never have a daily goal, have a weekly goal. Nobody has daily bills unless you run a business anyway, and you're not there yet, so… You don't have to worry about that, so don't put any additional stress on yourself. And I don't want you to get a big head either, so that's why I want you to have more homework that'll help you To where you're having to think more. about… Learning than you are about how good you're doing. Okay. I've seen people take 300 to 10,000 and take 10,000 at $300, so don't be that person. Makes sense.\n\n[14:13] Josh: Yeah.\n\n[14:14] jason murray: So, I found the way… best way to do that is to give them excessive amounts of work, but… Not gonna give you that much, but I am gonna give you some. So, I want you to be able to do this, see or take profits, see the areas of interest, which obviously… is already marked because I give the people the bookmark, or order block indicator now. But right here, I mean, if this breaks, no bueno. If it doesn't break, then it should bounce here. We go to a shorter time frame, you can see there's sellers right here. Already. So I can bring that down. So I can tell this is not a play for me right now. I can tell short-term this is green. So this is likely to test VWAP, it's a couple bucks, not really much of a trade. So I'm gonna leave it alone. I'm gonna let it settle out here and play out for tomorrow. Which is really key. If you notice, this has gone up, and it's got a huge gap down. Right?\n\n[15:09] Josh: Yeah.\n\n[15:09] jason murray: This huge gap. Well, this gap is a continuation play of this gap. Which is also a gap. Which is also a gap over here. So to clean this up on your daily chart, you should be able to come over here and simply look at the bottom of this gap, which is basically 220, 54, I know I marked 61, but I think it's 54. And then, understand that that gap's present, and there's a gap right up here around 223. Or the top of these gaps. And then that gap continues all the way up to around 225, basically. So, you've got kind of a hole here between 220 and 225, where Nvidia can't make up his mind whether it wants to be sold or bought. These zones are what we call trap zones. Or eat your premium zone. or, eat your lunch zone, or whatever you want to call it, this is not where we want to trade. So you want to see this gap either break more to the downside, or you want to see it pop here and take out that 225. So, much different picture than MU, and the reason why is because the memory play's still alive. The overall hardware play is already priced in. However… You'll notice, after the massive move from, microsoft Which, I will suggest you never bet against this company. Unless it's short-term. If you notice, major gap up here. Major gap down here after the double top on the weekly chart. We have not regained that area. We tried. We haven't regained this area here. So, this is a major resistance zone here, and you can bring it all the way down. To hear.\n\n[17:09] Josh: No, what are you bringing down in?\n\n[17:12] jason murray: Because it hasn't recovered and held. See all these top wicks here? Oops.\n\n[17:17] Josh: Yeah.\n\n[17:18] jason murray: We have one massive candle here, but every time else it hits, it, what, rejects, and the candle fills are all the way down here, and down here. So it's really telling me that 500 is a really terrible zone for the stock, and anything above 500 at this point should be sold until otherwise. Given an answer. If you wanted to be more, what we call conservative, you can bring it all the way up here to around 517. It's like 516 and change. Because again, you do want to connect as many as you can. And I would say that's pretty fair right in here, somewhere. You can even bring it down here, but somewhere in here is fair, right? So kind of a zone from, like, 515 to 520 that's a no-touch, no-buy zone until Microsoft closes the week. Above that area, okay? This is accumulation off of a massive, triple bottom, basically. On the weekly? So, obviously, if it gets down to 3… anywhere in this zone from 350 to $360, even all the way up to 370-ish area, it's definitely an accumulate stock. It's definitely not a sell. So these are kind of areas to know. On your weekly chart. And this gap right here is holding, so I have to come back down here. And Mark, this is my near-term support. On the chart, so to speak. Do-do-do. Kind of showing that coming down a little. So, even though this is coming up. It's being muted on the way up. In other words, it's got to a point… To where we're looking to discover price somewhere in this zone. And soon, in the next few weeks, this will either pop out of this, ugly-looking triangle, or it's gonna come down. Being seasonally, we're going into the holidays, this is something to keep on your watch list going into the end of the year. For you to have on the long side. Okay? So this is how we look at things, and then you can come in here. I already can tell you that short-term, this is not a buy. It's still consolidating. But it kind of gives you a range of where this stock is trading. So, if it gets down here short-term, around this area, it's a buy. Up here, it's a sell. It's just chopping around, right?\n\n[19:53] Josh: Yeah.\n\n[19:53] jason murray: So it's gonna break out soon, look at the basis building. See that? Maybe easier to see this way.\n\n[20:03] Josh: ILOs every… Couple of players.\n\n[20:07] jason murray: It's getting equal highs, though, so it kind of negates the lows.\n\n[20:11] Josh: Bye.\n\n[20:11] jason murray: But at the end of the day, it's trending, so… Something to keep on your watch list if it breaks out of those ranges, one way or the other. Apple, doing a little check on this one, coming in my support area here, this is my buy zone. Until it's not, right? Apple benefits from tokenization, too, part of the reason why this kind of took off, if you notice the dates. The bottom, the one week before, basically, the announcement. And if you notice, you kinda got a, that area here on the 17th. Really haven't held that area above there since, so if you look at that… That area high on the 17th is also kind of a resistance zone right now, right? You can see that. So, until we continue above this area here, where the announcement came out about tokenization. Apple is a, consolidation, until it's not, so it's looking to break out of zone or break down. Okay, so you want to keep this on watch. So that's 2 of the MAX7, right?\n\n[21:18] Josh: Yeah.\n\n[21:19] jason murray: Right?\n\n[21:21] Josh: Oh.\n\n[21:22] jason murray: Take a look at Tesla here. Little health check here. Kind of forming a… what we call a rising wedge here. Is rising wedge bullish or bearish?\n\n[21:36] Josh: I… I don't know. I mean, it looks bullish.\n\n[21:40] jason murray: It's bullish until it's not. At some point, this pukes this way. But it can infinitely go up. Sorry for the analogy, it might not be good around lunch, my bad. Hmm. So yeah, we got a support here around 315. And some gap resistance here, around 397, almost 400. And kinda here is where it's been rejecting, right? Around 385? So you want to mark these on your chart, especially for the Mach 7, because they're the ones that kind of move the market, so I know often… Tesla starts to close above $385 consistently, then it's going higher, and that likely brings the market with it. I know if it comes back into this gap around, what is this, 369? then that's not good either, because then we could do what? Go back down.\n\n[22:34] Josh: Yeah.\n\n[22:36] jason murray: So you want to check these, these are your Mach 7. These kind of give you the health of the market. Google's broken out this triangle twice now, and it looks like it's trying to fail again. Also, back below VWAP here, and below this resistance at 343. So, not looking good on Google's part. Weekly… Kinda lookin' the same here. Monthly the same too, right? You can kind of, draw these a little different on a monthly. So, when you keep these tight like this, you can kind of see it should connect around this 320… The 315? And could come all the way down to 300, or what is this, 288? Yep, 288. Remember, the sharper the up move, the sharper the down move?\n\n[23:32] Josh: Yeah.\n\n[23:33] jason murray: Yep, same thing here on the way down. Yeah, same thing on the way down. If we can hold this 320 area, then we got, something that we could work with. It's coming to the end of the month, right? So, good to look at, right? So you want to take a… I, I'm kind of showing you how to go through these. I'm going as slow as I can. This feels like, moving in mud to me. But I want to make sure that you see what I'm doing. And have, like, an understanding of what I'm doing. Meta's a much different picture, right?\n\n[24:12] Josh: Yeah…\n\n[24:14] jason murray: So this one's the AI Play. This deals directly with tokenization. It goes directly in line with, virtual reality. All that garbage they want you to believe in.\n\n[24:26] Josh: And it just came out with a glass, too.\n\n[24:31] jason murray: Yeah, I can actually get them because of my army service for free. It's just crazy. So I can play in the metaverse for free. Kinda wild, huh? So, this candle here obviously is accumulation. I checked the volume on this. This stock is actually under massive accumulation. This isn't distribution like some of the other things we've been looking at. So somebody wants to own this for some reason. So… This will likely, continue and take out that all-time high. We kind of see this a little better here. When you go 6-month candles.\n\n[25:11] Josh: Hmm.\n\n[25:12] jason murray: See how this is, starting to move above this? So as long as this, you know, holds this area, is it 740, basically, into the monthly close? We definitely have a trend line up. That's definitely the case here. And we're starting to peak above this trend line here, where it had broken. See that?\n\n[25:37] Josh: Dude.\n\n[25:37] jason murray: Oh, it's breaking all the rules? But we like it, because we own it. I just sold it. When it hits 770, And then, I'm playing both sides here, kind of, you know? I want to see a little pullback. We might get a $20 pullback into tomorrow, $15 maybe? So let's see. Then again, I could just hang around. But at the end of the day, we're playing both sides on this. It obviously is under accumulation, there's no time frame. That it's not? Every time frame it is. Oops. Get a little granular there. See that? So, every time frame, this is under massive accumulation, is coming through an order block, so buyers or sellers are being shifted to buyers, whether they like it or not. Here's another one. Okta… Okay, I want to keep this one on your watch list, too. What's this? This also deals with that. So, anytime you don't know anything here, you can just come over here to chatbot. Sounds cool, right? Okta, explain… To my client. And… Normal terms. That way, it doesn't give you the Jason breakdown of, what do they call it? Here we go. So, kind of like what I was looking at with, Microsoft, right, with software, but it deals with the security side. Right. So, this kind of goes along with, another stock that I like. Do you ever go to the airport and see Clear?\n\n[27:27] Josh: Yeah.\n\n[27:28] jason murray: Oh, wow.\n\n[27:34] Josh: Jeez.\n\n[27:38] jason murray: My chatbot went dumb. Jeez. I have to give my chatbot an update, holy cow. Alright, so here we go. So this is the part why I like it. Look at this. Identity Verification Company. That's much different than the way that I describe it to you. As a security line airport checker, right?\n\n[28:19] Josh: Yeah.\n\n[28:20] jason murray: So, Luke, what it's doing? Trying to become the digital ID for the real world. So instead of constantly pulling out your stuff, what's, the things they use in the last times in the Bible? It deals with you can't buy or sell. Well, guess what happens? A company like this can actually control that. So if you take a look at the stock price. I had a dream about this being 60 bucks when it was, like, 16. It's coming down again, right? Look where it hit. Almost 70 bucks. I had a dream it was hitting 60, so… Yep. So now it's coming down right here to this gap, right? So now, what am I doing? I'm adding it back to my list because of what? Coming into a buy zone.\n\n[29:14] Josh: Hmm.\n\n[29:16] jason murray: And then, you can do this… These are things that I want you to learn to use while I'm showing you, kind of real time, because this is on my personal watch list. This isn't like Jason teaching you, this is Jason showing you what I'm actually looking at personally. I'm treating you like you're my family, not just somebody who's paying me on a monthly basis.\n\n[29:52] Ifoma Pierre: Appreciate you, man.\n\n[29:55] Josh: Today actually makes month one, since we started.\n\n[29:59] Ifoma Pierre: So… I set up, just for reference, I set up, an app for him, right? I'll send it to you, too, just for fun, but it's an app that he can talk to, so I typed in the same thing, like, break down Okta for me. In simple terms, and I broke it down, and at the end of it, this… Brother Marini says. He said it's a good name to study and put on your watch list. It's just funny that, you know, because I trained the… I trained the… I personally trained this model, so it's different from ChatGPT. I train it like a trader. Right. And, so it was just funny how you said that, and then it was pulling that back up, so… anyway. It's pretty cool.\n\n[30:43] jason murray: So, look, they're pricing it based on what? Airport security, right? Here is where it gets interesting. Short interest is substantial. 13% of the float. So when this happens, what do you think is gonna happen to Price soon?\n\n[31:07] Josh: I'm gonna spike up.\n\n[31:08] jason murray: Yeah, so it looks… Price suppressed rather than fundamentally broken. Yup.\n\n[31:21] Ifoma Pierre: So is that something similar, like, how… Like, you would… Buy stock. In general, or is that the same, like, you were traded the way that we're doing it now, or is that something that you buy and you just…\n\n[31:32] jason murray: This is a longer-term viewpoint. You can trade it in options, but longer term, or you can trade it in stock. It's totally up to you how you trade it, but I personally like to own it, own the company.\n\n[31:44] Ifoma Pierre: Yeah. And that's with stock, not in options.\n\n[31:47] jason murray: Correct. Remember, with options, you have to be right on time and price. With stock, you just have to be right on price. This is a more interesting framework, and to stop treating it like an airport membership company and starts valuing its identity infrastructure software, then multiple can change. And then, so you can go through, and I don't want to take up, like, your time, like, showing you the thought process alone. But you want to go through and actually, like, price things out based on what they really are, not what people see them as.\n\n[32:16] Ifoma Pierre: Right.\n\n[32:16] jason murray: This is how you make real money, as far as, like, you hear those people, I want to 10X my money, I want to 100x my money. Well, this is how you do it.\n\n[32:23] Ifoma Pierre: Right.\n\n[32:25] jason murray: You do it by understanding something that other people don't, and you can't do that if you have a view that's very… Narrow. Or skewed. So, for me, when I look at it from that perspective, it looks a lot different.\n\n[32:38] Ifoma Pierre: Okay.\n\n[32:39] jason murray: Than just an airport security stock.\n\n[32:41] Ifoma Pierre: Yeah.\n\n[32:43] jason murray: Right, so net premium is still negative. Average volume is still negative. My strikes, look at this. It's kind of crazy, huh? Why is there $50 strikes out here? So, all that stuff is super important for you to tie into your overall thought process when you're looking for opportunities. And you can take something like this. Not gonna show you this, it's just not something you can do, you… Here… Human identity… identity verification is at 4.4 time multiple. Which is much different than what it should be selling at, obviously. And this way, you can see the option, kind of, like, real time, what you're asking me. So you can see, like, what stands out. Because in this case, there is something that actually does stand out. It's kind of interesting, also. So, anyway, I have this on my personal watchlist. So, again, short-term, it's compressed, and the thing shows it. Watch this. Someone has clearly put meaningful bullish exposure considerably above the current price. But I would not interpret this as you's going to 50 next week. So… But yeah, it looks like it could bounce in the next couple days. Is it gonna bounce? Maybe? Is it not? Maybe. There's still, structurally speaking, a lot of sellers, but they can be flipped to buyers because their short interest is so high. Structurally speaking, something like this stock, though, is totally different. This is making higher lows and lower highs because of the structural Changes in fiscal and monetary policy. So, tax structure changing, and your interest rate changes. So, tax structure tried to keep it up, and interest rate structure has caused the stock to suffer. So, you can also look for opportunities in plain English. What I'm saying is, to the other side of the trade, where you've got a massive downtrend that's likely to continue. Simply because of structure. And then, you know, playing it here when it short is kind of not the best move. So you want to see if it gives us a little bounce here, even up to here, and then take it back down again. Okay? So, just because it is going down doesn't mean that you want to play it down tomorrow. Just understand, structurally, it's down. And that's on every time frame. Okay. So when they thought interest rates were going up, you can kind of mark this. This is August of 2024, interest rates started to be cut in September. But the market rates went the opposite direction. So guess what happened to the stock? This is August of 24? This is $183, and buy… July of 25, this was at 130.\n\n[36:09] Josh: Cheers.\n\n[36:09] jason murray: And as this stock starts to notice that we're not cutting interest rates and unlikely going to raise them, this could take out this low. And so you can make a significant amount of money over the next couple months if rates continue to be pressured to the downside. So, look for opportunities down. That means buy puts in English. Let me go back to my camera now and stop sharing. So look for opportunities to the downside, things that are structurally broken because of the policy that the Federal Reserve has put into place. Or that Donald Trump has put into place, or that… tax, that Congress is putting into place because of changes in tax code. Like autos, certain autos can't be, count it off 100% anymore. Little things like that'll give you clues that if you don't understand what I'm saying. Simply put it into an AI tool and have it show you the opportunities. So, 3 main takeaways. Tokenization's gonna change how we look at markets. Again, like I told you, we're gonna have 24-hour markets. This is before this came out. I've been saying this, it's gonna happen, and it's much closer now.\n\n[37:13] Josh: that for the NASDAQ, right?\n\n[37:15] jason murray: There's gonna be that for everything.\n\n[37:17] Josh: Oh, vote, yeah.\n\n[37:19] jason murray: Yeah. So that's number one. So understand how that changes, I'm gonna send you a little, cinematic thing with a couple stocks to pull up. That I'm gonna post, but I'll send it to you first. Number two, understand that you can look for opportunities on both sides of the playing field, down and up. And number three, make sure that you're looking at the homework that you need to look through. The things that I give you to study are super intentional for you to continue to broaden the view… So then you can concentrate it back into something. I always use the analogy of the sun. The sun by itself can warm you. If you focus it, you can start a fire. Like, with a magnifying glass?\n\n[38:02] Ifoma Pierre: It's a good one. I'm usually the… I'm usually the… the quote guy, but that's a… that's a good one. I never got that one.\n\n[38:11] jason murray: Yeah. So, you can start a fire with your life by using the light the correct way, or you can just have enough warmth to keep yourself warm. So, up to you how you see life.\n\n[38:22] Ifoma Pierre: Man, you're dropping all these wisdom nuggets, man, you're like a shit.\n\n[38:26] jason murray: You're on the… you're on the call too, so I gotta give you something so you don't fall asleep on me.\n\n[38:31] Ifoma Pierre: Heh, heh, no. Even though, even though I'm… you know, I'm still behind in tracking, it's, it's still not… it's still good, man. I don't fall asleep, it's still… I'm happy, man.\n\n[38:45] jason murray: So, I'm giving you an overview of the economy. So you can see how it works. Policy is restrictive. Right now? Even though it's really pricing things equally, it's restrictive for what we're used to. As a nation, and then number two, the tax code is not helping. Because taxes aren't coming down, government spend is going up, so taxes will have to go up. And then the other thing is, is that the AI play is playing out, which puts a demand on capital. And so the more demand on capital, the higher the price of that capital's gonna be. I was talking to a guy yesterday, He works for Noble Energy. They charge $275,000 today to run one rig. That's how much it costs. And then they charge back to the government, $475,000. A day. Not a month, not a week, a day. So you're talking about billion dollars in operations, Just for one rig. So these rigs last 20 years, but at the end of the day, to get these structurally set up, in the U.S. is what we're doing because of the massive amount of power that's going to be needed. So, the capex on that, or the capital expenditure requirements and the energy expenditure requirements, are massive. When I say massive, that's probably the understatement of the day. It is beyond, comprehension to me. How much money they're actually spending, or need to spend, is mind-blowing. And this is one of the top guys, he spends, like, you know, 30 days at home and 30 days out in the field. So… And he's not some, like, guy that's just, like, drilling the, oil and running those little things, you know. So the engineering on this, NASA creates these grids, or rigs. And, they only last for 20 years. But once they're up, I mean, they're up. So it's a massive infrastructure spend just for power, and you can make those plays and make some money, and that's why I told you to keep your eyes on oil and gas, because it's not going lower, it's going higher. Interest rates are not going lower, they're going higher. The cost of living is going higher, the end of times has rich and poor, and so I'm giving you a tool to help, continue the rich and wealth in your family. So yeah, that's all I have for today. Abby, homework, up to give you more of a macro view, instead of the micro shoot… Stuff at you, and this will allow you to learn how to fish. Last time I showed you how to fish, now I'm showing you the thought process behind how to structurally pick, what you're fishing for, and, the thought process that actually goes behind it. And even though I do it very quickly, dunno. You should be able to do the same over time as you pick up the process. So, you'll do this quickly, and you'll be able to look in and say, okay, Dad, I'm up $2,000, I'm gonna go play… Xbox, or whatever you play for fun.\n\n[42:01] Ifoma Pierre: It's so funny, though, man, he surprised me, because he made a couple of dollars, and then he calls me. I mean, for me, if I had my win, I would have been, like, out chillin'. He calls me, like, hey, man, I made some money, I'm about to pull up at the studio. I'm like, what?\n\n[42:15] jason murray: That's the… that's the… that's the attitude of a winner, so you're teaching them right.\n\n[42:20] Ifoma Pierre: Yeah, man, he's a good dude. Alright, man. Appreciate you, bro.\n\n[42:24] jason murray: Love you guys, I'm gonna have, lunch or breakfast or whatever my parents call this meal, and I'll be in the chat, so, thank you. Losers. Take care.\n\n[42:35] Josh: Later. Thank you.\n\n[42:36] Ifoma Pierre: Right."
+  },
+  {
+    "call": {
       "title": "Live Trading Session — Rapid Setup Scan, AAPL & DELL Options",
       "date": "2026-09-17",
       "duration": "59:55",
