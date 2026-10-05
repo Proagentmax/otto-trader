@@ -667,7 +667,7 @@ async function chat(req: Request, sys: string, cs: Chunk[], apiKey: string) {
    Secrets:  OTTO_TOKEN_KEY       any long random string (encrypts the tokens)
              OTTO_ALLOWED_EMAILS  comma list; default ottotrader@vinecreativestudio.com
              OTTO_RH_ACCOUNT      optional; pins the Robinhood account orders go to
-   Tables:   supabase/desk-setup.sql
+   Tables:   supabase/004_desk.sql
 */
 
 const DESK_REDIRECT = Deno.env.get("OTTO_REDIRECT") || "https://proagentmax.github.io/otto-trader/oauth.html";
@@ -756,7 +756,7 @@ async function db(path: string, init: RequestInit = {}): Promise<any> {
   const t = await r.text();
   if (!r.ok) {
     if (/relation .* does not exist|Could not find the table/i.test(t))
-      throw new Error("Desk tables missing — run supabase/desk-setup.sql in the SQL editor");
+      throw new Error("Desk tables missing — run supabase/004_desk.sql in the SQL editor");
     throw new Error("db " + r.status + " " + t.slice(0, 200));
   }
   return t ? JSON.parse(t) : null;

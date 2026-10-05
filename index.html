@@ -354,7 +354,7 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
   :root{--gut:28px}
   main{max-width:780px;margin:0 auto;padding-bottom:60px}
   .nav{position:sticky;top:0;bottom:auto;border-top:0;border-bottom:1px solid var(--rule);backdrop-filter:none;
-    background:var(--bg);max-width:780px;margin:0 auto;grid-template-columns:repeat(5,auto);justify-content:start}
+    background:var(--bg);max-width:780px;margin:0 auto;grid-template-columns:repeat(6,auto);justify-content:start}
   .nav button{min-height:54px;flex-direction:row;gap:9px;padding:0 18px;font-size:13.5px;font-weight:600}
   .badge{position:static;margin-left:4px}
   .top{position:static}
@@ -367,9 +367,145 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
   .reads{grid-template-columns:repeat(4,1fr)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* ================= THE DESK (v3.0) ================= */
+:root{--warn:#F5B400;--blue:#5AA9FF;--s1:#131519}
+body.dk-on{overflow:hidden}
+body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
+.dk[hidden]{display:none!important}
+.dk{position:fixed;inset:0;z-index:40;background:var(--bg);display:grid;
+  grid-template-columns:60px 290px minmax(0,1fr) 330px;grid-template-rows:auto minmax(0,1fr);font-size:13.5px;line-height:1.45}
+.dk-rail{grid-row:1/3;background:#08090A;border-right:1px solid var(--rule);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px}
+.dk-logo{width:30px;height:30px;border-radius:9px;background:var(--up);color:#000;font-weight:800;display:grid;place-items:center;margin-bottom:10px}
+.dk-rail button{width:48px;min-height:42px;border-radius:10px;color:var(--ink-3);font-size:10.5px;font-weight:600;display:grid;place-items:center;line-height:1.1;padding:4px 0}
+.dk-rail button svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;margin-bottom:2px}
+.dk-rail button.on{background:var(--surface-2);color:var(--up)}
+.dk-rail button:hover{color:var(--ink)}
+.dk-rail .sp{flex:1}
+.dk-strip{grid-column:2/5;display:flex;align-items:center;gap:20px;padding:9px 16px;border-bottom:1px solid var(--rule);background:#0E0F12;white-space:nowrap;overflow-x:auto;min-height:42px}
+.dk-strip .k{color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-right:5px}
+.dk-strip .v{font-family:var(--mono);font-weight:600}
+.dk-chips{margin-left:auto;display:flex;gap:6px}
+.dk-chip{font-size:11.5px;color:var(--ink-2);background:var(--surface-2);padding:4px 10px;border-radius:999px;cursor:pointer}
+.dk-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:1px;background:var(--ink-3)}
+.dk-dot.on{background:var(--up)}.dk-dot.bad{background:var(--down)}
+.dk-col{overflow:auto;padding:14px;border-right:1px solid var(--rule);display:flex;flex-direction:column;gap:12px;min-height:0}
+.dk-col.r{border-right:0}
+.dk-cardx{background:var(--s1);border:1px solid var(--rule);border-radius:12px;padding:12px 13px}
+.dk-h{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;gap:8px}
+.dk-h b{color:var(--ink-2);font-weight:600;text-transform:none;letter-spacing:0}
+.dk-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--rule);gap:8px}
+.dk-row:last-child{border-bottom:0}
+.dk .mono{font-family:var(--mono)}.dk .up{color:var(--up)}.dk .dn{color:var(--down)}.dk .warn{color:var(--warn)}.dk .mut{color:var(--ink-3)}
+.dk-tag{font-size:10.5px;padding:2px 7px;border-radius:5px;font-weight:600;white-space:nowrap;background:var(--surface-3);color:var(--ink-2)}
+.dk-tag.ok{background:rgba(0,200,5,.12);color:var(--up)}.dk-tag.near{background:rgba(245,180,0,.14);color:var(--warn)}.dk-tag.bad{background:rgba(255,80,0,.13);color:var(--down)}
+.dk-check{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
+.dk-box{width:15px;height:15px;border:1.5px solid var(--ink-3);border-radius:4px;flex:none;margin-top:2px;display:grid;place-items:center;font-size:10px}
+.dk-box.on{background:var(--up);border-color:var(--up);color:#000}
+.dk-link{color:var(--up);font-size:12px;font-weight:600;margin-top:6px}
+/* chat */
+.dk-desk{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--rule)}
+.dk-head{padding:11px 18px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dk-head b{font-size:15px}
+.dk-pill{font-size:11px;color:var(--ink-2);border:1px solid var(--rule);border-radius:999px;padding:3px 9px}
+.dk-who{margin-left:auto;font-size:12px;color:var(--ink-2);display:flex;gap:6px;align-items:center}
+.dk-who select{background:var(--surface-2);border:1px solid var(--rule);border-radius:8px;padding:3px 6px}
+.dk-msgs{flex:1;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:14px;min-height:0}
+.dk-m{max-width:80%;border-radius:14px;padding:10px 13px;overflow-wrap:anywhere}
+.dk-m.me{align-self:flex-end;background:var(--surface-3);white-space:pre-wrap}
+.dk-m.ai{align-self:flex-start;background:var(--s1);border:1px solid var(--rule);max-width:90%}
+.dk-m.ai .md p{margin:0 0 8px}.dk-m.ai .md p:last-child{margin-bottom:0}.dk-m.ai .md ul{margin:4px 0 8px;padding-left:18px}
+.dk-m.ai .md h4{margin:8px 0 4px;font-size:13.5px}
+.dk-mw{font-size:11px;color:var(--ink-3);margin-bottom:4px}
+.dk-tool{font-size:11px;color:var(--ink-3);font-family:var(--mono);margin:2px 0 6px}
+.dk-sys{align-self:center;font-size:11.5px;color:var(--ink-3);background:var(--surface);border-radius:999px;padding:3px 12px}
+.dk-err{color:var(--down)}
+.dk-thumb{max-width:220px;max-height:140px;border-radius:8px;display:block;margin-bottom:6px;border:1px solid var(--rule)}
+.dk-act{border:1px solid rgba(0,200,5,.35);background:rgba(0,200,5,.05);border-radius:12px;padding:11px 12px;margin-top:8px}
+.dk-act.st-rejected,.dk-act.st-expired{border-color:var(--rule);background:var(--surface);opacity:.75}
+.dk-act.st-failed{border-color:rgba(255,80,0,.45);background:rgba(255,80,0,.05)}
+.dk-act-h{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px}
+.dk-act-h b{font-size:13.5px}
+.dk-sum{font-family:var(--mono);font-size:12.3px;white-space:pre-wrap;margin:0;color:var(--ink)}
+.dk-calls{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);margin-top:8px}
+.dk-risk{font-size:12.5px;margin-top:8px}
+.dk-warnbox{border:1px solid rgba(245,180,0,.45);background:rgba(245,180,0,.08);border-radius:9px;padding:7px 10px;font-size:12.5px;margin-top:8px}
+.dk-act details{margin-top:8px;font-size:12px;color:var(--ink-2)}
+.dk-act details pre{white-space:pre-wrap;font-family:var(--mono);font-size:11.5px;max-height:220px;overflow:auto;background:var(--bg);padding:8px;border-radius:8px}
+.dk-btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.dk-btn{border:0;border-radius:9px;padding:8px 12px;font-weight:600;font-size:13px}
+.dk-btn.go{background:var(--up);color:#000}.dk-btn.sec{background:var(--surface-3);color:var(--ink)}.dk-btn.j{border:1px solid var(--rule);color:var(--ink-2)}
+.dk-btn:disabled{opacity:.5;cursor:default}
+.dk-quick{display:flex;gap:6px;margin:0 18px 8px;flex-wrap:wrap}
+.dk-quick button{font-size:11.5px;border:1px solid var(--rule);border-radius:999px;padding:4px 10px;color:var(--ink-2)}
+.dk-quick button:hover{color:var(--ink);border-color:var(--ink-3)}
+.dk-compose{margin:0 18px 16px;display:flex;gap:8px;align-items:flex-end;background:var(--s1);border:1px solid var(--rule);border-radius:14px;padding:8px}
+.dk-compose textarea{flex:1;background:transparent;border:0;resize:none;outline:0;min-height:36px;max-height:160px;padding:7px 4px;line-height:1.4}
+.dk-att{background:var(--surface-3);border-radius:9px;padding:7px 10px;color:var(--ink-2);font-size:12px;white-space:nowrap}
+.dk-go{background:var(--up);color:#000;border-radius:9px;padding:7px 14px;font-weight:700}
+.dk-go:disabled{opacity:.5}
+.dk-pend{margin:0 18px 6px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2)}
+.dk-pend img{height:40px;border-radius:6px;border:1px solid var(--rule)}
+.dk-lock{margin:auto;max-width:420px;text-align:center;padding:30px}
+.dk-lock h3{margin-bottom:8px}
+.dk-empty{color:var(--ink-3);text-align:center;margin:auto;max-width:460px;line-height:1.6}
+@media (max-width:1279px){.dk{grid-template-columns:60px 250px minmax(0,1fr) 290px}}
+@media (max-width:1099px){
+  .dk{position:static;display:flex;flex-direction:column;min-height:100vh}
+  body.dk-on{overflow:auto}
+  .dk-rail{flex-direction:row;justify-content:space-around;padding:6px;position:sticky;top:0;z-index:2;border-right:0;border-bottom:1px solid var(--rule)}
+  .dk-rail .sp,.dk-logo{display:none}
+  .dk-rail{order:-3}.dk-strip{order:-2}
+  .dk-desk{border-right:0;min-height:80vh;order:-1}
+  .dk-col{border-right:0;overflow:visible}
+}
+.gate2 .gcancel{display:block;margin:14px auto 0;color:var(--ink-2);font-size:13px}
+.dk-pend[hidden],.gate2 .gcancel[hidden],#sDeskLogin[hidden]{display:none!important}
 </style>
 </head>
 <body>
+
+<div class="dk" id="dk" hidden>
+  <nav class="dk-rail" aria-label="Otto">
+    <div class="dk-logo">O</div>
+    <button data-go="desk" class="on"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5a8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4z"/></svg>Desk</button>
+    <button data-go="market"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>Market</button>
+    <button data-go="week"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Week</button>
+    <button data-go="journal"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Journal</button>
+    <button data-go="insights"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Jason</button>
+    <div class="sp"></div>
+    <button data-go="settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Settings</button>
+  </nav>
+
+  <div class="dk-strip" id="dkStrip"><span class="mut">Loading prices…</span></div>
+
+  <div class="dk-col" id="dkLeft"></div>
+
+  <div class="dk-desk">
+    <div class="dk-head">
+      <b>The Desk</b>
+      <span class="dk-pill">Jason brain + TradingView + Robinhood</span>
+      <span class="dk-pill">Every change needs an Approve</span>
+      <label class="dk-who">At the desk <select id="dkWho"><option>Ifoma</option><option>Josh</option></select></label>
+    </div>
+    <div class="dk-msgs" id="dkMsgs"></div>
+    <div class="dk-quick" id="dkQuick">
+      <button data-q="Morning read: the three macro inputs, SPY/QQQ and the Mag 7, today's calendar and earnings on my watchlist. Bias and the 2–3 setups worth watching. No orders.">Morning read</button>
+      <button data-q="Check my positions in the Agentic account: hold, trim or close, and the exact level that would change the answer.">Check my positions</button>
+      <button data-q="Grade this chart against Jason's method: Take it / Wait / Pass, and the one reason that matters most.">Grade this chart</button>
+      <button data-q="Pull my Robinhood order history and build my 5 biggest wins and 5 biggest losses, with which of Jason's rules each one followed or broke.">5 wins / 5 losses</button>
+      <button data-fill="What did Jason say about ">What did Jason say about…</button>
+    </div>
+    <div class="dk-pend" id="dkPend" hidden><img id="dkPendImg" alt=""><span>Chart attached</span><button class="dk-btn j" id="dkPendX" style="padding:3px 8px">Remove</button></div>
+    <div class="dk-compose">
+      <button class="dk-att" id="dkAtt" title="Attach a chart (or paste with Ctrl+V)">＋ Chart</button>
+      <input type="file" id="dkFile" accept="image/*" hidden>
+      <textarea id="dkIn" rows="1" placeholder="Ask the desk, or paste a chart (Ctrl+V)…"></textarea>
+      <button class="dk-go" id="dkSend">Send</button>
+    </div>
+  </div>
+
+  <div class="dk-col r" id="dkRight"></div>
+</div>
 
 <header class="top">
   <div class="brand"><span class="dot"></span>Otto Trader</div>
@@ -387,6 +523,7 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
 </div>
 
 <nav class="nav" role="tablist">
+  <button role="tab" aria-selected="false" data-p="desk"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Desk</button>
   <button role="tab" aria-selected="true" data-p="week"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Week<span class="badge" id="bWeek" hidden></span></button>
   <button role="tab" aria-selected="false" data-p="insights"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Insights</button>
   <button role="tab" aria-selected="false" data-p="coach"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5a8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4z"/></svg>Coach</button>
@@ -554,6 +691,13 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
       <button class="btn wide" id="sOut" style="margin-top:10px">Sign out</button>
     </div>
     <div style="margin-bottom:20px">
+      <label class="f">The Desk</label>
+      <p class="hint" style="margin-top:0">Desk login: <b id="sDeskWho">—</b></p>
+      <button class="btn solid wide" id="sDeskLogin" hidden>Sign in with the Otto email</button>
+      <div id="sConn"></div>
+      <p class="hint">Connect once and the Desk keeps the sign-in (encrypted, on the server). Nothing is ever changed without an Approve click.</p>
+    </div>
+    <div style="margin-bottom:20px">
       <input class="f" id="sKey" type="hidden">
       <p class="hint" style="margin-top:0">Market data needs no key any more — the routine and the bias card both read from the server.</p>
     </div>
@@ -600,6 +744,7 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
       <button class="btn solid wide" id="gVerify" style="margin-top:10px">Sign in</button>
       <p class="hint" style="margin-top:8px">If tapping the link lands you on a GitHub 404 page, that&rsquo;s fine &mdash; copy the address out of the browser bar and paste it here. The sign-in is inside that address.</p>
     </div>
+    <button class="gcancel" id="gCancel" hidden>Not now</button>
     <p class="gsub" style="margin-top:18px;font-size:12.5px">No password. Type the code from the email &mdash; or tap the link in it, either works.</p>
   </div>
 </div>
@@ -751,6 +896,8 @@ const today=()=>new Date().toISOString().slice(0,10);
 const week=()=>CALLS[CUR]||null;
 
 $$(".nav button").forEach(b=>b.addEventListener("click",()=>{
+  if(b.dataset.p==="desk"){openDesk();return}
+  if(typeof closeDesk==="function"&&DK.open)closeDesk();
   $$(".nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
   $$(".pane").forEach(p=>p.classList.toggle("on",p.id==="p-"+b.dataset.p));
   LS.set("tab",b.dataset.p);window.scrollTo(0,0);
@@ -1499,7 +1646,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="2.6.8";
+const BUILD="3.0.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -1907,6 +2054,7 @@ $("#clearRunBtn").addEventListener("click",()=>{RUN=null;LS.del("run");renderMar
 /* ---------- settings ---------- */
 function openSettings(){
   $("#sWho").textContent=(USER&&USER.email)||"—";
+  if(typeof dkRenderConn==="function")dkRenderConn();
   $("#sKey").value=CFG.key;$("#sTen").value=CFG.ten;
   $("#sTenH").value=CFG.tenH;$("#sJpy").value=CFG.jpy;$("#sMax").value=CFG.maxDay;$("#sWatch").value=CFG.watch;
   $("#dlgSet").showModal();
@@ -1998,7 +2146,8 @@ function hydrate(){
 
 /* ---------- sign in ---------- */
 function showLogin(msg){
-  $("#gate2").hidden=false;
+  $("#gate2").hidden=false;$("#gCancel").hidden=!USER;
+  if($("#dlgSet").open)$("#dlgSet").close();
   if(msg){const m=$("#gMsg");m.textContent=msg;m.className="gmsg err"}
 }
 $("#gSend").addEventListener("click",async()=>{
@@ -2066,6 +2215,8 @@ async function verifyCode(){
   }
 }
 $("#gVerify").addEventListener("click",verifyCode);
+$("#gCancel").addEventListener("click",()=>{$("#gate2").hidden=true});
+$("#sDeskLogin").addEventListener("click",()=>{$("#gCodeWrap").hidden=false;showLogin()});
 $("#gCode").addEventListener("keydown",e=>{if(e.key==="Enter")verifyCode()});
 
 /* The magic link comes back as #access_token=... Take it, store it, and strip
@@ -2086,6 +2237,378 @@ function claimHash(){
    has been and gone and nobody claims the token. Catch that case too. */
 window.addEventListener("hashchange",()=>{ if(claimHash())location.reload() });
 
+/* ================================================================ THE DESK
+   v3.0, 4 Oct 2026. The laptop trading desk: one conversation shared by
+   everyone on the Otto login, with Jason's brain, TradingView and Robinhood
+   behind it. The model can look at anything; it can change nothing. Every
+   order, cancel, alert or watchlist edit comes back as a card, and only a
+   click on Approve runs it (server: ?fn=act runs exactly the stored calls). */
+const DK={rows:[],acts:{},lastId:0,streaming:null,panel:null,img:null,open:false,locked:false,pollT:null,panelAt:0,whoami:null};
+const DK_WIDE=()=>window.innerWidth>=1100;
+
+async function dkApi(fn,body,qs){
+  const {url,headers}=await fnUrl(fn);
+  const r=await fetch(url+(qs||""),body?{method:"POST",headers,body:JSON.stringify(body)}:{headers});
+  const j=await r.json().catch(()=>({ok:false,error:"HTTP "+r.status}));
+  if(r.status===403&&j.locked){DK.locked=true;dkRenderMsgs()}
+  if(!j.ok)throw new Error(j.error||("HTTP "+r.status));
+  return j;
+}
+
+function openDesk(){
+  document.body.classList.add("dk-on");$("#dk").hidden=false;DK.open=true;
+  $$(".dk-rail button").forEach(b=>b.classList.toggle("on",b.dataset.go==="desk"));
+  $$(".nav button").forEach(x=>x.setAttribute("aria-selected",x.dataset.p==="desk"));
+  $("#dkWho").value=LS.get("deskWho","Ifoma");
+  dkRenderLeft();dkRenderRight();dkRenderStrip();dkRenderMsgs();
+  dkStart();
+}
+function closeDesk(){
+  document.body.classList.remove("dk-on");$("#dk").hidden=true;DK.open=false;
+  clearInterval(DK.pollT);DK.pollT=null;
+}
+$$(".dk-rail button").forEach(b=>b.addEventListener("click",()=>{
+  const g=b.dataset.go;
+  if(g==="desk")return openDesk();
+  if(g==="settings")return openSettings();
+  closeDesk();
+  const t=$$(".nav button").find(x=>x.dataset.p===g);if(t)t.click();
+}));
+$("#dkWho").addEventListener("change",e=>LS.set("deskWho",e.target.value));
+
+async function dkStart(){
+  if(!USER)return;
+  try{
+    const w=await dkApi("whoami");DK.whoami=w;DK.locked=!w.desk;
+  }catch(e){DK.locked=true}
+  dkRenderMsgs();
+  if(DK.locked)return;
+  await Promise.all([dkLoadLog(),dkPanel(true)]);
+  clearInterval(DK.pollT);
+  DK.pollT=setInterval(()=>{
+    if(!DK.open||document.visibilityState!=="visible")return;
+    if(!DK.streaming)dkPoll();
+    if(Date.now()-DK.panelAt>60e3)dkPanel();
+  },10e3);
+}
+
+/* ---------- the shared log ---------- */
+async function dkLoadLog(){
+  try{
+    const j=await dkApi("desk_log");
+    DK.rows=j.rows||[];(j.actions||[]).forEach(a=>DK.acts[a.id]=a);
+    DK.lastId=DK.rows.reduce((m,r)=>Math.max(m,r.id),0);
+    dkRenderMsgs(true);
+  }catch(e){if(!DK.locked)toast("Desk: "+String(e.message).slice(0,90))}
+}
+async function dkPoll(){
+  const live=Object.values(DK.acts).filter(a=>a.status==="pending"||a.status==="running").map(a=>a.id);
+  try{
+    const j=await dkApi("desk_log",null,"&since="+DK.lastId+(live.length?"&acts="+live.join(","):""));
+    let changed=false;
+    (j.actions||[]).forEach(a=>{const o=DK.acts[a.id];if(!o||o.status!==a.status)changed=true;DK.acts[a.id]=a});
+    if(j.rows&&j.rows.length){DK.rows.push(...j.rows);DK.lastId=Math.max(DK.lastId,...j.rows.map(r=>r.id));changed=true}
+    if(changed){dkRenderMsgs(true);dkRenderRight()}
+  }catch(e){}
+}
+
+/* ---------- panel: prices, accounts, alerts ---------- */
+async function dkPanel(force){
+  if(!force&&Date.now()-DK.panelAt<20e3)return;
+  DK.panelAt=Date.now();
+  try{DK.panel=await dkApi("panel")}catch(e){DK.panel={error:e.message}}
+  (DK.panel.pending||[]).forEach(a=>DK.acts[a.id]=a);
+  dkRenderStrip();dkRenderLeft();dkRenderRight();
+}
+// TradingView's batch answer, whatever its exact shape, into {SYMBOL: {close, change}}
+function dkQuotes(){
+  const out={},p=DK.panel;if(!p||!p.quotes)return out;
+  const walk=o=>{
+    if(!o||typeof o!=="object")return;
+    if(Array.isArray(o)){o.forEach(walk);return}
+    const s=o.symbol||o.ticker||o.s||o.name;
+    const d=o.d&&typeof o.d==="object"?o.d:o;
+    const c=d.close??d.price??d.last;
+    if(typeof s==="string"&&c!=null&&isFinite(+c)){out[s.toUpperCase()]={close:+c,change:d.change!=null?+d.change:null,desc:d.description||""}}
+    Object.values(o).forEach(v=>{if(v&&typeof v==="object")walk(v)});
+  };
+  walk(p.quotes);
+  return out;
+}
+function dkQ(Q,sym){return Q[sym]||Q[sym.split(":")[1]]||null}
+const dkPct=c=>c==null||!isFinite(c)?"":`<span class="${c>=0?"up":"dn"}">${c>=0?"+":""}${c.toFixed(2)}%</span>`;
+const dkNum=(v,d)=>v==null||!isFinite(v)?"—":(+v).toLocaleString(undefined,{minimumFractionDigits:d??2,maximumFractionDigits:d??2});
+
+function dkRenderStrip(){
+  const p=DK.panel||{},Q=dkQuotes();let h="";
+  if(p.quotes&&p.macro){
+    h=p.macro.map(m=>{const q=dkQ(Q,m.sym);
+      return `<span><span class="k">${esc(m.label)}</span><span class="v">${q?dkNum(q.close,m.k==="ten"?3:2)+(m.k==="ten"?"%":""):"—"}</span> ${q?dkPct(q.change):""}</span>`}).join("");
+  }else if(p.fallback_quotes){
+    const f=p.fallback_quotes,one=(lab,o)=>o?`<span><span class="k">${lab}</span><span class="v">${dkNum(o.price)}</span> ${dkPct(o.pct)}</span>`:"";
+    h=`<span class="mut">10Y needs TradingView</span>`+one("Crude (USO)",f.crude)+one("USD/JPY",f.jpy)+one("SPY",f.es)+one("QQQ",f.nq);
+  }else if(DK.locked){h=`<span class="mut">Sign in with the Otto login to load the desk.</span>`}
+  else h=`<span class="mut">${p.error?esc(p.error):"Loading prices…"}</span>`;
+  const c=p.conn||{},dot=(ok,err)=>`<span class="dk-dot ${err?"bad":ok?"on":""}"></span>`;
+  h+=`<span class="dk-chips"><span class="dk-chip" data-set="1">${dot(c.tv,p.quotes_error)}TradingView</span>`+
+     `<span class="dk-chip" data-set="1">${dot(c.rh,p.rh_error)}Robinhood</span>`+
+     `<span class="dk-chip">${dot(CALLS.length)}Jason brain ${CALLS.length} calls</span>`+
+     `<span class="dk-chip">v${BUILD}</span></span>`;
+  $("#dkStrip").innerHTML=h;
+  $$("#dkStrip [data-set]").forEach(x=>x.addEventListener("click",openSettings));
+}
+
+function dkRenderLeft(){
+  const p=DK.panel||{},Q=dkQuotes();
+  let h=`<div class="dk-cardx"><div class="dk-h">Morning read <b>${new Date().toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}</b></div>
+    <div class="mut" style="color:var(--ink-2)">Ask the desk for today's read: the three inputs, SPY/QQQ, the Mag 7, the calendar.</div>
+    <button class="dk-link" data-q="Morning read: the three macro inputs, SPY/QQQ and the Mag 7, today's calendar and earnings on my watchlist. Bias and the 2–3 setups worth watching. No orders.">Run the morning read →</button></div>`;
+  // Watchlist: prices only, by decision (4 Oct) — no Jason-level distances yet.
+  const w=p.watch||[];
+  h+=`<div class="dk-cardx"><div class="dk-h">Watchlist <b>${esc(p.watchlist_name||"TradingView")}${w.length?" · "+w.length:""}</b></div>`;
+  if(!p.conn||!p.conn.tv)h+=`<div class="mut">Connect TradingView in Settings to see your watchlist here.</div>`;
+  else if(p.watchlist_error)h+=`<div class="dk-err">${esc(p.watchlist_error)}</div>`;
+  else if(!w.length)h+=`<div class="mut">Your active TradingView watchlist is empty.</div>`;
+  else h+=w.map(s=>{const q=dkQ(Q,s);return `<div class="dk-row"><span><b>${esc(s.split(":")[1]||s)}</b></span><span class="mono">${q?dkNum(q.close):"—"} ${q?dkPct(q.change):""}</span></div>`}).join("");
+  h+=`</div>`;
+  // Jason's homework from the newest call
+  const c=CALLS[0];
+  if(c&&(c.assignments||[]).length){
+    const d=(c.call&&c.call.date)||"";
+    h+=`<div class="dk-cardx"><div class="dk-h">Jason's homework <b>${esc(d)}</b></div>`+
+      c.assignments.slice(0,8).map(a=>{let on=false;try{on=!!DONE[hwKey(a,d)]}catch(e){}
+        return `<div class="dk-check"><span class="dk-box ${on?"on":""}">${on?"✓":""}</span><span>${esc(a.task||"")}</span></div>`}).join("")+
+      `<button class="dk-link" data-go2="week">Open the week →</button></div>`;
+  }
+  $("#dkLeft").innerHTML=h;
+  dkBindQuick($("#dkLeft"));
+  $$("#dkLeft [data-go2]").forEach(b=>b.addEventListener("click",()=>{closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.go2);if(t)t.click()}));
+}
+
+function dkRenderRight(){
+  const p=DK.panel||{};let h="";
+  // Robinhood
+  h+=`<div class="dk-cardx"><div class="dk-h">Robinhood <b>${p.agentic?"live":""}</b></div>`;
+  if(!p.conn||!p.conn.rh)h+=`<div class="mut">Connect Robinhood in Settings. Orders only ever go to the Agentic account.</div>`;
+  else if(p.rh_error)h+=`<div class="dk-err">${esc(p.rh_error)}</div>`;
+  else if(p.agentic){
+    const a=p.agentic,pf=a.portfolio||{},tot=+pf.total_value,bp=pf.buying_power&&+pf.buying_power.buying_power;
+    h+=`<div class="dk-row"><span><b>Agentic</b> ${esc(a.account)} <span class="dk-tag ok">AI trades here</span></span><span class="mono">$${dkNum(tot)}</span></div>`+
+       `<div class="dk-row"><span class="mut">Buying power</span><span class="mono">$${dkNum(bp)}</span></div>`+
+       `<div class="dk-row"><span class="mut">20% flag at</span><span class="mono">$${dkNum(tot*0.2)}</span></div>`;
+    const ops=Array.isArray(a.options)?a.options:[];
+    h+=ops.length?ops.map(o=>`<div class="dk-row"><span><b>${esc(o.chain_symbol||"")}</b> <span class="mut">${esc(o.type||"")} · exp ${esc(o.expiration_date||"")}</span></span><span class="mono">${dkNum(+o.quantity,0)} · avg $${dkNum(+o.average_price)}</span></div>`).join("")
+      :`<div class="dk-row"><span class="mut">Open option positions</span><span>${a.options_error?`<span class="dk-err">error</span>`:"none"}</span></div>`;
+  } else h+=`<div class="mut">Loading…</div>`;
+  h+=`</div>`;
+  // Cards waiting
+  const pend=Object.values(DK.acts).filter(a=>a.status==="pending"||a.status==="running").sort((a,b)=>String(b.created_at).localeCompare(a.created_at));
+  h+=`<div class="dk-cardx"><div class="dk-h">Waiting for approval <b>${pend.length}</b></div>`+
+    (pend.length?pend.map(a=>`<div class="dk-row"><span>${esc(a.title)}</span><span class="dk-tag near">${esc(a.status)}</span></div>`).join(""):`<div class="mut">Nothing waiting.</div>`)+`</div>`;
+  // TradingView alerts
+  const al=[];const walk=o=>{if(!o||typeof o!=="object")return;if(Array.isArray(o)){o.forEach(walk);return}
+    if(o.alert_id!=null||(o.name&&o.symbol))al.push(o);else Object.values(o).forEach(walk)};
+  walk(p.alerts);
+  h+=`<div class="dk-cardx"><div class="dk-h">TradingView alerts <b>${p.alerts?al.length+" active":""}</b></div>`+
+    (!p.conn||!p.conn.tv?`<div class="mut">Connect TradingView to see alerts.</div>`
+     :p.alerts_error?`<div class="dk-err">${esc(p.alerts_error)}</div>`
+     :al.length?al.slice(0,8).map(a=>`<div class="dk-row"><span>${esc(a.name||a.symbol||"alert")}</span></div>`).join("")+(al.length>8?`<div class="mut" style="margin-top:4px">+ ${al.length-8} more</div>`:"")
+     :`<div class="mut">No active alerts.</div>`)+`</div>`;
+  // Brain
+  const c=CALLS[0];
+  h+=`<div class="dk-cardx"><div class="dk-h">Jason brain <b>${CALLS.length} calls</b></div>`+
+    (c?`<div class="dk-row"><span class="mut">Newest</span><span>${esc((c.call&&c.call.date)||"")}</span></div><div class="mut" style="margin-top:4px">${esc((c.call&&c.call.title)||"")}</div>`:`<div class="mut">Loading…</div>`)+
+    (c&&(c.questions||[]).length?`<div class="mut" style="margin-top:8px">Open questions for Jason:</div><ul style="margin:4px 0 0;padding-left:16px;color:var(--ink-2)">${c.questions.slice(0,3).map(q=>`<li>${esc(q.q||q.question||q.text||String(q))}</li>`).join("")}</ul>`:"")+`</div>`;
+  $("#dkRight").innerHTML=h;
+}
+
+/* ---------- messages ---------- */
+function dkTime(t){try{return new Date(t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}catch(e){return ""}}
+function dkCard(a){
+  if(!a)return "";
+  const r=a.risk||{},st=a.status||"pending";
+  const calls=(a.calls||[]).map(c=>{const g=Object.assign({},c.args||{});delete g.ref_id;delete g.account_number;
+    return `${c.service==="rh"?"Robinhood":"TradingView"} · ${esc(c.tool)} · ${esc(JSON.stringify(g)).slice(0,300)}`}).join("<br>");
+  let risk="";
+  if(r.cost!=null||r.account_value){
+    risk=`<div class="dk-risk">Max cost <b class="mono">${r.cost!=null?"$"+dkNum(r.cost):"unknown"}</b>`+
+      (r.pct!=null?` · <b>${(r.pct*100).toFixed(0)}%</b> of $${dkNum(r.account_value)}`:"")+(r.account?` · Agentic ${esc(r.account)}`:"")+
+      ((r.notes||[]).length?` <span class="mut">(${esc(r.notes.join("; "))})</span>`:"")+`</div>`;
+  }
+  if(r.flag)risk+=`<div class="dk-warnbox">⚠ This risks ${(r.pct*100).toFixed(0)}% of the account — over your 20% flag. Jason called ~40% in one trade "crazy" (Oct 1). You can still approve.</div>`;
+  const res=(a.result||[]).map(x=>`<div class="${x.ok?"up":"dn"}" style="font-size:12px;margin-top:6px">${x.ok?"✓":"✗"} ${esc(x.tool)}</div><pre style="white-space:pre-wrap;font-size:11.5px;margin:2px 0 0;color:var(--ink-2)">${esc(String(x.text||"").slice(0,700))}</pre>`).join("");
+  const tag={pending:"near",running:"near",done:"ok",failed:"bad"}[st]||"";
+  const label={pending:"needs your approval",running:"running…",done:"done",failed:"failed",rejected:"rejected",expired:"expired — ask again for fresh prices"}[st]||st;
+  const who=a.decided_by?` <span class="mut" style="font-size:11px">· ${esc(a.decided_by.split("@")[0])} ${dkTime(a.decided_at)}</span>`:"";
+  return `<div class="dk-act st-${esc(st)}" data-act="${esc(a.id)}">
+    <div class="dk-act-h"><b>${esc(a.title)}</b><span><span class="dk-tag ${tag}">${esc(label)}</span>${who}</span></div>
+    ${a.summary?`<pre class="dk-sum">${esc(a.summary)}</pre>`:""}
+    ${risk}
+    <div class="dk-calls">${calls}</div>
+    ${a.review?`<details><summary>Robinhood's own review</summary><pre>${esc(a.review)}</pre></details>`:""}
+    ${res}
+    <div class="dk-btns">${st==="pending"?`<button class="dk-btn go" data-ok="1">Approve &amp; ${(a.calls||[]).some(c=>/^place_/.test(c.tool))?"place":"run"}</button><button class="dk-btn sec" data-no="1">Reject</button>`:""}<button class="dk-btn j" data-jason="1">Send to Jason</button></div>
+  </div>`;
+}
+function dkRenderMsgs(stick){
+  const box=$("#dkMsgs");if(!box)return;
+  if(DK.locked){
+    box.innerHTML=`<div class="dk-lock"><h3>The Desk is locked</h3><p class="mut">It can see your Robinhood and TradingView accounts, so it only opens for the Otto login. ${USER&&USER.email?"You're signed in as "+esc(USER.email)+".":"This device is on a guest session."}</p><button class="dk-btn go" id="dkLogin">Sign in with the Otto email</button></div>`;
+    $("#dkLogin").addEventListener("click",()=>{$("#gCodeWrap").hidden=false;showLogin()});
+    return;
+  }
+  const near=box.scrollHeight-box.scrollTop-box.clientHeight<120;
+  let h="";
+  if(!DK.rows.length&&!DK.streaming)h=`<div class="dk-empty"><b style="color:var(--ink)">The Desk</b><br>Ask anything — a read on the market, a chart (paste it with Ctrl+V), a trade idea, your positions. It reads TradingView and Robinhood live and leans on Jason's calls. Anything that would change something comes back as a card; nothing happens until someone clicks Approve.</div>`;
+  for(const r of DK.rows){
+    if(r.role==="system"){h+=`<div class="dk-sys">${esc(r.content)} · ${dkTime(r.created_at)}</div>`;continue}
+    if(r.role==="user"){h+=`<div class="dk-m me"><div class="dk-mw">${esc(r.author||"")} · ${dkTime(r.created_at)}</div>${esc(r.content)}</div>`;continue}
+    h+=`<div class="dk-m ai"><div class="dk-mw">Otto · ${dkTime(r.created_at)}</div>${r.content?`<div class="md">${md(r.content)}</div>`:""}${r.action_id?dkCard(DK.acts[r.action_id]):""}</div>`;
+  }
+  const s=DK.streaming;
+  if(s){
+    h+=`<div class="dk-m me"><div class="dk-mw">${esc(s.author)} · now</div>${s.img?`<img class="dk-thumb" src="${s.img}">`:""}${esc(s.q)}</div>`;
+    h+=`<div class="dk-m ai"><div class="dk-mw">Otto</div>${s.tools.length?`<div class="dk-tool">↳ ${s.tools.slice(-6).map(esc).join(" · ")}</div>`:""}`+
+      (s.err?`<div class="dk-err">${esc(s.err)}</div>`:s.text?`<div class="md">${md(s.text)}</div>`:`<span class="mut">working…</span>`)+
+      s.cards.map(id=>dkCard(DK.acts[id])).join("")+`</div>`;
+  }
+  box.innerHTML=h;
+  if(stick||near)box.scrollTop=box.scrollHeight;
+}
+$("#dkMsgs").addEventListener("click",async e=>{
+  const card=e.target.closest("[data-act]");if(!card)return;
+  const a=DK.acts[card.dataset.act];if(!a)return;
+  if(e.target.closest("[data-jason]")){
+    const t=`Jason — quick look before I take this?\n${a.title}\n${a.summary||""}`.trim();
+    try{await navigator.clipboard.writeText(t);toast("Copied — paste it to Jason")}catch(err){prompt("Copy this to Jason:",t)}
+    return;
+  }
+  const ok=e.target.closest("[data-ok]"),no=e.target.closest("[data-no]");
+  if(!ok&&!no)return;
+  const order=(a.calls||[]).some(c=>/^place_/.test(c.tool));
+  if(ok&&order&&!confirm(`Place this with real money?\n\n${a.title}${a.risk&&a.risk.flag?"\n\n⚠ Over your 20% flag.":""}`))return;
+  card.querySelectorAll("button").forEach(b=>b.disabled=true);
+  try{
+    const j=await dkApi("act",{id:a.id,decision:ok?"approve":"reject"});
+    DK.acts[a.id]=j.action;
+    toast(j.action.status==="done"?"Done":j.action.status==="failed"?"It failed — see the card":j.action.status);
+  }catch(err){toast(String(err.message).slice(0,100))}
+  dkRenderMsgs();dkRenderRight();dkPoll();dkPanel(true);
+});
+
+/* ---------- compose ---------- */
+function dkBindQuick(root){
+  root.querySelectorAll("[data-q]").forEach(b=>b.addEventListener("click",()=>{
+    if(b.dataset.q.startsWith("Grade this chart")&&!DK.img){$("#dkIn").value=b.dataset.q;toast("Paste or attach the chart, then Send");$("#dkFile").click();return}
+    $("#dkIn").value=b.dataset.q;dkSend()}));
+  root.querySelectorAll("[data-fill]").forEach(b=>b.addEventListener("click",()=>{const i=$("#dkIn");i.value=b.dataset.fill;i.focus()}));
+}
+dkBindQuick($("#dkQuick"));
+async function dkSetImg(file){
+  try{DK.img=await shrinkImage(file);$("#dkPendImg").src=DK.img.url;$("#dkPend").hidden=false}
+  catch(e){DK.img=null;toast("Couldn't read that image")}
+}
+$("#dkAtt").addEventListener("click",()=>$("#dkFile").click());
+$("#dkFile").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)dkSetImg(f);e.target.value=""});
+$("#dkPendX").addEventListener("click",()=>{DK.img=null;$("#dkPend").hidden=true});
+document.addEventListener("paste",e=>{
+  if(!DK.open)return;
+  const it=[...(e.clipboardData&&e.clipboardData.items||[])].find(i=>i.type.startsWith("image/"));
+  if(it){e.preventDefault();dkSetImg(it.getAsFile())}
+});
+$("#dkIn").addEventListener("input",e=>{e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,160)+"px"});
+$("#dkIn").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();dkSend()}});
+$("#dkSend").addEventListener("click",dkSend);
+
+async function dkSend(){
+  const el=$("#dkIn"),q=el.value.trim();
+  if(!q&&!DK.img)return;
+  if(DK.streaming)return toast("One moment — the desk is still answering");
+  if(DK.locked)return toast("Sign in with the Otto login first");
+  const author=$("#dkWho").value||"Ifoma";
+  const img=DK.img;DK.img=null;$("#dkPend").hidden=true;el.value="";el.style.height="auto";
+  const hist=DK.rows.slice(-24).map(r=>r.role==="system"?{role:"user",content:"Otto (system): "+r.content}
+    :r.role==="user"?{role:"user",author:r.author,content:r.content}
+    :{role:"assistant",content:r.content||(r.action_id&&DK.acts[r.action_id]?`[Showed card: ${DK.acts[r.action_id].title} — ${DK.acts[r.action_id].status}]`:"(card shown)")});
+  hist.push({role:"user",author,content:q||"(chart attached)",image:img?{media_type:img.media_type,data:img.data}:undefined});
+  DK.streaming={q:q||"(chart attached)",author,img:img&&img.url,text:"",tools:[],cards:[],err:""};
+  $("#dkSend").disabled=true;dkRenderMsgs(true);
+  const s=DK.streaming;
+  try{
+    const {url,headers}=await fnUrl("desk");
+    const res=await fetch(url,{method:"POST",headers,body:JSON.stringify({messages:hist,author})});
+    if(!res.ok||!res.body){const j=await res.json().catch(()=>({}));if(res.status===403&&j.locked)DK.locked=true;throw new Error(j.error||("HTTP "+res.status))}
+    const rd=res.body.getReader(),dec=new TextDecoder();let buf="";
+    for(;;){
+      const {done,value}=await rd.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const parts=buf.split("\n\n");buf=parts.pop()||"";
+      for(const p of parts){
+        const line=p.split("\n").find(x=>x.startsWith("data: "));if(!line)continue;
+        let ev;try{ev=JSON.parse(line.slice(6))}catch(e){continue}
+        if(ev.t==="text")s.text+=ev.v;
+        else if(ev.t==="tool")s.tools.push(ev.v);
+        else if(ev.t==="action"){DK.acts[ev.v.id]=ev.v;s.cards.push(ev.v.id);dkRenderRight()}
+        else if(ev.t==="error")s.err=ev.v;
+        dkRenderMsgs();
+      }
+    }
+    if(!s.text&&!s.cards.length&&!s.err)s.err="No answer came back. Try again.";
+  }catch(e){s.err="Couldn't reach the desk: "+String(e.message).slice(0,160)}
+  $("#dkSend").disabled=false;
+  if(s.err){dkRenderMsgs(true);toast(s.err.slice(0,90))}
+  // the server logged both sides; reload so both laptops see the same thing
+  const keep=s.err?s:null;
+  DK.streaming=null;
+  await dkLoadLog();
+  if(keep){DK.streaming=null;$("#dkMsgs").insertAdjacentHTML("beforeend",`<div class="dk-sys dk-err">${esc(keep.err)}</div>`)}
+  dkPanel(true);
+}
+
+/* ---------- connections (Settings) ---------- */
+async function dkRenderConn(){
+  const box=$("#sConn");if(!box)return;
+  const email=USER&&USER.email;
+  $("#sDeskWho").textContent=email||"guest session (not the Otto login)";
+  if(!email){box.innerHTML=`<p class="hint">Sign in with the Otto email to connect TradingView and Robinhood.</p>`;$("#sDeskLogin").hidden=false;return}
+  box.innerHTML=`<p class="hint">Checking…</p>`;
+  try{
+    const w=await dkApi("whoami");
+    if(!w.desk){box.innerHTML=`<p class="hint">${esc(email)} isn't the Otto login, so the Desk stays locked on this device.</p>`;$("#sDeskLogin").hidden=false;return}
+    $("#sDeskLogin").hidden=true;
+    const j=await dkApi("conn_status");
+    const row=s=>(j.conn||[]).find(c=>c.service===s);
+    const line=(s,name,note)=>{const r=row(s);
+      return `<div class="dk-row" style="padding:8px 0"><span><span class="dk-dot ${r?"on":""}"></span><b>${name}</b><br><span class="hint" style="margin:0">${r?"Connected "+new Date(r.connected_at||r.updated_at).toLocaleDateString()+(r.connected_by?" by "+esc(r.connected_by.split("@")[0]):""):note}</span></span>`+
+        (r?`<button class="btn" data-disc="${s}" style="min-height:34px">Disconnect</button>`:`<button class="btn solid" data-conn="${s}" style="min-height:34px">Connect</button>`)+`</div>`};
+    box.innerHTML=line("tv","TradingView","Prices, watchlists, alerts")+line("rh","Robinhood","Accounts and positions. Orders go to the Agentic account only, after Approve.");
+    box.querySelectorAll("[data-conn]").forEach(b=>b.addEventListener("click",async()=>{
+      b.disabled=true;b.textContent="Opening…";
+      try{const r=await dkApi("oauth_start",{service:b.dataset.conn});location.href=r.url}
+      catch(e){toast(String(e.message).slice(0,120));b.disabled=false;b.textContent="Connect"}
+    }));
+    box.querySelectorAll("[data-disc]").forEach(b=>b.addEventListener("click",async()=>{
+      if(!confirm("Disconnect? The desk will stop seeing this account until you connect it again."))return;
+      try{await dkApi("disconnect",{service:b.dataset.disc});toast("Disconnected");dkRenderConn();DK.panelAt=0}catch(e){toast(e.message)}
+    }));
+  }catch(e){box.innerHTML=`<p class="hint dk-err">${esc(e.message)}</p>`}
+}
+
+/* Coming back from TradingView / Robinhood: oauth.html left the code here. */
+async function dkOauthReturn(){
+  let ret=null;try{ret=JSON.parse(localStorage.getItem(NS+"oauthret")||"null");localStorage.removeItem(NS+"oauthret")}catch(e){}
+  if(location.search.includes("desk=1"))history.replaceState(null,"",location.pathname);
+  if(!ret)return false;
+  if(ret.error||!ret.code){toast("Connection cancelled: "+String(ret.error||"no code").slice(0,80));return true}
+  if(Date.now()-(ret.at||0)>15*60e3){toast("That sign-in is too old — press Connect again");return true}
+  toast("Finishing the connection…");
+  try{
+    const j=await dkApi("oauth_finish",{code:ret.code,state:ret.state});
+    toast(j.name+" connected"+(j.warn?" — but: "+String(j.warn).slice(0,60):""));
+  }catch(e){toast("Connection failed: "+String(e.message).slice(0,100))}
+  return true;
+}
+
 (async function boot(){
   if(!SB_ANON||SB_ANON.indexOf("PASTE")===0){
     document.getElementById("gate2").hidden=false;
@@ -2100,6 +2623,7 @@ window.addEventListener("hashchange",()=>{ if(claimHash())location.reload() });
   // syncs as people navigate (unchanged), it just isn't what boot reads.
   const t=$$(".nav button").filter(x=>x.dataset.p==="market")[0];if(t)t.click();
   renderAll();
+  const wantDesk=DK_WIDE()||location.search.includes("desk=1");
 
   let tok=await token();
   if(!tok){
@@ -2118,8 +2642,13 @@ window.addEventListener("hashchange",()=>{ if(claimHash())location.reload() });
   try{ await pull(); hydrate(); renderAll(); }
   catch(e){ toast("Offline — showing your last saved copy") }
 
-  autoBrain().then(autoWeek);
-  autoMarket();                                // the landing tab reads itself; no tap needed
+  autoBrain().then(()=>{autoWeek();if(DK.open){dkRenderLeft();dkRenderRight();dkRenderStrip()}});
+  autoMarket();
+  // v3.0: laptops land on the Desk. A return from TradingView/Robinhood sign-in
+  // finishes the connection first, then opens the Desk with Settings showing it.
+  const back=await dkOauthReturn();
+  if(wantDesk||back)openDesk();
+  if(back)openSettings();                                // the landing tab reads itself; no tap needed
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")autoMarket()});
 })();
 

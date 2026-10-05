@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Otto Trader — connecting</title>
+<style>body{margin:0;height:100vh;display:grid;place-items:center;background:#0B0C0E;color:#F2F5F8;font-family:system-ui,sans-serif}</style>
+</head><body>
+<p>Connecting to Otto…</p>
+<script>
+/* TradingView and Robinhood send the sign-in back here. Hand the one-time code
+   to the app (same origin) and go straight back; the app finishes the exchange
+   on the server, where the tokens are encrypted. Nothing is stored here. */
+var q=new URLSearchParams(location.search);
+try{localStorage.setItem("otto:oauthret",JSON.stringify({code:q.get("code"),state:q.get("state"),
+  error:q.get("error_description")||q.get("error"),at:Date.now()}))}catch(e){}
+location.replace("./?desk=1");
+</script>
+</body></html>

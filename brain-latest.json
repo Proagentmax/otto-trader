@@ -1458,6 +1458,12 @@
         "caption": "MU monthly chart — the near-vertical move Jason points to as “straight up” with real follow-through, contrasted with AAPL."
       },
       {
+        "file": "frames/0310_msft_monthly_trendline_break.jpg",
+        "at": "03:10",
+        "caption": "MSFT monthly — long uptrend line from 2020 lows now broken by the latest candles, green demand zones near ~300 and ~205. Part of his fast-scan segment: \"Traders are not slow in their brain; they're quick.\"",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
         "file": "frames/0352_tem_order_block_resistance.jpg",
         "at": "03:24",
         "caption": "TEM (Tempus AI) 10m chart — the bullish-engulfing-into-order-block example where he says not to enter despite the pattern looking good."
@@ -1468,9 +1474,33 @@
         "caption": "INTC weekly — downtrend break into resistance that still needs a retest before it's tradable."
       },
       {
+        "file": "frames/0535_intc_10m_at_resistance.jpg",
+        "at": "05:35",
+        "caption": "INTC 10m — ripped from ~102 to ~111 and stalled at a 111.17 resistance line, VWAP far below, green zone ~104.5–106. His read: at resistance — needs to break resistance, retest, then go; \"Until then, look for sells… come off a VWAP.\"",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
         "file": "frames/0612_spy_daily_gap_vwap.jpg",
         "at": "06:19",
         "caption": "SPY 1h chart — the daily gap zone and VWAP band he cites (760/762/769/772)."
+      },
+      {
+        "file": "frames/0700_spy_daily_760_gap_hold.jpg",
+        "at": "07:00",
+        "caption": "SPY daily — blue line at ~760.55 marking the daily gap that held; price 762.83. He's pointing to the daily VWAP band 762–769 as what price is testing, not 772.",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
+        "file": "frames/0845_spy_daily_trendlines_wick_vs_body.jpg",
+        "at": "08:45",
+        "caption": "SPY daily — the trendlines he drew live (lines at 764.31 and 760.55, rising support from June, falling line from the August highs). Context: Josh asked about drawing trendlines wick-to-wick vs body-to-body; Jason draws fast \"where you can see it\" and says you can be more precise if you want.",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
+        "file": "frames/1055_spy_15m_gap_up_zones.jpg",
+        "at": "10:55",
+        "caption": "SPY 15m — the V-recovery from the ~750 low on the 16th into the gap up on the 17th, red resistance band ~762–764, green zones ~752–753 and ~750. Said here: \"when you think long, you think wrong.\"",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
       },
       {
         "file": "frames/1332_rgti_weekly_support.jpg",
@@ -1488,9 +1518,39 @@
         "caption": "ARM weekly — the downtrend break and drawn resistance line (chart reads ~287, he said 275)."
       },
       {
+        "file": "frames/1705_run_weekly_supply_demand.jpg",
+        "at": "17:05",
+        "caption": "RUN (Sunrun) weekly — on screen during the scan: red supply zones ~14.5–20 and ~10–11.5, green demand ~5.5–7.5, price 8.89. (Spoken words around here are about ARM — the screen and the speech are not on the same name.)",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
+        "file": "frames/1920_ntra_daily_breakout_339.jpg",
+        "at": "19:20",
+        "caption": "NTRA daily — breakout above the 339.27 line he drew, price 362.73, gap-up zone ~315–320 below. He calls it \"about as good as they come\" but \"a little toppy\" and wants a pullback to 355–360.",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
+        "file": "frames/2140_ntra_1h_349_retest.jpg",
+        "at": "21:40",
+        "caption": "NTRA 1h — the 349.70 line held as support on the retest, green zone ~345–347, now at 362.6. His pullback area for entry: 355–360.",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
+        "file": "frames/2210_aapl_5m_maplestax_cbc_panel.jpg",
+        "at": "22:10",
+        "caption": "AAPL 5m with his full indicator set: MapleStax CBC panel reads CBC 5m Bearish / 10m Bullish, Opening range: Above range, EMA cloud Bullish, VWAP Above, EMA 200 Above. Marked NY ORB-High 335.65, PMH 335, NY ORB-Low 330.2. Price stuck at 337.24 — \"give it a couple minutes, if it doesn't we'll take our couple bucks off.\"",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
         "file": "frames/2252_dell_before_entry.jpg",
         "at": "22:43",
         "caption": "DELL 1h chart just before he starts pricing the 600-strike calls."
+      },
+      {
+        "file": "frames/2500_aapl_5m_needs_new_high.jpg",
+        "at": "25:00",
+        "caption": "AAPL 5m — price pushed to ~337.1 above the purple line at 336.82, yellow zone ~335. He moves his level up: \"It needs to make a new high though.\"",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
       },
       {
         "file": "frames/2652_dell_trendline_break_entry.jpg",
@@ -1503,9 +1563,57 @@
         "caption": "COIN daily chart — the support/resistance zones as actually drawn (differ from the spoken 165/190)."
       },
       {
+        "file": "frames/2910_spy_768_call_chain.jpg",
+        "at": "29:10",
+        "caption": "Robinhood chain: SPY $768 call 9/25 — ask $2.17, delta 0.33, volume 1,256 vs open interest 2,723, IV 8.9%. He said he was checking the 764s; the screen shows the 768 selected, and 768 is the level he names as resistance.",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
+        "file": "frames/3020_amd_monthly_550_resistance.jpg",
+        "at": "30:20",
+        "caption": "AMD monthly — parabolic run to the 550 area (\"hard resistance for a while\"); price 546. If it clears the little red candle he expects ~602.",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
+        "file": "frames/3045_dell_10m_retest_after_fill.jpg",
+        "at": "30:45",
+        "caption": "DELL 10m — just after his 600-call order filled: price ~593 pulling back to retest the green zone ~570–576 from the morning gap. \"It's coming back down to retest this area. We got in.\"",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
         "file": "frames/3142_aapl_intraday_resistance.jpg",
         "at": "31:10",
         "caption": "AAPL 5m chart — price stalling right at the resistance line during the Apple trade."
+      },
+      {
+        "file": "frames/3225_nvda_15m_megaphone_trendlines.jpg",
+        "at": "32:25",
+        "caption": "NVDA 15m — two rising trendlines from the 213 low: the sharper one broke, the other still holds, price 219.6 at the top line. \"The sharper trend did break, but the other trend is in place… forming a megaphone.\"",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
+        "file": "frames/3445_aapl_15m_hammer_trade_not_over.jpg",
+        "at": "34:45",
+        "caption": "AAPL 15m — after he closed the Apple trade price shot to ~338. \"Look at the trade. Hammer… as long as you're above this, technically the trade's there.\" Line at 337.26, zone ~335.",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
+        "file": "frames/3500_aapl_weekly_344_resistance.jpg",
+        "at": "35:00",
+        "caption": "AAPL weekly — rising trendline from 2025, horizontal resistance at 344.22 and 334.47, green demand zones ~265–288 and ~235–240. Price 337.58.",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
+        "file": "frames/4145_dell_5m_needs_new_high.jpg",
+        "at": "41:45",
+        "caption": "DELL 5m — at ~593 near the high after holding the green zone ~586. \"Now I'm looking for a new high. If it doesn't make a new high, I got to cut it somewhere in here.\"",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
+      },
+      {
+        "file": "frames/4220_aapl_daily_gap_wait.jpg",
+        "at": "42:20",
+        "caption": "AAPL daily — price at the 337.8 line / gap area. \"Can I trade them? I could, but I have to take a risk that it rejects a gap at the morning open… so why don't I just wait?\"",
+        "source": "Otto_Trader.mp4 deep pass, 4 Oct 2026"
       },
       {
         "file": "frames/5040_dell_cutloss_1.jpg",
