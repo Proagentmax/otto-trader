@@ -1655,15 +1655,68 @@ const SENT_RULES = [
 const FRESH_SEC = 45 * 60;
 let SENT: { at: number; body: any } | null = null;
 
-async function legData(l: any) {
+async function tvLeg(l: any) {
   const [d, m] = await Promise.all([tvBars(l.sym, "1D", 3), tvBars(l.sym, "15m", 8)]);
   const last = m[m.length - 1];
   const cur = d[d.length - 1];
   const prev = last.t >= cur.t && d.length > 1 ? d[d.length - 2].c : cur.c;
   const pct = prev ? (last.c - prev) / prev * 100 : null;
   const age = Math.max(0, Date.now() / 1000 - (last.t + 900));
-  return { k: l.k, label: l.label, sym: l.sym, price: last.c, pct, age: Math.round(age), live: pct !== null && age <= FRESH_SEC,
+  return { k: l.k, label: l.label, sym: l.sym, src: "tv", price: last.c, pct, age: Math.round(age), live: pct !== null && age <= FRESH_SEC,
     spark: m.map((b: any) => b.c) };
+}
+
+/* Yahoo backup, 5 Oct 2026 (v3.4.1). TradingView's bar feed refused every
+   connection mid-morning ("tvws: dial: websocket: bad handshake") and the
+   banner fell to "1 of 7 fresh → No read". Ifoma's call: TradingView stays
+   first; a leg that fails (or is staler than Yahoo's) is filled from Yahoo.
+   Accuracy rules:
+   - The REAL instruments, never ETF stand-ins (the old IEF/UUP/USO path went
+     stale outside stock hours): ^TNX, DX-Y.NYB, JPY=X, CL=F, ES=F, NQ=F, YM=F.
+   - A leg's price, prior close and % change all come from ONE source.
+     Checked live 5 Oct 12:02 ET: Yahoo's prior closes match TradingView's
+     prior daily bar (ES 7777.25, CL 91.11, 10Y 5.277 vs 5.275).
+   - age = now − Yahoo's regularMarketTime (the real last-trade time; it
+     advances, unlike the TwelveData `at` bug of 25 Aug). Yahoo's futures and
+     DXY run ~10 min behind, ^TNX ~15; TradingView's own bars are delayed 15+.
+     Ifoma chose to COUNT a delayed leg, labelled with its age; the same
+     45-minute FRESH_SEC gate still drops anything older.
+   - Every refresh tries TradingView first, so legs switch back on their own. */
+const YAHOO_SYM: Record<string, string> = {
+  yield: "^TNX", dollar: "DX-Y.NYB", jpy: "JPY=X", crude: "CL=F", es: "ES=F", nq: "NQ=F", ym: "YM=F",
+};
+async function yahooLeg(l: any) {
+  const ys = YAHOO_SYM[l.k];
+  const res: any = await cached(`yleg|${ys}`, 60e3, async () => {
+    const r = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(ys) +
+                          "?range=1d&interval=15m", { headers: UA });
+    if (!r.ok) throw new Error("yahoo HTTP " + r.status);
+    const j = await r.json();
+    const x = j?.chart?.result?.[0];
+    if (!x?.meta) throw new Error(j?.chart?.error?.description || "yahoo: no data");
+    return x;
+  });
+  const m = res.meta;
+  const price = Number(m.regularMarketPrice), prev = Number(m.chartPreviousClose ?? m.previousClose);
+  const t = Number(m.regularMarketTime);
+  if (!isFinite(price) || !isFinite(prev) || !prev || !isFinite(t)) throw new Error("yahoo: incomplete quote for " + ys);
+  const pct = (price - prev) / prev * 100;
+  const age = Math.max(0, Date.now() / 1000 - t);
+  const closes = (res.indicators?.quote?.[0]?.close || []).filter((c: any) => typeof c === "number");
+  return { k: l.k, label: l.label, sym: "Yahoo " + ys, src: "yahoo", price, pct, age: Math.round(age), live: age <= FRESH_SEC,
+    spark: closes.slice(-8) };
+}
+
+async function legData(l: any) {
+  let tv: any = null, tvErr = "";
+  try { tv = await tvLeg(l); } catch (e) { tvErr = String((e as Error).message ?? e).slice(0, 160); }
+  if (tv && tv.live) return tv;
+  let y: any = null, yErr = "";
+  try { y = await yahooLeg(l); } catch (e) { yErr = String((e as Error).message ?? e).slice(0, 160); }
+  // Yahoo only replaces TradingView when TradingView failed or Yahoo is fresher.
+  if (y && (!tv || y.age < tv.age)) return { ...y, tv_error: tvErr || (tv ? `TradingView bar ${Math.round(tv.age / 60)} min old` : "") };
+  if (tv) return yErr ? { ...tv, yahoo_error: yErr } : tv;
+  throw new Error(`TradingView: ${tvErr || "no data"} · Yahoo: ${yErr || "no data"}`);
 }
 
 async function sentimentNow(force = false, kind = "live"): Promise<any> {
@@ -1689,7 +1742,7 @@ async function sentimentNow(force = false, kind = "live"): Promise<any> {
   rows.push({ row: 8, label: "NQ vs YM divergence", why: "Rotation, not entry: whipsaw risk.", fired: diverged, side: 0, value: null });
 
   let verdict: string, tone: string, note: string;
-  if (fresh < 2) { verdict = "No read"; tone = "none"; note = "Not enough fresh data. Futures and FX trade almost 24h; if this persists, TradingView may be down or disconnected."; }
+  if (fresh < 2) { verdict = "No read"; tone = "none"; note = "Not enough fresh data from TradingView or the Yahoo backup. Futures and FX trade almost 24h; if this persists outside the weekend, both feeds may be down."; }
   else if (diverged) { verdict = "Choppy — stand aside"; tone = "chop"; note = "Nasdaq and Dow pulling opposite ways. Josh's sheet calls that rotation (row 8): scalp only or stand aside."; }
   else if (fresh >= 5 && score >= 3) { verdict = "Leaning long"; tone = "long"; note = "Macro tailwind and the indexes agree."; }
   else if (fresh >= 5 && score <= -3) { verdict = "Leaning short"; tone = "short"; note = "Macro headwind and the indexes agree."; }
@@ -1719,7 +1772,8 @@ async function sentimentNow(force = false, kind = "live"): Promise<any> {
     if (r?.[0]?.news && Date.now() - Date.parse(r[0].at) < 14 * 3600e3) news = { text: r[0].news, at: r[0].at };
   } catch { /* table may be missing until 005 runs */ }
 
-  const body = { ok: true, at: Date.now(), et: `${now.wd} ${fmtMin(now.min)}`, verdict, tone, score, fresh, total: LEGS.length,
+  const backup = legs.filter((l: any) => l.src === "yahoo").length;
+  const body = { ok: true, at: Date.now(), et: `${now.wd} ${fmtMin(now.min)}`, verdict, tone, score, fresh, total: LEGS.length, backup,
     note, legs: legs.map((l: any) => { const { spark, ...rest } = l; return { ...rest, spark }; }), rows, calendar, next_event: nextHigh,
     window, jason, news };
   SENT = { at: Date.now(), body };

@@ -1797,7 +1797,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.4.0";
+const BUILD="3.4.1";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2495,7 +2495,7 @@ function dkRenderStrip(){
   const p=DK.panel||{},Q=dkQuotes();let h="";
   const S=DK.sent&&!DK.sent.error&&DK.sent.legs;
   if(S){
-    h=DK.sent.legs.map(l=>`<span title="${esc(l.sym)}${l.live?"":" · stale"}"><span class="k">${esc(l.label)}</span><span class="v">${l.price!=null?dkNum(l.price,l.k==="yield"?3:2)+(l.k==="yield"?"%":""):"—"}</span> ${l.pct!=null?dkPct(l.pct):""}</span>`).join("");
+    h=DK.sent.legs.map(l=>`<span title="${esc(l.sym)}${l.live?"":" · stale"}${l.src==="yahoo"?" · Yahoo backup, "+Math.round((l.age||0)/60)+" min behind":""}"><span class="k">${esc(l.label)}</span><span class="v">${l.price!=null?dkNum(l.price,l.k==="yield"?3:2)+(l.k==="yield"?"%":""):"—"}</span> ${l.pct!=null?dkPct(l.pct):""}</span>`).join("");
   }else if(p.quotes&&p.macro){
     h=p.macro.map(m=>{const q=dkQ(Q,m.sym);
       return `<span><span class="k">${esc(m.label)}</span><span class="v">${q?dkNum(q.close,m.k==="ten"?3:2)+(m.k==="ten"?"%":""):"—"}</span> ${q?dkPct(q.change):""}</span>`}).join("");
@@ -2850,7 +2850,7 @@ function dkRenderBanner(){
     if(l.error||l.pct==null)return `<span class="dk-leg flat" title="${esc(l.error||"")}">${esc(l.label)} <b>—</b></span>`;
     const f=firedBy[k]||[],side=f.length?f[0].side:0;
     const cls=!l.live?"flat stale":side<0?"bear":side>0?"bull":"flat";
-    return `<span class="dk-leg ${cls}" title="${esc(l.live?(f.map(r=>r.why).join(" ")||"No rule fired"):"Stale: last bar "+Math.round(l.age/60)+" min old")}">${esc(l.label)} <b>${l.pct>=0?"▲":"▼"} ${l.pct>=0?"+":""}${l.pct.toFixed(2)}%</b>${f.length?`<span class="src">row ${f.map(r=>r.row).join(",")}</span>`:(l.live?"":`<span class="src">stale</span>`)}</span>`};
+    return `<span class="dk-leg ${cls}" title="${esc((l.live?(f.map(r=>r.why).join(" ")||"No rule fired"):"Stale: last bar "+Math.round(l.age/60)+" min old")+(l.src==="yahoo"?" · Yahoo backup ("+(l.tv_error||"TradingView unavailable")+"), "+Math.round((l.age||0)/60)+" min behind":""))}">${esc(l.label)} <b>${l.pct>=0?"▲":"▼"} ${l.pct>=0?"+":""}${l.pct.toFixed(2)}%</b>${f.length?`<span class="src">row ${f.map(r=>r.row).join(",")}</span>`:(l.live?"":`<span class="src">stale</span>`)}${l.src==="yahoo"?`<span class="src">via Yahoo · ${Math.round((l.age||0)/60)}m</span>`:""}</span>`};
   const r7=(s.rows||[]).find(r=>r.row===7),r8=(s.rows||[]).find(r=>r.row===8);
   const idx=r8&&r8.fired?`<span class="dk-leg bear">NQ vs YM <b>diverging</b><span class="src">row 8</span></span>`
     :r7&&r7.fired?`<span class="dk-leg ${r7.side>0?"bull":"bear"}">ES/NQ/YM <b>${r7.side>0?"▲ together":"▼ together"}</b><span class="src">row 7</span></span>`
@@ -2863,7 +2863,7 @@ function dkRenderBanner(){
     :"⚑ Josh's sheet trades the 9:30 range · Jason: no first 30 min";
   const J=s.jason||{},jr=x=>x?`${x.pct==null?"—":(x.pct>=0?"▲":"▼")} <span class="${x.read==="headwind"?"dn":x.read==="tailwind"?"up":""}">${esc(x.read)}</span>`:"—";
   el.innerHTML=`<div class="dk-verdict"><span class="k">Sentiment · Josh's sheet · ${esc(s.et||"")} ET</span><span class="big">${esc(s.verdict)}</span>
-      <span class="sub">Score ${s.score>0?"+":""}${s.score} · ${s.fresh} of ${s.total} legs fresh · refreshes every 5 min in market hours</span></div>
+      <span class="sub">Score ${s.score>0?"+":""}${s.score} · ${s.fresh} of ${s.total} legs fresh${s.backup?` · ${s.backup} via Yahoo backup`:""} · refreshes every 5 min in market hours</span></div>
     <div class="dk-legs">${chip("yield")}${chip("jpy")}${chip("dollar")}${chip("crude")}${idx}${ev}${nw}</div>
     <div class="dk-sentR"><span class="dk-conflict">${esc(conflict)}</span>
       <span>Jason's inputs: capital ${jr(J.capital)} · transport ${jr(J.transport)} · currency ${jr(J.currency)}</span>
@@ -2915,7 +2915,7 @@ async function dkMarket(){
   pg.innerHTML=`<div class="dkp-cols3">
     <div class="dk-col"><div class="dk-cardx"><div class="dk-h">Josh's intermarket sheet <b>${esc(s.verdict||"")}</b></div>${rows||`<div class="mut">Unavailable</div>`}
       <div class="mut" style="font-size:11.5px;margin-top:6px">From Josh's cheat sheet, labelled as his. Live TradingView: US10Y, DXY, USDJPY, CL1!, ES1!, NQ1!, YM1!.</div></div>
-      <div class="dk-cardx"><div class="dk-h">Legs <b>${s.fresh||0}/${s.total||7} fresh</b></div>${(s.legs||[]).map(l=>`<div class="dk-row"><span>${esc(l.label)} <span class="mut">${esc(l.sym)}</span></span><span class="mono">${l.price!=null?dkNum(l.price,l.k==="yield"?3:2):"—"} ${l.pct!=null?dkPct(l.pct):""}${l.live?"":` <span class="dk-tag">stale</span>`}</span></div>`).join("")}</div></div>
+      <div class="dk-cardx"><div class="dk-h">Legs <b>${s.fresh||0}/${s.total||7} fresh</b></div>${(s.legs||[]).map(l=>`<div class="dk-row"><span>${esc(l.label)} <span class="mut">${esc(l.sym)}</span></span><span class="mono">${l.price!=null?dkNum(l.price,l.k==="yield"?3:2):"—"} ${l.pct!=null?dkPct(l.pct):""}${l.live?"":` <span class="dk-tag">stale</span>`}${l.src==="yahoo"?` <span class="dk-tag">Yahoo · ${Math.round((l.age||0)/60)}m</span>`:""}</span></div>`).join("")}</div></div>
     <div class="dk-col"><div class="dk-cardx"><div class="dk-h">Jason's six-step routine <b>live</b></div>
       <div class="dk-row"><span>1 · 10-year (cost of capital)</span>${jr(J.capital)}</div>
       <div class="dk-row"><span>2 · USD/JPY (cost of currency)</span>${jr(J.currency)}</div>
