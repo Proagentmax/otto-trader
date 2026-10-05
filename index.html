@@ -373,8 +373,8 @@ body.dk-on{overflow:hidden}
 body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .dk[hidden]{display:none!important}
 .dk{position:fixed;inset:0;z-index:40;background:var(--bg);display:grid;
-  grid-template-columns:60px 290px minmax(0,1fr) 330px;grid-template-rows:auto minmax(0,1fr);font-size:13.5px;line-height:1.45}
-.dk-rail{grid-row:1/3;background:#08090A;border-right:1px solid var(--rule);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px}
+  grid-template-columns:60px 290px minmax(0,1fr) 330px;grid-template-rows:auto auto minmax(0,1fr);font-size:13.5px;line-height:1.45}
+.dk-rail{grid-row:1/4;background:#08090A;border-right:1px solid var(--rule);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px}
 .dk-logo{width:30px;height:30px;border-radius:9px;background:var(--up);color:#000;font-weight:800;display:grid;place-items:center;margin-bottom:10px}
 .dk-rail button{width:48px;min-height:42px;border-radius:10px;color:var(--ink-3);font-size:10.5px;font-weight:600;display:grid;place-items:center;line-height:1.1;padding:4px 0}
 .dk-rail button svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;margin-bottom:2px}
@@ -454,12 +454,68 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
   body.dk-on{overflow:auto}
   .dk-rail{flex-direction:row;justify-content:space-around;padding:6px;position:sticky;top:0;z-index:2;border-right:0;border-bottom:1px solid var(--rule)}
   .dk-rail .sp,.dk-logo{display:none}
-  .dk-rail{order:-3}.dk-strip{order:-2}
+  .dk-rail{order:-4}.dk-strip{order:-3}
   .dk-desk{border-right:0;min-height:80vh;order:-1}
   .dk-col{border-right:0;overflow:visible}
 }
 .gate2 .gcancel{display:block;margin:14px auto 0;color:var(--ink-2);font-size:13px}
 .dk-pend[hidden],.gate2 .gcancel[hidden],#sDeskLogin[hidden]{display:none!important}
+/* ---- v3.1: banner + pages ---- */
+.dk-banner{grid-column:2/5;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px 18px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--rule)}
+.dk-banner[hidden]{display:none}
+.dk-banner.t-chop,.dk-banner.t-none{background:linear-gradient(90deg,rgba(245,180,0,.10),rgba(245,180,0,0) 60%)}
+.dk-banner.t-long{background:linear-gradient(90deg,rgba(0,200,5,.10),rgba(0,200,5,0) 60%)}
+.dk-banner.t-short{background:linear-gradient(90deg,rgba(255,80,0,.10),rgba(255,80,0,0) 60%)}
+.dk-verdict{display:flex;flex-direction:column;gap:2px;min-width:220px}
+.dk-verdict .k{color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.dk-verdict .big{font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--warn)}
+.t-long .dk-verdict .big{color:var(--up)}.t-short .dk-verdict .big{color:var(--down)}
+.dk-verdict .sub{font-size:11.5px;color:var(--ink-2)}
+.dk-legs{display:flex;gap:6px;flex-wrap:wrap}
+.dk-leg{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:var(--s1);border-radius:9px;padding:5px 9px;font-size:12px;max-width:340px}
+.dk-leg b{font-family:var(--mono);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dk-leg .src{font-size:10px;color:var(--ink-3);white-space:nowrap}
+.dk-leg.bear{border-color:rgba(255,80,0,.45)}.dk-leg.bear b{color:var(--down)}
+.dk-leg.bull{border-color:rgba(0,200,5,.45)}.dk-leg.bull b{color:var(--up)}
+.dk-leg.warnc{border-color:rgba(245,180,0,.45)}.dk-leg.warnc b{color:var(--warn)}
+.dk-leg.flat{opacity:.85}.dk-leg.stale{opacity:.55}
+.dk-sentR{text-align:right;font-size:11.5px;color:var(--ink-2);display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.dk-conflict{color:var(--warn);border:1px solid rgba(245,180,0,.35);border-radius:999px;padding:3px 10px}
+.dk-why{color:var(--ink-3);text-decoration:underline;font-size:11.5px}
+.dk-whybox{grid-column:1/4;font-size:12.5px;color:var(--ink-2);border-top:1px solid var(--rule);padding-top:8px}
+.dk-whybox ul{margin:6px 0;padding-left:18px}
+.dk-page{grid-column:2/5;overflow:auto;min-height:0}
+.dk:not(.v-page) .dk-page{display:none}
+.dk.v-page #dkLeft,.dk.v-page #dkRight,.dk.v-page .dk-desk{display:none}
+.dkp{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.dkp-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.dkp-head h2{margin:0;font-size:18px}
+.dkp-cols3{display:grid;grid-template-columns:290px minmax(0,1fr) 330px;min-height:100%}
+.dkp-cols3>.dk-col{overflow:visible}
+.dkp-grid2{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px;align-items:start}
+.dkp-grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+.dkp-grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.dk-stat .n{font-size:24px;font-weight:800;font-family:var(--mono)}.dk-stat .l{font-size:11.5px;color:var(--ink-2)}
+.dkt{width:100%;border-collapse:collapse;font-size:12.8px}
+.dkt th{text-align:left;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
+.dkt td{padding:9px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+.dkt tr[data-tr]{cursor:pointer}.dkt tr.sel td{background:rgba(0,200,5,.05)}
+.dk-reason{width:100%;min-width:180px;background:var(--bg);border:1px solid var(--rule);border-radius:8px;padding:6px 8px;color:var(--ink)}
+.dk-reason.need{border-color:rgba(245,180,0,.55)}
+.dk-tag.blue{background:rgba(90,169,255,.13);color:var(--blue)}
+.dk-bar{height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden;margin:2px 0 6px}.dk-bar>i{display:block;height:100%}
+.dk-callout{border-left:3px solid var(--blue);padding:6px 10px;background:rgba(90,169,255,.06);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--ink-2)}
+.dk-sel{background:var(--surface-2);border:1px solid var(--rule);border-radius:9px;padding:6px 8px}
+.dk-callrow{display:flex;flex-direction:column;align-items:flex-start;text-align:left;width:100%;padding:7px 8px;border-radius:8px;gap:1px}
+.dk-callrow span{font-size:12px;color:var(--ink-2)}.dk-callrow.on{background:var(--surface-2)}.dk-callrow.on b{color:var(--up)}
+.dk-checks{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;font-size:12.5px}
+.dk-ck{display:flex;gap:7px;align-items:baseline}.dk-ck i{font-style:normal;font-weight:700;width:12px;flex:none}
+.dk .ink2{color:var(--ink-2)}
+@media (max-width:1099px){
+  .dk-banner{order:-2;grid-template-columns:1fr}.dk-sentR{align-items:flex-start;text-align:left}
+  .dk-page{order:-1}.dkp-cols3,.dkp-grid2,.dkp-grid3{grid-template-columns:1fr}.dkp-grid4{grid-template-columns:1fr 1fr}
+  .dk-rail{flex-wrap:wrap}.dk-checks{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
@@ -469,14 +525,17 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <div class="dk-logo">O</div>
     <button data-go="desk" class="on"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5a8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4z"/></svg>Desk</button>
     <button data-go="market"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>Market</button>
-    <button data-go="week"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Week</button>
     <button data-go="journal"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Journal</button>
-    <button data-go="insights"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Jason</button>
+    <button data-go="review"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review</button>
+    <button data-go="score"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Score</button>
+    <button data-go="jason"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Jason</button>
     <div class="sp"></div>
+    <button data-go="classic" title="The phone layout: Week, Coach, Journal, Market"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Classic</button>
     <button data-go="settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Settings</button>
   </nav>
 
   <div class="dk-strip" id="dkStrip"><span class="mut">Loading prices…</span></div>
+  <div class="dk-banner" id="dkBanner" hidden></div>
 
   <div class="dk-col" id="dkLeft"></div>
 
@@ -505,6 +564,8 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
   </div>
 
   <div class="dk-col r" id="dkRight"></div>
+  <div class="dk-page" id="dkPage"></div>
+  <input type="file" id="dkCallFile" accept=".vtt,.srt,.json" hidden>
 </div>
 
 <header class="top">
@@ -1660,7 +1721,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.0.1";
+const BUILD="3.1.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2274,7 +2335,7 @@ function openDesk(){
   $$(".dk-rail button").forEach(b=>b.classList.toggle("on",b.dataset.go==="desk"));
   $$(".nav button").forEach(x=>x.setAttribute("aria-selected",x.dataset.p==="desk"));
   $("#dkWho").value=LS.get("deskWho","Ifoma");
-  dkRenderLeft();dkRenderRight();dkRenderStrip();dkRenderMsgs();
+  dkRenderLeft();dkRenderRight();dkRenderStrip();dkRenderBanner();dkShow(LS.get("dkView","desk"));
   dkStart();
 }
 function closeDesk(){
@@ -2283,10 +2344,9 @@ function closeDesk(){
 }
 $$(".dk-rail button").forEach(b=>b.addEventListener("click",()=>{
   const g=b.dataset.go;
-  if(g==="desk")return openDesk();
   if(g==="settings")return openSettings();
-  closeDesk();
-  const t=$$(".nav button").find(x=>x.dataset.p===g);if(t)t.click();
+  if(g==="classic"){closeDesk();const t=$$(".nav button").find(x=>x.dataset.p==="market");if(t)t.click();return}
+  dkShow(g);
 }));
 $("#dkWho").addEventListener("change",e=>LS.set("deskWho",e.target.value));
 
@@ -2297,7 +2357,9 @@ async function dkStart(){
   }catch(e){DK.locked=true}
   dkRenderMsgs();
   if(DK.locked)return;
-  await Promise.all([dkLoadLog(),dkPanel(true)]);
+  await Promise.all([dkLoadLog(),dkPanel(true),dkSentiment()]);
+  dkSentTimer();
+  if(DK.view&&DK.view!=="desk")dkShow(DK.view);
   clearInterval(DK.pollT);
   DK.pollT=setInterval(()=>{
     if(!DK.open||document.visibilityState!=="visible")return;
@@ -2355,7 +2417,10 @@ const dkNum=(v,d)=>v==null||!isFinite(v)?"—":(+v).toLocaleString(undefined,{mi
 
 function dkRenderStrip(){
   const p=DK.panel||{},Q=dkQuotes();let h="";
-  if(p.quotes&&p.macro){
+  const S=DK.sent&&!DK.sent.error&&DK.sent.legs;
+  if(S){
+    h=DK.sent.legs.map(l=>`<span title="${esc(l.sym)}${l.live?"":" · stale"}"><span class="k">${esc(l.label)}</span><span class="v">${l.price!=null?dkNum(l.price,l.k==="yield"?3:2)+(l.k==="yield"?"%":""):"—"}</span> ${l.pct!=null?dkPct(l.pct):""}</span>`).join("");
+  }else if(p.quotes&&p.macro){
     h=p.macro.map(m=>{const q=dkQ(Q,m.sym);
       return `<span><span class="k">${esc(m.label)}</span><span class="v">${q?dkNum(q.close,m.k==="ten"?3:2)+(m.k==="ten"?"%":""):"—"}</span> ${q?dkPct(q.change):""}</span>`}).join("");
   }else if(p.fallback_quotes){
@@ -2374,7 +2439,9 @@ function dkRenderStrip(){
 
 function dkRenderLeft(){
   const p=DK.panel||{},Q=dkQuotes();
-  let h=`<div class="dk-cardx"><div class="dk-h">Morning read <b>${new Date().toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}</b></div>
+  const cal=(DK.sent&&DK.sent.calendar)||[];
+  let h=cal.length||DK.sent?`<div class="dk-cardx"><div class="dk-h">Today <b>${new Date().toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}</b></div>${cal.length?cal.map(e=>`<div class="dk-row"><span>${esc(dkTime(e.date))} · ${esc(e.title)}</span><span class="dk-tag ${e.importance>=1?(Date.parse(e.date)>Date.now()?"near":""):""}">${e.importance>=1?(Date.parse(e.date)>Date.now()?"binary":"passed"):"med"}</span></div>`).join(""):`<div class="mut">No US releases today.</div>`}</div>`:"";
+  h+=`<div class="dk-cardx"><div class="dk-h">Morning read <b>${new Date().toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}</b></div>
     <div class="mut" style="color:var(--ink-2)">Ask the desk for today's read: the three inputs, SPY/QQQ, the Mag 7, the calendar.</div>
     <button class="dk-link" data-q="Morning read: the three macro inputs, SPY/QQQ and the Mag 7, today's calendar and earnings on my watchlist. Bias and the 2–3 setups worth watching. No orders.">Run the morning read →</button></div>`;
   // Watchlist: prices only, by decision (4 Oct) — no Jason-level distances yet.
@@ -2437,7 +2504,7 @@ function dkRenderRight(){
 }
 
 /* ---------- messages ---------- */
-function dkTime(t){try{return new Date(t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}catch(e){return ""}}
+function dkTime(t){if(!t)return "";const d=new Date(t);return isNaN(d)?"":d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}
 function dkCard(a){
   if(!a)return "";
   const r=a.risk||{},st=a.status||"pending";
@@ -2458,6 +2525,7 @@ function dkCard(a){
     <div class="dk-act-h"><b>${esc(a.title)}</b><span><span class="dk-tag ${tag}">${esc(label)}</span>${who}</span></div>
     ${a.summary?`<pre class="dk-sum">${esc(a.summary)}</pre>`:""}
     ${risk}
+    ${dkChecks(a)}
     <div class="dk-calls">${calls}</div>
     ${a.review?`<details><summary>Robinhood's own review</summary><pre>${esc(a.review)}</pre></details>`:""}
     ${res}
@@ -2654,6 +2722,273 @@ async function dkOauthReturn(){
     toast(j.name+" connected"+(j.warn?" — but: "+String(j.warn).slice(0,60):""));
   }catch(e){toast("Connection failed: "+String(e.message).slice(0,100))}
   return true;
+}
+
+/* ================================================================ v3.1 VIEWS
+   4 Oct 2026, approved mockup otto-v3.1-mockup.html. The sentiment banner
+   (Josh's intermarket sheet on live TradingView data, verdict only, no sizing),
+   desktop Market / Journal / Review / Score / Jason pages inside the Desk shell. */
+const DK_VIEWS=["desk","market","journal","review","score","jason"];
+function dkShow(v){
+  if(!DK_VIEWS.includes(v))v="desk";
+  DK.view=v;LS.set("dkView",v);
+  $("#dk").classList.toggle("v-page",v!=="desk");
+  $$(".dk-rail button").forEach(b=>b.classList.toggle("on",b.dataset.go===v));
+  if(v==="desk"){dkRenderMsgs(true);return}
+  const pg=$("#dkPage");pg.scrollTop=0;
+  if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see this page.</p></div>`;return}
+  ({market:dkMarket,journal:dkJournal,review:dkReview,score:dkScore,jason:dkJason})[v]();
+}
+const dkLoading=t=>`<div class="dk-empty" style="margin:60px auto">${esc(t||"Loading…")}</div>`;
+const dkErr=e=>`<div class="dk-empty dk-err" style="margin:60px auto">${esc(String(e&&e.message||e))}</div>`;
+const dkDate=t=>{try{return new Date(t).toLocaleDateString([], {month:"numeric",day:"numeric"})+" "+new Date(t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}catch(e){return ""}};
+const dkMoney=n=>n==null||!isFinite(n)?"—":`<span class="${n>=0?"up":"dn"}">${n>=0?"+":"−"}$${Math.abs(n).toFixed(2)}</span>`;
+
+/* ---------- the banner ---------- */
+async function dkSentiment(force){
+  try{DK.sent=await dkApi("sentiment",null,force?"&force=1":"")}catch(e){if(!DK.sent)DK.sent={error:e.message}}
+  dkRenderBanner();dkRenderStrip();dkRenderLeft();
+}
+function dkSentTimer(){
+  clearTimeout(DK.sentT);
+  const n=nyNow(),open=!["Sat","Sun"].includes(n.wd)&&n.min>=8*60&&n.min<16*60+15;
+  DK.sentT=setTimeout(async()=>{if(DK.open&&document.visibilityState==="visible")await dkSentiment();dkSentTimer()},open?5*60e3:30*60e3);
+}
+function dkRenderBanner(){
+  const el=$("#dkBanner");if(!el)return;
+  if(DK.locked){el.hidden=true;return}
+  el.hidden=false;const s=DK.sent;
+  if(!s){el.className="dk-banner";el.innerHTML=`<div class="mut">Reading the market…</div>`;return}
+  if(s.error){el.className="dk-banner";el.innerHTML=`<div class="dk-err">Sentiment unavailable: ${esc(s.error)}</div>`;return}
+  el.className="dk-banner t-"+(s.tone||"none");
+  const by={};(s.legs||[]).forEach(l=>by[l.k]=l);
+  const firedBy={};(s.rows||[]).forEach(r=>{if(r.fired&&r.leg)(firedBy[r.leg]||(firedBy[r.leg]=[])).push(r)});
+  const chip=k=>{const l=by[k];if(!l)return"";
+    if(l.error||l.pct==null)return `<span class="dk-leg flat" title="${esc(l.error||"")}">${esc(l.label)} <b>—</b></span>`;
+    const f=firedBy[k]||[],side=f.length?f[0].side:0;
+    const cls=!l.live?"flat stale":side<0?"bear":side>0?"bull":"flat";
+    return `<span class="dk-leg ${cls}" title="${esc(l.live?(f.map(r=>r.why).join(" ")||"No rule fired"):"Stale: last bar "+Math.round(l.age/60)+" min old")}">${esc(l.label)} <b>${l.pct>=0?"▲":"▼"} ${l.pct>=0?"+":""}${l.pct.toFixed(2)}%</b>${f.length?`<span class="src">row ${f.map(r=>r.row).join(",")}</span>`:(l.live?"":`<span class="src">stale</span>`)}</span>`};
+  const r7=(s.rows||[]).find(r=>r.row===7),r8=(s.rows||[]).find(r=>r.row===8);
+  const idx=r8&&r8.fired?`<span class="dk-leg bear">NQ vs YM <b>diverging</b><span class="src">row 8</span></span>`
+    :r7&&r7.fired?`<span class="dk-leg ${r7.side>0?"bull":"bear"}">ES/NQ/YM <b>${r7.side>0?"▲ together":"▼ together"}</b><span class="src">row 7</span></span>`
+    :`<span class="dk-leg flat">Indexes <b>mixed</b></span>`;
+  const ev=s.next_event?`<span class="dk-leg warnc">Calendar <b>${esc(s.next_event.title)} ${esc(dkTime(s.next_event.date))}</b><span class="src">binary</span></span>`
+    :`<span class="dk-leg flat">Calendar <b>no high-impact left today</b></span>`;
+  const nw=s.news&&s.news.text?`<span class="dk-leg flat" title="${esc(s.news.text.slice(0,600))}">News <b>${esc(s.news.text.replace(/[#*_>]/g,"").trim().split(/(?<=[.!?])\s/)[0].slice(0,70))}</b><span class="src">8:45 research</span></span>`:"";
+  const conflict=s.window==="in"?"⚑ First 30 minutes: Jason says stand down · Josh's sheet trades the opening range"
+    :s.window==="soon"?"⚑ Read now, act after 10:00 (Jason) · Josh's sheet trades the 9:30 range"
+    :"⚑ Josh's sheet trades the 9:30 range · Jason: no first 30 min";
+  const J=s.jason||{},jr=x=>x?`${x.pct==null?"—":(x.pct>=0?"▲":"▼")} <span class="${x.read==="headwind"?"dn":x.read==="tailwind"?"up":""}">${esc(x.read)}</span>`:"—";
+  el.innerHTML=`<div class="dk-verdict"><span class="k">Sentiment · Josh's sheet · ${esc(s.et||"")} ET</span><span class="big">${esc(s.verdict)}</span>
+      <span class="sub">Score ${s.score>0?"+":""}${s.score} · ${s.fresh} of ${s.total} legs fresh · refreshes every 5 min in market hours</span></div>
+    <div class="dk-legs">${chip("yield")}${chip("jpy")}${chip("dollar")}${chip("crude")}${idx}${ev}${nw}</div>
+    <div class="dk-sentR"><span class="dk-conflict">${esc(conflict)}</span>
+      <span>Jason's inputs: capital ${jr(J.capital)} · transport ${jr(J.transport)} · currency ${jr(J.currency)}</span>
+      <button class="dk-why" id="dkWhy">${DK.whyOpen?"Hide":"Why this verdict?"}</button></div>
+    ${DK.whyOpen?`<div class="dk-whybox"><b>${esc(s.verdict)}.</b> ${esc(s.note||"")}<ul>${(s.rows||[]).map(r=>`<li class="${r.fired?"":"mut"}">Row ${r.row} · ${esc(r.label)}: ${r.fired?"<b>fired</b> — "+esc(r.why):"not firing"}</li>`).join("")}</ul>
+      <span class="mut">Thresholds are the same as the v2.4 bias card built from Josh's cheat sheet. It's his sheet, not Jason's: no sizing here; size is the 20% check on each card.</span></div>`:""}`;
+  $("#dkWhy").onclick=()=>{DK.whyOpen=!DK.whyOpen;dkRenderBanner()};
+}
+
+/* ---------- card rule check ---------- */
+function dkChecks(a){
+  const c=a.checks||[];if(!c.length)return"";
+  const pass=c.filter(x=>x.ok===true).length,fail=c.filter(x=>x.ok===false).length;
+  return `<div class="dk-h" style="margin:10px 0 2px">Rule check <b>${pass} pass${fail?` · ${fail} flag${fail>1?"s":""}`:""}</b></div>
+    <div class="dk-checks">${c.map(x=>`<span class="dk-ck"><i class="${x.ok===true?"up":x.ok===false?"warn":"mut"}">${x.ok===true?"✓":x.ok===false?"!":"?"}</i>${esc(x.text)}</span>`).join("")}</div>`+
+    (a.plan?`<div class="mut" style="font-size:11.5px;margin-top:6px">Plan: ${esc(a.plan.setup||"")} · ${esc(a.plan.tv_symbol||"")} ${a.plan.direction==="down"?"▼":"▲"} · TP1 ${esc(a.plan.tp1)} · stop ${esc(a.plan.stop)}${a.banner?` · banner ${esc(a.banner.verdict)}`:""}</div>`:"");
+}
+
+/* ---------- Market ---------- */
+async function dkMarket(){
+  const pg=$("#dkPage");pg.innerHTML=dkLoading("Reading the market…");
+  let j;try{j=await dkApi("market_desk")}catch(e){pg.innerHTML=dkErr(e);return}
+  if(DK.view!=="market")return;
+  const s=j.sentiment||{},J=s.jason||{};
+  const rows=(s.rows||[]).map(r=>`<div class="dk-row"><span>${r.row} · ${esc(r.label)}${r.value!=null?` <span class="mut mono">${r.value>=0?"+":""}${(+r.value).toFixed(2)}%</span>`:""}</span>${r.fired?`<span class="dk-tag ${r.row===8?"near":r.side<0?"bad":"ok"}">fired${r.row===8?" · choppy":r.side<0?" · bear":r.side>0?" · bull":""}</span>`:`<span class="dk-tag">no</span>`}</div>`).join("");
+  const mag=Array.isArray(j.mag7)?j.mag7:[],green=mag.filter(m=>m.change>0).length,red=mag.filter(m=>m.change<0).length;
+  const earn=Array.isArray(j.earnings)?j.earnings:[];
+  const jr=x=>x?`<span class="${x.read==="headwind"?"dn":x.read==="tailwind"?"up":"mut"}">${x.pct==null?"—":(x.pct>=0?"+":"")+x.pct.toFixed(2)+"%"} · ${esc(x.read)}</span>`:"—";
+  const cal=Array.isArray(j.calendar_week)?j.calendar_week:[];
+  pg.innerHTML=`<div class="dkp-cols3">
+    <div class="dk-col"><div class="dk-cardx"><div class="dk-h">Josh's intermarket sheet <b>${esc(s.verdict||"")}</b></div>${rows||`<div class="mut">Unavailable</div>`}
+      <div class="mut" style="font-size:11.5px;margin-top:6px">From Josh's cheat sheet, labelled as his. Live TradingView: US10Y, DXY, USDJPY, CL1!, ES1!, NQ1!, YM1!.</div></div>
+      <div class="dk-cardx"><div class="dk-h">Legs <b>${s.fresh||0}/${s.total||7} fresh</b></div>${(s.legs||[]).map(l=>`<div class="dk-row"><span>${esc(l.label)} <span class="mut">${esc(l.sym)}</span></span><span class="mono">${l.price!=null?dkNum(l.price,l.k==="yield"?3:2):"—"} ${l.pct!=null?dkPct(l.pct):""}${l.live?"":` <span class="dk-tag">stale</span>`}</span></div>`).join("")}</div></div>
+    <div class="dk-col"><div class="dk-cardx"><div class="dk-h">Jason's six-step routine <b>live</b></div>
+      <div class="dk-row"><span>1 · 10-year (cost of capital)</span>${jr(J.capital)}</div>
+      <div class="dk-row"><span>2 · USD/JPY (cost of currency)</span>${jr(J.currency)}</div>
+      <div class="dk-row"><span>3 · Crude (cost of transportation)</span>${jr(J.transport)}</div>
+      <div class="dk-row"><span>4 · News &amp; calendar</span><span>${s.next_event?`<span class="warn">${esc(s.next_event.title)} ${esc(dkTime(s.next_event.date))}</span>`:`<span class="mut">no high-impact left today</span>`}</span></div>
+      <div class="dk-row"><span>5 · Watchlist earnings (14 days)</span><span>${earn.length?earn.map(e=>esc(e.sym.split(":")[1])).join(", "):`<span class="mut">none</span>`}</span></div>
+      <div class="dk-row"><span>6 · Mag 7 health</span><span>${mag.length?`<span class="up">${green} green</span> · <span class="dn">${red} red</span>`:`<span class="mut">unavailable</span>`}</span></div></div>
+      <div class="dk-cardx"><div class="dk-h">What's moving <b>${s.news?"8:45 research":""}</b></div><div class="md" id="dkNews">${s.news&&s.news.text?md(s.news.text):`<span class="mut">No research yet today.</span>`}</div>
+        <button class="dk-link" id="dkNewsBtn">Research now →</button></div>
+      <div class="dk-cardx"><div class="dk-h">Plan of attack <b>today</b></div><div class="mut">Your plan for the day, graded against Jason's method, with your marked-up chart.</div><button class="dk-link" id="dkPlanBtn">Open plan of attack →</button></div>
+      <div class="dk-cardx"><div class="dk-h">Mag 7</div>${mag.map(m=>`<div class="dk-row"><b>${esc(m.sym.split(":")[1])}</b><span class="mono">${m.close!=null?dkNum(m.close):"—"} ${m.change!=null?dkPct(m.change):""}</span></div>`).join("")||`<div class="mut">Unavailable</div>`}</div></div>
+    <div class="dk-col r"><div class="dk-cardx"><div class="dk-h">Economic calendar <b>next 7 days</b></div>${cal.length?cal.slice(0,20).map(e=>`<div class="dk-row"><span>${esc(dkDate(e.date))} · ${esc(e.title)}</span><span class="dk-tag ${e.importance>=1?"near":""}">${e.importance>=1?"high":"med"}</span></div>`).join(""):`<div class="mut">${j.calendar_week&&j.calendar_week.error?esc(j.calendar_week.error):"Nothing scheduled"}</div>`}</div>
+      <div class="dk-cardx"><div class="dk-h">Earnings on your watchlist <b>14 days</b></div>${earn.length?earn.map(e=>`<div class="dk-row"><b>${esc(e.sym.split(":")[1])}</b><span>${esc(e.date)}</span></div>`).join(""):`<div class="mut">None of your ${j.watchlist?j.watchlist.n:""} names report in the next 2 weeks.</div>`}</div></div>
+  </div>`;
+  $("#dkPlanBtn").onclick=()=>openPlan();
+  $("#dkNewsBtn").onclick=async e=>{const b=e.target;b.disabled=true;b.textContent="Researching…";
+    try{const {url,headers}=await fnUrl("news");const r=await fetch(url,{headers});const x=await r.json();if(!x.ok)throw new Error(x.error);$("#dkNews").innerHTML=md(x.text)}
+    catch(err){toast(String(err.message).slice(0,90))}b.disabled=false;b.textContent="Research again →"};
+}
+
+/* ---------- Journal ---------- */
+async function dkJournal(force){
+  const pg=$("#dkPage");if(!DK.journal||force)pg.innerHTML=dkLoading("Pulling your fills from Robinhood…");
+  try{DK.journal=await dkApi("journal",null,force?"&force=1":"")}catch(e){if(!DK.journal){pg.innerHTML=dkErr(e);return}}
+  if(DK.view==="journal")dkRenderJournal();
+}
+function dkRenderJournal(){
+  const j=DK.journal||{rows:[]},acts={};(j.actions||[]).forEach(a=>acts[a.id]=a);
+  const rows=j.rows||[],done=r=>r.status==="closed"||r.status==="expired";
+  const missing=rows.filter(r=>done(r)&&!r.reason).length;
+  if(!DK.jSel&&rows[0])DK.jSel=rows[0].id;
+  const sel=rows.find(r=>r.id===DK.jSel),sa=sel&&acts[sel.action_id];
+  const ck=a=>{const c=(a&&a.checks)||[];if(!c.length)return`<span class="mut">—</span>`;const p=c.filter(x=>x.ok===true).length;return `<span class="dk-tag ${p===c.length?"ok":"near"}">${p}/${c.length}</span>`};
+  const src=r=>r.action_id?`<span class="dk-tag ok">Desk card</span>`:r.agent==="agentic"?`<span class="dk-tag">agent</span>`:`<span class="dk-tag">placed in app</span>`;
+  $("#dkPage").innerHTML=`<div class="dkp">
+    <div class="dkp-head"><h2>Journal</h2><span class="dk-tag blue">auto-filled from Robinhood</span>
+      <span class="mut" style="margin-left:auto">Jason's rule: every trade needs your reason${missing?` · <b class="warn">${missing} missing</b>`:" · all in"}</span>
+      <button class="dk-btn sec" id="dkJSync">Sync now</button></div>
+    ${j.sync_error?`<div class="dk-warnbox">Couldn't refresh from Robinhood just now (${esc(j.sync_error)}). Showing the last sync.</div>`:""}
+    <div class="dkp-grid2"><div class="dk-cardx" style="padding:0;overflow:auto">
+      ${rows.length?`<table class="dkt"><tr><th>Opened</th><th>Account</th><th>Contract</th><th>In / Out</th><th>P&amp;L</th><th>From</th><th>Rules</th><th>Your reason</th></tr>
+      ${rows.map(r=>`<tr class="${r.id===DK.jSel?"sel":""}" data-tr="${esc(r.id)}"><td>${esc(dkDate(r.opened_at))}</td><td class="mut">${esc(r.account||"")}</td>
+        <td><b>${esc(r.contract)}</b><br><span class="mut">${esc(r.side)} · ${+r.qty} · ${esc(r.status)}</span></td>
+        <td class="mono">${dkNum(+r.entry)} → ${r.exit!=null?dkNum(+r.exit):"…"}</td><td class="mono">${dkMoney(r.pnl==null?null:+r.pnl)}</td>
+        <td>${src(r)}</td><td>${ck(acts[r.action_id])}</td>
+        <td>${r.reason?`<span class="ink2" data-edit="${esc(r.id)}" title="Click to edit">${esc(r.reason)}</span>`:`<input class="dk-reason${done(r)?" need":""}" data-rid="${esc(r.id)}" placeholder="Why did you take it? (one line)">`}</td></tr>`).join("")}</table>`
+      :`<div class="dk-empty" style="margin:40px auto">No option trades in the last 120 days on either Robinhood account.</div>`}
+    </div><div class="dk-cardx">${sel?`<div class="dk-h">${esc(sel.contract)} <b>selected</b></div>
+      <div class="dk-row"><span class="mut">Account</span><span>${esc(sel.account||"")}</span></div>
+      <div class="dk-row"><span class="mut">Opened / closed</span><span>${esc(dkDate(sel.opened_at))} → ${sel.closed_at?esc(dkDate(sel.closed_at)):"open"}</span></div>
+      <div class="dk-row"><span class="mut">P&amp;L</span><span class="mono">${dkMoney(sel.pnl==null?null:+sel.pnl)}</span></div>
+      ${sa?`<div class="dk-row"><span class="mut">Desk card</span><span>${esc(sa.title)}</span></div>
+        <div class="dk-row"><span class="mut">Approved by</span><span>${esc((sa.decided_by||"").split("@")[0])} ${esc(dkTime(sa.decided_at))}</span></div>
+        <div class="dk-row"><span class="mut">Banner at entry</span><span>${esc(sa.banner?sa.banner.verdict:"—")}</span></div>
+        ${dkChecks(sa)}${sa.summary?`<div class="dk-h" style="margin-top:10px">The ticket</div><pre class="dk-sum">${esc(sa.summary)}</pre>`:""}`
+      :`<p class="mut">Placed ${sel.agent==="agentic"?"by an agent":"in the Robinhood app"}, not through a Desk card, so there's no ticket or rule check at entry.</p>`}`
+      :`<div class="mut">Select a trade.</div>`}</div></div></div>`;
+  $("#dkJSync").onclick=()=>dkJournal(true);
+  $$("#dkPage [data-tr]").forEach(tr=>tr.addEventListener("click",e=>{if(e.target.closest("input,[data-edit]"))return;DK.jSel=tr.dataset.tr;dkRenderJournal()}));
+  $$("#dkPage [data-edit]").forEach(s=>s.addEventListener("click",()=>{const r=rows.find(x=>x.id===s.dataset.edit);r._editing=true;r.reason_old=r.reason;r.reason="";dkRenderJournal();const i=$(`#dkPage [data-rid="${CSS.escape(r.id)}"]`);if(i){i.value=r.reason_old||"";i.focus()}}));
+  $$("#dkPage [data-rid]").forEach(i=>{
+    const save=async()=>{const v=i.value.trim(),r=rows.find(x=>x.id===i.dataset.rid);if(!r||i._saving)return;
+      if(!v){if(r._editing){r.reason=r.reason_old;r._editing=false;dkRenderJournal()}return}
+      i._saving=true;try{await dkApi("trade_reason",{id:r.id,reason:v});r.reason=v;r._editing=false;toast("Saved");dkRenderJournal()}catch(e){toast(e.message);i._saving=false}};
+    i.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();save()}});
+    i.addEventListener("blur",save);
+  });
+}
+
+/* ---------- Review ---------- */
+async function dkReview(){
+  const pg=$("#dkPage");pg.innerHTML=dkLoading();
+  let j;try{j=await dkApi("review_get")}catch(e){pg.innerHTML=dkErr(e);return}
+  if(DK.view!=="review")return;
+  DK.reviews=j.reviews||[];dkRenderReview();
+}
+function dkRenderReview(){
+  const list=DK.reviews||[],r=list[DK.rIdx||0],p=r&&r.payload;
+  const line=t=>`<div class="dk-row"><span>${esc(t.contract)} <span class="mut">${esc(dkDate(t.closed))}</span>${t.reason?"":` <span class="dk-tag near">no reason</span>`}</span><span class="mono">${dkMoney(+t.pnl)}</span></div>`;
+  $("#dkPage").innerHTML=`<div class="dkp">
+    <div class="dkp-head"><h2>Weekly review${p?` · week of ${esc(p.week_start)}`:""}</h2>${r?`<span class="dk-tag blue">${esc(r.built_by||"")} · ${esc(dkDate(r.created_at))}</span>`:""}
+      <span style="margin-left:auto;display:flex;gap:8px">
+        ${list.length>1?`<select id="dkRWeek" class="dk-sel">${list.map((x,i)=>`<option value="${i}" ${i===(DK.rIdx||0)?"selected":""}>Week of ${esc(x.week_start)}</option>`).join("")}</select>`:""}
+        <button class="dk-btn sec" id="dkRBuild">Build this week now</button>
+        <button class="dk-btn sec" id="dkRJason">Build "For Jason" packet</button>
+        <button class="dk-btn sec" id="dkRCall">Load Tuesday's call</button></span></div>
+    ${p?`<div class="dkp-grid4">
+        <div class="dk-cardx dk-stat"><div class="n">${p.n}</div><div class="l">Closed trades</div></div>
+        <div class="dk-cardx dk-stat"><div class="n">${dkMoney(p.total)}</div><div class="l">Week P&amp;L</div></div>
+        <div class="dk-cardx dk-stat"><div class="n">${(p.wins||[]).length} / ${(p.losses||[]).length}</div><div class="l">Winners / losers</div></div>
+        <div class="dk-cardx dk-stat"><div class="n ${p.missing_reasons?"warn":""}">${p.missing_reasons||0}</div><div class="l">Trades with no reason</div></div></div>
+      <div class="dkp-grid3">
+        <div class="dk-cardx"><div class="dk-h">Biggest wins <b>Jason's ask · Oct 1</b></div>${(p.wins||[]).map(line).join("")||`<div class="mut">None this week.</div>`}</div>
+        <div class="dk-cardx"><div class="dk-h">Biggest losses</div>${(p.losses||[]).map(line).join("")||`<div class="mut">None this week.</div>`}</div>
+        <div class="dk-cardx"><div class="dk-h">Rules followed / broken</div>${(p.rules||[]).map(x=>`<div class="dk-row"><span>${esc(x.rule)}</span><span><span class="dk-tag ok">${+x.followed||0} ✓</span> ${+x.broken?`<span class="dk-tag bad">${+x.broken} ✗</span>`:""}</span></div>`).join("")||`<div class="mut">—</div>`}</div></div>
+      <div class="dk-cardx"><div class="dk-h">The pattern</div><div class="ink2">${esc(p.pattern||"")}</div>${p.one_thing?`<p style="margin:10px 0 0"><b>One thing for next week:</b> ${esc(p.one_thing)}</p>`:""}</div>`
+    :`<div class="dk-empty" style="margin:40px auto">No review yet. It builds itself every Friday after the close, or press "Build this week now".</div>`}
+    <div class="dk-callout">"For Jason" drafts your trades, his open questions and the spots you were unsure, ready to copy to him. "Load Tuesday's call" takes the call's transcript (.vtt from Zoom), adds it to the brain, and asks the Desk to propose alerts as a card.</div>
+  </div>`;
+  const w=$("#dkRWeek");if(w)w.onchange=()=>{DK.rIdx=+w.value;dkRenderReview()};
+  $("#dkRBuild").onclick=async e=>{const b=e.target;b.disabled=true;b.textContent="Building… (about a minute)";
+    try{await dkApi("review_build",{});DK.rIdx=0;await dkReview();toast("Review built")}catch(err){toast(String(err.message).slice(0,100));b.disabled=false;b.textContent="Build this week now"}};
+  $("#dkRJason").onclick=()=>{dkShow("desk");$("#dkIn").value="Build my \"For Jason\" packet for Tuesday's call: my trades since last Tuesday from Robinhood (both accounts), the open questions from the newest call, where I was unsure or broke one of his rules, and the levels + action I'm planning next. Plain text I can copy to him. No cards.";dkSend()};
+  $("#dkRCall").onclick=()=>$("#dkCallFile").click();
+}
+$("#dkCallFile").addEventListener("change",async e=>{
+  const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;
+  if(!confirm(`Add "${f.name}" to Jason's brain?\n\nIt's read into a week file, added to the brain everyone's Desk uses, and the Desk is asked to propose alerts for the new levels (as a card; nothing is created until you approve).`))return;
+  toast("Reading the call — about a minute");
+  try{
+    const txt=await f.text();let j;
+    if(/\.json$/i.test(f.name))j=JSON.parse(txt);
+    else{if(!/-->/.test(txt))throw new Error("That doesn't look like a .vtt or .srt transcript");j=await extractCall(txt,f.name)}
+    if(!j||(!j.rules&&!j.assignments&&!j.insights))throw new Error("No call content came back");
+    addCall(j);
+    const {url,headers}=await fnUrl("seed");
+    const r=await fetch(url,{method:"POST",headers,body:JSON.stringify(CALLS)});const x=await r.json();
+    if(!x.ok)throw new Error("Brain update failed: "+(x.error||r.status));
+    toast("Call added — brain version "+x.version);
+    dkShow("desk");
+    $("#dkIn").value=`New Jason call loaded (${(j.call&&j.call.date)||"newest"}): "${(j.call&&j.call.title)||f.name}". Give me the 5 things that matter from it, then propose TradingView alerts for its levels that are still relevant today, as ONE card (named "Jason MM/DD – TICKER level – meaning"). Skip stale or ambiguous levels and list what you skipped.`;
+    dkSend();
+  }catch(err){toast(String(err.message).slice(0,120))}
+});
+
+/* ---------- Score ---------- */
+async function dkScore(){
+  const pg=$("#dkPage");pg.innerHTML=dkLoading("Scoring every Desk idea against the tape…");
+  let j;try{j=await dkApi("score")}catch(e){pg.innerHTML=dkErr(e);return}
+  if(DK.view!=="score")return;
+  const pct=v=>v==null?"—":Math.round(v*100)+"%",R=v=>v==null?"—":`${v>=0?"+":""}${v.toFixed(2)}R`;
+  const grp=(l,lab)=>`<div class="dk-cardx"><div class="dk-h">${lab}</div>${(l||[]).map(g=>`<div class="dk-row"><span>${esc(g.key)}</span><span class="mono">${g.n} · ${pct(g.hit)} · ${R(g.avg_r)}</span></div>
+     <div class="dk-bar"><i style="width:${g.hit==null?0:Math.round(g.hit*100)}%;background:${g.hit!=null&&g.hit>=.5?"var(--up)":"var(--down)"}"></i></div>`).join("")||`<div class="mut">No ideas yet.</div>`}</div>`;
+  const st=o=>!o?"pending":o.state;
+  $("#dkPage").innerHTML=`<div class="dkp">
+    <div class="dkp-head"><h2>Scorecard</h2><span class="mut">Does Jason's method plus the Desk have an edge? Every opening option card is tracked, taken or not.</span></div>
+    <div class="dkp-grid4">
+      <div class="dk-cardx dk-stat"><div class="n">${j.all.n}</div><div class="l">Desk ideas tracked${j.since?` since ${esc(new Date(j.since).toLocaleDateString())}`:""}</div></div>
+      <div class="dk-cardx dk-stat"><div class="n">${j.taken.n}</div><div class="l">Taken · ${j.passed.n} passed</div></div>
+      <div class="dk-cardx dk-stat"><div class="n ${j.all.hit!=null&&j.all.hit>=.5?"up":""}">${pct(j.all.hit)}</div><div class="l">Hit TP1 before the stop (${j.all.wins}W / ${j.all.losses}L)</div></div>
+      <div class="dk-cardx dk-stat"><div class="n">${R(j.all.avg_r)}</div><div class="l">Average result per scored idea (R = planned risk)</div></div></div>
+    <div class="dkp-grid3">${grp(j.by_setup,"By setup <b>n · hit · avg R</b>")}${grp(j.by_verdict,"By banner verdict at the time")}
+      <div class="dk-cardx"><div class="dk-h">Taken vs passed</div>
+        <div class="dk-row"><span>Ideas you took (real P&amp;L)</span><span class="mono">${dkMoney(j.taken.pnl)} · ${R(j.taken.avg_r)}</span></div>
+        <div class="dk-row"><span>Ideas you passed (hypothetical)</span><span class="mono">${R(j.passed.avg_r)}</span></div>
+        <div class="mut" style="font-size:11.5px;margin-top:6px">Every idea is graded on the underlying: did price touch TP1 before the stop, on 5-minute TradingView bars from the moment the card was made. If one bar touches both, it counts as a loss. Passed ideas are hypothetical.</div></div></div>
+    <div class="dk-cardx" style="padding:0;overflow:auto">${j.recent.length?`<table class="dkt"><tr><th>When</th><th>Idea</th><th>Setup</th><th>Banner</th><th>Status</th><th>Outcome</th><th>P&amp;L</th></tr>
+      ${j.recent.map(i=>`<tr><td>${esc(dkDate(i.at))}</td><td>${esc(i.title)}</td><td class="mut">${esc(i.setup||"—")}</td><td class="mut">${esc(i.verdict||"—")}</td><td>${esc(i.status)}</td>
+        <td><span class="dk-tag ${st(i.outcome)==="win"?"ok":st(i.outcome)==="loss"?"bad":""}">${esc(st(i.outcome))}${i.outcome&&i.outcome.r!=null?" "+R(+i.outcome.r):""}</span></td><td class="mono">${i.pnl!=null?dkMoney(+i.pnl):"—"}</td></tr>`).join("")}</table>`
+      :`<div class="dk-empty" style="margin:30px auto">Starts empty on the day v3.1 goes live and fills itself as the Desk proposes trades.</div>`}</div>
+  </div>`;
+}
+
+/* ---------- Jason (Week + Insights, desktop) ---------- */
+function dkJason(){
+  const i=Math.min(DK.jIdx||0,Math.max(0,CALLS.length-1)),c=CALLS[i];
+  if(!c){$("#dkPage").innerHTML=dkLoading("Loading the brain…");return}
+  const d=(c.call&&c.call.date)||"";
+  const L=(arr,f)=>(arr||[]).map(f).join("")||`<div class="mut">None on this call.</div>`;
+  $("#dkPage").innerHTML=`<div class="dkp-cols3">
+    <div class="dk-col"><div class="dk-cardx"><div class="dk-h">Calls <b>${CALLS.length}</b></div>
+      ${CALLS.map((x,k)=>`<button class="dk-callrow ${k===i?"on":""}" data-ci="${k}"><b>${esc((x.call&&x.call.date)||"")}</b><span>${esc((x.call&&x.call.title)||"")}</span></button>`).join("")}</div></div>
+    <div class="dk-col"><div class="dk-cardx"><div class="dk-h">${esc(d)} · homework <b>${(c.assignments||[]).length}</b></div>
+        ${L(c.assignments,a=>{let on=false;try{on=!!DONE[hwKey(a,d)]}catch(e){}return `<div class="dk-check"><span class="dk-box ${on?"on":""}">${on?"✓":""}</span><span>${esc(a.task||"")}${a.at?` <span class="mut mono">${esc(a.at)}</span>`:""}</span></div>`})}
+        <button class="dk-link" data-classic="week">Tick homework in Week →</button></div>
+      <div class="dk-cardx"><div class="dk-h">Rules <b>${(c.rules||[]).length}</b></div>${L(c.rules,r=>`<div class="dk-row"><span>${esc(r.rule||"")}${r.why?`<br><span class="mut">${esc(r.why)}</span>`:""}</span><span class="mut mono">${esc(r.at||"")}</span></div>`)}</div>
+      <div class="dk-cardx"><div class="dk-h">Setups <b>${(c.setups||[]).length}</b></div>${L(c.setups,s=>`<div class="dk-row"><span><b>${esc(s.name||"")}</b><br><span class="ink2">${esc(s.trigger||"")}</span>${s.invalidation?`<br><span class="mut">Wrong if: ${esc(s.invalidation)}</span>`:""}</span><span class="mut mono">${esc(s.at||"")}</span></div>`)}</div>
+      <div class="dk-cardx"><div class="dk-h">Insights <b>${(c.insights||[]).length}</b></div>${L(c.insights,s=>`<div class="dk-row"><span><b>${esc(s.title||"")}</b><br><span class="ink2">${esc(s.body||"")}</span></span></div>`)}</div></div>
+    <div class="dk-col r"><div class="dk-cardx"><div class="dk-h">Ask Jason next call <b>${(c.questions||[]).length}</b></div>${L(c.questions,q=>`<div class="dk-row"><span>${esc(q.q||q.question||"")}</span></div>`)}</div>
+      <div class="dk-cardx"><div class="dk-h">Levels <b>dated ${esc(d)}</b></div>${L(c.levels,l=>`<div class="dk-row"><span><b>${esc(l.instrument||"")}</b> ${esc(l.value||"")}<br><span class="mut">${esc(l.meaning||"")}</span></span><span class="mut mono">${esc(l.at||"")}</span></div>`)}
+        <div class="mut" style="font-size:11.5px;margin-top:6px">Marks from the call, not current prices.</div></div>
+      <div class="dk-cardx"><div class="dk-h">Glossary <b>${(c.glossary||[]).length}</b></div>${L(c.glossary,g=>`<div class="dk-row"><span><b>${esc(g.term||"")}</b> — <span class="ink2">${esc(g.plain||"")}</span></span></div>`)}</div></div>
+  </div>`;
+  $$("#dkPage [data-ci]").forEach(b=>b.onclick=()=>{DK.jIdx=+b.dataset.ci;dkJason()});
+  $$("#dkPage [data-classic]").forEach(b=>b.onclick=()=>{closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.classic);if(t)t.click()});
 }
 
 (async function boot(){

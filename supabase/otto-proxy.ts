@@ -1016,6 +1016,12 @@ function costOf(tool: string, a: any): { cost: number | null; note: string } {
 async function proposeAction(input: any, who: string) {
   const calls = Array.isArray(input.calls) ? input.calls.slice(0, 6) : [];
   if (!calls.length) throw new Error("no calls");
+  // v3.1: an opening option order must carry its plan, so the scorecard can grade it.
+  const opening = calls.some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open"));
+  const plan = input.plan && typeof input.plan === "object" ? input.plan : null;
+  if (opening && (!plan || !plan.tv_symbol || !plan.direction || !plan.setup || plan.tp1 == null || plan.stop == null)) {
+    throw new Error("An opening option order needs plan: {tv_symbol (EXCHANGE:TICKER), direction ('up'|'down' on the underlying), setup, tp1, stop (underlying prices), entry_underlying?, expires? (YYYY-MM-DD)}. Add it and propose again.");
+  }
   const out: any[] = [];
   const review: string[] = [];
   let cost = 0, costKnown = true;
@@ -1053,10 +1059,16 @@ async function proposeAction(input: any, who: string) {
     cost: costKnown ? cost : null, account_value, pct,
     flag: pct !== null && pct > RISK_FLAG, notes, account: out.some((c) => c.service === "rh") ? mask(await agenticAccount().catch(() => "????")) : null,
   };
+  let banner: any = null, checks: any[] = [];
+  if (opening) {
+    try { const b = await sentimentNow(); banner = { verdict: b.verdict, score: b.score, fresh: b.fresh, at: b.at }; } catch { /* */ }
+    try { checks = await ruleChecks(out, plan, risk, banner); } catch (e) { checks = [{ ok: null, text: "Rule check failed: " + (e as Error).message }]; }
+  }
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
     title: String(input.title || "Action").slice(0, 140),
     summary: String(input.summary || "").slice(0, 4000),
     calls: out, risk, review: review.join("\n\n---\n\n"), status: "pending", created_by: who,
+    plan: plan ? { ...plan, setup: String(plan.setup).toLowerCase().slice(0, 40) } : null, banner, checks,
   }) });
   return publicAction(rows[0]);
 }
@@ -1069,7 +1081,8 @@ function publicAction(a: any) {
   });
   return { id: a.id, title: a.title, summary: a.summary, calls, risk: a.risk, review: a.review,
            status: a.status, result: a.result, created_at: a.created_at, created_by: a.created_by,
-           decided_by: a.decided_by, decided_at: a.decided_at };
+           decided_by: a.decided_by, decided_at: a.decided_at,
+           plan: a.plan || null, banner: a.banner || null, checks: a.checks || [], order_id: a.order_id || null, outcome: a.outcome || null };
 }
 
 async function actOn(id: string, decision: string, who: string) {
@@ -1094,11 +1107,15 @@ async function actOn(id: string, decision: string, who: string) {
     body: JSON.stringify({ status: "running", decided_by: who, decided_at: now }) });
   if (!claimed || !claimed.length) return publicAction((await db("otto_actions?id=eq." + id + "&select=*"))[0]);
   const results: any[] = [];
-  let failed = false;
+  let failed = false, orderId: string | null = null;
   for (const c of a.calls) {
     if (failed) { results.push({ tool: c.tool, ok: false, text: "skipped — an earlier step failed" }); continue; }
     try {
       const r = await call(c.service, c.tool, c.args);
+      if (/^place_/.test(c.tool) && !orderId) {
+        const j = mcpJson(r);
+        orderId = j?.data?.order?.id || j?.data?.id || j?.order?.id || j?.id || null;
+      }
       results.push({ tool: c.tool, ok: true, text: mcpText(r).slice(0, 2000) });
     } catch (e) {
       failed = true;
@@ -1106,7 +1123,7 @@ async function actOn(id: string, decision: string, who: string) {
     }
   }
   const fin = await db("otto_actions?id=eq." + id, { method: "PATCH",
-    body: JSON.stringify({ status: failed ? "failed" : "done", result: results }) });
+    body: JSON.stringify({ status: failed ? "failed" : "done", result: results, ...(orderId ? { order_id: String(orderId) } : {}) }) });
   await logDesk("system", "Otto", `${failed ? "✗" : "✓"} ${a.title} — ${failed ? "failed" : "done"} (approved by ${who})`, id);
   return publicAction(fin[0]);
 }
@@ -1154,9 +1171,10 @@ async function panel() {
       out.watchlist_name = wl.v?.name || wl.v?.watchlist?.name || wl.v?.data?.name || null;
     } else out.watchlist_error = wl.error;
     const syms = [...new Set([...MACRO.map((m) => m.sym), ...wsyms])];
-    const q = await settle((async () => mcpJson(await call("tv", "mcp-tv-get-symbol-data-batch",
-      { symbols: syms, columns: ["name", "description", "close", "change", "change_abs"] })))());
-    if (q.ok) out.quotes = q.v; else out.quotes_error = q.error;
+    // v3.1: quotesFor() falls back to OHLCV bars when the screener is rate-limited (429).
+    const q = await settle(quotesFor(syms));
+    if (q.ok) out.quotes = { data: Object.entries(q.v).map(([symbol, v]: any) => ({ symbol, close: v.close, change: v.change })) };
+    else out.quotes_error = q.error;
     out.macro = MACRO; out.watch = wsyms;
     const al = await settle((async () => mcpJson(await call("tv", "mcp-tv-list-alerts", { active: true })))());
     if (al.ok) out.alerts = al.v; else out.alerts_error = al.error;
@@ -1203,6 +1221,10 @@ You can READ anything with the tv__ and rh__ tools, as often as you need. You ca
 - Before proposing an option order: get the chain (rh__get_option_chains → rh__get_option_instruments) for the real option_id, check the quote (rh__get_option_quotes), and use a limit price. The server runs Robinhood's review and computes the risk vs the Agentic account.
 - One idea = one card. Several suggestions at once = several cards, each with its own title.
 - Don't propose new TradingView alerts or Jason-level alerts unless they explicitly ask for one. For now the desk shows prices only.
+- Every OPENING option card must include plan {tv_symbol, direction, setup, tp1, stop, entry_underlying, expires}. The server runs a rule check (first 30 minutes, delta 30–40, volume > OI, 20%, expiry, binary events, earnings, banner) and shows it on the card; read its result back and mention any failed check in one line.
+
+THE SENTIMENT BANNER
+The app shows a live banner built from Josh's Intermarket Sentiment Cheat Sheet on TradingView data (10Y, DXY, USD/JPY, crude, ES/NQ/YM). Its current verdict is in the desk context line. It is Josh's sheet, not Jason's: where it disagrees with Jason (Josh's sheet trades the 9:30 opening range; Jason says no first 30 minutes) say so and don't pick. Never attach Josh's sheet sizing ($15 / 15%) to anything — sizing is only the 20% check.
 
 THE ORDER TICKET (put this in the card's summary, plain text)
 Underlying / contract · Side / qty / type / limit · Max risk ($ and % of the account; ⚠ if over 20%) · Entry trigger · Stop / exit · Targets (TP1 / TP2 / runner) · Jason basis (rule, call date, MM:SS) · Not from Jason (anything you added).
@@ -1250,6 +1272,20 @@ const PROPOSE_TOOL = (writeHelp: string) => ({
           required: ["service", "tool", "args"],
         },
       },
+      plan: {
+        type: "object",
+        description: "REQUIRED for an opening option order (the scorecard grades every idea on it): the trade plan on the UNDERLYING.",
+        properties: {
+          tv_symbol: { type: "string", description: "TradingView symbol of the underlying, EXCHANGE:TICKER, e.g. NASDAQ:NVDA" },
+          direction: { type: "string", enum: ["up", "down"], description: "Your view on the underlying (calls = up, puts = down)" },
+          setup: { type: "string", enum: ["rejection at resistance", "support bounce", "gap failure", "breakdown", "breakout", "trend continuation", "other"] },
+          entry_underlying: { type: "number", description: "Underlying price at the entry trigger" },
+          tp1: { type: "number", description: "TP1 on the underlying" },
+          stop: { type: "number", description: "Underlying price that proves the idea wrong (your exit level)" },
+          expires: { type: "string", description: "Option expiration YYYY-MM-DD" },
+        },
+        required: ["tv_symbol", "direction", "setup", "tp1", "stop"],
+      },
     },
     required: ["title", "summary", "calls"],
   },
@@ -1286,7 +1322,103 @@ async function deskTools() {
   return { tools, help: help.join("\n") || "(no connector is connected yet)", status };
 }
 
-async function desk(req: Request, who: string, apiKey: string) {
+type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; maxRounds?: number };
+
+// The tool loop, shared by the live Desk (streamed) and the 8:45 run (silent).
+async function runDesk(o: DeskRun): Promise<{ said: string; cards: string[] }> {
+  const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
+  const { msgs, sys, tools, cs, who, send } = o;
+  let said = "";
+  const cards: string[] = [];
+  for (let round = 0; round < (o.maxRounds || 12); round++) {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: MODEL, max_tokens: 2500, stream: true, tools,
+        system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }],
+        messages: msgs,
+      }),
+    });
+    if (!r.ok || !r.body) throw new Error("claude HTTP " + r.status + " " + (await r.text()).slice(0, 200));
+    let stop = "";
+    const blocks: any[] = [];
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split("\n\n"); buf = parts.pop() || "";
+      for (const p of parts) {
+        const line = p.split("\n").find((x) => x.startsWith("data: "));
+        if (!line) continue;
+        let ev: any; try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+        if (ev.type === "content_block_start") {
+          const cb = ev.content_block;
+          blocks[ev.index] =
+            (cb.type === "tool_use" || cb.type === "server_tool_use") ? { ...cb, input: "" }
+            : (cb.type === "text") ? { type: "text", text: "" }
+            : { ...cb };
+        } else if (ev.type === "content_block_delta") {
+          const b = blocks[ev.index];
+          if (ev.delta.type === "text_delta") { b.text += ev.delta.text; said += ev.delta.text; send({ t: "text", v: ev.delta.text }); }
+          else if (ev.delta.type === "input_json_delta") b.input += ev.delta.partial_json;
+        } else if (ev.type === "message_delta" && ev.delta?.stop_reason) {
+          stop = ev.delta.stop_reason;
+        }
+      }
+    }
+    if (stop !== "tool_use") break;
+
+    const assistant: any[] = [];
+    const results: any[] = [];
+    for (const b of blocks) {
+      if (!b) continue;
+      if (b.type === "text") { if (b.text) assistant.push({ type: "text", text: b.text }); continue; }
+      if (b.type === "server_tool_use") {
+        let input: any = {}; try { input = JSON.parse(b.input || "{}"); } catch { /* */ }
+        assistant.push({ type: "server_tool_use", id: b.id, name: b.name, input });
+        continue;
+      }
+      if (b.type === "web_search_tool_result") { assistant.push(b); continue; }
+      let input: any = {}; try { input = JSON.parse(b.input || "{}"); } catch { /* */ }
+      assistant.push({ type: "tool_use", id: b.id, name: b.name, input });
+      let content = "", isErr = false;
+      try {
+        if (b.name === "search_jason") {
+          const q = String(input.query || "");
+          send({ t: "tool", v: "Jason: " + q });
+          const hits = search(cs, q);
+          content = hits.length ? hits.map(fmt).join("\n\n") : "NOTHING FOUND for that wording. Try different words.";
+        } else if (b.name === "propose_action") {
+          if (!o.allowPropose) throw new Error("no cards in this run");
+          send({ t: "tool", v: "Preparing card: " + String(input.title || "") });
+          const card = await proposeAction(input, who);
+          cards.push(card.id);
+          send({ t: "action", v: card });
+          content = `Card ${card.id} is on screen, status pending. Nothing has run. ` +
+            `Risk: ${JSON.stringify(card.risk)}. Rule check: ${JSON.stringify(card.checks || [])}. Robinhood review: ${(card.review || "n/a").slice(0, 1500)}`;
+        } else {
+          const m = /^(tv|rh)__(.+)$/.exec(b.name);
+          if (!m || !READ[m[1]].has(m[2])) throw new Error("unknown tool " + b.name);
+          const args = { ...input };
+          if (m[1] === "rh" && RH_FORCE_ACCT.has(m[2])) args.account_number = await agenticAccount();
+          send({ t: "tool", v: SVC[m[1]].name + ": " + m[2].replace(/^mcp-(tv|watchlist)-/, "") });
+          content = mcpText(await call(m[1], m[2], args)).slice(0, 30000);
+        }
+      } catch (e) {
+        isErr = true; content = "ERROR: " + (e as Error).message;
+      }
+      results.push({ type: "tool_result", tool_use_id: b.id, content: content || "(empty)", ...(isErr ? { is_error: true } : {}) });
+    }
+    msgs.push({ role: "assistant", content: assistant });
+    msgs.push({ role: "user", content: results });
+  }
+  return { said, cards };
+}
+
+async function desk(req: Request, who: string, _apiKey: string) {
   const body = await req.json().catch(() => ({}));
   const history = Array.isArray(body.messages) ? body.messages.slice(-24) : [];
   if (!history.length) throw new Error("no messages");
@@ -1295,7 +1427,8 @@ async function desk(req: Request, who: string, apiKey: string) {
   const calls = await loadBrain();
   const cs = chunksOf(calls);
   const sys = DESK_SYS.replace("{{RULES}}", alwaysOn(calls));
-  const { tools: mcpToolDefs, help, status } = await deskTools();
+  const [dt, sent] = await Promise.all([deskTools(), settle(sentimentNow())]);
+  const { tools: mcpToolDefs, help, status } = dt;
   const tools: any[] = [
     TOOLS[0],                                         // search_jason
     { type: "web_search_20250305", name: "web_search", max_uses: 4 },
@@ -1304,7 +1437,8 @@ async function desk(req: Request, who: string, apiKey: string) {
   ];
   const now = new Date().toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short",
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}.]`;
+  const bn = sent.ok ? `Banner: ${sent.v.verdict} (score ${sent.v.score}, ${sent.v.fresh}/${sent.v.total} legs fresh; fired: ${sent.v.rows.filter((r: any) => r.fired).map((r: any) => "row " + r.row).join(", ") || "none"}).` : "Banner: unavailable.";
+  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn}]`;
 
   const msgs: any[] = history.map((m: any, i: number) => {
     const role = m.role === "assistant" ? "assistant" : "user";
@@ -1336,103 +1470,573 @@ async function desk(req: Request, who: string, apiKey: string) {
   const encS = new TextEncoder();
   const stream = new ReadableStream({
     async start(ctrl) {
-      const send = (o: unknown) => ctrl.enqueue(encS.encode("data: " + JSON.stringify(o) + "\n\n"));
-      let said = "";
-      const cards: string[] = [];
+      const send = (o: unknown) => { try { ctrl.enqueue(encS.encode("data: " + JSON.stringify(o) + "\n\n")); } catch { /* client left */ } };
+      let res = { said: "", cards: [] as string[] };
       try {
-        for (let round = 0; round < 12; round++) {
-          const r = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-            body: JSON.stringify({
-              model: MODEL, max_tokens: 2500, stream: true, tools,
-              system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }],
-              messages: msgs,
-            }),
-          });
-          if (!r.ok || !r.body) throw new Error("claude HTTP " + r.status + " " + (await r.text()).slice(0, 200));
-          let stop = "";
-          const blocks: any[] = [];
-          const reader = r.body.getReader(), dec = new TextDecoder();
-          let buf = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += dec.decode(value, { stream: true });
-            const parts = buf.split("\n\n"); buf = parts.pop() || "";
-            for (const p of parts) {
-              const line = p.split("\n").find((x) => x.startsWith("data: "));
-              if (!line) continue;
-              let ev: any; try { ev = JSON.parse(line.slice(6)); } catch { continue; }
-              if (ev.type === "content_block_start") {
-                const cb = ev.content_block;
-                blocks[ev.index] =
-                  (cb.type === "tool_use" || cb.type === "server_tool_use") ? { ...cb, input: "" }
-                  : (cb.type === "text") ? { type: "text", text: "" }
-                  : { ...cb };
-              } else if (ev.type === "content_block_delta") {
-                const b = blocks[ev.index];
-                if (ev.delta.type === "text_delta") { b.text += ev.delta.text; said += ev.delta.text; send({ t: "text", v: ev.delta.text }); }
-                else if (ev.delta.type === "input_json_delta") b.input += ev.delta.partial_json;
-              } else if (ev.type === "message_delta" && ev.delta?.stop_reason) {
-                stop = ev.delta.stop_reason;
-              }
-            }
-          }
-          if (stop !== "tool_use") break;
-
-          const assistant: any[] = [];
-          const results: any[] = [];
-          for (const b of blocks) {
-            if (!b) continue;
-            if (b.type === "text") { if (b.text) assistant.push({ type: "text", text: b.text }); continue; }
-            if (b.type === "server_tool_use") {
-              let input: any = {}; try { input = JSON.parse(b.input || "{}"); } catch { /* */ }
-              assistant.push({ type: "server_tool_use", id: b.id, name: b.name, input });
-              continue;
-            }
-            if (b.type === "web_search_tool_result") { assistant.push(b); continue; }
-            let input: any = {}; try { input = JSON.parse(b.input || "{}"); } catch { /* */ }
-            assistant.push({ type: "tool_use", id: b.id, name: b.name, input });
-            let content = "", isErr = false;
-            try {
-              if (b.name === "search_jason") {
-                const q = String(input.query || "");
-                send({ t: "tool", v: "Jason: " + q });
-                const hits = search(cs, q);
-                content = hits.length ? hits.map(fmt).join("\n\n") : "NOTHING FOUND for that wording. Try different words.";
-              } else if (b.name === "propose_action") {
-                send({ t: "tool", v: "Preparing card: " + String(input.title || "") });
-                const card = await proposeAction(input, who);
-                cards.push(card.id);
-                send({ t: "action", v: card });
-                content = `Card ${card.id} is on screen, status pending. Nothing has run. ` +
-                  `Risk computed by the server: ${JSON.stringify(card.risk)}. Robinhood review: ${(card.review || "n/a").slice(0, 1500)}`;
-              } else {
-                const m = /^(tv|rh)__(.+)$/.exec(b.name);
-                if (!m || !READ[m[1]].has(m[2])) throw new Error("unknown tool " + b.name);
-                const args = { ...input };
-                if (m[1] === "rh" && RH_FORCE_ACCT.has(m[2])) args.account_number = await agenticAccount();
-                send({ t: "tool", v: SVC[m[1]].name + ": " + m[2].replace(/^mcp-(tv|watchlist)-/, "") });
-                content = mcpText(await call(m[1], m[2], args)).slice(0, 30000);
-              }
-            } catch (e) {
-              isErr = true; content = "ERROR: " + (e as Error).message;
-            }
-            results.push({ type: "tool_result", tool_use_id: b.id, content: content || "(empty)", ...(isErr ? { is_error: true } : {}) });
-          }
-          msgs.push({ role: "assistant", content: assistant });
-          msgs.push({ role: "user", content: results });
-        }
+        res = await runDesk({ msgs, sys, tools, cs, who, send, allowPropose: true });
         send({ t: "done" });
       } catch (e) {
         send({ t: "error", v: String((e as Error).message ?? e).slice(0, 300) });
       }
-      if (said.trim() || cards.length) await logDesk("assistant", "Otto", said.trim(), cards[cards.length - 1] || null);
-      ctrl.close();
+      if (res.said.trim() || res.cards.length) await logDesk("assistant", "Otto", res.said.trim(), res.cards[res.cards.length - 1] || null);
+      try { ctrl.close(); } catch { /* */ }
     },
   });
   return new Response(stream, { headers: { ...CORS, "content-type": "text/event-stream", "cache-control": "no-store" } });
+}
+
+/* ===================================================================== v3.1
+   4 Oct 2026 — sentiment banner, rule check, journal, weekly review, scorecard,
+   scheduled morning read. Everything here reads TradingView / Robinhood through
+   the same MCP client as the Desk; nothing here can place or change anything.
+
+   Data note (tested 4 Oct): TradingView's screener-backed tools (quotes batch,
+   earnings calendar) were returning 429. OHLCV and the economic calendar were
+   fine. So the banner runs on OHLCV bars only; quotes fall back to bars; and
+   earnings come from Robinhood's earnings calendar instead of TradingView's. */
+
+/* ------------------------------------------------------------ small helpers */
+
+function etParts(d = new Date()) {
+  const f = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour12: false, weekday: "short",
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(d);
+  const g = (t: string) => f.find((x) => x.type === t)?.value || "";
+  return { wd: g("weekday"), date: `${g("year")}-${g("month")}-${g("day")}`, min: (Number(g("hour")) % 24) * 60 + Number(g("minute")) };
+}
+const fmtMin = (m: number) => { const h = Math.floor(m / 60), mm = m % 60; return `${((h + 11) % 12) + 1}:${String(mm).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
+function etLabel(iso: string) {
+  const p = etParts(new Date(iso));
+  return `${p.wd} ${fmtMin(p.min)}`;
+}
+function addDays(date: string, n: number) {
+  const d = new Date(date + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10);
+}
+const dayDiff = (a: string, b: string) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 864e5);
+function fridayOf(date: string) { const wd = new Date(date + "T12:00:00Z").getUTCDay(); return addDays(date, (5 - wd + 7) % 7); }
+function mondayOf(date: string) { const wd = new Date(date + "T12:00:00Z").getUTCDay(); return addDays(date, -((wd + 6) % 7)); }
+
+const CACHE: Record<string, { at: number; v: any }> = {};
+async function cached<T>(key: string, ms: number, f: () => Promise<T>): Promise<T> {
+  const c = CACHE[key];
+  if (c && Date.now() - c.at < ms) return c.v;
+  const v = await f();
+  CACHE[key] = { at: Date.now(), v };
+  return v;
+}
+
+async function tvBars(sym: string, interval: string, count: number): Promise<any[]> {
+  return cached(`bars|${sym}|${interval}|${count}`, interval === "1D" ? 10 * 60e3 : 60e3, async () => {
+    const j = mcpJson(await call("tv", "mcp-tv-get-ohlcv", { symbol: sym, interval, count }));
+    if (!j || j.success === false || !Array.isArray(j.bars)) throw new Error(`no bars for ${sym}: ${j?.error || "empty"}`);
+    return j.bars;
+  });
+}
+
+async function econEvents(from: string, to: string, minImp = 1): Promise<any[]> {
+  return cached(`econ|${from}|${to}|${minImp}`, 30 * 60e3, async () => {
+    const j = mcpJson(await call("tv", "mcp-tv-get-economic-calendar",
+      { date_from: from, date_to: to + "T23:59:59Z", min_importance: minImp, countries: "US" }));
+    return (j?.result || []).map((e: any) => ({ date: e.date, title: e.title, importance: e.importance,
+      actual: e.actual, forecast: e.forecast, previous: e.previous, period: e.period }));
+  });
+}
+
+// Robinhood's calendar (TradingView's is screener-backed and was rate-limited).
+async function earningsMap(): Promise<Record<string, string>> {
+  return cached("earnings", 6 * 3600e3, async () => {
+    const out: Record<string, string> = {};
+    const today = etParts().date;
+    for (const start of [today, addDays(today, 31)]) {
+      try {
+        const j = mcpJson(await call("rh", "get_earnings_calendar", { start_date: start, days: 31, filter: "high_market_cap" }));
+        for (const r of j?.data?.results || []) {
+          if (r?.eps?.actual != null) continue;
+          const d = r?.report?.date; if (!d || !r.symbol) continue;
+          if (!out[r.symbol] || d < out[r.symbol]) out[r.symbol] = d + (r.report.timing ? " " + r.report.timing : "");
+        }
+      } catch { /* partial is fine */ }
+    }
+    return out;
+  });
+}
+
+// Prices for a list of EXCHANGE:TICKER. Screener batch first; bars if it's rate-limited.
+async function quotesFor(syms: string[]): Promise<Record<string, { close: number; change: number | null }>> {
+  const key = "q|" + syms.slice().sort().join(",");
+  return cached(key, 90e3, async () => {
+    const out: Record<string, any> = {};
+    try {
+      const j = mcpJson(await call("tv", "mcp-tv-get-symbol-data-batch", { symbols: syms, columns: ["close", "change"] }));
+      if (j && j.success !== false) {
+        const walk = (o: any) => {
+          if (!o || typeof o !== "object") return;
+          if (Array.isArray(o)) { o.forEach(walk); return; }
+          const s = o.symbol || o.ticker || o.s; const d = o.d && typeof o.d === "object" ? o.d : o;
+          if (typeof s === "string" && d.close != null) out[s] = { close: Number(d.close), change: d.change != null ? Number(d.change) : null };
+          Object.values(o).forEach((v) => { if (v && typeof v === "object") walk(v); });
+        };
+        walk(j);
+      }
+    } catch { /* fall through */ }
+    const missing = syms.filter((s) => !out[s]);
+    for (let i = 0; i < missing.length; i += 8) {
+      await Promise.all(missing.slice(i, i + 8).map(async (s) => {
+        try {
+          const b = await tvBars(s, "1D", 2);
+          const last = b[b.length - 1], prev = b.length > 1 ? b[b.length - 2] : null;
+          out[s] = { close: last.c, change: prev ? (last.c - prev.c) / prev.c * 100 : null };
+        } catch { /* leave missing */ }
+      }));
+    }
+    return out;
+  });
+}
+
+/* ------------------------------------------------------------ the sentiment banner
+   Josh's Intermarket Sentiment Cheat Sheet, same thresholds as the v2.4 bias card
+   (BIAS_RULES in index.html), now on real TradingView series instead of ETF
+   stand-ins. No sizing anywhere — Ifoma's decision, 4 Oct: verdict and reasons only. */
+
+const LEGS = [
+  { k: "yield", sym: "TVC:US10Y", label: "10Y" },
+  { k: "dollar", sym: "TVC:DXY", label: "DXY" },
+  { k: "jpy", sym: "FX:USDJPY", label: "USD/JPY" },
+  { k: "crude", sym: "NYMEX:CL1!", label: "Crude" },
+  { k: "es", sym: "CME_MINI:ES1!", label: "ES" },
+  { k: "nq", sym: "CME_MINI:NQ1!", label: "NQ" },
+  { k: "ym", sym: "CBOT_MINI:YM1!", label: "YM" },
+];
+const SENT_RULES = [
+  { row: 1, leg: "yield", when: (p: number) => p >= 0.60, side: -1, label: "10Y spikes up", why: "Higher discount rates compress tech multiples." },
+  { row: 2, leg: "yield", when: (p: number) => p <= -0.40, side: +1, label: "10Y falls", why: "Easing yields relieve valuation pressure." },
+  { row: 3, leg: "jpy", when: (p: number) => p <= -0.40, side: -1, label: "USD/JPY dumps", why: "Yen strengthening: risk-off, carry-trade unwind." },
+  { row: 4, leg: "jpy", when: (p: number) => p >= 0.15, side: +1, label: "USD/JPY grinds up", why: "Dollar firm vs yen: healthy liquidity." },
+  { row: 5, leg: "dollar", when: (p: number) => p >= 0.40, side: -1, label: "DXY breaks up", why: "Strong dollar tightens conditions." },
+  { row: 6, leg: "crude", when: (p: number) => p >= 2.00, side: -1, label: "Crude spikes", why: "Energy shock lifts yields." },
+];
+const FRESH_SEC = 45 * 60;
+let SENT: { at: number; body: any } | null = null;
+
+async function legData(l: any) {
+  const [d, m] = await Promise.all([tvBars(l.sym, "1D", 3), tvBars(l.sym, "15m", 8)]);
+  const last = m[m.length - 1];
+  const cur = d[d.length - 1];
+  const prev = last.t >= cur.t && d.length > 1 ? d[d.length - 2].c : cur.c;
+  const pct = prev ? (last.c - prev) / prev * 100 : null;
+  const age = Math.max(0, Date.now() / 1000 - (last.t + 900));
+  return { k: l.k, label: l.label, sym: l.sym, price: last.c, pct, age: Math.round(age), live: pct !== null && age <= FRESH_SEC,
+    spark: m.map((b: any) => b.c) };
+}
+
+async function sentimentNow(force = false, kind = "live"): Promise<any> {
+  if (!force && SENT && Date.now() - SENT.at < 4 * 60e3) return SENT.body;
+  const legs = await Promise.all(LEGS.map((l) => legData(l).catch((e) => ({ k: l.k, label: l.label, sym: l.sym, live: false, error: (e as Error).message }))));
+  const by: Record<string, any> = Object.fromEntries(legs.map((l: any) => [l.k, l]));
+  const fresh = legs.filter((l: any) => l.live).length;
+  let score = 0;
+  const rows: any[] = [];
+  for (const r of SENT_RULES) {
+    const l = by[r.leg];
+    const fired = !!(l && l.live && r.when(l.pct));
+    if (fired) score += r.side;
+    rows.push({ row: r.row, label: r.label, why: r.why, fired, side: r.side, value: l?.pct ?? null, leg: r.leg });
+  }
+  const sgn = (v: number) => (v >= 0 ? 1 : -1);
+  const idx = ["es", "nq", "ym"].map((k) => by[k]).filter((l) => l && l.live);
+  const aligned = idx.length === 3 && idx.every((l) => Math.abs(l.pct) >= 0.25) && new Set(idx.map((l) => sgn(l.pct))).size === 1 ? sgn(idx[0].pct) : 0;
+  const nq = by.nq, ym = by.ym;
+  const diverged = !!(nq?.live && ym?.live && sgn(nq.pct) !== sgn(ym.pct) && Math.abs(nq.pct) >= 0.20 && Math.abs(ym.pct) >= 0.20);
+  if (aligned) score += aligned * 2;
+  rows.push({ row: 7, label: "ES, NQ and YM break together", why: "Broad institutional buying or selling.", fired: !!aligned, side: aligned, value: null });
+  rows.push({ row: 8, label: "NQ vs YM divergence", why: "Rotation, not entry: whipsaw risk.", fired: diverged, side: 0, value: null });
+
+  let verdict: string, tone: string, note: string;
+  if (fresh < 2) { verdict = "No read"; tone = "none"; note = "Not enough fresh data. Futures and FX trade almost 24h; if this persists, TradingView may be down or disconnected."; }
+  else if (diverged) { verdict = "Choppy — stand aside"; tone = "chop"; note = "Nasdaq and Dow pulling opposite ways. Josh's sheet calls that rotation (row 8): scalp only or stand aside."; }
+  else if (fresh >= 5 && score >= 3) { verdict = "Leaning long"; tone = "long"; note = "Macro tailwind and the indexes agree."; }
+  else if (fresh >= 5 && score <= -3) { verdict = "Leaning short"; tone = "short"; note = "Macro headwind and the indexes agree."; }
+  else if (score >= 2) { verdict = "Mildly long — small size"; tone = "long"; note = "Some tailwind, not conviction (Scenario 3: small targets)."; }
+  else if (score <= -2) { verdict = "Mildly short — small size"; tone = "short"; note = "Some headwind, not conviction (Scenario 3: small targets)."; }
+  else { verdict = "No edge"; tone = "none"; note = "Nothing lines up. Jason: no edge, no trade."; }
+
+  const now = etParts();
+  let calendar: any[] = [];
+  try { calendar = await econEvents(now.date, now.date, 0); } catch { /* shown as unavailable */ }
+  const nextHigh = calendar.find((e) => e.importance >= 1 && Date.parse(e.date) > Date.now()) || null;
+
+  let window: string | null = null;
+  if (!["Sat", "Sun"].includes(now.wd)) {
+    if (now.min >= 570 && now.min < 600) window = "in";
+    else if (now.min >= 525 && now.min < 570) window = "soon";
+  }
+  const dir = (l: any, bad: number) => !l?.live || l.pct == null ? "—" : (Math.sign(l.pct) === bad ? "headwind" : "tailwind");
+  const jason = {
+    capital: { label: "10-year (cost of capital)", pct: by.yield?.pct ?? null, read: dir(by.yield, 1) },
+    transport: { label: "Crude (cost of transportation)", pct: by.crude?.pct ?? null, read: dir(by.crude, 1) },
+    currency: { label: "USD/JPY (cost of currency)", pct: by.jpy?.pct ?? null, read: dir(by.jpy, -1) },
+  };
+  let news: any = null;
+  try {
+    const r = await db("otto_sentiment?kind=eq.auto&order=id.desc&limit=1&select=at,news");
+    if (r?.[0]?.news && Date.now() - Date.parse(r[0].at) < 14 * 3600e3) news = { text: r[0].news, at: r[0].at };
+  } catch { /* table may be missing until 005 runs */ }
+
+  const body = { ok: true, at: Date.now(), et: `${now.wd} ${fmtMin(now.min)}`, verdict, tone, score, fresh, total: LEGS.length,
+    note, legs: legs.map((l: any) => { const { spark, ...rest } = l; return { ...rest, spark }; }), rows, calendar, next_event: nextHigh,
+    window, jason, news };
+  SENT = { at: Date.now(), body };
+  try {
+    const last = await db("otto_sentiment?order=id.desc&limit=1&select=at");
+    if (kind === "auto" || !last?.[0] || Date.now() - Date.parse(last[0].at) > 5 * 60e3) {
+      await db("otto_sentiment", { method: "POST", headers: { prefer: "return=minimal" },
+        body: JSON.stringify({ kind, verdict, score, payload: { ...body, legs: body.legs.map((l: any) => ({ ...l, spark: undefined })) } }) });
+    }
+  } catch { /* history is a nice-to-have */ }
+  return body;
+}
+
+/* ------------------------------------------------------------ Market (desktop) */
+
+const MAG7 = ["NASDAQ:AAPL", "NASDAQ:MSFT", "NASDAQ:NVDA", "NASDAQ:AMZN", "NASDAQ:GOOGL", "NASDAQ:META", "NASDAQ:TSLA"];
+
+async function marketDesk() {
+  const now = etParts();
+  const [sent, mag, week, earn, wl] = await Promise.all([
+    settle(sentimentNow()),
+    settle(quotesFor(MAG7)),
+    settle(econEvents(now.date, addDays(now.date, 7), 0)),
+    settle(earningsMap()),
+    settle((async () => mcpJson(await call("tv", "mcp-watchlist-get-active-watchlist", {}))?.watchlist)()),
+  ]);
+  const watch: string[] = wl.ok ? (wl.v?.symbols || []) : [];
+  const upcoming = earn.ok ? watch.map((s) => ({ sym: s, date: earn.v[s.split(":")[1]] })).filter((x) => x.date && x.date.slice(0, 10) <= addDays(now.date, 14)) : [];
+  return {
+    ok: true,
+    sentiment: sent.ok ? sent.v : { error: sent.error },
+    mag7: mag.ok ? MAG7.map((s) => ({ sym: s, ...(mag.v[s] || {}) })) : { error: mag.error },
+    calendar_week: week.ok ? week.v : { error: week.error },
+    earnings: earn.ok ? upcoming : { error: earn.error },
+    watchlist: wl.ok ? { name: wl.v?.name, n: watch.length } : null,
+  };
+}
+
+/* ------------------------------------------------------------ rule check */
+
+async function ruleChecks(out: any[], plan: any, risk: any, banner: any) {
+  const checks: any[] = [];
+  const add = (ok: boolean | null, text: string) => checks.push({ ok, text });
+  const open = out.find((c) => c.tool === "place_option_order" && (c.args.legs || []).some((l: any) => l.position_effect === "open"));
+  if (!open) return checks;
+  const now = etParts();
+  if (["Sat", "Sun"].includes(now.wd) || now.min < 570 || now.min >= 960) add(null, "Market closed now: this waits for the open, and Jason says not the first 30 minutes");
+  else if (now.min < 600) add(false, "Inside the first 30 minutes (Jason: stand down until 10:00)");
+  else add(true, `Past the first 30 minutes (${fmtMin(now.min)} ET)`);
+
+  const leg = open.args.legs.find((l: any) => l.position_effect === "open");
+  let q: any = null, ins: any = null;
+  try { ins = (mcpJson(await call("rh", "get_option_instruments", { ids: leg.option_id }))?.data?.instruments || [])[0] || null; } catch { /* */ }
+  try { q = (mcpJson(await call("rh", "get_option_quotes", { instrument_ids: [leg.option_id] }))?.data?.results || [])[0]?.quote || null; } catch { /* */ }
+  if (q?.delta != null) { const d = Math.abs(Number(q.delta)); add(d >= 0.30 && d <= 0.40, `Delta ${d.toFixed(2)} (Jason: 0.30–0.40)`); }
+  else add(null, "Delta: couldn't read the quote");
+  if (q?.volume != null && q?.open_interest != null) add(Number(q.volume) > Number(q.open_interest), `Volume ${q.volume} vs open interest ${q.open_interest} (Jason: volume > OI)`);
+  else add(null, "Volume vs open interest: not available");
+  if (risk?.pct != null) add(risk.pct <= RISK_FLAG, `${Math.round(risk.pct * 100)}% of the account (flag above 20%)`);
+  else add(null, "Size vs account: unknown (no limit price)");
+
+  const exp = ins?.expiration_date || null;
+  if (exp) {
+    const days = dayDiff(now.date, exp);
+    if (days <= 0) add(false, "Expires today (0DTE)");
+    else if (["Thu", "Fri"].includes(now.wd) && exp === fridayOf(now.date)) add(false, "This Friday's expiry after Wednesday (Jason: use next week's)");
+    else add(true, `Expiry ${exp} (${days} day${days === 1 ? "" : "s"})`);
+    try {
+      const ev = (await econEvents(now.date, exp, 1)).filter((e) => Date.parse(e.date) > Date.now());
+      if (ev.length) add(false, `Binary event before expiry: ${ev.slice(0, 2).map((e) => `${e.title} ${etLabel(e.date)}`).join(", ")}`);
+      else add(true, "No high-impact release before expiry");
+    } catch { add(null, "Economic calendar: not available"); }
+    const tk = String(plan?.tv_symbol || ins?.chain_symbol || "").split(":").pop();
+    if (tk) {
+      try {
+        const e = (await earningsMap())[tk];
+        if (e && e.slice(0, 10) <= exp) add(false, `${tk} reports earnings ${e}, before expiry`);
+        else add(true, e ? `${tk} earnings ${e}, after expiry` : `No ${tk} earnings in the next 2 months`);
+      } catch { add(null, "Earnings: couldn't check"); }
+    }
+  }
+  if (banner?.verdict) {
+    const v = banner.verdict;
+    if (/choppy/i.test(v)) add(false, "Banner says choppy: scalp only, small");
+    else if (plan?.direction && ((/long/i.test(v) && plan.direction === "down") || (/short/i.test(v) && plan.direction === "up"))) add(false, `Against the banner (${v})`);
+    else add(true, `Banner: ${v}`);
+  }
+  return checks;
+}
+
+/* ------------------------------------------------------------ journal (auto-filled) */
+
+async function allAccounts(): Promise<any[]> {
+  return cached("accounts", 30 * 60e3, async () => {
+    const j = mcpJson(await call("rh", "get_accounts", {}));
+    return (j?.data?.accounts || []).filter((a: any) => a.account_number && !a.deactivated)
+      .map((a: any) => ({ n: String(a.account_number), agentic: a.agentic_allowed === true,
+        label: `${a.agentic_allowed ? "Agentic" : (a.nickname || "Individual")} ${mask(a.account_number)}` }));
+  });
+}
+
+async function syncJournal(force = false) {
+  if (!force && CACHE.journalSync && Date.now() - CACHE.journalSync.at < 2 * 60e3) return;
+  CACHE.journalSync = { at: Date.now(), v: true };
+  const since = addDays(etParts().date, -120);
+  const fills: any[] = [];
+  for (const a of await allAccounts()) {
+    let cursor: string | undefined;
+    for (let page = 0; page < 8; page++) {
+      let j: any;
+      try { j = mcpJson(await call("rh", "get_option_orders", { account_number: a.n, state: "filled", created_at_gte: since, ...(cursor ? { cursor } : {}) })); }
+      catch { break; }
+      for (const o of j?.data?.orders || []) {
+        for (const l of o.legs || []) {
+          for (const x of l.executions || []) {
+            fills.push({ acct: a.label, order_id: o.id, agent: o.placed_agent, option_id: l.option_id, sym: o.chain_symbol,
+              strike: Number(l.strike_price), type: l.option_type, exp: l.expiration_date, side: l.side, effect: l.position_effect,
+              price: Number(x.price), qty: Number(x.quantity), ts: x.timestamp, mult: Number(o.trade_value_multiplier) || 100 });
+          }
+        }
+      }
+      cursor = j?.data?.next || j?.next || undefined;
+      if (!cursor) break;
+    }
+  }
+  fills.sort((a, b) => a.ts.localeCompare(b.ts));
+  const trades: Record<string, any> = {};
+  const lots: Record<string, any[]> = {};
+  for (const f of fills) {
+    const k = f.acct + "|" + f.option_id;
+    if (f.effect === "open") {
+      const id = (f.acct + "|" + f.option_id + "|" + f.order_id).replace(/\s/g, "");
+      const t = trades[id] ||= { id, account: f.acct, symbol: f.sym, option_id: f.option_id,
+        contract: `${f.sym} ${f.strike % 1 ? f.strike : Math.round(f.strike)}${f.type === "put" ? "P" : "C"} ${f.exp.slice(5).replace("-", "/")}`,
+        exp: f.exp, side: f.side === "buy" ? "long" : "short", qty: 0, entry_cost: 0, exit_value: 0, closed_qty: 0,
+        opened_at: f.ts, closed_at: null, open_order_id: f.order_id, agent: f.agent, mult: f.mult };
+      t.qty += f.qty; t.entry_cost += f.price * f.qty;
+      (lots[k] ||= []).push({ id, left: f.qty });
+    } else {
+      let left = f.qty;
+      for (const lot of lots[k] || []) {
+        if (left <= 0) break;
+        const take = Math.min(lot.left, left); if (take <= 0) continue;
+        lot.left -= take; left -= take;
+        const t = trades[lot.id]; t.exit_value += f.price * take; t.closed_qty += take; t.closed_at = f.ts;
+      }
+    }
+  }
+  const today = etParts().date;
+  const rows = Object.values(trades).map((t: any) => {
+    let status = t.closed_qty >= t.qty ? "closed" : t.closed_qty > 0 ? "partial" : "open";
+    if (status !== "closed" && t.exp < today) {            // expired worthless: the rest closes at 0
+      t.closed_qty = t.qty; status = "expired"; t.closed_at = t.closed_at || t.exp + "T20:00:00Z";
+    }
+    const entry = t.entry_cost / t.qty;
+    const exit = t.closed_qty ? t.exit_value / t.closed_qty : null;
+    const pnl = t.closed_qty ? (t.side === "long" ? 1 : -1) * (t.exit_value - entry * t.closed_qty) * t.mult : null;
+    return { id: t.id, account: t.account, symbol: t.symbol, contract: t.contract, option_id: t.option_id, side: t.side,
+      qty: t.qty, entry: +entry.toFixed(4), exit: exit == null ? null : +exit.toFixed(4), pnl: pnl == null ? null : +pnl.toFixed(2),
+      opened_at: t.opened_at, closed_at: status === "open" ? null : t.closed_at, status, open_order_id: t.open_order_id,
+      agent: t.agent, updated_at: new Date().toISOString() };
+  });
+  if (!rows.length) return;
+  // link to the Desk card that placed it
+  try {
+    const acts = await db("otto_actions?select=id,order_id&order_id=not.is.null&order=created_at.desc&limit=300");
+    const byOrder: Record<string, string> = Object.fromEntries(acts.map((a: any) => [a.order_id, a.id]));
+    rows.forEach((r: any) => { if (byOrder[r.open_order_id]) r.action_id = byOrder[r.open_order_id]; });
+  } catch { /* */ }
+  for (let i = 0; i < rows.length; i += 200) {
+    await db("otto_trades?on_conflict=id", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(rows.slice(i, i + 200)) });
+  }
+}
+
+async function journal(force = false) {
+  let syncErr: string | null = null;
+  try { await syncJournal(force); } catch (e) { syncErr = (e as Error).message; }
+  const rows = await db("otto_trades?select=*&order=opened_at.desc&limit=200");
+  const ids = [...new Set(rows.map((r: any) => r.action_id).filter(Boolean))];
+  const acts = ids.length ? await db("otto_actions?select=*&id=in.(" + ids.join(",") + ")") : [];
+  return { ok: true, rows, actions: acts.map(publicAction), sync_error: syncErr };
+}
+
+/* ------------------------------------------------------------ weekly review */
+
+function postHocChecks(t: any, a: any) {
+  if (a?.checks?.length) return a.checks;
+  const p = etParts(new Date(t.opened_at));
+  return [p.min >= 570 && p.min < 600 ? { ok: false, text: "Opened inside the first 30 minutes" } : { ok: true, text: "Not in the first 30 minutes" }];
+}
+
+async function weeklyReview(apiKey: string, who = "Otto") {
+  await syncJournal(true);
+  const now = etParts();
+  const ws = ["Sat", "Sun"].includes(now.wd) ? mondayOf(addDays(now.date, -2)) : mondayOf(now.date);
+  const we = addDays(ws, 4);
+  const all = await db("otto_trades?select=*&order=closed_at.desc&limit=400");
+  const wk = all.filter((t: any) => t.pnl != null && t.closed_at && etParts(new Date(t.closed_at)).date >= ws && etParts(new Date(t.closed_at)).date <= we);
+  const ids = [...new Set(wk.map((t: any) => t.action_id).filter(Boolean))];
+  const acts = ids.length ? await db("otto_actions?select=*&id=in.(" + ids.join(",") + ")") : [];
+  const actBy: Record<string, any> = Object.fromEntries(acts.map((a: any) => [a.id, a]));
+  const items: any[] = wk.map((t: any) => ({ id: t.id, contract: t.contract, account: t.account, pnl: t.pnl, opened: t.opened_at, closed: t.closed_at,
+    status: t.status, reason: t.reason || null, from_card: !!t.action_id, setup: actBy[t.action_id]?.plan?.setup || null,
+    banner: actBy[t.action_id]?.banner?.verdict || null, checks: postHocChecks(t, actBy[t.action_id]) }));
+  const wins = items.filter((t) => t.pnl > 0).sort((a, b) => b.pnl - a.pnl).slice(0, 5);
+  const losses = items.filter((t) => t.pnl < 0).sort((a, b) => a.pnl - b.pnl).slice(0, 5);
+  const total = items.reduce((s, t) => s + t.pnl, 0);
+
+  let pattern = "", one_thing = "", rules: any[] = [];
+  if (items.length) {
+    const calls = await loadBrain();
+    const cs = chunksOf(calls);
+    const seen = new Set<string>(); const hits: Chunk[] = [];
+    for (const q of ["resistance support entry rejection bounce rates", "first 30 minutes gap trap", "size account percent", "exit entry candle runner TP1"])
+      for (const h of search(cs, q, 6)) { const k = h.d + h.at + h.s.slice(0, 40); if (!seen.has(k)) { seen.add(k); hits.push(h); } }
+    const sys = `You write Ifoma's Friday trade review in the voice of the Otto desk: direct, numbers first, no hype. Judge each trade against Jason Murray's method (material below). Cite Jason as (call date, MM:SS) only from the material given. Never invent a rule. Respond with JSON only: {"pattern": "2-4 sentences on what the winners and losers have in common", "one_thing": "one concrete thing to do differently next week", "rules": [{"rule": "short rule name", "followed": n, "broken": n}]}.\n\nJASON'S RULES:\n${alwaysOn(calls)}\n\nMATERIAL:\n${hits.slice(0, 18).map(fmt).join("\n\n")}`;
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: MODEL, max_tokens: 1500, system: sys,
+        messages: [{ role: "user", content: `Week of ${ws}. Closed trades (P&L in $):\n${JSON.stringify(items, null, 1).slice(0, 40000)}` }] }),
+    });
+    const j = await r.json();
+    const txt = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
+    try { const p = JSON.parse(txt.slice(txt.indexOf("{"), txt.lastIndexOf("}") + 1)); pattern = p.pattern || ""; one_thing = p.one_thing || ""; rules = p.rules || []; }
+    catch { pattern = txt.slice(0, 1200); }
+  } else {
+    pattern = "No closed trades this week.";
+  }
+  const payload = { week_start: ws, week_end: we, total: +total.toFixed(2), n: items.length, wins, losses, pattern, one_thing, rules,
+    missing_reasons: items.filter((t) => !t.reason).length };
+  await db("otto_reviews?on_conflict=week_start", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ week_start: ws, payload, built_by: who, created_at: new Date().toISOString() }) });
+  await logDesk("system", "Otto", `Weekly review for the week of ${ws} is ready (Review tab): ${items.length} closed trade${items.length === 1 ? "" : "s"}, ${total >= 0 ? "+" : "−"}$${Math.abs(total).toFixed(2)}.${one_thing ? " Next week: " + one_thing : ""}`);
+  return payload;
+}
+
+/* ------------------------------------------------------------ scorecard
+   Every opening option card is an idea, taken or not. An idea is scored on the
+   UNDERLYING: did price touch TP1 before the stop, using 5-minute TradingView
+   bars from the moment the card was made. Stop-first when one bar touches both
+   (conservative). Passed ideas are labelled hypothetical everywhere. */
+
+async function evalIdea(a: any) {
+  const p = a.plan || {};
+  const tp1 = Number(p.tp1), stop = Number(p.stop);
+  if (!p.tv_symbol || !isFinite(tp1) || !isFinite(stop) || !p.direction) return { state: "unscored" };
+  const created = Date.parse(a.created_at);
+  if (Date.now() - created < 10 * 60e3) return { state: "pending" };
+  let bars: any[];
+  try { bars = await tvBars(p.tv_symbol, "5m", 1500); } catch { return { state: "pending" }; }
+  const after = bars.filter((b) => b.t * 1000 >= created - 5 * 60e3);
+  if (!after.length) return { state: "pending" };
+  const entry = Number(p.entry_underlying) || after[0].o;
+  const risk = Math.abs(entry - stop), reward = Math.abs(tp1 - entry);
+  if (!risk) return { state: "unscored" };
+  const down = p.direction === "down";
+  for (const b of after) {
+    const hitStop = down ? b.h >= stop : b.l <= stop;
+    const hitTp = down ? b.l <= tp1 : b.h >= tp1;
+    if (hitStop) return { state: "loss", r: -1, at: b.t };
+    if (hitTp) return { state: "win", r: +(reward / risk).toFixed(2), at: b.t };
+  }
+  const deadline = Math.min(Date.parse((p.expires || "2999-01-01") + "T20:00:00Z"), created + 7 * 864e5);
+  if (Date.now() > deadline) {
+    const last = after[after.length - 1].c;
+    return { state: "scratch", r: +(((down ? entry - last : last - entry) / risk)).toFixed(2), at: after[after.length - 1].t };
+  }
+  return { state: "open" };
+}
+
+async function scorecard() {
+  const acts = await db("otto_actions?select=*&order=created_at.desc&limit=400");
+  const ideas = acts.filter((a: any) => (a.calls || []).some((c: any) => c.tool === "place_option_order" &&
+    (c.args?.legs || []).some((l: any) => l.position_effect === "open")));
+  let budget = 12;                                   // keep one call bounded
+  for (const a of ideas) {
+    if (a.outcome && ["win", "loss", "scratch", "unscored"].includes(a.outcome.state)) continue;
+    if (budget-- <= 0) break;
+    const o = await evalIdea(a);
+    a.outcome = o;
+    if (["win", "loss", "scratch", "unscored"].includes(o.state)) {
+      await db("otto_actions?id=eq." + a.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ outcome: o }) }).catch(() => {});
+    }
+  }
+  const trades = await db("otto_trades?select=action_id,pnl&action_id=not.is.null");
+  const pnlBy: Record<string, number> = {};
+  trades.forEach((t: any) => { if (t.pnl != null) pnlBy[t.action_id] = (pnlBy[t.action_id] || 0) + Number(t.pnl); });
+  const scored = (l: any[]) => l.filter((a) => a.outcome && ["win", "loss", "scratch"].includes(a.outcome.state));
+  const agg = (l: any[]) => {
+    const s = scored(l), w = s.filter((a) => a.outcome.state === "win").length, lo = s.filter((a) => a.outcome.state === "loss").length;
+    return { n: l.length, scored: s.length, wins: w, losses: lo, hit: w + lo ? w / (w + lo) : null,
+      avg_r: s.length ? s.reduce((x, a) => x + Number(a.outcome.r || 0), 0) / s.length : null };
+  };
+  const group = (key: (a: any) => string) => {
+    const g: Record<string, any[]> = {};
+    ideas.forEach((a: any) => (g[key(a) || "unlabelled"] ||= []).push(a));
+    return Object.entries(g).map(([k, l]) => ({ key: k, ...agg(l) })).sort((a, b) => b.n - a.n);
+  };
+  const taken = ideas.filter((a: any) => a.status === "done");
+  const passed = ideas.filter((a: any) => ["rejected", "expired"].includes(a.status));
+  return {
+    ok: true,
+    since: ideas.length ? ideas[ideas.length - 1].created_at : null,
+    all: agg(ideas), taken: { ...agg(taken), pnl: taken.reduce((s: number, a: any) => s + (pnlBy[a.id] || 0), 0) },
+    passed: agg(passed),
+    by_setup: group((a) => a.plan?.setup), by_verdict: group((a) => a.banner?.verdict),
+    recent: ideas.slice(0, 25).map((a: any) => ({ id: a.id, title: a.title, at: a.created_at, status: a.status,
+      setup: a.plan?.setup || null, verdict: a.banner?.verdict || null, outcome: a.outcome || null, pnl: pnlBy[a.id] ?? null })),
+  };
+}
+
+/* ------------------------------------------------------------ scheduled runs
+   pg_cron (005_v31.sql) calls ?fn=cron_morning on weekdays at 12:45 and 13:45
+   UTC and ?fn=cron_weekly on Fridays at 20:30 and 21:30 UTC — both halves of
+   daylight saving. The function itself checks New York time and skips the
+   one that's an hour off. Authenticated by OTTO_CRON_SECRET, not by a user. */
+
+async function morningRead(apiKey: string) {
+  const sent = await sentimentNow(true, "auto");
+  let news = "";
+  try { news = await whatsMoving(apiKey); } catch { /* the read still runs */ }
+  if (news) {
+    try {
+      const last = await db("otto_sentiment?kind=eq.auto&order=id.desc&limit=1&select=id");
+      if (last?.[0]) await db("otto_sentiment?id=eq." + last[0].id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ news }) });
+    } catch { /* */ }
+    if (SENT) SENT.body.news = { text: news, at: new Date().toISOString() };
+  }
+  const calls = await loadBrain();
+  const cs = chunksOf(calls);
+  const sys = DESK_SYS.replace("{{RULES}}", alwaysOn(calls));
+  const { tools: mcpToolDefs } = await deskTools();
+  const tools = [TOOLS[0], ...mcpToolDefs];
+  const lite = { verdict: sent.verdict, score: sent.score, fresh: `${sent.fresh}/${sent.total}`,
+    legs: sent.legs.map((l: any) => ({ leg: l.label, pct: l.pct == null ? null : +l.pct.toFixed(2), live: l.live })),
+    fired: sent.rows.filter((r: any) => r.fired).map((r: any) => `row ${r.row}: ${r.label}`),
+    calendar_today: sent.calendar.map((e: any) => `${etLabel(e.date)} ${e.title} (importance ${e.importance})`) };
+  const prompt = `[Automatic 8:45 morning read — no one typed this. ${sent.et} ET.]
+The live sentiment banner (Josh's intermarket sheet on TradingView data) says: ${JSON.stringify(lite)}
+What's moving (web research just now): ${news.slice(0, 2500) || "unavailable"}
+
+Write today's morning read for Ifoma and Josh (Workflow 1): one line each for the 10-year, crude, USD/JPY; any binary event today; SPY/QQQ and Mag-7 tone (fetch what you need); a bias that agrees with or explains any disagreement with the banner; and the 2–3 setups worth watching from the TradingView watchlist with the trigger level for each. Jason's levels are dated marks — say the call date. No order cards. Under 250 words.`;
+  const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools, cs, who: "cron", send: () => {}, allowPropose: false, maxRounds: 8 });
+  if (res.said.trim()) await logDesk("assistant", "Otto · 8:45 auto", res.said.trim());
+  return { ok: true, verdict: sent.verdict, words: res.said.split(/\s+/).length };
+}
+
+function cronAllowed(req: Request) {
+  const s = Deno.env.get("OTTO_CRON_SECRET") || "";
+  return s.length >= 16 && req.headers.get("x-otto-cron") === s;
+}
+function background(p: Promise<unknown>) {
+  const er = (globalThis as any).EdgeRuntime;
+  if (er?.waitUntil) er.waitUntil(p.catch((e) => console.error("background", e))); else p.catch((e) => console.error("background", e));
 }
 
 /* --------------------------------------------------------------- transport */
@@ -1449,6 +2053,24 @@ Deno.serve(async (req) => {
   // is whether the caller is a real signed-in user or just anybody holding the
   // public anon key — and the anon key ships in the app, so without this the
   // published URL would let a stranger burn the market-data and Claude quotas.
+  // v3.1 scheduled runs (pg_cron → pg_net). They carry the cron secret, not a user.
+  const fn0 = new URL(req.url).searchParams.get("fn") || "";
+  if (fn0 === "cron_morning" || fn0 === "cron_weekly") {
+    if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
+    const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
+    const et = etParts();
+    const force = new URL(req.url).searchParams.get("force") === "1";
+    if (fn0 === "cron_morning") {
+      // fires at 12:45 and 13:45 UTC; only the one that lands at 8:45 New York runs
+      if (!force && (["Sat", "Sun"].includes(et.wd) || Math.abs(et.min - 525) > 20)) return json({ ok: true, skipped: et });
+      background(morningRead(apiKey));
+      return json({ ok: true, started: "morning" }, 202);
+    }
+    if (!force && (et.wd !== "Fri" || Math.abs(et.min - 990) > 20)) return json({ ok: true, skipped: et });
+    background(weeklyReview(apiKey, "Otto (Friday auto)"));
+    return json({ ok: true, started: "weekly" }, 202);
+  }
+
   const claims = jwtPayload(req.headers.get("authorization"));
   if (!claims || claims.role !== "authenticated" || !claims.sub) {
     return json({ ok: false, error: "sign in required" }, 401);
@@ -1461,7 +2083,8 @@ Deno.serve(async (req) => {
     if (fn === "whoami") {
       return json({ ok: true, email: claims.email || null, anonymous: !!claims.is_anonymous, desk: !!deskUser(claims) });
     }
-    if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect"].includes(fn)) {
+    if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
+         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -1474,6 +2097,31 @@ Deno.serve(async (req) => {
       }
       if (fn === "act") return json({ ok: true, action: await actOn(String(body.id || ""), String(body.decision || ""), who) });
       if (fn === "panel") return json(await panel());
+      // ---- v3.1
+      if (fn === "sentiment") return json(await sentimentNow(new URL(req.url).searchParams.get("force") === "1"));
+      if (fn === "market_desk") return json(await marketDesk());
+      if (fn === "journal") return json(await journal(new URL(req.url).searchParams.get("force") === "1"));
+      if (fn === "trade_reason") {
+        const id = String(body.id || ""), reason = String(body.reason || "").trim().slice(0, 600);
+        if (!id) return json({ ok: false, error: "id required" }, 400);
+        const r = await db("otto_trades?id=eq." + encodeURIComponent(id), { method: "PATCH",
+          body: JSON.stringify({ reason: reason || null, reason_by: who, reason_at: new Date().toISOString() }) });
+        return json({ ok: true, row: r?.[0] || null });
+      }
+      if (fn === "review_get") {
+        const r = await db("otto_reviews?select=*&order=week_start.desc&limit=8");
+        return json({ ok: true, reviews: r });
+      }
+      if (fn === "review_build") {
+        const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
+        return json({ ok: true, review: await weeklyReview(apiKey, who) });
+      }
+      if (fn === "score") return json(await scorecard());
+      if (fn === "morning_now") {
+        const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
+        background(morningRead(apiKey));
+        return json({ ok: true, started: true });
+      }
       if (fn === "desk_log") {
         const since = Number(new URL(req.url).searchParams.get("since")) || 0;
         const rows = await db("otto_desk?select=id,created_at,role,author,content,action_id" +
