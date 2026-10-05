@@ -528,7 +528,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <button data-go="journal"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Journal</button>
     <button data-go="review"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review</button>
     <button data-go="score"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Score</button>
-    <button data-go="jason"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Jason</button>
+    <button data-go="jason"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Calls</button>
     <div class="sp"></div>
     <button data-go="classic" title="The phone layout: Week, Coach, Journal, Market"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Classic</button>
     <button data-go="settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Settings</button>
@@ -542,7 +542,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
   <div class="dk-desk">
     <div class="dk-head">
       <b>The Desk</b>
-      <span class="dk-pill">Jason brain + TradingView + Robinhood</span>
+      <span class="dk-pill">Jarvis · TradingView · Robinhood</span>
       <span class="dk-pill">Every change needs an Approve</span>
       <label class="dk-who">At the desk <select id="dkWho"><option>Ifoma</option><option>Josh</option></select></label>
     </div>
@@ -557,6 +557,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <div class="dk-pend" id="dkPend" hidden><img id="dkPendImg" alt=""><span>Chart attached</span><button class="dk-btn j" id="dkPendX" style="padding:3px 8px">Remove</button></div>
     <div class="dk-compose">
       <button class="dk-att" id="dkAtt" title="Attach a chart (or paste with Ctrl+V)">＋ Chart</button>
+      <button class="dk-att" id="dkTicketBtn" title="Buy or sell yourself — makes an Approve card">Order ticket</button>
       <input type="file" id="dkFile" accept="image/*" hidden>
       <textarea id="dkIn" rows="1" placeholder="Ask the desk, or paste a chart (Ctrl+V)…"></textarea>
       <button class="dk-go" id="dkSend">Send</button>
@@ -773,6 +774,28 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <p class="hint" id="verStamp" style="margin-top:26px;text-align:center"></p>
   </div>
   <div class="ft"><button class="btn danger" id="sWipe">Erase all</button><button class="btn" id="sClose">Close</button><button class="btn solid" id="sSave">Save</button></div>
+</dialog>
+
+<dialog id="dlgTicket">
+  <div class="grip"></div><div class="hd"><h3>Order ticket</h3></div>
+  <div class="bd">
+    <p class="hint" style="margin-top:0">Robinhood Agentic account only. This makes the same card as Jarvis does, with the cost check and rule check. Nothing is sent until you click Approve on the card.</p>
+    <div class="grid g2">
+      <div><label class="f" for="tkSide">Action</label><select class="f" id="tkSide"><option value="buy_open">Buy to open</option><option value="sell_close">Sell to close</option></select></div>
+      <div><label class="f" for="tkSym">Ticker</label><input class="f" id="tkSym" placeholder="SPY" autocapitalize="characters" autocomplete="off"></div>
+      <div><label class="f" for="tkType">Call / put</label><select class="f" id="tkType"><option value="call">Call</option><option value="put">Put</option></select></div>
+      <div><label class="f" for="tkExp">Expiry</label><input class="f" id="tkExp" type="date"></div>
+      <div><label class="f" for="tkStrike">Strike</label><input class="f" id="tkStrike" type="number" step="any" inputmode="decimal" placeholder="760"></div>
+      <div><label class="f" for="tkQty">Contracts</label><input class="f" id="tkQty" type="number" min="1" step="1" value="1"></div>
+      <div><label class="f" for="tkPrice">Limit price (per share)</label><input class="f" id="tkPrice" type="number" step="0.01" inputmode="decimal" placeholder="2.10"></div>
+      <div><label class="f" for="tkSetup">Setup</label><select class="f" id="tkSetup"><option>rejection at resistance</option><option>support bounce</option><option>gap failure</option><option>breakdown</option><option>breakout</option><option>trend continuation</option><option>other</option></select></div>
+      <div class="tk-open"><label class="f" for="tkTp1">TP1 (stock price)</label><input class="f" id="tkTp1" type="number" step="any" inputmode="decimal" placeholder="optional"></div>
+      <div class="tk-open"><label class="f" for="tkStop">Wrong if price hits</label><input class="f" id="tkStop" type="number" step="any" inputmode="decimal" placeholder="optional"></div>
+    </div>
+    <label class="f" for="tkNote" style="margin-top:10px">Why (one line)</label><input class="f" id="tkNote" placeholder="Rejection at 760 gap, rates rising">
+    <p class="hint" id="tkMsg">Add TP1 and the "wrong if" price on a buy and the Scorecard can grade it.</p>
+  </div>
+  <div class="ft"><button class="btn" id="tkCancel">Cancel</button><button class="btn solid" id="tkGo">Make the card</button></div>
 </dialog>
 
 <dialog id="dlgRh">
@@ -1278,7 +1301,7 @@ function renderInsights(){
 }
 
 /* ---------- coach ---------- */
-const COACH_SYS=`You are Jason Brain. You answer only from what Josh's mentor actually said on the recorded calls and lessons in the material below.
+const COACH_SYS=`You are Jarvis. You answer only from what Josh's mentor actually said on the recorded calls and lessons in the material below.
 
 ONE METHOD, TWO VOICES. The material is the iBelieve Investments Club curriculum. Jason Murray runs Josh's coaching calls and taught the options/callouts lesson; Lige, his nephew, teaches the chart lessons on Jason's behalf and with his approval. Treat all of it as ONE sanctioned method. Do not hedge Lige's material as provisional, do not tell Josh to go and check whether Jason agrees with it, and do not rank one teacher above the other. If it is in the corpus, it is the method.
 
@@ -1721,7 +1744,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.1.0";
+const BUILD="3.2.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -1781,7 +1804,7 @@ const wait=(k,e)=>`<div class="read wait"><div class="k">${esc(k)}</div><div cla
    Jason's fix for every bad trade on the record is the same: do the homework
    BEFORE, so you have confidence DURING (3 Sep 2026, 54:15). This is the
    homework as a form — read, the three inputs, catalyst, levels, expiry,
-   swing or not, and the marked-up chart — graded by Jason Brain against his
+   swing or not, and the marked-up chart — graded by Jarvis against his
    rules with citations. It grades the PROCESS. It never says buy, sell, size
    or stop; the server prompt refuses those the same way the Coach does. */
 const todayPlan=()=>PLANS.find(p=>p.date===today())||null;
@@ -2431,7 +2454,7 @@ function dkRenderStrip(){
   const c=p.conn||{},dot=(ok,err)=>`<span class="dk-dot ${err?"bad":ok?"on":""}"></span>`;
   h+=`<span class="dk-chips"><span class="dk-chip" data-set="1">${dot(c.tv,p.quotes_error)}TradingView</span>`+
      `<span class="dk-chip" data-set="1">${dot(c.rh,p.rh_error)}Robinhood</span>`+
-     `<span class="dk-chip">${dot(CALLS.length)}Jason brain ${CALLS.length} calls</span>`+
+     `<span class="dk-chip">${dot(CALLS.length)}Jarvis brain · ${CALLS.length} calls</span>`+
      `<span class="dk-chip">v${BUILD}</span></span>`;
   $("#dkStrip").innerHTML=h;
   $$("#dkStrip [data-set]").forEach(x=>x.addEventListener("click",openSettings));
@@ -2497,7 +2520,7 @@ function dkRenderRight(){
      :`<div class="mut">No active alerts.</div>`)+`</div>`;
   // Brain
   const c=CALLS[0];
-  h+=`<div class="dk-cardx"><div class="dk-h">Jason brain <b>${CALLS.length} calls</b></div>`+
+  h+=`<div class="dk-cardx"><div class="dk-h">Jarvis brain <b>${CALLS.length} calls</b></div>`+
     (c?`<div class="dk-row"><span class="mut">Newest</span><span>${esc((c.call&&c.call.date)||"")}</span></div><div class="mut" style="margin-top:4px">${esc((c.call&&c.call.title)||"")}</div>`:`<div class="mut">Loading…</div>`)+
     (c&&(c.questions||[]).length?`<div class="mut" style="margin-top:8px">Open questions for Jason:</div><ul style="margin:4px 0 0;padding-left:16px;color:var(--ink-2)">${c.questions.slice(0,3).map(q=>`<li>${esc(q.q||q.question||q.text||String(q))}</li>`).join("")}</ul>`:"")+`</div>`;
   $("#dkRight").innerHTML=h;
@@ -2545,12 +2568,12 @@ function dkRenderMsgs(stick){
   for(const r of DK.rows){
     if(r.role==="system"){h+=`<div class="dk-sys">${esc(r.content)} · ${dkTime(r.created_at)}</div>`;continue}
     if(r.role==="user"){h+=`<div class="dk-m me"><div class="dk-mw">${esc(r.author||"")} · ${dkTime(r.created_at)}</div>${esc(r.content)}</div>`;continue}
-    h+=`<div class="dk-m ai"><div class="dk-mw">Otto · ${dkTime(r.created_at)}</div>${r.content?`<div class="md">${md(r.content)}</div>`:""}${r.action_id?dkCard(DK.acts[r.action_id]):""}</div>`;
+    h+=`<div class="dk-m ai"><div class="dk-mw">${esc(/^otto$/i.test(r.author||"")?"Jarvis":(r.author||"Jarvis"))} · ${dkTime(r.created_at)}</div>${r.content?`<div class="md">${md(r.content)}</div>`:""}${r.action_id?dkCard(DK.acts[r.action_id]):""}</div>`;
   }
   const s=DK.streaming;
   if(s){
     h+=`<div class="dk-m me"><div class="dk-mw">${esc(s.author)} · now</div>${s.img?`<img class="dk-thumb" src="${s.img}">`:""}${esc(s.q)}</div>`;
-    h+=`<div class="dk-m ai"><div class="dk-mw">Otto</div>${s.tools.length?`<div class="dk-tool">↳ ${s.tools.slice(-6).map(esc).join(" · ")}</div>`:""}`+
+    h+=`<div class="dk-m ai"><div class="dk-mw">Jarvis</div>${s.tools.length?`<div class="dk-tool">↳ ${s.tools.slice(-6).map(esc).join(" · ")}</div>`:""}`+
       (s.err?`<div class="dk-err">${esc(s.err)}</div>`:s.text?`<div class="md">${md(s.text)}</div>`:`<span class="mut">working…</span>`)+
       s.cards.map(id=>dkCard(DK.acts[id])).join("")+`</div>`;
   }
@@ -2899,7 +2922,7 @@ function dkRenderReview(){
         ${list.length>1?`<select id="dkRWeek" class="dk-sel">${list.map((x,i)=>`<option value="${i}" ${i===(DK.rIdx||0)?"selected":""}>Week of ${esc(x.week_start)}</option>`).join("")}</select>`:""}
         <button class="dk-btn sec" id="dkRBuild">Build this week now</button>
         <button class="dk-btn sec" id="dkRJason">Build "For Jason" packet</button>
-        <button class="dk-btn sec" id="dkRCall">Load Tuesday's call</button></span></div>
+        <button class="dk-btn sec" id="dkRCall">Log a call</button></span></div>
     ${p?`<div class="dkp-grid4">
         <div class="dk-cardx dk-stat"><div class="n">${p.n}</div><div class="l">Closed trades</div></div>
         <div class="dk-cardx dk-stat"><div class="n">${dkMoney(p.total)}</div><div class="l">Week P&amp;L</div></div>
@@ -2911,12 +2934,12 @@ function dkRenderReview(){
         <div class="dk-cardx"><div class="dk-h">Rules followed / broken</div>${(p.rules||[]).map(x=>`<div class="dk-row"><span>${esc(x.rule)}</span><span><span class="dk-tag ok">${+x.followed||0} ✓</span> ${+x.broken?`<span class="dk-tag bad">${+x.broken} ✗</span>`:""}</span></div>`).join("")||`<div class="mut">—</div>`}</div></div>
       <div class="dk-cardx"><div class="dk-h">The pattern</div><div class="ink2">${esc(p.pattern||"")}</div>${p.one_thing?`<p style="margin:10px 0 0"><b>One thing for next week:</b> ${esc(p.one_thing)}</p>`:""}</div>`
     :`<div class="dk-empty" style="margin:40px auto">No review yet. It builds itself every Friday after the close, or press "Build this week now".</div>`}
-    <div class="dk-callout">"For Jason" drafts your trades, his open questions and the spots you were unsure, ready to copy to him. "Load Tuesday's call" takes the call's transcript (.vtt from Zoom), adds it to the brain, and asks the Desk to propose alerts as a card.</div>
+    <div class="dk-callout">"For Jason" drafts your trades, his open questions and the spots you were unsure, ready to copy to him. "Log a call" takes the call's transcript (.vtt from Zoom), adds it to the brain, and asks the Desk to propose alerts as a card.</div>
   </div>`;
   const w=$("#dkRWeek");if(w)w.onchange=()=>{DK.rIdx=+w.value;dkRenderReview()};
   $("#dkRBuild").onclick=async e=>{const b=e.target;b.disabled=true;b.textContent="Building… (about a minute)";
     try{await dkApi("review_build",{});DK.rIdx=0;await dkReview();toast("Review built")}catch(err){toast(String(err.message).slice(0,100));b.disabled=false;b.textContent="Build this week now"}};
-  $("#dkRJason").onclick=()=>{dkShow("desk");$("#dkIn").value="Build my \"For Jason\" packet for Tuesday's call: my trades since last Tuesday from Robinhood (both accounts), the open questions from the newest call, where I was unsure or broke one of his rules, and the levels + action I'm planning next. Plain text I can copy to him. No cards.";dkSend()};
+  $("#dkRJason").onclick=()=>{dkShow("desk");$("#dkIn").value="Build my \"For Jason\" packet for the next call with Jason: my trades since the last call from Robinhood (both accounts), the open questions from the newest call, where I was unsure or broke one of his rules, and the levels + action I'm planning next. Plain text I can copy to him. No cards.";dkSend()};
   $("#dkRCall").onclick=()=>$("#dkCallFile").click();
 }
 $("#dkCallFile").addEventListener("change",async e=>{
@@ -2967,6 +2990,82 @@ async function dkScore(){
   </div>`;
 }
 
+
+/* ---------- v3.2: order ticket ---------- */
+$("#dkTicketBtn").addEventListener("click",()=>{
+  if(DK.locked)return toast("Sign in with the Otto login first");
+  $("#tkMsg").className="hint";$("#tkMsg").textContent="Add TP1 and the “wrong if” price on a buy and the Scorecard can grade it.";
+  if(!$("#tkExp").value){const d=new Date();d.setDate(d.getDate()+((5-d.getDay()+7)%7||7)+(d.getDay()>=3?7:0));$("#tkExp").value=d.toISOString().slice(0,10)}
+  $("#dlgTicket").showModal();
+});
+$("#tkSide").addEventListener("change",()=>$$(".tk-open").forEach(x=>x.style.display=$("#tkSide").value==="buy_open"?"":"none"));
+$("#tkCancel").addEventListener("click",()=>$("#dlgTicket").close());
+$("#tkGo").addEventListener("click",async()=>{
+  const b=$("#tkGo"),m=$("#tkMsg");
+  const body={side:$("#tkSide").value,symbol:$("#tkSym").value.trim().toUpperCase(),type:$("#tkType").value,expiry:$("#tkExp").value,
+    strike:$("#tkStrike").value,qty:$("#tkQty").value,price:$("#tkPrice").value,setup:$("#tkSetup").value,
+    tp1:$("#tkTp1").value,stop:$("#tkStop").value,note:$("#tkNote").value.trim(),author:$("#dkWho").value||"Ifoma"};
+  if(!body.symbol||!body.expiry||!body.strike||!body.price){m.className="hint dk-err";m.textContent="Ticker, expiry, strike and limit price are required.";return}
+  b.disabled=true;b.textContent="Checking with Robinhood…";
+  try{
+    const j=await dkApi("ticket",body);DK.acts[j.action.id]=j.action;
+    $("#dlgTicket").close();["tkStrike","tkPrice","tkTp1","tkStop","tkNote"].forEach(id=>$("#"+id).value="");
+    dkShow("desk");await dkLoadLog();dkRenderRight();toast("Card ready — review it and Approve");
+  }catch(e){m.className="hint dk-err";m.textContent=String(e.message).slice(0,200)}
+  b.disabled=false;b.textContent="Make the card";
+});
+
+/* ---------- v3.2: Pine script of Jason's levels (Jarvis levels) ----------
+   Built straight from the brain's level lists — no AI in the loop. Lines only
+   draw on the chart whose ticker matches. Re-copy after each call. */
+function dkPineLevels(){
+  const now=Date.now(),out=[],seen=new Set();
+  const newest=CALLS[0]&&CALLS[0].call&&CALLS[0].call.date;
+  CALLS.forEach(c=>{
+    const d=(c.call&&c.call.date)||"";if(!d||now-Date.parse(d+"T12:00:00Z")>35*864e5)return;
+    (c.levels||[]).forEach(l=>{
+      let t=String(l.instrument||"").toUpperCase().replace(/\s+/g,"");
+      if(/10.?Y|TEN.?YEAR|TREASUR/.test(t))t="US10Y";else if(/USD\/?JPY|YEN/.test(t))t="USDJPY";
+      if(!/^[A-Z][A-Z0-9.]{0,6}$/.test(t))return;
+      const v=String(l.value||""),mean=String(l.meaning||"");if(/bp|%/.test(v)&&t!=="US10Y")return;
+      if(/\bstrike\b|breakeven|premium|\bdelta\b|\bask\b|% on the day/i.test(mean))return;   // option prices aren't chart levels
+      const nums=(v.replace(/,/g,"").match(/\d+(?:\.\d+)?/g)||[]).map(Number).filter(n=>n>0);if(!nums.length)return;
+      const zone=nums.length>=2&&/[–\-]|to/.test(v)&&Math.abs(nums[1]-nums[0])/nums[0]<0.1;
+      const key=t+"|"+(zone?nums[0]+"-"+nums[1]:nums[0]);if(seen.has(key))return;seen.add(key);
+      const txt=`${d.slice(5).replace("-","/")} ${t} ${zone?nums[0]+"–"+nums[1]:nums[0]} · ${String(l.meaning||"").split(/[—;(]|\.\s/)[0].trim().slice(0,40)}`.replace(/"/g,"'");
+      out.push({t,lo:zone?Math.min(nums[0],nums[1]):nums[0],hi:zone?Math.max(nums[0],nums[1]):null,txt,newest:d===newest});
+    });
+  });
+  // drop strays: a number far from the ticker's other levels (e.g. "up 6–7%" read as TSLA 7)
+  const med=t=>{const v=out.filter(x=>x.t===t).map(x=>x.lo).sort((a,b)=>a-b);return v[Math.floor(v.length/2)]};
+  return out.filter(x=>{const m=med(x.t);return !m||(x.lo>m*0.6&&x.lo<m*1.6)});
+}
+function dkPineScript(){
+  const L=dkPineLevels(),today=new Date().toISOString().slice(0,10);
+  const f=n=>(+n).toFixed(n<10?3:2);
+  return `//@version=5
+// Jarvis levels for TradingView, from Otto Trader (${today}).
+// Dated marks from the calls — not live prices. Re-copy from Otto after each call and paste over this script.
+indicator("Jarvis levels · ${today}", overlay = true, max_lines_count = 300, max_labels_count = 300, max_boxes_count = 100)
+showLabels = input.bool(true, "Show labels")
+newCol = input.color(color.orange, "Newest call")
+oldCol = input.color(color.gray, "Older calls")
+t = syminfo.ticker
+f_lvl(string sym, float p, string txt, bool newest) =>
+    if t == sym
+        c = newest ? newCol : oldCol
+        line.new(bar_index - 1, p, bar_index, p, extend = extend.both, color = c, width = newest ? 2 : 1)
+        if showLabels
+            label.new(bar_index + 3, p, txt, style = label.style_label_left, color = color.new(c, 85), textcolor = c, size = size.small)
+f_zone(string sym, float lo, float hi, string txt, bool newest) =>
+    if t == sym
+        c = newest ? newCol : oldCol
+        box.new(bar_index - 300, hi, bar_index + 20, lo, border_color = color.new(c, 40), bgcolor = color.new(c, 88), text = showLabels ? txt : "", text_color = c, text_size = size.small, text_halign = text.align_right)
+if barstate.islast
+${L.length?L.map(x=>x.hi!=null?`    f_zone("${x.t}", ${f(x.lo)}, ${f(x.hi)}, "${x.txt}", ${x.newest})`:`    f_lvl("${x.t}", ${f(x.lo)}, "${x.txt}", ${x.newest})`).join("\n"):"    na"}
+`;
+}
+
 /* ---------- Jason (Week + Insights, desktop) ---------- */
 function dkJason(){
   const i=Math.min(DK.jIdx||0,Math.max(0,CALLS.length-1)),c=CALLS[i];
@@ -2982,12 +3081,19 @@ function dkJason(){
       <div class="dk-cardx"><div class="dk-h">Rules <b>${(c.rules||[]).length}</b></div>${L(c.rules,r=>`<div class="dk-row"><span>${esc(r.rule||"")}${r.why?`<br><span class="mut">${esc(r.why)}</span>`:""}</span><span class="mut mono">${esc(r.at||"")}</span></div>`)}</div>
       <div class="dk-cardx"><div class="dk-h">Setups <b>${(c.setups||[]).length}</b></div>${L(c.setups,s=>`<div class="dk-row"><span><b>${esc(s.name||"")}</b><br><span class="ink2">${esc(s.trigger||"")}</span>${s.invalidation?`<br><span class="mut">Wrong if: ${esc(s.invalidation)}</span>`:""}</span><span class="mut mono">${esc(s.at||"")}</span></div>`)}</div>
       <div class="dk-cardx"><div class="dk-h">Insights <b>${(c.insights||[]).length}</b></div>${L(c.insights,s=>`<div class="dk-row"><span><b>${esc(s.title||"")}</b><br><span class="ink2">${esc(s.body||"")}</span></span></div>`)}</div></div>
-    <div class="dk-col r"><div class="dk-cardx"><div class="dk-h">Ask Jason next call <b>${(c.questions||[]).length}</b></div>${L(c.questions,q=>`<div class="dk-row"><span>${esc(q.q||q.question||"")}</span></div>`)}</div>
+    <div class="dk-col r"><div class="dk-cardx"><div class="dk-h">TradingView levels <b>${dkPineLevels().length} from the last 5 weeks</b></div>
+        <div class="ink2" style="font-size:12.5px">A Pine script that draws these calls' levels and zones on your TradingView chart, on whichever ticker you're viewing.</div>
+        <ol style="margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--ink-2)"><li>Click <b>Copy script</b>.</li><li>In TradingView, open <b>Pine Editor</b> (bottom panel), select all, paste.</li><li><b>Save</b>, then <b>Add to chart</b>.</li><li>After each call, copy again and paste over it.</li></ol>
+        <div class="dk-btns"><button class="dk-btn go" id="dkPineCopy">Copy script</button><button class="dk-btn sec" id="dkPineShow">Show it</button></div>
+        <pre id="dkPinePre" hidden style="white-space:pre;overflow:auto;max-height:260px;font-size:11px;background:var(--bg);padding:8px;border-radius:8px"></pre></div>
+      <div class="dk-cardx"><div class="dk-h">Ask Jason next call <b>${(c.questions||[]).length}</b></div>${L(c.questions,q=>`<div class="dk-row"><span>${esc(q.q||q.question||"")}</span></div>`)}</div>
       <div class="dk-cardx"><div class="dk-h">Levels <b>dated ${esc(d)}</b></div>${L(c.levels,l=>`<div class="dk-row"><span><b>${esc(l.instrument||"")}</b> ${esc(l.value||"")}<br><span class="mut">${esc(l.meaning||"")}</span></span><span class="mut mono">${esc(l.at||"")}</span></div>`)}
         <div class="mut" style="font-size:11.5px;margin-top:6px">Marks from the call, not current prices.</div></div>
       <div class="dk-cardx"><div class="dk-h">Glossary <b>${(c.glossary||[]).length}</b></div>${L(c.glossary,g=>`<div class="dk-row"><span><b>${esc(g.term||"")}</b> — <span class="ink2">${esc(g.plain||"")}</span></span></div>`)}</div></div>
   </div>`;
   $$("#dkPage [data-ci]").forEach(b=>b.onclick=()=>{DK.jIdx=+b.dataset.ci;dkJason()});
+  $("#dkPineCopy").onclick=async()=>{const s=dkPineScript();try{await navigator.clipboard.writeText(s);toast("Copied — paste it into TradingView's Pine Editor")}catch(e){$("#dkPinePre").hidden=false;$("#dkPinePre").textContent=s;toast("Select the script below and copy it")}};
+  $("#dkPineShow").onclick=()=>{const p=$("#dkPinePre");p.hidden=!p.hidden;p.textContent=dkPineScript()};
   $$("#dkPage [data-classic]").forEach(b=>b.onclick=()=>{closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.classic);if(t)t.click()});
 }
 

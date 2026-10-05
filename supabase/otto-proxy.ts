@@ -1,5 +1,7 @@
 // Otto Trader — server side. One Edge Function.
 //
+//   v3.2 (5 Oct 2026): the AI is called Jarvis; ?fn=ticket (Buy/Sell form);
+//   ?fn=cron_alerts (TradingView alert watcher, posts fires to the Desk).
 //   v3.0 THE DESK (4 Oct 2026): ?fn=desk act panel desk_log oauth_start
 //   oauth_finish conn_status disconnect whoami — see the DESK section below.
 //
@@ -46,7 +48,7 @@ const MODEL = "claude-sonnet-4-6";
      straight, and don't pretend to have a live price feed.
    The earlier hardened prompt lives in git history (commit 3ecf527 and
    before) and in jason-brain-system.md if it's ever wanted back. */
-const SYSTEM = `You are Jason Brain, the AI trading assistant inside Otto Trader. You're built for Josh, a newer day trader mentored by Jason Murray of the iBelieve Investments Club, and you work the way a sharp, experienced trading partner would if he'd spent years absorbing Jason's teaching and made it the foundation of how he thinks. Charting, market structure, macro, sentiment, news on a name, order types, risk, stops, sizing, what to do with a trade he's in — whatever Josh brings you, you engage with it fully and give him a real answer, the way you would in any normal conversation with a knowledgeable trader.
+const SYSTEM = `You are Jarvis, the AI trading assistant inside Otto Trader (built on Jason Murray's method — say "Jarvis" if asked your name). You're built for Josh, a newer day trader mentored by Jason Murray of the iBelieve Investments Club, and you work the way a sharp, experienced trading partner would if he'd spent years absorbing Jason's teaching and made it the foundation of how he thinks. Charting, market structure, macro, sentiment, news on a name, order types, risk, stops, sizing, what to do with a trade he's in — whatever Josh brings you, you engage with it fully and give him a real answer, the way you would in any normal conversation with a knowledgeable trader.
 
 JASON IS YOUR FOUNDATION, NOT YOUR FENCE. Jason's material — his rules, his setups, his three inputs (cost of capital, cost of transportation, cost of currency), his patience, his "more than one catalyst" standard — is the lens you reach for first. When he's taught on something, lead with his way of seeing it, in his own phrasing where it's vivid, because that's the voice Josh will actually remember under pressure. When he hasn't, you don't stop — you keep going and answer from everything else you know, plus a web search whenever the question is current, factual, or about a specific name. You don't label which part came from where. It's one voice: a trader who thinks like Jason and knows the rest of the market too.
 
@@ -281,7 +283,7 @@ function alwaysOn(calls: any[]) {
    no stop, no live-price arithmetic, nothing carried across instruments or
    years, nothing invented. Everything it praises or sends back must cite a
    call and a timestamp. */
-const PLAN_SYS = `You are Jason Brain, grading Josh's PLAN OF ATTACK for today before the market opens. Josh is a beginner mentored by Jason Murray (iBelieve Investments Club). You have Jason's standing rules and setups in full below, plus material retrieved from the recorded calls, and possibly a screenshot of the chart Josh marked up.
+const PLAN_SYS = `You are Jarvis, grading Josh's PLAN OF ATTACK for today before the market opens. Josh is a beginner mentored by Jason Murray (iBelieve Investments Club). You have Jason's standing rules and setups in full below, plus material retrieved from the recorded calls, and possibly a screenshot of the chart Josh marked up.
 
 WHAT YOU ARE GRADING. Whether Josh did the homework Jason told him to do — not whether the trade will work. You have no live market data and no opinion on direction. Check his plan against what Jason actually said, item by item, and cite every item as (call, date, MM:SS). If Jason never addressed something, say "he has not covered that" — never fill the gap.
 
@@ -1013,13 +1015,13 @@ function costOf(tool: string, a: any): { cost: number | null; note: string } {
 
 /* ------------------------------------------------------------ propose / act */
 
-async function proposeAction(input: any, who: string) {
+async function proposeAction(input: any, who: string, opts: { manual?: boolean } = {}) {
   const calls = Array.isArray(input.calls) ? input.calls.slice(0, 6) : [];
   if (!calls.length) throw new Error("no calls");
   // v3.1: an opening option order must carry its plan, so the scorecard can grade it.
   const opening = calls.some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open"));
   const plan = input.plan && typeof input.plan === "object" ? input.plan : null;
-  if (opening && (!plan || !plan.tv_symbol || !plan.direction || !plan.setup || plan.tp1 == null || plan.stop == null)) {
+  if (opening && !opts.manual && (!plan || !plan.tv_symbol || !plan.direction || !plan.setup || plan.tp1 == null || plan.stop == null)) {
     throw new Error("An opening option order needs plan: {tv_symbol (EXCHANGE:TICKER), direction ('up'|'down' on the underlying), setup, tp1, stop (underlying prices), entry_underlying?, expires? (YYYY-MM-DD)}. Add it and propose again.");
   }
   const out: any[] = [];
@@ -1209,7 +1211,7 @@ async function panel() {
 
 /* ------------------------------------------------------------ the Desk chat */
 
-const DESK_SYS = `You are Otto, the trading desk inside Otto Trader. You sit between three things:
+const DESK_SYS = `You are Jarvis, the AI on the trading desk inside Otto Trader. If asked your name, you are Jarvis; your judgment is built on Jason Murray's method (his mentorship calls). You sit between three things:
 - Jason Murray's method (his recorded mentorship calls) — the judgment. Search it with search_jason.
 - TradingView (Ifoma's paid account) — market data, watchlists, alerts. Tools named tv__…
 - Robinhood — positions and orders. Tools named rh__…. Orders only ever go to the Robinhood Agentic account; the server enforces that, you don't pick the account.
@@ -1478,7 +1480,7 @@ async function desk(req: Request, who: string, _apiKey: string) {
       } catch (e) {
         send({ t: "error", v: String((e as Error).message ?? e).slice(0, 300) });
       }
-      if (res.said.trim() || res.cards.length) await logDesk("assistant", "Otto", res.said.trim(), res.cards[res.cards.length - 1] || null);
+      if (res.said.trim() || res.cards.length) await logDesk("assistant", "Jarvis", res.said.trim(), res.cards[res.cards.length - 1] || null);
       try { ctrl.close(); } catch { /* */ }
     },
   });
@@ -1874,7 +1876,7 @@ function postHocChecks(t: any, a: any) {
   return [p.min >= 570 && p.min < 600 ? { ok: false, text: "Opened inside the first 30 minutes" } : { ok: true, text: "Not in the first 30 minutes" }];
 }
 
-async function weeklyReview(apiKey: string, who = "Otto") {
+async function weeklyReview(apiKey: string, who = "Jarvis") {
   await syncJournal(true);
   const now = etParts();
   const ws = ["Sat", "Sun"].includes(now.wd) ? mondayOf(addDays(now.date, -2)) : mondayOf(now.date);
@@ -1898,7 +1900,7 @@ async function weeklyReview(apiKey: string, who = "Otto") {
     const seen = new Set<string>(); const hits: Chunk[] = [];
     for (const q of ["resistance support entry rejection bounce rates", "first 30 minutes gap trap", "size account percent", "exit entry candle runner TP1"])
       for (const h of search(cs, q, 6)) { const k = h.d + h.at + h.s.slice(0, 40); if (!seen.has(k)) { seen.add(k); hits.push(h); } }
-    const sys = `You write Ifoma's Friday trade review in the voice of the Otto desk: direct, numbers first, no hype. Judge each trade against Jason Murray's method (material below). Cite Jason as (call date, MM:SS) only from the material given. Never invent a rule. Respond with JSON only: {"pattern": "2-4 sentences on what the winners and losers have in common", "one_thing": "one concrete thing to do differently next week", "rules": [{"rule": "short rule name", "followed": n, "broken": n}]}.\n\nJASON'S RULES:\n${alwaysOn(calls)}\n\nMATERIAL:\n${hits.slice(0, 18).map(fmt).join("\n\n")}`;
+    const sys = `You are Jarvis, writing Ifoma's Friday trade review on the Otto desk: direct, numbers first, no hype. Judge each trade against Jason Murray's method (material below). Cite Jason as (call date, MM:SS) only from the material given. Never invent a rule. Respond with JSON only: {"pattern": "2-4 sentences on what the winners and losers have in common", "one_thing": "one concrete thing to do differently next week", "rules": [{"rule": "short rule name", "followed": n, "broken": n}]}.\n\nJASON'S RULES:\n${alwaysOn(calls)}\n\nMATERIAL:\n${hits.slice(0, 18).map(fmt).join("\n\n")}`;
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({ model: MODEL, max_tokens: 1500, system: sys,
@@ -2026,7 +2028,7 @@ What's moving (web research just now): ${news.slice(0, 2500) || "unavailable"}
 
 Write today's morning read for Ifoma and Josh (Workflow 1): one line each for the 10-year, crude, USD/JPY; any binary event today; SPY/QQQ and Mag-7 tone (fetch what you need); a bias that agrees with or explains any disagreement with the banner; and the 2–3 setups worth watching from the TradingView watchlist with the trigger level for each. Jason's levels are dated marks — say the call date. No order cards. Under 250 words.`;
   const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools, cs, who: "cron", send: () => {}, allowPropose: false, maxRounds: 8 });
-  if (res.said.trim()) await logDesk("assistant", "Otto · 8:45 auto", res.said.trim());
+  if (res.said.trim()) await logDesk("assistant", "Jarvis · 8:45 auto", res.said.trim());
   return { ok: true, verdict: sent.verdict, words: res.said.split(/\s+/).length };
 }
 
@@ -2037,6 +2039,101 @@ function cronAllowed(req: Request) {
 function background(p: Promise<unknown>) {
   const er = (globalThis as any).EdgeRuntime;
   if (er?.waitUntil) er.waitUntil(p.catch((e) => console.error("background", e))); else p.catch((e) => console.error("background", e));
+}
+
+
+/* ===================================================================== v3.2
+   5 Oct 2026 — Jarvis rename, manual order ticket, TradingView alert watcher.
+
+   Webhook note: the approved plan was a TradingView webhook. TradingView won't
+   let an outside app put a webhook on an alert (it needs 2-factor on the
+   account and has to be set by hand on every alert, 17 of them). Same result
+   without any of that: every 2 minutes in market hours Otto reads TradingView's
+   alert log and posts each new fire to the Desk with Jarvis's quick read. */
+
+async function tvSymbolFor(ticker: string): Promise<string | null> {
+  const t = ticker.toUpperCase().trim();
+  return cached("tvsym|" + t, 7 * 864e5, async () => {
+    try {
+      const j = mcpJson(await call("tv", "mcp-tv-search-symbols", { query: t }));
+      const list = j?.data?.symbols || j?.symbols || [];
+      const ok = ["NASDAQ", "NYSE", "AMEX", "NYSE ARCA", "ARCA", "CBOE", "BATS"];
+      const hit = list.find((x: any) => String(x.symbol || "").split(":")[1] === t && ok.includes(String(x.exchange || "").toUpperCase()))
+        || list.find((x: any) => String(x.symbol || "").split(":")[1] === t && String(x.currency_logoid || "").includes("US"));
+      return hit ? String(hit.symbol) : null;
+    } catch { return null; }
+  });
+}
+
+// The Buy/Sell form on the Desk. Same card, same Approve, same checks as Jarvis's cards.
+async function orderTicket(b: any, who: string, author: string) {
+  const sym = String(b.symbol || "").toUpperCase().replace(/[^A-Z.]/g, "");
+  const type = b.type === "put" ? "put" : "call";
+  const exp = String(b.expiry || "");
+  const strike = Number(b.strike), qty = Math.floor(Number(b.qty)), price = Number(b.price);
+  const side = b.side === "sell_close" ? "sell_close" : "buy_open";
+  if (!sym || !/^\d{4}-\d{2}-\d{2}$/.test(exp) || !(strike > 0) || !(qty >= 1) || !(price > 0)) throw new Error("Fill in ticker, expiry, strike, quantity and limit price");
+  const ins = mcpJson(await call("rh", "get_option_instruments", { chain_symbol: sym, expiration_dates: exp, strike_price: strike.toFixed(4), type }));
+  const inst = (ins?.data?.instruments || [])[0];
+  if (!inst?.id) throw new Error(`No ${sym} ${strike} ${type} expiring ${exp} on Robinhood. Check the expiry date and strike.`);
+  const label = `${sym} ${strike % 1 ? strike : Math.round(strike)}${type === "put" ? "P" : "C"} ${exp.slice(5).replace("-", "/")}`;
+  const title = `${side === "buy_open" ? "Buy" : "Sell"} ${qty} ${label} @ ${price.toFixed(2)}`;
+  let plan: any = null;
+  if (side === "buy_open" && b.tp1 != null && b.stop != null && b.tp1 !== "" && b.stop !== "") {
+    const tv = await tvSymbolFor(sym);
+    if (tv) plan = { tv_symbol: tv, direction: type === "put" ? "down" : "up", setup: String(b.setup || "other"), tp1: Number(b.tp1), stop: Number(b.stop), expires: exp, manual: true };
+  }
+  const summary = [
+    `Underlying / contract   ${label}`,
+    `Side / qty / type       ${side === "buy_open" ? "Buy to open" : "Sell to close"} · ${qty} · limit $${price.toFixed(2)}`,
+    side === "buy_open" ? `Plan                    ${plan ? `TP1 ${plan.tp1} · stop ${plan.stop} · ${plan.setup}` : "no TP1/stop given — this one won't be scored"}` : "",
+    b.note ? `Why                     ${String(b.note).slice(0, 300)}` : "",
+    `Source                  Order ticket, entered by ${author}`,
+  ].filter(Boolean).join("\n");
+  await logDesk("user", author, `Order ticket: ${title}${b.note ? " — " + String(b.note).slice(0, 300) : ""}`);
+  const card = await proposeAction({ title, summary, plan,
+    calls: [{ service: "rh", tool: "place_option_order", args: {
+      legs: [{ option_id: inst.id, side: side === "buy_open" ? "buy" : "sell", position_effect: side === "buy_open" ? "open" : "close" }],
+      quantity: String(qty), price: price.toFixed(2), type: "limit", time_in_force: "gfd" } }] }, who, { manual: true });
+  const flags = (card.checks || []).filter((c: any) => c.ok === false).map((c: any) => c.text);
+  await logDesk("assistant", "Jarvis", `Card from your order ticket.${flags.length ? " Rule check flags: " + flags.join("; ") + "." : ""} Nothing happens until you click Approve.`, card.id);
+  return card;
+}
+
+// Alert watcher (cron, every 2 minutes in market hours).
+async function alertWatch(apiKey: string) {
+  const j = mcpJson(await call("tv", "mcp-tv-get-alerts-log", { days: 1, limit: 50 }));
+  const events: any[] = j?.events || j?.data?.events || [];
+  if (!events.length) return { ok: true, fired: 0 };
+  const keyOf = (e: any) => [e.alert_id ?? e.id ?? e.name ?? "", e.fire_time ?? e.time ?? e.timestamp ?? e.fired_at ?? e.created ?? ""].join("|");
+  const keys = events.map(keyOf);
+  const seen = await db("otto_alert_fires?select=key&key=in.(" + encodeURIComponent(keys.map((k) => '"' + k.replace(/"/g, "") + '"').join(",")) + ")").catch(() => []);
+  const have = new Set(seen.map((r: any) => r.key));
+  const fresh = events.filter((e, i) => !have.has(keys[i]));
+  if (!fresh.length) return { ok: true, fired: 0 };
+  await db("otto_alert_fires?on_conflict=key", { method: "POST", headers: { prefer: "resolution=ignore-duplicates,return=minimal" },
+    body: JSON.stringify(fresh.map((e) => ({ key: keyOf(e), payload: e }))) });
+  // First run ever: just remember the backlog, don't flood the Desk.
+  const total = await db("otto_alert_fires?select=key&limit=60");
+  if (total.length <= fresh.length && fresh.length > 3) return { ok: true, fired: 0, primed: fresh.length };
+  const recentReads = await db("otto_desk?select=id&author=eq.Jarvis%20%C2%B7%20alert%20read&created_at=gte." + new Date(Date.now() - 3600e3).toISOString()).catch(() => []);
+  let reads = recentReads.length;
+  for (const e of fresh.slice(0, 5)) {
+    const name = e.name || e.alert_name || "", sym = e.symbol || e.ticker || "", msg = e.message || "";
+    const line = `🔔 TradingView alert fired: ${name || sym}${msg && msg !== name ? " — " + msg : ""}`;
+    await logDesk("system", "TradingView", line.slice(0, 500));
+    if (reads >= 6) continue;                     // cap the reads, never the log lines
+    reads++;
+    const calls = await loadBrain();
+    const sys = DESK_SYS.replace("{{RULES}}", alwaysOn(calls));
+    const { tools: mcpToolDefs } = await deskTools();
+    const prompt = `[A TradingView alert just fired — no one typed this.] ${JSON.stringify({ name, symbol: sym, message: msg }).slice(0, 600)}
+In 3–4 short sentences for Ifoma and Josh: what this level is (search Jason's calls; give the call date), where price is right now (fetch it), what it means against the current banner, and what to watch next. No cards.`;
+    const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: [TOOLS[0], ...mcpToolDefs], cs: chunksOf(calls),
+      who: "alert", send: () => {}, allowPropose: false, maxRounds: 5 });
+    if (res.said.trim()) await logDesk("assistant", "Jarvis · alert read", res.said.trim());
+  }
+  return { ok: true, fired: fresh.length };
 }
 
 /* --------------------------------------------------------------- transport */
@@ -2055,6 +2152,14 @@ Deno.serve(async (req) => {
   // published URL would let a stranger burn the market-data and Claude quotas.
   // v3.1 scheduled runs (pg_cron → pg_net). They carry the cron secret, not a user.
   const fn0 = new URL(req.url).searchParams.get("fn") || "";
+  if (fn0 === "cron_alerts") {
+    if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
+    const et = etParts();
+    const force = new URL(req.url).searchParams.get("force") === "1";
+    if (!force && (["Sat", "Sun"].includes(et.wd) || et.min < 540 || et.min > 990)) return json({ ok: true, skipped: et });
+    background(alertWatch(Deno.env.get("ANTHROPIC_KEY") || ""));
+    return json({ ok: true, started: "alerts" }, 202);
+  }
   if (fn0 === "cron_morning" || fn0 === "cron_weekly") {
     if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
     const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
@@ -2067,7 +2172,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, started: "morning" }, 202);
     }
     if (!force && (et.wd !== "Fri" || Math.abs(et.min - 990) > 20)) return json({ ok: true, skipped: et });
-    background(weeklyReview(apiKey, "Otto (Friday auto)"));
+    background(weeklyReview(apiKey, "Jarvis (Friday auto)"));
     return json({ ok: true, started: "weekly" }, 202);
   }
 
@@ -2084,7 +2189,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, email: claims.email || null, anonymous: !!claims.is_anonymous, desk: !!deskUser(claims) });
     }
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
-         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now"].includes(fn)) {
+         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -2117,6 +2222,7 @@ Deno.serve(async (req) => {
         return json({ ok: true, review: await weeklyReview(apiKey, who) });
       }
       if (fn === "score") return json(await scorecard());
+      if (fn === "ticket") return json({ ok: true, action: await orderTicket(body, who, String(body.author || "Ifoma").slice(0, 30)) });
       if (fn === "morning_now") {
         const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
         background(morningRead(apiKey));
