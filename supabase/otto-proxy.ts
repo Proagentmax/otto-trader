@@ -2,6 +2,7 @@
 //
 //   v3.6 (5 Oct 2026): phone notifications (Web Push). ?fn=push_key push_sub push_list
 //   push_remove push_test; notify() hooked into auto-close, fills, stops, alerts, cards.
+//   v3.8.1 (5 Oct 2026): time budgets on TradingView/Robinhood calls; Yahoo price fallback on the Desk panel.
 //   v3.8 (5 Oct 2026): your layout — ?fn=layout_get / layout_set (otto_settings "layout").
 //   v3.7 (5 Oct 2026): Jason's calls. A pasted screenshot of Jason's Discord post
 //   (desk body.jason) is read into otto_jason (call/level/note) and Jarvis drafts
@@ -908,7 +909,9 @@ async function rpcOnce(service: string, method: string, params: any, token: stri
                authorization: "Bearer " + token, "mcp-protocol-version": "2025-06-18",
                ...(sid ? { "mcp-session-id": sid } : {}) },
     body: JSON.stringify(notify ? { jsonrpc: "2.0", method, params } : { jsonrpc: "2.0", id, method, params }),
-  });
+    // v3.8.1: a hung TradingView/Robinhood request used to hold the whole Desk panel open.
+    signal: AbortSignal.timeout(method === "tools/call" ? 20_000 : 12_000),
+  }).catch((e) => { throw new Error(SVC[service].name + (e?.name === "TimeoutError" ? " timed out" : " unreachable: " + String(e?.message || e).slice(0, 120))); });
   const newSid = r.headers.get("mcp-session-id");
   if (notify) { await r.body?.cancel(); return { status: r.status, sid: newSid, msg: null }; }
   if (!r.ok) { const t = await r.text(); return { status: r.status, sid: newSid, msg: null, err: t.slice(0, 300) }; }
@@ -1185,6 +1188,42 @@ const MACRO = [
   { k: "qqq", sym: "NASDAQ:QQQ", label: "QQQ" },
 ];
 
+// v3.8.1 (5 Oct 2026): every slow outside call gets a budget so one slow service
+// (TradingView was taking 60 s+ per refresh) can't blank the rest of the Desk.
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((res, rej) => {
+    const t = setTimeout(() => rej(new Error(label + " is slow right now (over " + Math.round(ms / 1000) + " s)")), ms);
+    p.then((v) => { clearTimeout(t); res(v); }, (e) => { clearTimeout(t); rej(e); });
+  });
+}
+// Circuit breaker for the Desk panel / banner: after a TradingView timeout, skip it
+// for 2 minutes and go straight to the backups (Yahoo prices, cached watchlist).
+let TV_SLOW_UNTIL = 0, WC_LAST = "";
+const tvSlow = () => Date.now() < TV_SLOW_UNTIL;
+function tvBudget<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  if (tvSlow()) return Promise.reject(new Error("TradingView is slow right now — using backups for a couple of minutes"));
+  return withTimeout(p, ms, label).catch((e) => {
+    if (/slow right now|timed out/.test(String(e?.message))) { TV_SLOW_UNTIL = Date.now() + 120_000; putSetting("tv_slow_until", TV_SLOW_UNTIL).catch(() => {}); }
+    throw e;
+  });
+}
+// Each request can land on a fresh server instance, so the breaker is shared through otto_settings.
+async function tvSlowLoad() { try { const v = Number(await setting("tv_slow_until")); if (v > TV_SLOW_UNTIL) TV_SLOW_UNTIL = v; } catch { /* */ } }
+// TradingView symbol → Yahoo symbol, for the price fallback.
+function ySym(tv: string): string {
+  const MAP: Record<string, string> = { "TVC:US10Y": "^TNX", "TVC:DXY": "DX-Y.NYB", "FX:USDJPY": "JPY=X", "NYMEX:CL1!": "CL=F",
+    "CME_MINI:ES1!": "ES=F", "CME_MINI:NQ1!": "NQ=F", "CBOT_MINI:YM1!": "YM=F" };
+  if (MAP[tv]) return MAP[tv];
+  return (tv.split(":")[1] || tv).replace(/\./g, "-");
+}
+async function yahooQuotes(syms: string[]): Promise<Record<string, { close: number; change: number | null }>> {
+  const out: Record<string, any> = {};
+  await Promise.all(syms.map(async (s) => {
+    try { const q = await withTimeout(yq(ySym(s)), 6000, "Yahoo"); if (q.price != null) out[s] = { close: q.price, change: q.pct }; } catch { /* leave it out */ }
+  }));
+  return out;
+}
+
 async function settle<T>(p: Promise<T>): Promise<{ ok: true; v: T } | { ok: false; error: string }> {
   try { return { ok: true, v: await p }; } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
@@ -1196,7 +1235,8 @@ async function panel() {
 
   const tvPart = async () => {
     if (!has("tv")) return;
-    const wl = await settle((async () => mcpJson(await call("tv", "mcp-watchlist-get-active-watchlist", {})))());
+    await tvSlowLoad();
+    const wl = await settle(tvBudget((async () => mcpJson(await call("tv", "mcp-watchlist-get-active-watchlist", {})))(), 6000, "TradingView watchlist"));
     let wsyms: string[] = [];
     if (wl.ok) {
       const found: string[] = [];
@@ -1207,14 +1247,26 @@ async function panel() {
       walk(wl.v);
       wsyms = [...new Set(found)].slice(0, 30);
       out.watchlist_name = wl.v?.name || wl.v?.watchlist?.name || wl.v?.data?.name || null;
-    } else out.watchlist_error = wl.error;
+      const wk = JSON.stringify(wsyms);
+      if (wsyms.length && wk !== WC_LAST) { WC_LAST = wk; putSetting("watch_cache", { syms: wsyms, name: out.watchlist_name || null }).catch(() => {}); }
+    } else {
+      // TradingView slow: keep showing the last watchlist we saw, priced from Yahoo.
+      const wc = await setting("watch_cache").catch(() => null);
+      if (wc?.syms?.length) { wsyms = wc.syms.slice(0, 30); out.watchlist_name = wc.name; out.watchlist_note = "saved copy — " + wl.error; }
+      else out.watchlist_error = wl.error;
+    }
     const syms = [...new Set([...MACRO.map((m) => m.sym), ...wsyms])];
     // v3.1: quotesFor() falls back to OHLCV bars when the screener is rate-limited (429).
-    const q = await settle(quotesFor(syms));
-    if (q.ok) out.quotes = { data: Object.entries(q.v).map(([symbol, v]: any) => ({ symbol, close: v.close, change: v.change })) };
-    else out.quotes_error = q.error;
     out.macro = MACRO; out.watch = wsyms;
-    const al = await settle((async () => mcpJson(await call("tv", "mcp-tv-list-alerts", { active: true })))());
+    const [q, al] = await Promise.all([
+      settle(tvBudget(quotesFor(syms), 7000, "TradingView prices")),
+      settle(tvBudget((async () => mcpJson(await call("tv", "mcp-tv-list-alerts", { active: true })))(), 7000, "TradingView alerts")),
+    ]);
+    let qv: Record<string, any> = q.ok ? q.v : {};
+    const missing = syms.filter((s) => !qv[s]);
+    if (missing.length) { const y = await yahooQuotes(missing); qv = { ...qv, ...y }; if (Object.keys(y).length) out.quotes_source = q.ok ? "tradingview+yahoo" : "yahoo"; }
+    if (Object.keys(qv).length) out.quotes = { data: Object.entries(qv).map(([symbol, v]: any) => ({ symbol, close: v.close, change: v.change })) };
+    if (!q.ok) out.quotes_note = q.error + " — prices from Yahoo";
     if (al.ok) out.alerts = al.v; else out.alerts_error = al.error;
   };
 
@@ -1235,7 +1287,7 @@ async function panel() {
     };
   };
 
-  await Promise.all([settle(tvPart()), settle(rhPart())]);
+  await Promise.all([settle(withTimeout(tvPart(), 16000, "TradingView")), settle(withTimeout(rhPart(), 16000, "Robinhood").catch((e) => { out.rh_error ||= e.message; }))]);
   if (!out.quotes) {                      // TradingView not connected: fall back to the free quotes
     const fq = await settle(fetchQuotes());
     if (fq.ok) out.fallback_quotes = fq.v.quotes;
@@ -1349,7 +1401,7 @@ async function deskTools() {
   const status: Record<string, string> = {};
   for (const s of ["tv", "rh"]) {
     try {
-      const list = await mcpTools(s);
+      const list = await withTimeout(mcpTools(s), 10000, SVC[s].name);
       for (const t of list) {
         if (READ[s].has(t.name)) {
           tools.push({ name: `${s}__${t.name}`.slice(0, 64),
@@ -1756,7 +1808,7 @@ async function yahooLeg(l: any) {
 
 async function legData(l: any) {
   let tv: any = null, tvErr = "";
-  try { tv = await tvLeg(l); } catch (e) { tvErr = String((e as Error).message ?? e).slice(0, 160); }
+  try { tv = await tvBudget(tvLeg(l), 8000, "TradingView"); } catch (e) { tvErr = String((e as Error).message ?? e).slice(0, 160); }
   if (tv && tv.live) return tv;
   let y: any = null, yErr = "";
   try { y = await yahooLeg(l); } catch (e) { yErr = String((e as Error).message ?? e).slice(0, 160); }
@@ -1768,6 +1820,7 @@ async function legData(l: any) {
 
 async function sentimentNow(force = false, kind = "live"): Promise<any> {
   if (!force && SENT && Date.now() - SENT.at < 4 * 60e3) return SENT.body;
+  await tvSlowLoad();
   const legs = await Promise.all(LEGS.map((l) => legData(l).catch((e) => ({ k: l.k, label: l.label, sym: l.sym, live: false, error: (e as Error).message }))));
   const by: Record<string, any> = Object.fromEntries(legs.map((l: any) => [l.k, l]));
   const fresh = legs.filter((l: any) => l.live).length;
@@ -1799,7 +1852,7 @@ async function sentimentNow(force = false, kind = "live"): Promise<any> {
 
   const now = etParts();
   let calendar: any[] = [];
-  try { calendar = await econEvents(now.date, now.date, 0); } catch { /* shown as unavailable */ }
+  try { calendar = await tvBudget(econEvents(now.date, now.date, 0), 5000, "TradingView calendar"); } catch { /* shown as unavailable */ }
   const nextHigh = calendar.find((e) => e.importance >= 1 && Date.parse(e.date) > Date.now()) || null;
 
   let window: string | null = null;
