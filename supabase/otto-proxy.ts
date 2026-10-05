@@ -667,7 +667,7 @@ async function chat(req: Request, sys: string, cs: Chunk[], apiKey: string) {
    Secrets:  OTTO_TOKEN_KEY       any long random string (encrypts the tokens)
              OTTO_ALLOWED_EMAILS  comma list; default ottotrader@vinecreativestudio.com
              OTTO_RH_ACCOUNT      optional; pins the Robinhood account orders go to
-   Tables:   supabase/desk-setup.sql
+   Tables:   supabase/004_desk.sql
 */
 
 const DESK_REDIRECT = Deno.env.get("OTTO_REDIRECT") || "https://proagentmax.github.io/otto-trader/oauth.html";
@@ -692,6 +692,11 @@ const SVC: Record<string, any> = {
     register: "https://agent.robinhood.com/oauth/trading/register",
     scope: "internal",
     resource: "https://agent.robinhood.com/mcp/trading",
+    // v3.0.1: Robinhood refuses to return to a web page it doesn't know
+    // (tested 4 Oct: "Uh oh! Something's gone wrong" after Allow), but it
+    // accepts a localhost address. The browser can't load it, so the user
+    // pastes that address back into Otto once. See paste flow in index.html.
+    redirect: "http://localhost:8976/callback",
   },
 };
 
@@ -756,7 +761,7 @@ async function db(path: string, init: RequestInit = {}): Promise<any> {
   const t = await r.text();
   if (!r.ok) {
     if (/relation .* does not exist|Could not find the table/i.test(t))
-      throw new Error("Desk tables missing — run supabase/desk-setup.sql in the SQL editor");
+      throw new Error("Desk tables missing — run supabase/004_desk.sql in the SQL editor");
     throw new Error("db " + r.status + " " + t.slice(0, 200));
   }
   return t ? JSON.parse(t) : null;
@@ -791,12 +796,15 @@ async function unseal(s: string) {
 
 /* ------------------------------------------------------------ OAuth */
 
+const redirectFor = (service: string) => SVC[service]?.redirect || DESK_REDIRECT;
+
 async function oauthStart(service: string, who: string) {
   const s = SVC[service]; if (!s) throw new Error("unknown service");
+  const redirect = redirectFor(service);
   await aesKey();                                   // fail early if the secret is missing
   const reg = await fetch(s.register, {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ client_name: "Otto Trader", redirect_uris: [DESK_REDIRECT],
+    body: JSON.stringify({ client_name: "Otto Trader", redirect_uris: [redirect],
       grant_types: ["authorization_code", "refresh_token"], response_types: ["code"],
       token_endpoint_auth_method: "none" }),
   });
@@ -807,7 +815,7 @@ async function oauthStart(service: string, who: string) {
   const state = service + "." + b64url(crypto.getRandomValues(new Uint8Array(18)));
   await db("otto_oauth", { method: "POST", body: JSON.stringify({
     state, service, client_id: rj.client_id, verifier: await seal(verifier), started_by: who }) });
-  const q = new URLSearchParams({ response_type: "code", client_id: rj.client_id, redirect_uri: DESK_REDIRECT,
+  const q = new URLSearchParams({ response_type: "code", client_id: rj.client_id, redirect_uri: redirect,
     code_challenge: challenge, code_challenge_method: "S256", state, scope: s.scope, resource: s.resource });
   return s.authorize + "?" + q.toString();
 }
@@ -843,7 +851,7 @@ async function oauthFinish(code: string, state: string, who: string) {
   if (!p) throw new Error("that sign-in link expired or was already used — press Connect again");
   await db("otto_oauth?state=eq." + encodeURIComponent(state), { method: "DELETE" });
   if (Date.now() - Date.parse(p.created_at) > 15 * 60_000) throw new Error("sign-in took longer than 15 minutes — press Connect again");
-  const j = await tokenPost(p.service, { grant_type: "authorization_code", code, redirect_uri: DESK_REDIRECT,
+  const j = await tokenPost(p.service, { grant_type: "authorization_code", code, redirect_uri: redirectFor(p.service),
     client_id: p.client_id, code_verifier: await unseal(p.verifier), resource: SVC[p.service].resource });
   await saveTokens(p.service, p.client_id, j, null, who);
   return p.service;
@@ -1477,7 +1485,10 @@ Deno.serve(async (req) => {
         const acts = ids.length ? await db("otto_actions?select=*&id=in.(" + ids.join(",") + ")") : [];
         return json({ ok: true, rows: list, actions: acts.map(publicAction) });
       }
-      if (fn === "oauth_start") return json({ ok: true, url: await oauthStart(String(body.service || ""), who) });
+      if (fn === "oauth_start") {
+        const service = String(body.service || "");
+        return json({ ok: true, url: await oauthStart(service, who), paste: !!SVC[service]?.redirect });
+      }
       if (fn === "oauth_finish") {
         const service = await oauthFinish(String(body.code || ""), String(body.state || ""), who);
         let tools = 0, warn = null;

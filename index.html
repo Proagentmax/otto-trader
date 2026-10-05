@@ -714,6 +714,20 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
   <div class="ft"><button class="btn danger" id="sWipe">Erase all</button><button class="btn" id="sClose">Close</button><button class="btn solid" id="sSave">Save</button></div>
 </dialog>
 
+<dialog id="dlgRh">
+  <div class="grip"></div><div class="hd"><h3>Connect Robinhood</h3></div>
+  <div class="bd">
+    <ol style="padding-left:20px;margin:0 0 12px;line-height:1.6">
+      <li>In the Robinhood tab, click <b>Allow</b> and approve on your phone.</li>
+      <li>You'll land on a page that says <b>&ldquo;This site can&rsquo;t be reached.&rdquo;</b> That's expected.</li>
+      <li>Copy the whole address from that page's address bar (it starts with <span style="font-family:var(--mono)">localhost:8976/callback?code=</span>) and paste it here.</li>
+    </ol>
+    <textarea class="f" id="rhPaste" rows="3" spellcheck="false" placeholder="Paste the localhost address here" style="font-family:var(--mono);font-size:12.5px"></textarea>
+    <p class="hint" id="rhMsg" style="margin-top:8px">The code in that address works once and expires in a few minutes. Otto exchanges it on the server and stores the sign-in encrypted.</p>
+  </div>
+  <div class="ft"><button class="btn" id="rhCancel">Cancel</button><button class="btn" id="rhAgain">Open Robinhood again</button><button class="btn solid" id="rhGo">Connect</button></div>
+</dialog>
+
 <dialog id="dlgMail">
   <div class="grip"></div><div class="hd"><h3>Email Jason</h3></div>
   <div class="bd">
@@ -1646,7 +1660,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.0.0";
+const BUILD="3.0.1";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2583,9 +2597,17 @@ async function dkRenderConn(){
         (r?`<button class="btn" data-disc="${s}" style="min-height:34px">Disconnect</button>`:`<button class="btn solid" data-conn="${s}" style="min-height:34px">Connect</button>`)+`</div>`};
     box.innerHTML=line("tv","TradingView","Prices, watchlists, alerts")+line("rh","Robinhood","Accounts and positions. Orders go to the Agentic account only, after Approve.");
     box.querySelectorAll("[data-conn]").forEach(b=>b.addEventListener("click",async()=>{
+      const svc=b.dataset.conn;
+      // Robinhood (v3.0.1): new tab + paste-back. Open the tab inside the click
+      // so the popup blocker allows it, then point it at Robinhood.
+      const tab=svc==="rh"?window.open("about:blank","_blank"):null;
       b.disabled=true;b.textContent="Opening…";
-      try{const r=await dkApi("oauth_start",{service:b.dataset.conn});location.href=r.url}
-      catch(e){toast(String(e.message).slice(0,120));b.disabled=false;b.textContent="Connect"}
+      try{
+        const r=await dkApi("oauth_start",{service:svc});
+        if(r.paste){DK.rhUrl=r.url;if(tab)tab.location=r.url;else window.open(r.url,"_blank");dkRhOpen()}
+        else location.href=r.url;
+      }catch(e){if(tab)tab.close();toast(String(e.message).slice(0,120))}
+      b.disabled=false;b.textContent="Connect";
     }));
     box.querySelectorAll("[data-disc]").forEach(b=>b.addEventListener("click",async()=>{
       if(!confirm("Disconnect? The desk will stop seeing this account until you connect it again."))return;
@@ -2593,6 +2615,31 @@ async function dkRenderConn(){
     }));
   }catch(e){box.innerHTML=`<p class="hint dk-err">${esc(e.message)}</p>`}
 }
+
+/* Robinhood paste-back (v3.0.1). Robinhood only returns to localhost, which
+   the browser can't load — so the code arrives as an address the user pastes. */
+function dkRhOpen(){
+  $("#rhPaste").value="";
+  $("#rhMsg").className="hint";$("#rhMsg").textContent="The code in that address works once and expires in a few minutes. Otto exchanges it on the server and stores the sign-in encrypted.";
+  $("#dlgRh").showModal();
+}
+$("#rhCancel").addEventListener("click",()=>$("#dlgRh").close());
+$("#rhAgain").addEventListener("click",()=>{if(DK.rhUrl)window.open(DK.rhUrl,"_blank")});
+$("#rhGo").addEventListener("click",async()=>{
+  const raw=$("#rhPaste").value.trim(),m=$("#rhMsg"),b=$("#rhGo");
+  let code=null,state=null;
+  try{const q=new URLSearchParams(raw.slice(raw.indexOf("?")+1).split("#")[0]);code=q.get("code");state=q.get("state");
+    if(!code&&q.get("error"))throw new Error("Robinhood said: "+(q.get("error_description")||q.get("error")))}
+  catch(e){m.className="hint dk-err";m.textContent=e.message;return}
+  if(!code||!state){m.className="hint dk-err";m.textContent="That address has no code in it. Copy the whole address from the \u201cThis site can\u2019t be reached\u201d page.";return}
+  b.disabled=true;b.textContent="Connecting…";
+  try{
+    const j=await dkApi("oauth_finish",{code,state});
+    $("#dlgRh").close();toast(j.name+" connected"+(j.warn?" — but: "+String(j.warn).slice(0,60):""));
+    dkRenderConn();DK.panelAt=0;if(DK.open)dkPanel(true);
+  }catch(e){m.className="hint dk-err";m.textContent="Didn't connect: "+String(e.message).slice(0,160)+" — press Open Robinhood again only if it says expired; otherwise Cancel and Connect again."}
+  b.disabled=false;b.textContent="Connect";
+});
 
 /* Coming back from TradingView / Robinhood: oauth.html left the code here. */
 async function dkOauthReturn(){
