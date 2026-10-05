@@ -464,6 +464,33 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 }
 .gate2 .gcancel{display:block;margin:14px auto 0;color:var(--ink-2);font-size:13px}
 .dk-pend[hidden],.gate2 .gcancel[hidden],#sDeskLogin[hidden]{display:none!important}
+/* ---- v3.8: your layout ---- */
+.dk-tabs{display:flex;flex-direction:column;gap:4px;align-items:center}
+.dk-rail button[hidden],.dk-morebox[hidden]{display:none!important}
+.dk-rail{position:relative}
+.dk-morebox{position:absolute;left:62px;z-index:30;background:var(--surface-2);border:1px solid var(--rule);border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:2px;min-width:140px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.dk-morebox button{width:auto!important;min-height:0!important;display:block!important;text-align:left;padding:7px 10px!important;font-size:12.5px!important;color:var(--ink)!important;border-radius:7px}
+.dk-morebox button:hover{background:var(--surface-3)}
+.dk.dk-edit .dk-tabs button{outline:1px dashed var(--surface-3);cursor:grab}
+.dk.dk-edit .dk-cust{background:var(--surface-2);color:var(--up)}
+.dk.dk-edit .dk-col .dk-cardx{outline:1px dashed var(--surface-3);cursor:grab}
+.dk.dk-edit .dk-col{min-height:120px;background:rgba(0,200,5,.02)}
+.lay-drag{opacity:.35}.lay-over{box-shadow:0 0 0 2px var(--up)!important}
+.dk-cardx .dk-min{margin-left:6px;color:var(--ink-3);font-size:11px;padding:0 3px;border-radius:4px;line-height:1}
+.dk-cardx .dk-min:hover{color:var(--ink);background:var(--surface-3)}
+.dk-cardx.min>:not(.dk-h){display:none!important}
+.dk-cardx.min{padding-bottom:8px}
+.lay-panel{position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:60;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 110px);overflow:auto;background:var(--surface);border:1px solid var(--rule);border-radius:14px;padding:16px;box-shadow:0 16px 48px rgba(0,0,0,.6);color:var(--ink)}
+.lay-panel[hidden]{display:none}
+.lay-panel h3{margin:0 0 4px;font-size:16px}
+.lay-row{display:grid;grid-template-columns:26px 22px 1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--rule);font-size:13px;touch-action:none;background:var(--surface)}
+.lay-row:first-child{border-top:0}
+.lay-row .hd{cursor:grab;color:var(--ink-3);text-align:center;font-size:15px;user-select:none}
+.lay-row input[type=text]{background:var(--surface-2);border:1px solid var(--rule);color:var(--ink);border-radius:7px;padding:5px 8px;font:inherit;width:100%;min-width:0}
+.lay-row label{font-size:12px;color:var(--ink-2);display:flex;gap:5px;align-items:center;white-space:nowrap}
+.lay-row.lifting{box-shadow:0 6px 18px rgba(0,0,0,.5);position:relative;z-index:2}
+.lay-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}.lay-btns .dk-btn{white-space:nowrap}
+@media (max-width:1099px){.dk-tabs{flex-direction:row;flex-wrap:wrap;justify-content:space-around}.dk-morebox{left:auto;right:8px;top:56px}.lay-row{grid-template-columns:26px 1fr auto auto}.lay-row .ic{display:none}}
 /* ---- v3.7: Jason's calls ---- */
 .dk-jbtn{background:rgba(232,69,90,.15);color:#E8455A;border:1px solid rgba(232,69,90,.55);font-weight:700}
 .dk-jtag{display:inline-block;background:rgba(232,69,90,.15);color:#E8455A;border:1px solid rgba(232,69,90,.45);border-radius:6px;font-size:10.5px;font-weight:700;padding:1px 6px;letter-spacing:.03em;margin-left:4px}
@@ -559,6 +586,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 <div class="dk" id="dk" hidden>
   <nav class="dk-rail" aria-label="Otto">
     <div class="dk-logo">O</div>
+    <div class="dk-tabs" id="dkTabs">
     <button data-go="desk" class="on"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5a8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4z"/></svg>Desk</button>
     <button data-go="market"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>Market</button>
     <button data-go="perf"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Results</button>
@@ -566,12 +594,22 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <button data-go="review"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review</button>
     <button data-go="score"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Score</button>
     <button data-go="jason"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Calls</button>
-    <div class="sp"></div>
     <button data-go="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>Help</button>
     <button data-go="classic" title="The phone layout: Week, Coach, Journal, Market"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Classic</button>
+    </div>
+    <button class="dk-more" id="dkMore" hidden title="Hidden tabs"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
+    <div class="dk-morebox" id="dkMoreBox" hidden></div>
+    <div class="sp"></div>
+    <button class="dk-cust" id="dkCust" title="Reorder, rename or hide the side tabs and move the side cards"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Customize</button>
     <button data-go="settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Settings</button>
   </nav>
 
+  <div class="lay-panel" id="layPanel" hidden role="dialog" aria-label="Customize the Desk">
+    <h3>Customize the Desk</h3>
+    <div class="mut" style="font-size:12.5px;margin-bottom:10px">Drag the side tabs in the rail (or the ⋮⋮ handles below) to reorder. Drag cards within or between the left and right columns; ▾ collapses one. ★ = the tab Otto opens on. Desk and Settings always stay visible. One layout for both laptops.</div>
+    <div id="layRows"></div>
+    <div class="lay-btns"><button class="dk-btn sec" id="layReset">Reset to default</button><button class="dk-btn sec" id="layCancel">Cancel</button><button class="dk-btn go" id="laySave">Save layout</button></div>
+  </div>
   <div class="dk-strip" id="dkStrip"><span class="mut">Loading prices…</span></div>
   <div class="dk-banner" id="dkBanner" hidden></div>
 
@@ -1833,7 +1871,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.7.1";
+const BUILD="3.8.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2447,14 +2485,15 @@ function openDesk(){
   $$(".dk-rail button").forEach(b=>b.classList.toggle("on",b.dataset.go==="desk"));
   $$(".nav button").forEach(x=>x.setAttribute("aria-selected",x.dataset.p==="desk"));
   $("#dkWho").value=LS.get("deskWho","Ifoma");
-  dkRenderLeft();dkRenderRight();dkRenderStrip();dkRenderBanner();dkShow(LS.get("dkView","desk"));
+  dkRenderLeft();dkRenderRight();dkRenderStrip();dkRenderBanner();
+  dkShow(DK.opened?LS.get("dkView","desk"):(typeof layHome==="function"?layHome():"desk"));DK.opened=true;
   dkStart();
 }
 function closeDesk(){
   document.body.classList.remove("dk-on");$("#dk").hidden=true;DK.open=false;
   clearInterval(DK.pollT);DK.pollT=null;
 }
-$$(".dk-rail button").forEach(b=>b.addEventListener("click",()=>{
+$$(".dk-rail button[data-go]").forEach(b=>b.addEventListener("click",()=>{
   const g=b.dataset.go;
   if(g==="settings")return openSettings();
   if(g==="classic"){closeDesk();const t=$$(".nav button").find(x=>x.dataset.p==="market");if(t)t.click();return}
@@ -2507,7 +2546,7 @@ async function dkPanel(force){
   try{DK.panel=await dkApi("panel")}catch(e){DK.panel={error:e.message}}
   (DK.panel.pending||[]).forEach(a=>DK.acts[a.id]=a);
   dkRenderStrip();dkRenderLeft();dkRenderRight();
-  dkJasonLoad();
+  dkJasonLoad();laySync();
 }
 // v3.7: today's Jason posts (feed on the right, levels on the left)
 async function dkJasonLoad(){
@@ -2603,10 +2642,9 @@ function dkRenderLeft(){
         return `<div class="dk-check"><span class="dk-box ${on?"on":""}">${on?"✓":""}</span><span>${esc(a.task||"")}</span></div>`}).join("")+
       `<button class="dk-link" data-go2="week">Open the week →</button></div>`;
   }
-  h=dkJasonLevels()+h;
-  $("#dkLeft").innerHTML=h;
-  dkBindQuick($("#dkLeft"));
-  $$("#dkLeft [data-go2]").forEach(b=>b.addEventListener("click",()=>{closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.go2);if(t)t.click()}));
+  h+=dkJasonLevels();
+  laySetCards("left",h,box=>{dkBindQuick(box);
+    box.querySelectorAll("[data-go2]").forEach(b=>b.addEventListener("click",()=>{closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.go2);if(t)t.click()}))});
 }
 
 function dkRenderRight(){
@@ -2650,7 +2688,7 @@ function dkRenderRight(){
   h+=`<div class="dk-cardx"><div class="dk-h">Jarvis brain <b>${CALLS.length} calls</b></div>`+
     (c?`<div class="dk-row"><span class="mut">Newest</span><span>${esc((c.call&&c.call.date)||"")}</span></div><div class="mut" style="margin-top:4px">${esc((c.call&&c.call.title)||"")}</div>`:`<div class="mut">Loading…</div>`)+
     (c&&(c.questions||[]).length?`<div class="mut" style="margin-top:8px">Open questions for Jason:</div><ul style="margin:4px 0 0;padding-left:16px;color:var(--ink-2)">${c.questions.slice(0,3).map(q=>`<li>${esc(q.q||q.question||q.text||String(q))}</li>`).join("")}</ul>`:"")+`</div>`;
-  $("#dkRight").innerHTML=h;
+  laySetCards("right",h);
 }
 
 /* ---------- messages ---------- */
@@ -3287,6 +3325,170 @@ async function dkJasonScore(){
     ${j.splits.map(s=>`<tr><td>${esc(s.key)}</td><td class="mono" style="text-align:center">${s.n}</td><td class="mono" style="text-align:center">${s.scored?pc(s.rate):"—"}</td><td class="mono" style="text-align:center">${sp(s.avg_close)}</td><td class="mono" style="text-align:center">${sp(s.avg_best)}</td></tr>`).join("")}</table>
     <div class="mut" style="font-size:11.5px;margin-top:6px">"Worked" = the stock closed the day in Jason's direction from the 5-minute bar he posted in. Cards we took are also graded TP1 vs stop. Calls are dated ideas: they never go into Jarvis's teaching brain.</div></div>`;
 }
+
+/* ---------- v3.8: your layout (approved mockup otto-v3.8-layout-mockup.html) ----------
+   Side tabs: order, names, hidden (→ More), landing tab. Side cards: order, column,
+   collapsed. One layout shared by both laptops (otto_settings "layout" via
+   ?fn=layout_get / layout_set), cached per device in localStorage for instant load. */
+var LAY_TABS=[...document.querySelectorAll("#dkTabs button[data-go]")].map(b=>b.dataset.go);
+var LAY_LABEL=Object.fromEntries([...document.querySelectorAll("#dkTabs button[data-go]")].map(b=>[b.dataset.go,b.lastChild.textContent.trim()]));
+var LAY_LOCK=new Set(["desk"]);
+var LAY_CARDS={left:["today","morning-read","watchlist","jason-s-homework","jason-s-levels-today"],
+  right:["robinhood","protected-trades","waiting-for-approval","jason-today","tradingview-alerts","jarvis-brain"]};
+var LAY=(()=>{try{return JSON.parse(localStorage.getItem("otto:layout")||"null")}catch(e){return null}})();
+var LAY_DRAFT=null,LAY_NODES=LAY_NODES||{left:{},right:{}},LAY_DRAG=null,LAY_SYNC=0;
+const layCur=()=>LAY_DRAFT||LAY||{};
+function layTabs(){
+  if(!LAY_TABS)return [];
+  const saved=layCur().tabs||[],seen=new Set(),out=[];
+  for(const t of saved)if(LAY_TABS.includes(t.k)&&!seen.has(t.k)){seen.add(t.k);out.push({k:t.k,l:(t.l||"").trim()||LAY_LABEL[t.k],hide:!!t.hide&&!LAY_LOCK.has(t.k)})}
+  for(const k of LAY_TABS)if(!seen.has(k))out.push({k,l:LAY_LABEL[k],hide:false});
+  return out;
+}
+function layHome(){
+  const h=(LAY&&LAY.home)||"desk",t=layTabs().find(x=>x.k===h&&!x.hide);
+  return t&&DK_VIEWS.includes(h)?h:"desk";
+}
+function layApplyRail(){
+  const box=$("#dkTabs");if(!box)return;const list=layTabs();
+  for(const t of list){const b=box.querySelector(`button[data-go="${t.k}"]`);if(!b)continue;
+    box.appendChild(b);b.lastChild.textContent=t.l;b.hidden=t.hide;b.draggable=!!LAY_DRAFT;
+    if(!b._lay){b._lay=1;layDnd(b,"tab")}}
+  const hid=list.filter(t=>t.hide);
+  $("#dkMore").hidden=!hid.length;
+  $("#dkMoreBox").innerHTML=hid.map(t=>`<button data-more="${esc(t.k)}">${esc(t.l)}</button>`).join("");
+  if(!hid.length)$("#dkMoreBox").hidden=true;
+}
+function layKey(el){
+  const h=el.querySelector(".dk-h");if(!h)return "";
+  const n=h.firstChild,t=(n&&n.nodeType===3?n.textContent:h.textContent)||"";
+  return t.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40);
+}
+function laySetCards(side,html,bind){
+  // mid-customize, a background refresh must not undo the moves made so far
+  if(LAY_DRAFT&&$("#dkLeft")&&$("#dkLeft").children.length){const c=layColState();LAY_DRAFT.cards={left:c.left,right:c.right};LAY_DRAFT.min=c.min}
+  const tmp=document.createElement("div");tmp.innerHTML=html;if(bind)bind(tmp);
+  const m={};[...tmp.children].forEach((el,i)=>{const k=layKey(el)||(side+"-"+i);el.dataset.card=k;el._i=i;m[k]=el});
+  LAY_NODES[side]=m;layApplyCards();
+}
+function layApplyCards(){
+  const L=$("#dkLeft"),R=$("#dkRight");if(!L||!R)return;
+  const all=Object.assign({},LAY_NODES.left,LAY_NODES.right),sv=layCur().cards||{},placed=new Set(),cols={left:[],right:[]};
+  for(const side of ["left","right"])for(const k of (sv[side]||[]))if(all[k]&&!placed.has(k)){cols[side].push(all[k]);placed.add(k)}
+  for(const side of ["left","right"]){
+    const def=LAY_CARDS[side];
+    Object.values(LAY_NODES[side]).filter(el=>!placed.has(el.dataset.card))
+      .sort((a,b)=>{const ia=def.indexOf(a.dataset.card),ib=def.indexOf(b.dataset.card);return (ia<0?100+a._i:ia)-(ib<0?100+b._i:ib)})
+      .forEach(el=>{cols[side].push(el);placed.add(el.dataset.card)});
+  }
+  const mins=new Set(layCur().min||[]);
+  for(const [side,col] of [["left",L],["right",R]]){
+    col.replaceChildren(...cols[side]);
+    cols[side].forEach(el=>{el.classList.toggle("min",mins.has(el.dataset.card));layCardChrome(el)});
+  }
+}
+function layCardChrome(el){
+  el.draggable=!!LAY_DRAFT;
+  const h=el.querySelector(".dk-h");
+  if(h&&!h.querySelector(".dk-min")){
+    const b=document.createElement("button");b.className="dk-min";b.type="button";b.title="Collapse / expand";
+    b.addEventListener("click",e=>{e.stopPropagation();el.classList.toggle("min");b.textContent=el.classList.contains("min")?"▸":"▾";if(!LAY_DRAFT)laySaveMin()});
+    h.appendChild(b);
+  }
+  const mb=h&&h.querySelector(".dk-min");if(mb)mb.textContent=el.classList.contains("min")?"▸":"▾";
+  if(!el._lay){el._lay=1;layDnd(el,"card")}
+}
+function layColState(){
+  const ord=side=>[...(side==="left"?$("#dkLeft"):$("#dkRight")).children].map(el=>el.dataset.card).filter(Boolean);
+  const left=ord("left"),right=ord("right"),seen=new Set([...left,...right]);
+  // keep a slot for default cards that aren't on screen right now (e.g. Protected trades)
+  for(const side of ["left","right"]){const arr=side==="left"?left:right;
+    LAY_CARDS[side].forEach((k,i)=>{if(seen.has(k))return;
+      // after the nearest default neighbour above it that is in this column, else at the top
+      let at=0;for(let j=i-1;j>=0;j--){const p=arr.indexOf(LAY_CARDS[side][j]);if(p>=0){at=p+1;break}}
+      arr.splice(at,0,k);seen.add(k)})}
+  const min=[...document.querySelectorAll(".dk-col .dk-cardx.min")].map(el=>el.dataset.card);
+  const keepMin=(LAY&&LAY.min||[]).filter(k=>!document.querySelector(`.dk-col [data-card="${k}"]`));
+  return {left,right,min:[...new Set([...min,...keepMin])]};
+}
+async function layPersist(v){
+  LAY=v;try{localStorage.setItem("otto:layout",JSON.stringify(v))}catch(e){}
+  try{const j=await dkApi("layout_set",v);if(j.layout){LAY=j.layout;try{localStorage.setItem("otto:layout",JSON.stringify(LAY))}catch(e){}}}
+  catch(e){toast("Saved on this device only — "+String(e.message).slice(0,60))}
+}
+function laySaveMin(){const c=layColState();const base=LAY||{};layPersist(Object.assign({},base,{tabs:base.tabs||layTabs(),home:base.home||"desk",cards:base.cards&&(base.cards.left||[]).length?base.cards:{left:c.left,right:c.right},min:c.min}))}
+/* drag & drop: rail tabs and side cards (mouse); the panel list uses pointer drag (works on phones) */
+function layDnd(el,type){
+  el.addEventListener("dragstart",e=>{if(!LAY_DRAFT)return e.preventDefault();LAY_DRAG={type,el};el.classList.add("lay-drag");try{e.dataTransfer.setData("text/plain",type);e.dataTransfer.effectAllowed="move"}catch(x){}});
+  el.addEventListener("dragend",()=>{el.classList.remove("lay-drag");$$(".lay-over").forEach(x=>x.classList.remove("lay-over"));LAY_DRAG=null});
+  el.addEventListener("dragover",e=>{if(LAY_DRAFT&&LAY_DRAG&&LAY_DRAG.type===type&&LAY_DRAG.el!==el){e.preventDefault();el.classList.add("lay-over")}});
+  el.addEventListener("dragleave",()=>el.classList.remove("lay-over"));
+  el.addEventListener("drop",e=>{
+    if(!LAY_DRAFT||!LAY_DRAG||LAY_DRAG.type!==type)return;e.preventDefault();e.stopPropagation();el.classList.remove("lay-over");
+    const r=el.getBoundingClientRect(),after=type==="tab"&&getComputedStyle(el.parentNode).flexDirection==="row"?e.clientX>r.left+r.width/2:e.clientY>r.top+r.height/2;
+    el.parentNode.insertBefore(LAY_DRAG.el,after?el.nextSibling:el);
+    if(type==="tab"){LAY_DRAFT.tabs=layReadRail();layRows()}
+  });
+}
+["#dkLeft","#dkRight"].forEach(sel=>{const col=$(sel);if(!col)return;
+  col.addEventListener("dragover",e=>{if(LAY_DRAFT&&LAY_DRAG&&LAY_DRAG.type==="card")e.preventDefault()});
+  col.addEventListener("drop",e=>{if(!LAY_DRAFT||!LAY_DRAG||LAY_DRAG.type!=="card"||e.target.closest(".dk-cardx"))return;e.preventDefault();col.appendChild(LAY_DRAG.el)})});
+function layReadRail(){
+  const lab=Object.fromEntries((LAY_DRAFT&&LAY_DRAFT.tabs||layTabs()).map(t=>[t.k,t]));
+  return [...$$("#dkTabs button[data-go]")].map(b=>({k:b.dataset.go,l:(lab[b.dataset.go]||{}).l||LAY_LABEL[b.dataset.go],hide:!!(lab[b.dataset.go]||{}).hide}));
+}
+function layRows(){
+  const tabs=LAY_DRAFT.tabs,home=LAY_DRAFT.home||"desk";
+  const ico=k=>{const b=$(`#dkTabs button[data-go="${k}"] svg`);return b?b.outerHTML:""};
+  $("#layRows").innerHTML=tabs.map((t,i)=>`<div class="lay-row" data-i="${i}"><span class="hd" title="Drag to reorder">⋮⋮</span><span class="ic" style="color:var(--ink-3)">${ico(t.k).replace("<svg",'<svg width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:1.8"')}</span>
+    <input type="text" maxlength="18" value="${esc(t.l)}" data-i="${i}" aria-label="Name for ${esc(LAY_LABEL[t.k])}">
+    <label><input type="checkbox" data-hide="${i}" ${t.hide?"checked":""} ${LAY_LOCK.has(t.k)?"disabled":""}>hide</label>
+    <label title="Otto opens on this tab"><input type="radio" name="layHome" data-home="${esc(t.k)}" ${home===t.k?"checked":""} ${t.hide||t.k==="classic"?"disabled":""}>★</label></div>`).join("");
+  $$("#layRows input[type=text]").forEach(x=>x.addEventListener("input",()=>{LAY_DRAFT.tabs[+x.dataset.i].l=x.value.trim()||LAY_LABEL[LAY_DRAFT.tabs[+x.dataset.i].k];layApplyRail()}));
+  $$("#layRows [data-hide]").forEach(x=>x.addEventListener("change",()=>{const t=LAY_DRAFT.tabs[+x.dataset.hide];t.hide=x.checked;if(t.hide&&LAY_DRAFT.home===t.k)LAY_DRAFT.home="desk";layApplyRail();layRows()}));
+  $$("#layRows [data-home]").forEach(x=>x.addEventListener("change",()=>{LAY_DRAFT.home=x.dataset.home}));
+  $$("#layRows .hd").forEach(h=>h.addEventListener("pointerdown",layRowDrag));
+}
+function layRowDrag(e){
+  const row=e.target.closest(".lay-row"),box=$("#layRows");e.preventDefault();row.classList.add("lifting");
+  const move=ev=>{const y=ev.clientY;for(const r of [...box.children]){if(r===row)continue;const b=r.getBoundingClientRect();
+      if(y<b.top+b.height/2&&r===row.previousElementSibling){box.insertBefore(row,r);break}
+      if(y>b.top+b.height/2&&r===row.nextElementSibling){box.insertBefore(r,row);break}}};
+  const up=()=>{row.classList.remove("lifting");window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);
+    const order=[...box.children].map(r=>LAY_DRAFT.tabs[+r.dataset.i]);LAY_DRAFT.tabs=order;layApplyRail();layRows()};
+  window.addEventListener("pointermove",move);window.addEventListener("pointerup",up);
+}
+function layEdit(on){
+  if(on){
+    if(DK.locked)return toast("Sign in with the Otto login first");
+    if(DK.view!=="desk")dkShow("desk");
+    LAY_DRAFT={tabs:layTabs().map(t=>({...t})),home:layHome(),cards:(LAY&&LAY.cards)||{},min:(LAY&&LAY.min)||[]};
+  } else LAY_DRAFT=null;
+  $("#dk").classList.toggle("dk-edit",!!on);$("#layPanel").hidden=!on;
+  layApplyRail();layApplyCards();if(on)layRows();
+}
+$("#dkCust").addEventListener("click",()=>layEdit(!LAY_DRAFT));
+$("#layCancel").addEventListener("click",()=>layEdit(false));
+$("#laySave").addEventListener("click",async()=>{
+  const c=layColState();
+  const v={tabs:layReadRail().map(t=>({...t,l:(LAY_DRAFT.tabs.find(x=>x.k===t.k)||t).l,hide:!!(LAY_DRAFT.tabs.find(x=>x.k===t.k)||t).hide})),home:LAY_DRAFT.home||"desk",cards:{left:c.left,right:c.right},min:c.min};
+  layEdit(false);await layPersist(v);layApplyRail();layApplyCards();toast("Layout saved for both laptops");
+});
+$("#layReset").addEventListener("click",async()=>{
+  if(!confirm("Put the side tabs and cards back to the default layout?"))return;
+  layEdit(false);await layPersist({tabs:[],home:"desk",cards:{left:[],right:[]},min:[],reset:true});
+  layApplyRail();layApplyCards();toast("Back to the default layout");
+});
+$("#dkMore").addEventListener("click",e=>{e.stopPropagation();const b=$("#dkMoreBox");b.hidden=!b.hidden;if(!b.hidden){const r=$("#dkMore").getBoundingClientRect(),rr=$(".dk-rail").getBoundingClientRect();if(innerWidth>1099)b.style.top=Math.max(8,r.top-rr.top-20)+"px";else b.style.top=""}});
+$("#dkMoreBox").addEventListener("click",e=>{const x=e.target.closest("[data-more]");if(!x)return;$("#dkMoreBox").hidden=true;const b=$(`#dkTabs button[data-go="${x.dataset.more}"]`);if(b)b.click()});
+document.addEventListener("click",e=>{if(!e.target.closest("#dkMoreBox,#dkMore")&&$("#dkMoreBox"))$("#dkMoreBox").hidden=true});
+// the other laptop's changes: checked when the Desk panel refreshes (at most once a minute)
+async function laySync(){
+  if(LAY_DRAFT||DK.locked||Date.now()-LAY_SYNC<60e3)return;LAY_SYNC=Date.now();
+  try{const j=await dkApi("layout_get");const v=j.layout;
+    if(v&&(!LAY||v.at!==LAY.at)){LAY=v;try{localStorage.setItem("otto:layout",JSON.stringify(v))}catch(e){}layApplyRail();layApplyCards()}}catch(e){}
+}
+layApplyRail();
 
 /* ---------- Limits & goals ---------- */
 async function openLimits(){

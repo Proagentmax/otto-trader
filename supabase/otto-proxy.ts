@@ -2,6 +2,7 @@
 //
 //   v3.6 (5 Oct 2026): phone notifications (Web Push). ?fn=push_key push_sub push_list
 //   push_remove push_test; notify() hooked into auto-close, fills, stops, alerts, cards.
+//   v3.8 (5 Oct 2026): your layout — ?fn=layout_get / layout_set (otto_settings "layout").
 //   v3.7 (5 Oct 2026): Jason's calls. A pasted screenshot of Jason's Discord post
 //   (desk body.jason) is read into otto_jason (call/level/note) and Jarvis drafts
 //   the card; ?fn=jason_today / jason_score / jason_sweep (5 PM Discord sweep). 009_v37.sql.
@@ -3003,6 +3004,23 @@ async function putSetting(key: string, value: any, by = "otto") {
     body: JSON.stringify({ key, value, updated_by: by, updated_at: new Date().toISOString() }) });
 }
 
+/* ---- v3.8 (5 Oct 2026): the Desk layout Ifoma and Josh customize — side-tab
+   order / names / hidden / landing tab, and side-card order / column / collapsed.
+   Shared by both laptops. Validated loosely: keys and labels only, nothing runs. */
+async function layoutSet(body: any, who: string) {
+  const key = (v: any) => String(v || "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 40);
+  const tabs = (Array.isArray(body.tabs) ? body.tabs : []).slice(0, 20).map((t: any) => ({
+    k: key(t.k), l: String(t.l || "").replace(/[<>]/g, "").trim().slice(0, 18), hide: !!t.hide })).filter((t: any) => t.k);
+  const side = (a: any) => (Array.isArray(a) ? a : []).slice(0, 30).map(key).filter(Boolean);
+  const v = { v: 1, tabs, home: key(body.home) || "desk",
+    cards: { left: side(body.cards?.left), right: side(body.cards?.right) },
+    min: side(body.min), at: new Date().toISOString(), by: who };
+  // Reset = empty lists; the app fills in its default order for anything not listed.
+  if (body.reset) { v.tabs = []; v.home = "desk"; v.cards = { left: [], right: [] }; v.min = []; }
+  await putSetting("layout", v, who);
+  return v;
+}
+
 let VAPID: { pub: string; jwk: any } | null = null;
 async function vapid() {
   if (VAPID) return VAPID;
@@ -3374,7 +3392,7 @@ Deno.serve(async (req) => {
     }
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
          "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "performance", "help", "jason_today", "jason_sweep", "jason_score",
-         "push_key", "push_sub", "push_list", "push_remove", "push_test"].includes(fn)) {
+         "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -3411,6 +3429,9 @@ Deno.serve(async (req) => {
       if (fn === "jason_today") return json(await jasonToday());
       if (fn === "jason_score") return json(await jasonScorecard());
       if (fn === "jason_sweep") return json(await jasonSweep(body, who));
+      // ---- v3.8 your layout: one shared layout for the Desk (otto_settings "layout")
+      if (fn === "layout_get") return json({ ok: true, layout: await setting("layout") });
+      if (fn === "layout_set") return json({ ok: true, layout: await layoutSet(body, who) });
       if (fn === "limits_get") return json({ ok: true, limits: await getLimits() });
       if (fn === "push_key") return json({ ok: true, key: (await vapid()).pub });
       if (fn === "push_sub") return json({ ok: true, ...(await pushSubscribe(body, who)) });
