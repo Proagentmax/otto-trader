@@ -1,5 +1,8 @@
 // Otto Trader — server side. One Edge Function.
 //
+//   v3.4 (5 Oct 2026): enter with the exit already set. Opening cards carry
+//   plan.stop_option; after the fill Otto places the stop + TradingView alerts
+//   and puts up a close card when one fires (otto_actions.exit, 008_v34.sql).
 //   v3.3 (5 Oct 2026): ?fn=performance (Results page), limits_get/limits_set
 //   (editable limits & goals, otto_settings), ?fn=help (app-questions chat).
 //   v3.2 (5 Oct 2026): the AI is called Jarvis; ?fn=ticket (Buy/Sell form);
@@ -1023,9 +1026,11 @@ async function proposeAction(input: any, who: string, opts: { manual?: boolean }
   // v3.1: an opening option order must carry its plan, so the scorecard can grade it.
   const opening = calls.some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open"));
   const plan = input.plan && typeof input.plan === "object" ? input.plan : null;
-  if (opening && !opts.manual && (!plan || !plan.tv_symbol || !plan.direction || !plan.setup || plan.tp1 == null || plan.stop == null)) {
-    throw new Error("An opening option order needs plan: {tv_symbol (EXCHANGE:TICKER), direction ('up'|'down' on the underlying), setup, tp1, stop (underlying prices), entry_underlying?, expires? (YYYY-MM-DD)}. Add it and propose again.");
+  // v3.4: ...and its exits. No exits, no card (Jarvis and the manual ticket alike).
+  if (opening && (!plan || !plan.tv_symbol || !plan.direction || !plan.setup || plan.tp1 == null || plan.stop == null || !(Number(plan.stop_option) > 0))) {
+    throw new Error("An opening option order needs its plan and exits: {tv_symbol (EXCHANGE:TICKER), direction ('up'|'down' on the underlying), setup, tp1, stop (underlying prices), stop_option (OPTION price for the protective stop, below the limit), entry_underlying?, expires? (YYYY-MM-DD)}. Add it and propose again.");
   }
+  void opts;
   const out: any[] = [];
   const review: string[] = [];
   let cost = 0, costKnown = true;
@@ -1051,6 +1056,7 @@ async function proposeAction(input: any, who: string, opts: { manual?: boolean }
     }
     out.push({ service, tool, args });
   }
+  const exit = opening ? exitSpec(out, plan) : null;
   let account_value: number | null = null;
   if (out.some((c) => c.service === "rh" && c.tool.startsWith("place_"))) {
     try {
@@ -1069,12 +1075,17 @@ async function proposeAction(input: any, who: string, opts: { manual?: boolean }
     try { const b = await sentimentNow(); banner = { verdict: b.verdict, score: b.score, fresh: b.fresh, at: b.at }; } catch { /* */ }
     try { checks = await ruleChecks(out, plan, risk, banner); } catch (e) { checks = [{ ok: null, text: "Rule check failed: " + (e as Error).message }]; }
     try { checks = checks.concat(await limitChecks(risk.cost)); } catch { /* */ }
+    if (exit) {
+      const atStop = (exit.entry_limit - exit.stop_option) * 100 * exit.qty;
+      checks.push({ ok: atStop <= LIM.max_trade_loss, text: `If the stop fills at $${exit.stop_option.toFixed(2)}: about −$${atStop.toFixed(0)} (limit $${LIM.max_trade_loss}). Option stops can fill lower on a fast move.` });
+    }
   }
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
     title: String(input.title || "Action").slice(0, 140),
     summary: String(input.summary || "").slice(0, 4000),
     calls: out, risk, review: review.join("\n\n---\n\n"), status: "pending", created_by: who,
     plan: plan ? { ...plan, setup: String(plan.setup).toLowerCase().slice(0, 40) } : null, banner, checks,
+    ...(exit ? { exit: { ...exit, state: "planned", log: [] } } : {}),
   }) });
   return publicAction(rows[0]);
 }
@@ -1088,7 +1099,7 @@ function publicAction(a: any) {
   return { id: a.id, title: a.title, summary: a.summary, calls, risk: a.risk, review: a.review,
            status: a.status, result: a.result, created_at: a.created_at, created_by: a.created_by,
            decided_by: a.decided_by, decided_at: a.decided_at,
-           plan: a.plan || null, banner: a.banner || null, checks: a.checks || [], order_id: a.order_id || null, outcome: a.outcome || null };
+           plan: a.plan || null, banner: a.banner || null, checks: a.checks || [], order_id: a.order_id || null, outcome: a.outcome || null, exit: a.exit || null };
 }
 
 async function actOn(id: string, decision: string, who: string) {
@@ -1131,6 +1142,18 @@ async function actOn(id: string, decision: string, who: string) {
   const fin = await db("otto_actions?id=eq." + id, { method: "PATCH",
     body: JSON.stringify({ status: failed ? "failed" : "done", result: results, ...(orderId ? { order_id: String(orderId) } : {}) }) });
   await logDesk("system", "Otto", `${failed ? "✗" : "✓"} ${a.title} — ${failed ? "failed" : "done"} (approved by ${who})`, id);
+  // v3.4: the entry is in — hand its exits to the exit engine.
+  if (a.exit && a.exit.state === "planned") {
+    const ex: any = { ...a.exit, state: failed ? "dead" : "waiting_fill", order_id: orderId ? String(orderId) : null };
+    exitLog(ex, failed ? "Entry failed, exits not armed" : `Approved by ${who}; waiting for the fill`);
+    await saveExit(id, ex).catch(() => {});
+    if (!failed) background((async () => {
+      await new Promise((r) => setTimeout(r, 4000));
+      const rows = await db("otto_actions?id=eq." + id + "&select=*");
+      if (rows?.[0]) await exitTick(rows[0]);
+    })());
+    return publicAction({ ...fin[0], exit: ex });
+  }
   return publicAction(fin[0]);
 }
 
@@ -1210,6 +1233,10 @@ async function panel() {
   }
   const pend = await settle(db("otto_actions?status=in.(pending,running)&order=created_at.desc&limit=10&select=*"));
   out.pending = pend.ok ? pend.v.map(publicAction) : [];
+  const ex = await settle(db("otto_actions?select=id,title,exit,created_at&exit->>state=in.(waiting_fill,armed,closed,dead)&order=created_at.desc&limit=8"));
+  out.exits = ex.ok ? ex.v.filter((r: any) => ["waiting_fill", "armed"].includes(r.exit.state) ||
+    Date.now() - Date.parse(r.exit.closed_at || r.created_at) < 18 * 3600e3).slice(0, 5) : [];
+  if (has("rh") && out.exits.some((r: any) => ["waiting_fill", "armed"].includes(r.exit.state))) background(exitsTick());
   return out;
 }
 
@@ -1227,7 +1254,7 @@ You can READ anything with the tv__ and rh__ tools, as often as you need. You ca
 - Before proposing an option order: get the chain (rh__get_option_chains → rh__get_option_instruments) for the real option_id, check the quote (rh__get_option_quotes), and use a limit price. The server runs Robinhood's review and computes the risk vs the Agentic account.
 - One idea = one card. Several suggestions at once = several cards, each with its own title.
 - Don't propose new TradingView alerts or Jason-level alerts unless they explicitly ask for one. For now the desk shows prices only.
-- Every OPENING option card must include plan {tv_symbol, direction, setup, tp1, stop, entry_underlying, expires}. The server runs a rule check (first 30 minutes, delta 30–40, volume > OI, 20%, expiry, binary events, earnings, banner) and shows it on the card; read its result back and mention any failed check in one line.
+- Every OPENING option card must include plan {tv_symbol, direction, setup, tp1, stop, stop_option, entry_underlying, expires}. stop_option is the OPTION price that triggers the protective stop (below your limit price); size it so (limit − stop_option) × 100 × contracts stays inside their max loss per trade. Approving the card approves its exits too: once the buy fills, Otto itself places a stop_market sell-to-close at stop_option (re-placed every morning — Robinhood stop orders are day orders) and two TradingView alerts on the stock (wrong-if = plan.stop on a 15-minute close, TP1 on touch), and puts up a close card when one fires. So never propose a separate stop order or alerts for that trade, and only one single-leg buy per opening card. To close a protected trade early, include rh cancel_option_order for its stop_order_id (listed in the desk context) BEFORE the sell, in the same card. The server runs a rule check (first 30 minutes, delta 30–40, volume > OI, 20%, expiry, binary events, earnings, banner) and shows it on the card; read its result back and mention any failed check in one line.
 
 THE SENTIMENT BANNER
 The app shows a live banner built from Josh's Intermarket Sentiment Cheat Sheet on TradingView data (10Y, DXY, USD/JPY, crude, ES/NQ/YM). Its current verdict is in the desk context line. It is Josh's sheet, not Jason's: where it disagrees with Jason (Josh's sheet trades the 9:30 opening range; Jason says no first 30 minutes) say so and don't pick. Never attach Josh's sheet sizing ($15 / 15%) to anything — sizing is only the 20% check.
@@ -1287,10 +1314,11 @@ const PROPOSE_TOOL = (writeHelp: string) => ({
           setup: { type: "string", enum: ["rejection at resistance", "support bounce", "gap failure", "breakdown", "breakout", "trend continuation", "other"] },
           entry_underlying: { type: "number", description: "Underlying price at the entry trigger" },
           tp1: { type: "number", description: "TP1 on the underlying" },
-          stop: { type: "number", description: "Underlying price that proves the idea wrong (your exit level)" },
+          stop: { type: "number", description: "Underlying price that proves the idea wrong (your exit level) — Otto alerts on a 15-minute close through it" },
+          stop_option: { type: "number", description: "OPTION price (per share, below the limit) where Otto's protective stop_market sell-to-close triggers. Otto places it after the fill." },
           expires: { type: "string", description: "Option expiration YYYY-MM-DD" },
         },
-        required: ["tv_symbol", "direction", "setup", "tp1", "stop"],
+        required: ["tv_symbol", "direction", "setup", "tp1", "stop", "stop_option"],
       },
     },
     required: ["title", "summary", "calls"],
@@ -1445,7 +1473,10 @@ async function desk(req: Request, who: string, _apiKey: string) {
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const bn = sent.ok ? `Banner: ${sent.v.verdict} (score ${sent.v.score}, ${sent.v.fresh}/${sent.v.total} legs fresh; fired: ${sent.v.rows.filter((r: any) => r.fired).map((r: any) => "row " + r.row).join(", ") || "none"}).` : "Banner: unavailable.";
   const LIM = await getLimits().catch(() => LIMIT_DEFAULTS);
-  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their own limits (Phase ${LIM.phase}): max loss per trade $${LIM.max_trade_loss}, weekly loss limit $${LIM.weekly_loss}, ${LIM.max_trades_day} trades/day, warn over ${LIM.warn_pct}% of the account — size ideas inside these and say so when an idea would break one.]`;
+  const prot = await settle(db("otto_actions?select=title,exit&exit->>state=in.(waiting_fill,armed)&limit=5"));
+  const protLine = prot.ok && prot.v.length ? " Protected trades (Otto runs their stop and alerts; to close one early, cancel_option_order its stop_order_id first, then sell, in one card): " +
+    prot.v.map((r: any) => `${r.title} [${r.exit.state}${r.exit.stop_order_id ? `, stop_order_id ${r.exit.stop_order_id} at $${r.exit.stop_option}` : ""}, wrong-if ${r.exit.wrong_if}, TP1 ${r.exit.tp1}]`).join("; ") + "." : "";
+  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their own limits (Phase ${LIM.phase}): max loss per trade $${LIM.max_trade_loss}, weekly loss limit $${LIM.weekly_loss}, ${LIM.max_trades_day} trades/day, warn over ${LIM.warn_pct}% of the account — size ideas inside these and say so when an idea would break one.${protLine}]`;
 
   const msgs: any[] = history.map((m: any, i: number) => {
     const role = m.role === "assistant" ? "assistant" : "user";
@@ -2084,14 +2115,19 @@ async function orderTicket(b: any, who: string, author: string) {
   const label = `${sym} ${strike % 1 ? strike : Math.round(strike)}${type === "put" ? "P" : "C"} ${exp.slice(5).replace("-", "/")}`;
   const title = `${side === "buy_open" ? "Buy" : "Sell"} ${qty} ${label} @ ${price.toFixed(2)}`;
   let plan: any = null;
-  if (side === "buy_open" && b.tp1 != null && b.stop != null && b.tp1 !== "" && b.stop !== "") {
+  if (side === "buy_open") {
+    if (b.tp1 == null || b.tp1 === "" || b.stop == null || b.stop === "" || !(Number(b.stop_option) > 0))
+      throw new Error("A buy needs its exits: TP1 and the wrong-if price (on the stock) and the stop on the option.");
     const tv = await tvSymbolFor(sym);
-    if (tv) plan = { tv_symbol: tv, direction: type === "put" ? "down" : "up", setup: String(b.setup || "other"), tp1: Number(b.tp1), stop: Number(b.stop), expires: exp, manual: true };
+    if (!tv) throw new Error(`Couldn't find ${sym} on TradingView for the exit alerts.`);
+    plan = { tv_symbol: tv, direction: type === "put" ? "down" : "up", setup: String(b.setup || "other"), tp1: Number(b.tp1), stop: Number(b.stop),
+      stop_option: Number(b.stop_option), expires: exp, manual: true };
   }
   const summary = [
     `Underlying / contract   ${label}`,
     `Side / qty / type       ${side === "buy_open" ? "Buy to open" : "Sell to close"} · ${qty} · limit $${price.toFixed(2)}`,
-    side === "buy_open" ? `Plan                    ${plan ? `TP1 ${plan.tp1} · stop ${plan.stop} · ${plan.setup}` : "no TP1/stop given — this one won't be scored"}` : "",
+    side === "buy_open" && plan ? `Plan                    TP1 ${plan.tp1} · wrong if ${plan.stop} · ${plan.setup}` : "",
+    side === "buy_open" && plan ? `Exits (Otto sets them)  stop on the option at $${Number(plan.stop_option).toFixed(2)} · alerts at ${plan.stop} (15-min close) and ${plan.tp1}` : "",
     b.note ? `Why                     ${String(b.note).slice(0, 300)}` : "",
     `Source                  Order ticket, entered by ${author}`,
   ].filter(Boolean).join("\n");
@@ -2127,6 +2163,7 @@ async function alertWatch(apiKey: string) {
     const name = e.name || e.alert_name || "", sym = e.symbol || e.ticker || "", msg = e.message || "";
     const line = `🔔 TradingView alert fired: ${name || sym}${msg && msg !== name ? " — " + msg : ""}`;
     await logDesk("system", "TradingView", line.slice(0, 500));
+    if (/^Otto ·/.test(name)) continue;           // v3.4: the exit engine handles its own alerts
     if (reads >= 6) continue;                     // cap the reads, never the log lines
     reads++;
     const calls = await loadBrain();
@@ -2141,6 +2178,234 @@ In 3–4 short sentences for Ifoma and Josh: what this level is (search Jason's 
   return { ok: true, fired: fresh.length };
 }
 
+
+/* ===================================================================== v3.4
+   5 Oct 2026 — enter with the exit already set.
+
+   An opening option card now carries plan.stop_option (the OPTION price that
+   triggers the protective stop). Approving the card approves the entry AND its
+   exits. Once the buy fills, Otto itself:
+     1. places a stop_market sell-to-close at stop_option. Robinhood only allows
+        stop_market as a day order, so Otto re-places it every morning at 9:30;
+     2. sets two TradingView alerts on the stock: wrong-if (plan.stop) on a
+        15-minute close, and TP1 on touch;
+     3. when one of those alerts fires, puts up a close card (cancel the stop,
+        then sell to close at market). Nothing sells without an Approve;
+     4. when the position goes flat (stop filled, close card, or closed by
+        hand), cancels any leftover stop and deletes the trade's alerts.
+   State lives in otto_actions.exit (008_v34.sql). Driven by the 2-minute
+   cron (cron_alerts), right after an Approve, and when the Desk panel loads. */
+
+const EXIT_OPEN_ORDER = new Set(["queued", "confirmed", "unconfirmed", "partially_filled", "new", "pending_cancelled"]);
+const EXIT_DEAD_ORDER = new Set(["cancelled", "rejected", "failed", "voided", "expired"]);
+
+function exitSpec(out: any[], plan: any) {
+  const opens = out.filter((c) => c.tool === "place_option_order" && (c.args.legs || []).some((l: any) => l.position_effect === "open"));
+  if (opens.length !== 1) throw new Error("Exits work on one opening option order per card. Split it into separate cards.");
+  const o = opens[0], legs = o.args.legs || [];
+  if (legs.length !== 1 || legs[0].side !== "buy") throw new Error("Exits work on a single-leg buy to open (a long call or put).");
+  const entry = Number(o.args.price), stopOpt = Number(plan.stop_option), qty = Math.floor(Number(o.args.quantity));
+  if (!(qty >= 1)) throw new Error("quantity must be a whole number of contracts");
+  if (!(entry > 0)) throw new Error("Use a limit price on the entry so the stop can be checked against it.");
+  if (!(stopOpt > 0 && stopOpt < entry)) throw new Error(`plan.stop_option ($${stopOpt}) must be above 0 and below the entry limit ($${entry}).`);
+  const dir = plan.direction === "down" ? "down" : "up";
+  const tp1 = Number(plan.tp1), wrong = Number(plan.stop);
+  if (!(tp1 > 0) || !(wrong > 0)) throw new Error("plan.tp1 and plan.stop must be prices on the underlying");
+  if (dir === "up" ? !(tp1 > wrong) : !(tp1 < wrong)) throw new Error(`For a ${dir === "up" ? "call (up)" : "put (down)"} TP1 must be ${dir === "up" ? "above" : "below"} the wrong-if price.`);
+  return { option_id: legs[0].option_id, qty, entry_limit: entry, stop_option: Math.round(stopOpt * 100) / 100,
+    tv_symbol: String(plan.tv_symbol), direction: dir, wrong_if: wrong, tp1, expires: plan.expires || null };
+}
+
+async function saveExit(id: string, ex: any) {
+  await db("otto_actions?id=eq." + id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ exit: ex }) });
+}
+function exitLog(ex: any, text: string) {
+  ex.log = [...(ex.log || []), { at: new Date().toISOString(), text }].slice(-30);
+}
+const rthNow = () => { const e = etParts(); return !["Sat", "Sun"].includes(e.wd) && e.min >= 570 && e.min < 960; };
+const orderIdOf = (j: any) => j?.data?.order?.id || j?.data?.id || j?.order?.id || j?.id || null;
+
+async function optOrder(acct: string, id: string) {
+  const j = mcpJson(await call("rh", "get_option_orders", { account_number: acct, order_id: id }));
+  return (j?.data?.orders || j?.orders || [])[0] || null;
+}
+async function cardBusy(id: string | null | undefined) {
+  if (!id) return false;
+  return db("otto_actions?id=eq." + id + "&select=status").then((r: any) => ["pending", "running"].includes(r?.[0]?.status)).catch(() => false);
+}
+
+async function placeStop(a: any, ex: any, acct: string) {
+  try {
+    const r = await call("rh", "place_option_order", { account_number: acct,
+      legs: [{ option_id: ex.option_id, side: "sell", position_effect: "close" }],
+      quantity: String(ex.qty), type: "stop_market", stop_price: ex.stop_option.toFixed(2),
+      time_in_force: "gfd", market_hours: "regular_hours", ref_id: crypto.randomUUID() });
+    ex.stop_order_id = orderIdOf(mcpJson(r)); ex.stop_error = null;
+    exitLog(ex, `Stop placed: sell to close at $${ex.stop_option.toFixed(2)} (day order)`);
+    return true;
+  } catch (e) {
+    ex.stop_error = (e as Error).message.slice(0, 300);
+    exitLog(ex, "Stop order FAILED: " + ex.stop_error);
+    await logDesk("system", "Otto", `⚠ ${a.title}: the protective stop at $${ex.stop_option.toFixed(2)} could not be placed (${ex.stop_error}). This trade has NO stop working. Close it or set one by hand.`, a.id);
+    return false;
+  }
+}
+
+async function armAlerts(a: any, ex: any) {
+  const exp = ex.expires && /^\d{4}-\d{2}-\d{2}$/.test(ex.expires) ? ex.expires + "T21:00:00Z" : new Date(Date.now() + 14 * 864e5).toISOString();
+  const tk = ex.tv_symbol.split(":").pop();
+  const mk = async (kind: "wrong" | "tp1") => {
+    const up = ex.direction === "up";
+    const value = kind === "wrong" ? ex.wrong_if : ex.tp1;
+    const type = kind === "wrong" ? (up ? "cross_down" : "cross_up") : (up ? "cross_up" : "cross_down");
+    const res = kind === "wrong" ? "15" : "1";
+    const args = { symbol: ex.tv_symbol,
+      name: `Otto · ${tk} ${kind === "wrong" ? "WRONG IF" : "TP1"} ${value} · ${String(a.id).slice(0, 8)}`,
+      message: `${tk} ${kind === "wrong" ? "closed a 15-minute bar through your wrong-if" : "reached TP1"} ${value} (Otto trade: ${a.title})`,
+      conditions: [{ type, frequency: kind === "wrong" ? "on_bar_close" : "on_first_fire", resolution: res,
+        cross_interval: true, series: [{ type: "barset" }, { type: "value", value }] }],
+      resolution: res, expiration: exp, popup: false, mobile_push: false, email: false };
+    try {
+      const j = mcpJson(await call("tv", "mcp-tv-create-alert", args));
+      const id = j?.alert_id ?? j?.data?.alert_id ?? null;
+      exitLog(ex, `Alert set: ${kind === "wrong" ? "wrong-if" : "TP1"} ${tk} ${value}`);
+      return id;
+    } catch (e) {
+      const m = (e as Error).message;
+      exitLog(ex, `Alert FAILED (${kind}): ${m.slice(0, 200)}`);
+      ex.alert_error = /max_primitive_alerts_count_exceeded/.test(m) ? "TradingView alert limit reached (20) — delete an old alert" : m.slice(0, 200);
+      return null;
+    }
+  };
+  ex.alerts = { wrong: await mk("wrong"), tp1: await mk("tp1") };
+}
+
+async function cleanupExit(ex: any, acct: string) {
+  if (ex.stop_order_id) {
+    try {
+      const o = await optOrder(acct, ex.stop_order_id);
+      if (o && EXIT_OPEN_ORDER.has(o.state)) { await call("rh", "cancel_option_order", { account_number: acct, order_id: ex.stop_order_id }); exitLog(ex, "Leftover stop cancelled"); }
+    } catch (e) { exitLog(ex, "Couldn't cancel the leftover stop: " + (e as Error).message.slice(0, 150)); }
+  }
+  const ids = [ex.alerts?.wrong, ex.alerts?.tp1].filter((x) => x != null).map(Number);
+  if (ids.length) {
+    try { await call("tv", "mcp-tv-delete-alert", { alert_ids: ids }); exitLog(ex, "Trade alerts removed"); }
+    catch (e) { exitLog(ex, "Couldn't remove the trade alerts: " + (e as Error).message.slice(0, 150)); }
+  }
+}
+
+async function heldQty(acct: string, optionId: string) {
+  const j = mcpJson(await call("rh", "get_option_positions", { account_number: acct, option_ids: optionId }));
+  return (j?.data?.positions || []).filter((p: any) => p.type === "long").reduce((s: number, p: any) => s + Number(p.quantity || 0), 0);
+}
+
+async function exitTick(a: any) {
+  const ex: any = { ...(a.exit || {}) };
+  const acct = await agenticAccount();
+  const today = etParts().date;
+
+  if (ex.state === "waiting_fill") {
+    let o: any = ex.order_id ? await optOrder(acct, ex.order_id) : null;
+    if (!o) {
+      const j = mcpJson(await call("rh", "get_option_orders", { account_number: acct, created_at_gte: a.decided_at || a.created_at }));
+      o = (j?.data?.orders || []).find((x: any) => (x.legs || []).some((l: any) => l.option_id === ex.option_id && l.position_effect === "open")) || null;
+      if (o) ex.order_id = o.id;
+    }
+    if (!o) return { id: a.id, state: ex.state, note: "entry order not found yet" };
+    if (EXIT_DEAD_ORDER.has(o.state)) {
+      ex.state = "dead"; exitLog(ex, `Entry ${o.state}, nothing to protect`);
+      await saveExit(a.id, ex);
+      await logDesk("system", "Otto", `${a.title}: the entry was ${o.state}, so no stop or alerts were set.`, a.id);
+      return { id: a.id, state: ex.state };
+    }
+    if (o.state !== "filled") { await saveExit(a.id, ex); return { id: a.id, state: ex.state, order: o.state }; }
+    const execs = (o.legs || [])[0]?.executions || [];
+    const qf = execs.reduce((s: number, x: any) => s + Number(x.quantity), 0);
+    ex.fill_price = qf ? execs.reduce((s: number, x: any) => s + Number(x.price) * Number(x.quantity), 0) / qf : Number(o.price);
+    ex.qty = Math.floor(Number(o.processed_quantity || ex.qty));
+    ex.state = "armed"; ex.armed_at = new Date().toISOString(); ex.fired = [];
+    exitLog(ex, `Entry filled: ${ex.qty} @ $${ex.fill_price.toFixed(2)}`);
+    await armAlerts(a, ex);
+    let stopOk = false;
+    if (rthNow()) { ex.stop_try_day = today; ex.stop_tries = 1; stopOk = await placeStop(a, ex, acct); }
+    await saveExit(a.id, ex);
+    const loss = (ex.fill_price - ex.stop_option) * 100 * ex.qty;
+    await logDesk("system", "Otto", `✓ ${a.title}: filled at $${ex.fill_price.toFixed(2)}. ` +
+      (stopOk ? `Stop on at $${ex.stop_option.toFixed(2)} (about −$${loss.toFixed(0)} if it fills there). ` : rthNow() ? "" : "Stop goes on at 9:30 ET. ") +
+      `Alerts: wrong-if ${ex.wrong_if} ${ex.alerts?.wrong != null ? "✓" : "✗"}, TP1 ${ex.tp1} ${ex.alerts?.tp1 != null ? "✓" : "✗"}.` +
+      (ex.alert_error ? ` (${ex.alert_error})` : ""), a.id);
+    return { id: a.id, state: ex.state };
+  }
+  if (ex.state !== "armed") return { id: a.id, state: ex.state };
+
+  const held = await heldQty(acct, ex.option_id);
+  if (held <= 0) {
+    let how = "closed";
+    if (ex.stop_order_id) { try { const s = await optOrder(acct, ex.stop_order_id); if (s?.state === "filled") how = "stopped out"; } catch { /* */ } }
+    await cleanupExit(ex, acct);
+    ex.state = "closed"; ex.closed_at = new Date().toISOString(); ex.closed_how = how;
+    exitLog(ex, `Position flat (${how})`);
+    await saveExit(a.id, ex);
+    await logDesk("system", "Otto", `${a.title}: position is flat (${how}). Leftover stop and trade alerts cleaned up. Write the one-line reason in the Journal.`, a.id);
+    return { id: a.id, state: ex.state };
+  }
+  if (held !== ex.qty) { exitLog(ex, `Holding ${held} now (was ${ex.qty})`); ex.qty = held; }
+
+  // Keep the stop on during market hours (Robinhood's stop_market is a day order). At most 3 tries a day.
+  if (rthNow()) {
+    let need = !ex.stop_order_id;
+    if (ex.stop_order_id) { try { const s = await optOrder(acct, ex.stop_order_id); need = !s || EXIT_DEAD_ORDER.has(s.state); } catch { need = false; } }
+    if (ex.stop_try_day !== today) { ex.stop_try_day = today; ex.stop_tries = 0; }
+    if (need && (ex.stop_tries || 0) < 3 && !(await cardBusy(ex.close_card))) { ex.stop_tries = (ex.stop_tries || 0) + 1; await placeStop(a, ex, acct); }
+  }
+
+  // Did one of this trade's own alerts fire?
+  const ids = [ex.alerts?.wrong, ex.alerts?.tp1].filter((x) => x != null).map(String);
+  if (ids.length) {
+    const j = mcpJson(await call("tv", "mcp-tv-get-alerts-log", { days: 1, limit: 100 }));
+    const evs = (j?.events || j?.data?.events || []).filter((e: any) => ids.includes(String(e.tv_alert_id ?? e.alert_id)) &&
+      Date.parse(e.fired_at || e.fire_time || 0) > Date.parse(ex.armed_at));
+    const key = (e: any) => String(e.fire_id ?? e.fired_at);
+    const fresh = evs.filter((e: any) => !(ex.fired || []).includes(key(e)));
+    if (fresh.length) {
+      ex.fired = [...(ex.fired || []), ...fresh.map(key)].slice(-60);
+      const recent = ex.close_at && Date.now() - Date.parse(ex.close_at) < 10 * 60_000;
+      if (!(await cardBusy(ex.close_card)) && !recent) {
+        const wrong = fresh.some((e: any) => String(e.tv_alert_id ?? e.alert_id) === String(ex.alerts.wrong));
+        const why = wrong ? `wrong-if ${ex.wrong_if} hit (15-minute close)` : `TP1 ${ex.tp1} reached`;
+        let stopOpen = false;
+        if (ex.stop_order_id) { try { const s = await optOrder(acct, ex.stop_order_id); stopOpen = !!s && EXIT_OPEN_ORDER.has(s.state); } catch { /* */ } }
+        const calls: any[] = [];
+        if (stopOpen) calls.push({ service: "rh", tool: "cancel_option_order", args: { order_id: ex.stop_order_id } });
+        calls.push({ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: ex.option_id, side: "sell", position_effect: "close" }],
+          quantity: String(ex.qty), type: "market", time_in_force: "gfd" } });
+        const card = await proposeAction({ title: `Close ${String(a.title).replace(/^Buy\s+/i, "")} (${wrong ? "wrong if hit" : "TP1"})`,
+          summary: [`Why          ${why}`,
+            `Plan         ${wrong ? "out: the idea is proven wrong" : "TP1: bank it (1 contract = no runner)"}`,
+            `Order        ${stopOpen ? "cancel the $" + ex.stop_option.toFixed(2) + " stop, then " : ""}sell to close ${ex.qty} at market`,
+            `If you skip  ${stopOpen ? "the stop stays on underneath" : "⚠ no stop is working on this trade"}`].join("\n"),
+          calls }, "otto");
+        ex.close_card = card.id; ex.close_at = new Date().toISOString();
+        exitLog(ex, `${why} → close card ${String(card.id).slice(0, 8)}`);
+        await logDesk("assistant", "Jarvis", `${a.title}: ${why}. Your plan says ${wrong ? "out" : "take it"}. The close card is up${stopOpen ? "; the stop stays on until someone approves it" : ""}.`, card.id);
+      }
+    }
+  }
+  await saveExit(a.id, ex);
+  return { id: a.id, state: ex.state, held };
+}
+
+let EXIT_TICK_AT = 0;
+async function exitsTick(force = false) {
+  if (!force && Date.now() - EXIT_TICK_AT < 45_000) return { ok: true, skipped: "recent" };
+  EXIT_TICK_AT = Date.now();
+  const rows = await db("otto_actions?select=*&exit->>state=in.(waiting_fill,armed)&order=created_at.asc&limit=10");
+  const out: any[] = [];
+  for (const a of rows || []) {
+    try { out.push(await exitTick(a)); } catch (e) { out.push({ id: a.id, error: (e as Error).message.slice(0, 200) }); }
+  }
+  return { ok: true, n: (rows || []).length, out };
+}
 
 /* ===================================================================== v3.3
    5 Oct 2026 — Results page, editable limits & goals, Help chat.
@@ -2371,7 +2636,10 @@ Deno.serve(async (req) => {
     const et = etParts();
     const force = new URL(req.url).searchParams.get("force") === "1";
     if (!force && (["Sat", "Sun"].includes(et.wd) || et.min < 540 || et.min > 990)) return json({ ok: true, skipped: et });
-    background(alertWatch(Deno.env.get("ANTHROPIC_KEY") || ""));
+    background((async () => {
+      try { await exitsTick(true); } catch (e) { console.error("exits", e); }
+      await alertWatch(Deno.env.get("ANTHROPIC_KEY") || "");
+    })());
     return json({ ok: true, started: "alerts" }, 202);
   }
   if (fn0 === "cron_morning" || fn0 === "cron_weekly") {

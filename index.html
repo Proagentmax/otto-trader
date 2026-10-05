@@ -428,6 +428,10 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .dk-sum{font-family:var(--mono);font-size:12.3px;white-space:pre-wrap;margin:0;color:var(--ink)}
 .dk-calls{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);margin-top:8px}
 .dk-risk{font-size:12.5px;margin-top:8px}
+.dk-exit{border:1px solid var(--line,#2a2f2c);border-radius:9px;padding:8px 10px;margin-top:8px;font-size:12.5px}
+.dk-exit .ex-h{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px}
+.dk-exit .ex-row{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+.dk-exit details{margin-top:4px}.dk-exit details pre{white-space:pre-wrap;font-size:11.5px;margin:4px 0 0}
 .dk-warnbox{border:1px solid rgba(245,180,0,.45);background:rgba(245,180,0,.08);border-radius:9px;padding:7px 10px;font-size:12.5px;margin-top:8px}
 .dk-act details{margin-top:8px;font-size:12px;color:var(--ink-2)}
 .dk-act details pre{white-space:pre-wrap;font-family:var(--mono);font-size:11.5px;max-height:220px;overflow:auto;background:var(--bg);padding:8px;border-radius:8px}
@@ -836,11 +840,13 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
       <div><label class="f" for="tkQty">Contracts</label><input class="f" id="tkQty" type="number" min="1" step="1" value="1"></div>
       <div><label class="f" for="tkPrice">Limit price (per share)</label><input class="f" id="tkPrice" type="number" step="0.01" inputmode="decimal" placeholder="2.10"></div>
       <div><label class="f" for="tkSetup">Setup</label><select class="f" id="tkSetup"><option>rejection at resistance</option><option>support bounce</option><option>gap failure</option><option>breakdown</option><option>breakout</option><option>trend continuation</option><option>other</option></select></div>
-      <div class="tk-open"><label class="f" for="tkTp1">TP1 (stock price)</label><input class="f" id="tkTp1" type="number" step="any" inputmode="decimal" placeholder="optional"></div>
-      <div class="tk-open"><label class="f" for="tkStop">Wrong if price hits</label><input class="f" id="tkStop" type="number" step="any" inputmode="decimal" placeholder="optional"></div>
+      <div class="tk-open"><label class="f" for="tkTp1">TP1 (stock price)</label><input class="f" id="tkTp1" type="number" step="any" inputmode="decimal" placeholder="required"></div>
+      <div class="tk-open"><label class="f" for="tkStop">Wrong if (stock, 15-min close)</label><input class="f" id="tkStop" type="number" step="any" inputmode="decimal" placeholder="required"></div>
+      <div class="tk-open"><label class="f" for="tkStopOpt">Stop on the option ($)</label><input class="f" id="tkStopOpt" type="number" step="0.01" inputmode="decimal" placeholder="required, below the limit"></div>
+      <div class="tk-open"><label class="f">If the stop fills there</label><div class="f mono" id="tkLoss" style="padding:9px 2px;color:var(--ink-2)">—</div></div>
     </div>
     <label class="f" for="tkNote" style="margin-top:10px">Why (one line)</label><input class="f" id="tkNote" placeholder="Rejection at 760 gap, rates rising">
-    <p class="hint" id="tkMsg">Add TP1 and the "wrong if" price on a buy and the Scorecard can grade it.</p>
+    <p class="hint" id="tkMsg">A buy needs its exits. After the fill Otto puts the stop on the option and sets alerts at your wrong-if and TP1. When one fires you get a close card.</p>
   </div>
   <div class="ft"><button class="btn" id="tkCancel">Cancel</button><button class="btn solid" id="tkGo">Make the card</button></div>
 </dialog>
@@ -1791,7 +1797,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.3.0";
+const BUILD="3.4.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2552,6 +2558,12 @@ function dkRenderRight(){
       :`<div class="dk-row"><span class="mut">Open option positions</span><span>${a.options_error?`<span class="dk-err">error</span>`:"none"}</span></div>`;
   } else h+=`<div class="mut">Loading…</div>`;
   h+=`</div>`;
+  // v3.4: trades with their exits
+  const exs=Array.isArray(p.exits)?p.exits:[];
+  if(exs.length)h+=`<div class="dk-cardx"><div class="dk-h">Protected trades <b>${exs.filter(r=>r.exit.state==="armed").length} open</b></div>`+
+    exs.map(r=>{const x=r.exit,[tg,lb]=EX_STATE[x.state]||["",x.state];
+      return `<div class="dk-row"><span>${esc(r.title)}</span><span class="dk-tag ${tg}">${esc(lb)}</span></div>`+
+        (x.state==="armed"?`<div class="mut" style="font-size:11.5px;margin:-2px 0 6px">stop $${(+x.stop_option).toFixed(2)} ${x.stop_order_id?"✓":"✗"} · wrong if ${esc(x.wrong_if)} · TP1 ${esc(x.tp1)}</div>`:"")}).join("")+`</div>`;
   // Cards waiting
   const pend=Object.values(DK.acts).filter(a=>a.status==="pending"||a.status==="running").sort((a,b)=>String(b.created_at).localeCompare(a.created_at));
   h+=`<div class="dk-cardx"><div class="dk-h">Waiting for approval <b>${pend.length}</b></div>`+
@@ -2596,10 +2608,11 @@ function dkCard(a){
     ${a.summary?`<pre class="dk-sum">${esc(a.summary)}</pre>`:""}
     ${risk}
     ${dkChecks(a)}
+    ${dkExit(a)}
     <div class="dk-calls">${calls}</div>
     ${a.review?`<details><summary>Robinhood's own review</summary><pre>${esc(a.review)}</pre></details>`:""}
     ${res}
-    <div class="dk-btns">${st==="pending"?`<button class="dk-btn go" data-ok="1">Approve &amp; ${(a.calls||[]).some(c=>/^place_/.test(c.tool))?"place":"run"}</button><button class="dk-btn sec" data-no="1">Reject</button>`:""}<button class="dk-btn j" data-jason="1">Send to Jason</button></div>
+    <div class="dk-btns">${st==="pending"?`<button class="dk-btn go" data-ok="1">${a.exit?"Approve entry + exits":`Approve &amp; ${(a.calls||[]).some(c=>/^place_/.test(c.tool))?"place":"run"}`}</button><button class="dk-btn sec" data-no="1">Reject</button>`:""}<button class="dk-btn j" data-jason="1">Send to Jason</button></div>
   </div>`;
 }
 function dkRenderMsgs(stick){
@@ -2861,6 +2874,25 @@ function dkRenderBanner(){
 }
 
 /* ---------- card rule check ---------- */
+/* v3.4: exits travel with the entry */
+const EX_STATE={planned:["near","exits set on fill"],waiting_fill:["near","waiting for the fill"],armed:["ok","protected"],closed:["","closed"],dead:["bad","not armed"]};
+function dkExit(a){
+  const x=a.exit;if(!x)return "";
+  const [tag,lab]=EX_STATE[x.state]||["",x.state];
+  const loss=((x.fill_price||x.entry_limit)-x.stop_option)*100*(x.qty||1);
+  const tk=String(x.tv_symbol||"").split(":").pop();
+  const al=x.alerts||{};
+  const row=(k,v)=>`<div class="ex-row"><span class="mut">${k}</span><span class="mono">${v}</span></div>`;
+  return `<div class="dk-exit"><div class="ex-h"><b>Exits</b><span class="dk-tag ${tag}">${esc(lab)}</span></div>`+
+    row("Stop on the option",`$${(+x.stop_option).toFixed(2)} · about −$${loss.toFixed(0)}`+(x.state==="armed"?(x.stop_order_id?" ✓ working":" ✗ not working"):""))+
+    row(`Wrong if (${esc(tk)}, 15-min close)`,esc(x.wrong_if)+(x.state==="armed"?(al.wrong!=null?" ✓":" ✗"):""))+
+    row(`TP1 (${esc(tk)})`,esc(x.tp1)+(x.state==="armed"?(al.tp1!=null?" ✓":" ✗"):""))+
+    (x.fill_price?row("Filled",`${x.qty} @ $${(+x.fill_price).toFixed(2)}`):"")+
+    (x.stop_error&&x.state==="armed"?`<div class="dk-err" style="margin-top:4px">Stop problem: ${esc(x.stop_error)}</div>`:"")+
+    (x.alert_error&&x.state==="armed"?`<div class="dk-err" style="margin-top:4px">Alert problem: ${esc(x.alert_error)}</div>`:"")+
+    ((x.log||[]).length?`<details><summary class="mut">Timeline (${x.log.length})</summary><pre>${x.log.map(l=>dkTime(l.at)+"  "+esc(l.text)).join("\n")}</pre></details>`:"")+
+  `</div>`;
+}
 function dkChecks(a){
   const c=a.checks||[];if(!c.length)return"";
   const pass=c.filter(x=>x.ok===true).length,fail=c.filter(x=>x.ok===false).length;
@@ -3182,22 +3214,30 @@ async function dkHelpAsk(q){
 /* ---------- v3.2: order ticket ---------- */
 $("#dkTicketBtn").addEventListener("click",()=>{
   if(DK.locked)return toast("Sign in with the Otto login first");
-  $("#tkMsg").className="hint";$("#tkMsg").textContent="Add TP1 and the “wrong if” price on a buy and the Scorecard can grade it.";
+  $("#tkMsg").className="hint";$("#tkMsg").textContent="A buy needs its exits. After the fill Otto puts the stop on the option and sets alerts at your wrong-if and TP1. When one fires you get a close card.";
   if(!$("#tkExp").value){const d=new Date();d.setDate(d.getDate()+((5-d.getDay()+7)%7||7)+(d.getDay()>=3?7:0));$("#tkExp").value=d.toISOString().slice(0,10)}
   $("#dlgTicket").showModal();
 });
 $("#tkSide").addEventListener("change",()=>$$(".tk-open").forEach(x=>x.style.display=$("#tkSide").value==="buy_open"?"":"none"));
 $("#tkCancel").addEventListener("click",()=>$("#dlgTicket").close());
+["tkPrice","tkStopOpt","tkQty"].forEach(id=>$("#"+id).addEventListener("input",()=>{
+  const p=+$("#tkPrice").value,s=+$("#tkStopOpt").value,q=Math.max(1,Math.floor(+$("#tkQty").value||1)),el=$("#tkLoss");
+  if(!(p>0)||!(s>0)){el.textContent="—";el.style.color="";return}
+  if(s>=p){el.textContent="stop must be below the limit";el.style.color="var(--dn,#ef4444)";return}
+  const L=(p-s)*100*q;el.textContent="about −$"+L.toFixed(0);el.style.color=L>100?"var(--dn,#ef4444)":"";
+}));
 $("#tkGo").addEventListener("click",async()=>{
   const b=$("#tkGo"),m=$("#tkMsg");
   const body={side:$("#tkSide").value,symbol:$("#tkSym").value.trim().toUpperCase(),type:$("#tkType").value,expiry:$("#tkExp").value,
     strike:$("#tkStrike").value,qty:$("#tkQty").value,price:$("#tkPrice").value,setup:$("#tkSetup").value,
-    tp1:$("#tkTp1").value,stop:$("#tkStop").value,note:$("#tkNote").value.trim(),author:$("#dkWho").value||"Ifoma"};
+    tp1:$("#tkTp1").value,stop:$("#tkStop").value,stop_option:$("#tkStopOpt").value,note:$("#tkNote").value.trim(),author:$("#dkWho").value||"Ifoma"};
   if(!body.symbol||!body.expiry||!body.strike||!body.price){m.className="hint dk-err";m.textContent="Ticker, expiry, strike and limit price are required.";return}
+  if(body.side==="buy_open"&&(!body.tp1||!body.stop||!(+body.stop_option>0))){m.className="hint dk-err";m.textContent="A buy needs its exits: TP1, wrong-if, and the stop on the option.";return}
+  if(body.side==="buy_open"&&+body.stop_option>=+body.price){m.className="hint dk-err";m.textContent="The stop on the option has to be below your limit price.";return}
   b.disabled=true;b.textContent="Checking with Robinhood…";
   try{
     const j=await dkApi("ticket",body);DK.acts[j.action.id]=j.action;
-    $("#dlgTicket").close();["tkStrike","tkPrice","tkTp1","tkStop","tkNote"].forEach(id=>$("#"+id).value="");
+    $("#dlgTicket").close();["tkStrike","tkPrice","tkTp1","tkStop","tkStopOpt","tkNote"].forEach(id=>$("#"+id).value="");$("#tkLoss").textContent="—";
     dkShow("desk");await dkLoadLog();dkRenderRight();toast("Card ready — review it and Approve");
   }catch(e){m.className="hint dk-err";m.textContent=String(e.message).slice(0,200)}
   b.disabled=false;b.textContent="Make the card";
