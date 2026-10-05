@@ -2,7 +2,7 @@
    Network-first for anything that changes, cache-first only for static assets.
    A cache-first HTML strategy would pin users to an old build forever, which is
    exactly the failure we already hit once by hand. */
-const VERSION = 'otto-v3.5.0';
+const VERSION = 'otto-v3.7.0';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',   // config.js is deliberately NOT precached
   './icon-192.png', './icon-512.png',
@@ -75,4 +75,22 @@ self.addEventListener('fetch', e => {
       return res;
     }))
   );
+});
+
+// v3.6: phone notifications. The server sends {title, body, url, tag, kind}.
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'Otto', body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Otto', {
+    body: d.body || '', tag: d.tag || undefined, icon: './icon-192.png', badge: './icon-192.png',
+    data: { url: d.url || './#desk' }, requireInteraction: d.kind === 'no_stop',
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || './#desk', self.registration.scope).href;
+  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const c of list) { if (c.url.startsWith(self.registration.scope) && 'focus' in c) { c.navigate(url).catch(() => {}); return c.focus(); } }
+    return clients.openWindow(url);
+  }));
 });

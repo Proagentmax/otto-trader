@@ -464,6 +464,16 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 }
 .gate2 .gcancel{display:block;margin:14px auto 0;color:var(--ink-2);font-size:13px}
 .dk-pend[hidden],.gate2 .gcancel[hidden],#sDeskLogin[hidden]{display:none!important}
+/* ---- v3.7: Jason's calls ---- */
+.dk-jbtn{background:rgba(232,69,90,.15);color:#E8455A;border:1px solid rgba(232,69,90,.55);font-weight:700}
+.dk-jtag{display:inline-block;background:rgba(232,69,90,.15);color:#E8455A;border:1px solid rgba(232,69,90,.45);border-radius:6px;font-size:10.5px;font-weight:700;padding:1px 6px;letter-spacing:.03em;margin-left:4px}
+.dk-m.me.jason{border:1px solid rgba(232,69,90,.45)}
+.jf-it{display:grid;grid-template-columns:52px 1fr;gap:6px;padding:7px 0;border-top:1px solid var(--rule);font-size:12.5px}
+.jf-it:first-of-type{border-top:0}.jf-t{font-family:var(--mono);color:var(--ink-3);font-size:11.5px}
+.jf-ty{font-size:10px;font-weight:700;border-radius:5px;padding:0 5px;margin-right:5px}
+.jf-call{background:rgba(232,69,90,.18);color:#E8455A}.jf-level{background:rgba(245,180,0,.15);color:var(--warn)}.jf-note{background:var(--surface-3);color:var(--ink-2)}
+.jf-st{display:block;color:var(--ink-3);font-size:11.5px;margin-top:2px}
+@media (max-width:1099px){.dk-compose{flex-wrap:wrap}.dk-compose .dk-jbtn{order:-1;flex:1 0 100%;padding:11px;font-size:14px}}
 /* ---- v3.1: banner + pages ---- */
 .dk-banner{grid-column:2/5;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px 18px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--rule)}
 .dk-banner[hidden]{display:none}
@@ -582,8 +592,10 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
       <button data-q="Pull my Robinhood order history and build my 5 biggest wins and 5 biggest losses, with which of Jason's rules each one followed or broke.">5 wins / 5 losses</button>
       <button data-fill="What did Jason say about ">What did Jason say about…</button>
     </div>
-    <div class="dk-pend" id="dkPend" hidden><img id="dkPendImg" alt=""><span>Chart attached</span><button class="dk-btn j" id="dkPendX" style="padding:3px 8px">Remove</button></div>
+    <div class="dk-pend" id="dkPend" hidden><img id="dkPendImg" alt=""><span>Chart attached</span><button class="dk-att dk-jbtn" id="dkPendJ" style="padding:3px 8px">📣 Send as Jason's post</button><button class="dk-btn j" id="dkPendX" style="padding:3px 8px">Remove</button></div>
     <div class="dk-compose">
+      <button class="dk-att dk-jbtn" id="dkJason" title="Screenshot Jason's Discord post, then click (or paste it first with Ctrl+V)">📣 Jason's call</button>
+      <input type="file" id="dkJFile" accept="image/*" hidden>
       <button class="dk-att" id="dkAtt" title="Attach a chart (or paste with Ctrl+V)">＋ Chart</button>
       <button class="dk-att" id="dkTicketBtn" title="Buy or sell yourself — makes an Approve card">Order ticket</button>
       <input type="file" id="dkFile" accept="image/*" hidden>
@@ -793,6 +805,11 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
       <button class="btn wide" id="sLimits">Change limits &amp; goals</button>
     </div>
     <div style="margin-bottom:20px">
+      <label class="f">Phone notifications</label>
+      <p class="hint" style="margin-top:0" id="sPushSum">Get a buzz when Jarvis closes a trade, a stop is missing, a fill lands, or a card is waiting.</p>
+      <button class="btn wide" id="sPush">Set up notifications on this phone</button>
+    </div>
+    <div style="margin-bottom:20px">
       <input class="f" id="sKey" type="hidden">
       <p class="hint" style="margin-top:0">Market data needs no key any more — the routine and the bias card both read from the server.</p>
     </div>
@@ -807,6 +824,22 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <p class="hint" id="verStamp" style="margin-top:26px;text-align:center"></p>
   </div>
   <div class="ft"><button class="btn danger" id="sWipe">Erase all</button><button class="btn" id="sClose">Close</button><button class="btn solid" id="sSave">Save</button></div>
+</dialog>
+
+<dialog id="dlgPush">
+  <div class="grip"></div><div class="hd"><h3>Phone notifications</h3></div>
+  <div class="bd">
+    <p class="hint" style="margin-top:0" id="puStatus">Checking this phone…</p>
+    <div id="puIos" class="dk-warnbox" hidden><b>iPhone:</b> notifications only work when Otto is opened from the home-screen icon. In Safari tap Share → Add to Home Screen, then open Otto from that icon and come back here.</div>
+    <label class="f" for="puLabel" style="margin-top:10px">Name for this phone</label><input class="f" id="puLabel" placeholder="Ifoma's iPhone">
+    <div class="f" style="margin-top:12px;font-weight:600">What buzzes this phone</div>
+    <div id="puKinds" style="margin-top:4px"></div>
+    <p class="hint">Quiet outside 9:00 AM–4:30 PM ET on weekdays, except "no stop working", which always comes through.</p>
+    <div class="f" style="margin-top:12px;font-weight:600">Phones turned on</div>
+    <div id="puList" class="hint" style="margin-top:4px">—</div>
+    <p class="hint" id="puMsg"></p>
+  </div>
+  <div class="ft" style="flex-wrap:wrap;gap:8px"><button class="btn" id="puClose">Close</button><button class="btn" id="puOff">Turn off on this phone</button><button class="btn" id="puTest">Send a test</button><button class="btn solid" id="puOn">Allow &amp; save</button></div>
 </dialog>
 
 <dialog id="dlgLimits">
@@ -1800,7 +1833,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.5.0";
+const BUILD="3.7.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2474,7 +2507,37 @@ async function dkPanel(force){
   try{DK.panel=await dkApi("panel")}catch(e){DK.panel={error:e.message}}
   (DK.panel.pending||[]).forEach(a=>DK.acts[a.id]=a);
   dkRenderStrip();dkRenderLeft();dkRenderRight();
+  dkJasonLoad();
 }
+// v3.7: today's Jason posts (feed on the right, levels on the left)
+async function dkJasonLoad(){
+  if(DK.locked)return;
+  try{DK.jason=await dkApi("jason_today")}catch(e){DK.jason={error:e.message}}
+  dkRenderLeft();dkRenderRight();
+}
+const JF_CARD={pending:"card waiting for Approve",running:"placing…",done:"taken",rejected:"passed",expired:"card expired",failed:"card failed"};
+function dkJasonFeed(){
+  const J=DK.jason;if(!J)return "";
+  const rows=J.rows||[];
+  let h=`<div class="dk-cardx"><div class="dk-h">Jason today <b>${J.error?"":rows.length+" post"+(rows.length===1?"":"s")}</b></div>`;
+  if(J.error)return h+`<div class="dk-err">${esc(J.error)}</div></div>`;
+  if(!rows.length)return h+`<div class="mut">Nothing yet. When Jason posts in #platinum-chat, screenshot it and click <b style="color:#E8455A">📣 Jason's call</b>.</div></div>`;
+  h+=rows.slice().reverse().map(r=>{
+    const st=r.kind==="call"?(r.late?"late — no card":r.card?(JF_CARD[r.card.status]||r.card.status):"no card yet")
+      :r.kind==="level"?"watch level":"context for Jarvis";
+    const sc=r.score&&r.score.state&&r.score.state!=="unscored"?` · ${esc(r.score.state)} ${r.score.close_pct>=0?"+":""}${r.score.close_pct}% by close`:"";
+    return `<div class="jf-it"><span class="jf-t">${esc((r.label||"").replace(/ (AM|PM)$/,""))}</span><span><span class="jf-ty jf-${esc(r.kind)}">${esc(r.kind.toUpperCase())}</span>${esc(r.summary||r.words)}<span class="jf-st"${r.card&&r.card.status==="pending"?' style="color:var(--warn)"':""}>${esc(st)}${sc}${r.source==="sweep"?" · caught by the 5 PM sweep":""}</span></span></div>`}).join("");
+  return h+`</div>`;
+}
+function dkJasonLevels(){
+  const J=DK.jason;if(!J||J.error)return "";
+  const lv=(J.rows||[]).filter(r=>r.level||r.entry||r.kind==="level");
+  if(!lv.length)return "";
+  return `<div class="dk-cardx"><div class="dk-h">Jason's levels today <b>from his posts</b></div>`+
+    lv.map(r=>`<div class="dk-row"><span><b>${esc(r.ticker||"—")}</b> <span class="mut">${esc(String(r.summary||r.words).replace(new RegExp("^"+(r.ticker||"#")+":\\s*"),"").slice(0,60))}</span></span><span class="mono">${r.level?"$"+dkNum(r.level):r.entry?"entry $"+dkNum(r.entry):""}</span></div>`).join("")+`</div>`;
+}
+// For the 5 PM sweep (scheduled task, run inside this page): ottoJasonSweep("2026-10-05",[{time:"10:02 AM",text:"SPCX LONG"}])
+window.ottoJasonSweep=(date,posts)=>dkApi("jason_sweep",{date,posts});
 // TradingView's batch answer, whatever its exact shape, into {SYMBOL: {close, change}}
 function dkQuotes(){
   const out={},p=DK.panel;if(!p||!p.quotes)return out;
@@ -2540,13 +2603,14 @@ function dkRenderLeft(){
         return `<div class="dk-check"><span class="dk-box ${on?"on":""}">${on?"✓":""}</span><span>${esc(a.task||"")}</span></div>`}).join("")+
       `<button class="dk-link" data-go2="week">Open the week →</button></div>`;
   }
+  h=dkJasonLevels()+h;
   $("#dkLeft").innerHTML=h;
   dkBindQuick($("#dkLeft"));
   $$("#dkLeft [data-go2]").forEach(b=>b.addEventListener("click",()=>{closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.go2);if(t)t.click()}));
 }
 
 function dkRenderRight(){
-  const p=DK.panel||{};let h="";
+  const p=DK.panel||{};let h=dkJasonFeed();
   // Robinhood
   h+=`<div class="dk-cardx"><div class="dk-h">Robinhood <b>${p.agentic?"live":""}</b></div>`;
   if(!p.conn||!p.conn.rh)h+=`<div class="mut">Connect Robinhood in Settings. Orders only ever go to the Agentic account.</div>`;
@@ -2631,12 +2695,12 @@ function dkRenderMsgs(stick){
   if(!DK.rows.length&&!DK.streaming)h=`<div class="dk-empty"><b style="color:var(--ink)">The Desk</b><br>Ask anything — a read on the market, a chart (paste it with Ctrl+V), a trade idea, your positions. It reads TradingView and Robinhood live and leans on Jason's calls. Anything that would change something comes back as a card; nothing happens until someone clicks Approve.</div>`;
   for(const r of DK.rows){
     if(r.role==="system"){h+=`<div class="dk-sys">${esc(r.content)} · ${dkTime(r.created_at)}</div>`;continue}
-    if(r.role==="user"){h+=`<div class="dk-m me"><div class="dk-mw">${esc(r.author||"")} · ${dkTime(r.created_at)}</div>${esc(r.content)}</div>`;continue}
+    if(r.role==="user"){const jz=/^📣/.test(r.content||"");h+=`<div class="dk-m me${jz?" jason":""}"><div class="dk-mw">${esc(r.author||"")} · ${dkTime(r.created_at)}${jz?`<span class="dk-jtag">JASON'S CALL</span>`:""}</div>${esc(jz?String(r.content).replace(/^📣 Jason's post \(pasted\):?\n?/,""):r.content)}</div>`;continue}
     h+=`<div class="dk-m ai"><div class="dk-mw">${esc(/^otto$/i.test(r.author||"")?"Jarvis":(r.author||"Jarvis"))} · ${dkTime(r.created_at)}</div>${r.content?`<div class="md">${md(r.content)}</div>`:""}${r.action_id?dkCard(DK.acts[r.action_id]):""}</div>`;
   }
   const s=DK.streaming;
   if(s){
-    h+=`<div class="dk-m me"><div class="dk-mw">${esc(s.author)} · now</div>${s.img?`<img class="dk-thumb" src="${s.img}">`:""}${esc(s.q)}</div>`;
+    h+=`<div class="dk-m me${s.jason?" jason":""}"><div class="dk-mw">${esc(s.author)} · now${s.jason?`<span class="dk-jtag">JASON'S CALL</span>`:""}</div>${s.img?`<img class="dk-thumb" src="${s.img}">`:""}${esc(s.jason?s.q.replace(/^📣 Jason's post\n?/,""):s.q)}</div>`;
     h+=`<div class="dk-m ai"><div class="dk-mw">Jarvis</div>${s.tools.length?`<div class="dk-tool">↳ ${s.tools.slice(-6).map(esc).join(" · ")}</div>`:""}`+
       (s.err?`<div class="dk-err">${esc(s.err)}</div>`:s.text?`<div class="md">${md(s.text)}</div>`:`<span class="mut">working…</span>`)+
       s.cards.map(id=>dkCard(DK.acts[id])).join("")+`</div>`;
@@ -2680,6 +2744,10 @@ async function dkSetImg(file){
 $("#dkAtt").addEventListener("click",()=>$("#dkFile").click());
 $("#dkFile").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)dkSetImg(f);e.target.value=""});
 $("#dkPendX").addEventListener("click",()=>{DK.img=null;$("#dkPend").hidden=true});
+// v3.7: Jason's call — a pasted/attached screenshot goes straight to Jarvis as Jason's post.
+$("#dkJason").addEventListener("click",()=>{if(DK.img)dkSend({jason:true});else $("#dkJFile").click()});
+$("#dkPendJ").addEventListener("click",()=>dkSend({jason:true}));
+$("#dkJFile").addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;await dkSetImg(f);if(DK.img)dkSend({jason:true})});
 document.addEventListener("paste",e=>{
   if(!DK.open)return;
   const it=[...(e.clipboardData&&e.clipboardData.items||[])].find(i=>i.type.startsWith("image/"));
@@ -2689,8 +2757,10 @@ $("#dkIn").addEventListener("input",e=>{e.target.style.height="auto";e.target.st
 $("#dkIn").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();dkSend()}});
 $("#dkSend").addEventListener("click",dkSend);
 
-async function dkSend(){
+async function dkSend(opts){
   const el=$("#dkIn"),q=el.value.trim();
+  const jason=!!(opts&&opts.jason===true);
+  if(jason&&!DK.img&&!q)return toast("Screenshot Jason's post first, then click 📣");
   if(!q&&!DK.img)return;
   if(DK.streaming)return toast("One moment — the desk is still answering");
   if(DK.locked)return toast("Sign in with the Otto login first");
@@ -2700,12 +2770,12 @@ async function dkSend(){
     :r.role==="user"?{role:"user",author:r.author,content:r.content}
     :{role:"assistant",content:r.content||(r.action_id&&DK.acts[r.action_id]?`[Showed card: ${DK.acts[r.action_id].title} — ${DK.acts[r.action_id].status}]`:"(card shown)")});
   hist.push({role:"user",author,content:q||"(chart attached)",image:img?{media_type:img.media_type,data:img.data}:undefined});
-  DK.streaming={q:q||"(chart attached)",author,img:img&&img.url,text:"",tools:[],cards:[],err:""};
+  DK.streaming={q:jason?("📣 Jason's post"+(q?"\n"+q:"")):(q||"(chart attached)"),author,img:img&&img.url,text:"",tools:[],cards:[],err:"",jason};
   $("#dkSend").disabled=true;dkRenderMsgs(true);
   const s=DK.streaming;
   try{
     const {url,headers}=await fnUrl("desk");
-    const res=await fetch(url,{method:"POST",headers,body:JSON.stringify({messages:hist,author})});
+    const res=await fetch(url,{method:"POST",headers,body:JSON.stringify({messages:hist,author,jason})});
     if(!res.ok||!res.body){const j=await res.json().catch(()=>({}));if(res.status===403&&j.locked)DK.locked=true;throw new Error(j.error||("HTTP "+res.status))}
     const rd=res.body.getReader(),dec=new TextDecoder();let buf="";
     for(;;){
@@ -2719,6 +2789,7 @@ async function dkSend(){
         else if(ev.t==="tool")s.tools.push(ev.v);
         else if(ev.t==="action"){DK.acts[ev.v.id]=ev.v;s.cards.push(ev.v.id);dkRenderRight()}
         else if(ev.t==="error")s.err=ev.v;
+        else if(ev.t==="jason")dkJasonLoad();
         dkRenderMsgs();
       }
     }
@@ -3143,11 +3214,78 @@ async function dkPerf(force){
         ${row("Trades that followed every rule",ruTxt(ru.followed))}${row("Trades that broke one",ruTxt(ru.broke))}
         ${row(`Lost more than $${L.max_trade_loss} on one trade`,ru.over_limit&&ru.over_limit.n?`<span class="dn">${ru.over_limit.n} · ${dk$0(ru.over_limit.pnl)}</span>`:"0")}
         <div class="mut" style="font-size:11.5px;margin-top:6px">Followed / broke fill in as trades go through Desk cards with a rule check. The over-the-limit count uses every closed trade in the Journal.</div></div></div>
+    <div id="pfJason"></div>
     <div class="mut" style="font-size:11.5px">Robinhood's realized P&amp;L for both accounts, as of ${esc(dkDate(j.as_of))}. Weeks run Monday to Friday, New York time. Trade counts and calls vs puts come from the Journal.</div>
   </div>`;
+  dkJasonScore();
   $("#pfRef").addEventListener("click",()=>dkPerf(true));
   $("#pfLim").addEventListener("click",openLimits);
   $("#pfLim2").addEventListener("click",e=>{e.preventDefault();openLimits()});
+}
+
+/* ---------- v3.6: phone notifications ---------- */
+const PU={kinds:null,mine:null};
+const puIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+const puStandalone=()=>window.matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+function puKey(b){b=b.replace(/-/g,"+").replace(/_/g,"/");const s=atob(b+"===".slice((b.length+3)%4));return Uint8Array.from(s,c=>c.charCodeAt(0))}
+async function puReg(){if(!("serviceWorker" in navigator))return null;return navigator.serviceWorker.ready}
+async function puSub(){const r=await puReg();return r&&r.pushManager?r.pushManager.getSubscription():null}
+function puMsg(t,bad){const m=$("#puMsg");m.className="hint"+(bad?" dk-err":"");m.textContent=t||""}
+async function openPush(){
+  if(DK.locked)return toast("Sign in with the Otto login first");
+  $("#dlgPush").showModal();puMsg("");
+  $("#puIos").hidden=!(puIOS&&!puStandalone());
+  const supported="PushManager" in window&&"Notification" in window&&"serviceWorker" in navigator;
+  const sub=supported?await puSub().catch(()=>null):null;
+  try{
+    const j=await dkApi("push_list",{endpoint:sub?sub.endpoint:""});PU.kinds=j.kinds;PU.mine=j.list.find(x=>x.mine)||null;
+    $("#puLabel").value=PU.mine?PU.mine.label:($("#puLabel").value||(($("#dkWho")&&$("#dkWho").value)||"My")+"'s "+(puIOS?"iPhone":/Android/i.test(navigator.userAgent)?"Android":"device"));
+    $("#puKinds").innerHTML=Object.entries(j.kinds).map(([k,v])=>`<label style="display:flex;gap:8px;align-items:center;padding:5px 0;font-size:14px"><input type="checkbox" data-k="${esc(k)}" ${(PU.mine&&PU.mine.prefs&&k in PU.mine.prefs?PU.mine.prefs[k]:v.on)?"checked":""}> ${esc(v.label)}${v.always?' <span class="mut" style="font-size:11px">(always)</span>':""}</label>`).join("");
+    $("#puList").innerHTML=j.list.length?j.list.map(x=>`<div>● ${esc(x.label)}${x.mine?" <b>(this phone)</b>":""} <span class="mut">since ${esc(String(x.at||"").slice(0,10))}</span></div>`).join(""):"None yet.";
+  }catch(e){puMsg(String(e.message),true)}
+  $("#puStatus").textContent=!supported?"This browser can't receive notifications."+(puIOS?" On iPhone, open Otto from the home-screen icon.":"")
+    :Notification.permission==="denied"?"Notifications are blocked for Otto in this phone's settings. Allow them there, then come back."
+    :PU.mine?"✓ This phone is on. Change what buzzes it below, then Save.":"This phone is off. Tap Allow & save.";
+}
+async function puSave(){
+  const b=$("#puOn");b.disabled=true;
+  try{
+    if(!("PushManager" in window))throw new Error(puIOS?"Open Otto from the home-screen icon first (Share → Add to Home Screen).":"This browser can't receive notifications.");
+    const perm=await Notification.requestPermission();
+    if(perm!=="granted")throw new Error("Notifications weren't allowed. Allow them for Otto in the phone's settings.");
+    const reg=await puReg();const {key}=await dkApi("push_key");
+    let sub=await reg.pushManager.getSubscription();
+    if(sub){const cur=sub.options&&sub.options.applicationServerKey;if(cur){const a=new Uint8Array(cur),k=puKey(key);if(a.length!==k.length||a.some((x,i)=>x!==k[i])){await sub.unsubscribe();sub=null}}}
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:puKey(key)});
+    const prefs={};$$("#puKinds input[data-k]").forEach(x=>prefs[x.dataset.k]=x.checked);
+    await dkApi("push_sub",{subscription:sub.toJSON(),label:$("#puLabel").value.trim()||"Phone",prefs});
+    toast("Notifications on for this phone");await openPush();puMsg("Saved. Tap “Send a test” to check it.");
+  }catch(e){puMsg(String(e.message||e),true)}
+  b.disabled=false;
+}
+$("#sPush").addEventListener("click",openPush);
+$("#puClose").addEventListener("click",()=>$("#dlgPush").close());
+$("#puOn").addEventListener("click",puSave);
+$("#puTest").addEventListener("click",async()=>{try{const s=await puSub();if(!s)throw new Error("Turn this phone on first");await dkApi("push_test",{endpoint:s.endpoint});puMsg("Sent. It should appear in a few seconds (lock the phone to see it like a real alert).")}catch(e){puMsg(String(e.message||e),true)}});
+$("#puOff").addEventListener("click",async()=>{try{const s=await puSub();if(s){await dkApi("push_remove",{endpoint:s.endpoint});await s.unsubscribe()}toast("Notifications off for this phone");await openPush()}catch(e){puMsg(String(e.message||e),true)}});
+window.addEventListener("load",()=>{if(location.hash==="#desk")setTimeout(()=>{try{dkShow("desk")}catch(e){}},1500)});
+/* ---------- v3.7: Jason's calls scorecard (on Results) ---------- */
+async function dkJasonScore(){
+  const el=$("#pfJason");if(!el)return;
+  el.innerHTML=`<div class="dk-cardx"><div class="dk-h">Jason's calls <b>loading…</b></div></div>`;
+  let j;try{j=await dkApi("jason_score")}catch(e){el.innerHTML=`<div class="dk-cardx"><div class="dk-h">Jason's calls</div><div class="dk-err">${esc(e.message)}</div></div>`;return}
+  const pc=v=>v==null?"—":Math.round(v*100)+"%",sp=v=>v==null?"—":`<span class="${v>=0?"up":"dn"}">${v>=0?"+":""}${v.toFixed(2)}%</span>`;
+  if(!j.all||!j.all.n){el.innerHTML=`<div class="dk-cardx"><div class="dk-h">Jason's calls</div><div class="mut">No calls logged yet. Each one you paste with 📣 (or the 5 PM sweep catches) is scored after the close: did the stock move his way from the moment he posted to 4:00?</div></div>`;return}
+  const T=j.taken;
+  el.innerHTML=`<div class="dk-cardx"><div class="dk-h">Jason's calls <b>since ${esc(dkMD(j.since))} · scored from his post to the close, in his direction</b></div>
+    <div class="dkp-grid4" style="margin:6px 0 10px">
+      <div class="dk-stat"><div class="n">${j.all.n}</div><div class="l">Calls logged · ${j.all.scored} scored</div></div>
+      <div class="dk-stat"><div class="n ${j.fresh.rate>=.5?"up":""}">${pc(j.fresh.rate)}</div><div class="l">Worked by the close (not counting late calls)</div></div>
+      <div class="dk-stat"><div class="n">${T.n} / ${j.passed.n}</div><div class="l">Taken / passed${T.card_wins+T.card_losses?` · cards ${T.card_wins}W–${T.card_losses}L (TP1 vs stop)`:""}</div></div>
+      <div class="dk-stat"><div class="n ${T.pnl>=0?"up":"dn"}">${dk$0(T.pnl)}</div><div class="l">Result on the ones we took</div></div></div>
+    <table class="pf-tab" style="width:100%;border-collapse:collapse;font-size:12.5px"><tr><th style="text-align:left">Split</th><th>Calls</th><th>Worked</th><th>Avg by close</th><th>Avg best move</th></tr>
+    ${j.splits.map(s=>`<tr><td>${esc(s.key)}</td><td class="mono" style="text-align:center">${s.n}</td><td class="mono" style="text-align:center">${s.scored?pc(s.rate):"—"}</td><td class="mono" style="text-align:center">${sp(s.avg_close)}</td><td class="mono" style="text-align:center">${sp(s.avg_best)}</td></tr>`).join("")}</table>
+    <div class="mut" style="font-size:11.5px;margin-top:6px">"Worked" = the stock closed the day in Jason's direction from the 5-minute bar he posted in. Cards we took are also graded TP1 vs stop. Calls are dated ideas: they never go into Jarvis's teaching brain.</div></div>`;
 }
 
 /* ---------- Limits & goals ---------- */

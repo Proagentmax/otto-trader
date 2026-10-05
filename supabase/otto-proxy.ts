@@ -1,5 +1,10 @@
 // Otto Trader — server side. One Edge Function.
 //
+//   v3.6 (5 Oct 2026): phone notifications (Web Push). ?fn=push_key push_sub push_list
+//   push_remove push_test; notify() hooked into auto-close, fills, stops, alerts, cards.
+//   v3.7 (5 Oct 2026): Jason's calls. A pasted screenshot of Jason's Discord post
+//   (desk body.jason) is read into otto_jason (call/level/note) and Jarvis drafts
+//   the card; ?fn=jason_today / jason_score / jason_sweep (5 PM Discord sweep). 009_v37.sql.
 //   v3.5 (5 Oct 2026): auto-close. Jarvis may sell to close any Agentic position
 //   on his own (close_position) when the Settings switch is ON; scheduled position check.
 //   v3.4 (5 Oct 2026): enter with the exit already set. Opening cards carry
@@ -1089,6 +1094,7 @@ async function proposeAction(input: any, who: string, opts: { manual?: boolean }
     plan: plan ? { ...plan, setup: String(plan.setup).toLowerCase().slice(0, 40) } : null, banner, checks,
     ...(exit ? { exit: { ...exit, state: "planned", log: [] } } : {}),
   }) });
+  if (rows?.[0]?.status === "pending") await notify("card", `🃏 Card waiting: ${String(rows[0].title).slice(0, 80)}`, "Tap to open the Desk and Approve or Reject (cards expire in 20 minutes).");
   return publicAction(rows[0]);
 }
 
@@ -1466,6 +1472,7 @@ async function desk(req: Request, who: string, _apiKey: string) {
   const history = Array.isArray(body.messages) ? body.messages.slice(-24) : [];
   if (!history.length) throw new Error("no messages");
   const author = String(body.author || "Ifoma").slice(0, 30);
+  const isJason = !!body.jason;                    // v3.7: a pasted Jason post
 
   const calls = await loadBrain();
   const cs = chunksOf(calls);
@@ -1487,7 +1494,8 @@ async function desk(req: Request, who: string, _apiKey: string) {
   const prot = await settle(db("otto_actions?select=title,exit&exit->>state=in.(waiting_fill,armed)&limit=5"));
   const protLine = prot.ok && prot.v.length ? " Protected trades (Otto runs their stop and alerts; to close one early, cancel_option_order its stop_order_id first, then sell, in one card): " +
     prot.v.map((r: any) => `${r.title} [${r.exit.state}${r.exit.stop_order_id ? `, stop_order_id ${r.exit.stop_order_id} at $${r.exit.stop_option}` : ""}, wrong-if ${r.exit.wrong_if}, TP1 ${r.exit.tp1}]`).join("; ") + "." : "";
-  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their own limits (Phase ${LIM.phase}): max loss per trade $${LIM.max_trade_loss}, weekly loss limit $${LIM.weekly_loss}, ${LIM.max_trades_day} trades/day, warn over ${LIM.warn_pct}% of the account — size ideas inside these and say so when an idea would break one.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.]`;
+  const jctx = await jasonContext().catch(() => "");
+  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their own limits (Phase ${LIM.phase}): max loss per trade $${LIM.max_trade_loss}, weekly loss limit $${LIM.weekly_loss}, ${LIM.max_trades_day} trades/day, warn over ${LIM.warn_pct}% of the account — size ideas inside these and say so when an idea would break one.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.${jctx}]`;
 
   const msgs: any[] = history.map((m: any, i: number) => {
     const role = m.role === "assistant" ? "assistant" : "user";
@@ -1514,18 +1522,45 @@ async function desk(req: Request, who: string, _apiKey: string) {
   if (!msgs.length || msgs[msgs.length - 1].role !== "user") throw new Error("last message must be from you");
 
   const last = history[history.length - 1];
-  await logDesk("user", author, String(last.content || "") + (last.image ? "\n[chart attached]" : ""));
+  if (!isJason) await logDesk("user", author, String(last.content || "") + (last.image ? "\n[chart attached]" : ""));
+  const lastImg = last.image && typeof last.image.data === "string" && last.image.data.length > 100 && last.image.data.length < 6_000_000 ? last.image : null;
 
   const encS = new TextEncoder();
   const stream = new ReadableStream({
     async start(ctrl) {
       const send = (o: unknown) => { try { ctrl.enqueue(encS.encode("data: " + JSON.stringify(o) + "\n\n")); } catch { /* client left */ } };
       let res = { said: "", cards: [] as string[] };
+      let jrows: any[] = [];
       try {
+        if (isJason) {
+          // v3.7: read Jason's post first (vision, forced tool), save it, then hand Jarvis a structured prompt.
+          send({ t: "tool", v: "Reading Jason's post" });
+          const typed = String(last.content || "").replace(/^\(chart attached\)$/, "").trim();
+          jrows = await jasonIntake(_apiKey, lastImg, typed && !lastImg ? typed : "", who, author);
+          await logDesk("user", author, "📣 Jason's post (pasted)" + (jrows.length ? ":\n" + jrows.map((r: any) => `${r.posted_label || "?"} · ${r.words}`).join("\n") : " — nothing from Jason could be read") +
+            (typed && lastImg ? "\n" + typed : ""));
+          send({ t: "jason", v: jrows.length });
+          const lm = msgs[msgs.length - 1];
+          const prompt = ctxLine + "\n" + author + ": " + jasonPrompt(jrows, lastImg ? typed : "");
+          if (typeof lm.content === "string") lm.content = prompt;
+          else { const tb = lm.content.filter((b: any) => b.type === "text"); if (tb.length) tb[tb.length - 1].text = prompt; else lm.content.push({ type: "text", text: prompt }); }
+        }
         res = await runDesk({ msgs, sys, tools, cs, who, send, allowPropose: true, allowClose: !!LIMa.auto_close });
         send({ t: "done" });
       } catch (e) {
         send({ t: "error", v: String((e as Error).message ?? e).slice(0, 300) });
+      }
+      if (isJason && res.cards.length) {
+        // Link each card to the Jason call it came from (plan.jason_id, else the only open call).
+        try {
+          const acts = await db("otto_actions?select=id,plan&id=in.(" + res.cards.join(",") + ")");
+          const open = jrows.filter((r: any) => r.kind === "call" && !r.late && !r.action_id);
+          for (const a of acts) {
+            const jid = Number(a.plan?.jason_id);
+            const row = jrows.find((r: any) => r.id === jid) || (open.length === 1 ? open[0] : null);
+            if (row) await db("otto_jason?id=eq." + row.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ action_id: a.id }) });
+          }
+        } catch { /* the card still works; it just isn't linked */ }
       }
       if (res.said.trim() || res.cards.length) await logDesk("assistant", "Jarvis", res.said.trim(), res.cards[res.cards.length - 1] || null);
       try { ctrl.close(); } catch { /* */ }
@@ -2129,7 +2164,7 @@ What's moving (web research just now): ${news.slice(0, 2500) || "unavailable"}
 
 Write today's morning read for Ifoma and Josh (Workflow 1): one line each for the 10-year, crude, USD/JPY; any binary event today; SPY/QQQ and Mag-7 tone (fetch what you need); a bias that agrees with or explains any disagreement with the banner; and the 2–3 setups worth watching from the TradingView watchlist with the trigger level for each. Jason's levels are dated marks — say the call date. No order cards. Under 250 words.`;
   const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools, cs, who: "cron", send: () => {}, allowPropose: false, maxRounds: 8 });
-  if (res.said.trim()) await logDesk("assistant", "Jarvis · 8:45 auto", res.said.trim());
+  if (res.said.trim()) { await logDesk("assistant", "Jarvis · 8:45 auto", res.said.trim()); await notify("morning", "☀️ Morning read is ready", res.said.trim().slice(0, 200)); }
   return { ok: true, verdict: sent.verdict, words: res.said.split(/\s+/).length };
 }
 
@@ -2229,6 +2264,7 @@ async function alertWatch(apiKey: string) {
     const line = `🔔 TradingView alert fired: ${name || sym}${msg && msg !== name ? " — " + msg : ""}`;
     await logDesk("system", "TradingView", line.slice(0, 500));
     if (/^Otto ·/.test(name)) continue;           // v3.4: the exit engine handles its own alerts
+    await notify("jason_alert", `📈 ${String(name || sym).slice(0, 90)}`, String(msg || "TradingView alert fired").slice(0, 200));
     if (reads >= 6) continue;                     // cap the reads, never the log lines
     reads++;
     const calls = await loadBrain();
@@ -2312,6 +2348,7 @@ async function placeStop(a: any, ex: any, acct: string) {
     ex.stop_error = (e as Error).message.slice(0, 300);
     exitLog(ex, "Stop order FAILED: " + ex.stop_error);
     await logDesk("system", "Otto", `⚠ ${a.title}: the protective stop at $${ex.stop_option.toFixed(2)} could not be placed (${ex.stop_error}). This trade has NO stop working. Close it or set one by hand.`, a.id);
+    await notify("no_stop", `⚠ No stop on ${a.title.replace(/^Buy\s+/i, "")}`, `The protective stop at $${ex.stop_option.toFixed(2)} couldn't be placed. Open the Desk.`);
     return false;
   }
 }
@@ -2399,6 +2436,8 @@ async function exitTick(a: any) {
       (stopOk ? `Stop on at $${ex.stop_option.toFixed(2)} (about −$${loss.toFixed(0)} if it fills there). ` : rthNow() ? "" : "Stop goes on at 9:30 ET. ") +
       `Alerts: wrong-if ${ex.wrong_if} ${ex.alerts?.wrong != null ? "✓" : "✗"}, TP1 ${ex.tp1} ${ex.alerts?.tp1 != null ? "✓" : "✗"}.` +
       (ex.alert_error ? ` (${ex.alert_error})` : ""), a.id);
+    await notify("fill", `✓ Filled: ${a.title.replace(/^Buy\s+/i, "")} @ $${ex.fill_price.toFixed(2)}`,
+      stopOk ? `Stop on at $${ex.stop_option.toFixed(2)} (about −$${loss.toFixed(0)}). Alerts at ${ex.wrong_if} and ${ex.tp1}.` : `Stop goes on at 9:30 ET. Alerts at ${ex.wrong_if} and ${ex.tp1}.`);
     return { id: a.id, state: ex.state };
   }
   if (ex.state !== "armed") return { id: a.id, state: ex.state };
@@ -2412,6 +2451,7 @@ async function exitTick(a: any) {
     exitLog(ex, `Position flat (${how})`);
     await saveExit(a.id, ex);
     await logDesk("system", "Otto", `${a.title}: position is flat (${how}). Leftover stop and trade alerts cleaned up. Write the one-line reason in the Journal.`, a.id);
+    if (how === "stopped out") await notify("stopped", `🛑 Stopped out: ${a.title.replace(/^Buy\s+/i, "")}`, `The $${Number(ex.stop_option).toFixed(2)} stop filled. Write the one-line reason in the Journal.`);
     return { id: a.id, state: ex.state };
   }
   if (held !== ex.qty) { exitLog(ex, `Holding ${held} now (was ${ex.qty})`); ex.qty = held; }
@@ -2442,6 +2482,7 @@ async function exitTick(a: any) {
         const why = wrong ? `wrong-if ${ex.wrong_if} hit (15-minute close)` : `TP1 ${ex.tp1} reached`;
         ex.close_at = new Date().toISOString();
         exitLog(ex, `${why} → Jarvis deciding (auto-close on)`);
+        await notify("trade_alert", `🔔 ${a.title.replace(/^Buy\s+/i, "")}: ${wrong ? "wrong-if hit" : "TP1 reached"}`, `${why}. Jarvis is deciding now (auto-close is on).`);
         await saveExit(a.id, ex);
         try { await positionReview(`${a.title}: ${why}. option_id ${ex.option_id}. The plan says ${wrong ? "OUT" : "take profit"}.`); }
         catch (e) { await logDesk("system", "Otto", `⚠ ${a.title}: ${why}, but Jarvis's auto-close check failed (${(e as Error).message.slice(0, 200)}). The stop is still working. Close by hand if needed.`, a.id); }
@@ -2464,6 +2505,7 @@ async function exitTick(a: any) {
           calls }, "otto");
         ex.close_card = card.id; ex.close_at = new Date().toISOString();
         exitLog(ex, `${why} → close card ${String(card.id).slice(0, 8)}`);
+        await notify("trade_alert", `🔔 ${a.title.replace(/^Buy\s+/i, "")}: ${wrong ? "wrong-if hit" : "TP1 reached"}`, `${why}. A close card is waiting for Approve.`);
         await logDesk("assistant", "Jarvis", `${a.title}: ${why}. Your plan says ${wrong ? "out" : "take it"}. The close card is up${stopOpen ? "; the stop stays on until someone approves it" : ""}.`, card.id);
       }
     }
@@ -2482,6 +2524,300 @@ async function exitsTick(force = false) {
     try { out.push(await exitTick(a)); } catch (e) { out.push({ id: a.id, error: (e as Error).message.slice(0, 200) }); }
   }
   return { ok: true, n: (rows || []).length, out };
+}
+
+/* ===================================================================== v3.7
+   5 Oct 2026 — Jason's calls. Ifoma's decisions (approved mockup
+   otto-v3.6-jason-calls-mockup.html):
+   - Jason calls trades in Discord #platinum-chat (ALL CAPS, short bursts,
+     usually pinged @Platinum Members). No bot. Josh screenshots a post and
+     drops it on the Desk; Jarvis reads it and drafts the card right away;
+     Ifoma/Josh Approve.
+   - EVERY Jason post goes in, tagged or untagged, sorted call / level / note.
+     Only calls get an order card. Late calls ("should have called it") get
+     none. Jarvis and Josh decide direction.
+   - A weekday 5 PM sweep (scheduled task driving Chrome on the Engineer PC,
+     Discord search from:jmoney915) posts today's texts to ?fn=jason_sweep;
+     anything not pasted is logged, the day is scored, a Desk note goes up.
+   - Calls are dated ideas: they expire at the close, are scored, and NEVER
+     go into the teaching brain (search_jason / alwaysOn don't read them).
+   Table otto_jason (009_v37.sql). */
+
+const J_KINDS = new Set(["call", "level", "note"]);
+
+const JASON_TOOL = {
+  name: "record_posts",
+  description: "Record every message written by Jason (Discord name Jason, user jmoney915) that is visible. Skip everyone else (Josh, Lige [FLOW], bots).",
+  input_schema: {
+    type: "object",
+    properties: {
+      posts: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            time: { type: "string", description: "Time shown on the post, e.g. '10:02 AM'. Continuation lines inherit the time Discord shows when hovered; if none is visible use the block's time. Empty string if no time is visible at all." },
+            kind: { type: "string", enum: ["call", "level", "note"], description: "call = a trade idea with a direction or a ticker called out to trade (e.g. 'SPCX LONG', 'APP', 'ZETA ENTRY 33.15', 'PUTS ON TSLA'). level = a price level/zone he is watching or reporting (e.g. 'AMD $630 HELD RESISTANCE', 'ORDER BLOCK SHIFTED UP' on a named ticker). note = commentary, lessons, answers, reactions." },
+            ticker: { type: "string", description: "Stock/ETF ticker in caps, or empty string. Use the chart in the screenshot to find it if the text doesn't say." },
+            direction: { type: "string", enum: ["long", "short", ""], description: "long = calls/up/long/buy; short = puts/down/short/sell. Empty if not stated or not a call." },
+            late: { type: "boolean", description: "true when Jason says he called it late / should have called it / it already moved ('SHOULD HAVE CALLED IT OUT', 'IN CASE YOU MISSED IT' after the break still counts as NOT late unless he says he missed calling it)." },
+            entry: { type: "number", description: "Entry price only if Jason states one (stock price). 0 if none." },
+            level: { type: "number", description: "Key price level he states or that is clearly marked on his chart with a number. 0 if none." },
+            option: { type: "string", description: "Strike/expiry/type only if Jason states it, e.g. '10/17 42C'. Empty if not stated." },
+            words: { type: "string", description: "Jason's exact words, joined with ' / ' when one call spans several lines (e.g. 'SPCX LONG / BREAK HAPPENED IN CASE YOU MISSED IT'). Keep his caps. Drop the @Platinum Members ping text." },
+            pinged: { type: "boolean", description: "true if the post pinged @Platinum Members." },
+            chart: { type: "string", description: "If a chart image belongs to this post: one short line on what it shows (ticker, trend, levels drawn with numbers). Empty otherwise." },
+            summary: { type: "string", description: "One plain line, e.g. 'SPCX: long on the breakout' or 'AMD: $630 resistance held'." },
+          },
+          required: ["time", "kind", "ticker", "direction", "late", "entry", "level", "option", "words", "pinged", "chart", "summary"],
+        },
+      },
+    },
+    required: ["posts"],
+  },
+};
+
+const JASON_READ_SYS = `You read Jason Murray's posts from the iBelieve Investments Club Discord (#platinum-chat). Jason writes in ALL CAPS, in short bursts across several lines, and usually pings @Platinum Members when he calls something. A call is often just a ticker and a direction ("SPCX LONG"); levels are often only drawn on his chart screenshot. Record ONLY Jason's messages (display name Jason, username jmoney915). Group lines that belong to the same thought into one post (e.g. "SPCX LONG" + "BREAK HAPPENED IN CASE YOU MISSED IT" + the ping = one call). Never invent numbers: entry/level/option only when Jason wrote them or the chart labels them with a number. If nothing from Jason is visible, return an empty list.`;
+
+async function jasonExtract(apiKey: string, src: { image?: { media_type: string; data: string } | null; text?: string; day: string }) {
+  const content: any[] = [];
+  if (src.image) content.push({ type: "image", source: { type: "base64",
+    media_type: /^image\/(jpeg|png|webp|gif)$/.test(src.image.media_type) ? src.image.media_type : "image/jpeg", data: src.image.data } });
+  content.push({ type: "text", text: (src.image ? "Screenshot from Discord, " : "Discord messages, ") + `dated ${src.day} (New York time).` +
+    (src.text ? "\n\n" + src.text.slice(0, 20000) : "") + "\n\nRecord Jason's posts." });
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: MODEL, max_tokens: 4000, system: JASON_READ_SYS, tools: [JASON_TOOL],
+      tool_choice: { type: "tool", name: "record_posts" }, messages: [{ role: "user", content }] }),
+  });
+  if (!r.ok) throw new Error("reading Jason's post failed: claude HTTP " + r.status + " " + (await r.text()).slice(0, 160));
+  const j = await r.json();
+  const tu = (j.content || []).find((b: any) => b.type === "tool_use");
+  const posts = Array.isArray(tu?.input?.posts) ? tu.input.posts : [];
+  return posts.filter((p: any) => p && J_KINDS.has(p.kind) && String(p.words || "").trim());
+}
+
+// "10:02 AM" on a New York date → ISO. Tries EDT then EST and keeps the one
+// whose New York clock reads back the same minute.
+function nyIso(day: string, time: string): string | null {
+  const m = /^\s*(\d{1,2}):(\d{2})\s*([AP]M)?\s*$/i.exec(time || "");
+  if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  let h = Number(m[1]) % 12; if ((m[3] || "").toUpperCase() === "PM") h += 12;
+  if (!m[3] && Number(m[1]) === 12) h = 12;
+  const want = h * 60 + Number(m[2]);
+  for (const off of [4, 5]) {
+    const d = new Date(`${day}T${String(h).padStart(2, "0")}:${m[2]}:00Z`);
+    d.setUTCHours(d.getUTCHours() + off);
+    const p = etParts(d);
+    if (p.date === day && p.min === want) return d.toISOString();
+  }
+  return null;
+}
+
+const jNorm = (s: string) => String(s || "").toUpperCase().replace(/@\S+/g, "").replace(/[^A-Z0-9$.]+/g, " ").trim().slice(0, 90);
+
+async function jasonSave(posts: any[], day: string, source: string, who: string) {
+  const rows = posts.map((p: any) => {
+    const at = nyIso(day, p.time);
+    const hhmm = at ? fmtMin(etParts(new Date(at)).min) : "";
+    const ticker = String(p.ticker || "").toUpperCase().replace(/[^A-Z.]/g, "").slice(0, 8) || null;
+    return {
+      day, posted_at: at, posted_label: hhmm || null, kind: p.kind,
+      ticker, direction: ["long", "short"].includes(p.direction) ? p.direction : null,
+      late: !!p.late, entry: Number(p.entry) > 0 ? Number(p.entry) : null, level: Number(p.level) > 0 ? Number(p.level) : null,
+      option: String(p.option || "").slice(0, 40) || null, pinged: !!p.pinged,
+      words: String(p.words).slice(0, 600), chart: String(p.chart || "").slice(0, 300) || null,
+      summary: String(p.summary || "").slice(0, 200) || null, source, added_by: who,
+      fp: `${day}|${hhmm}|${jNorm(p.words)}`,
+    };
+  });
+  if (!rows.length) return { inserted: [] as any[], all: [] as any[] };
+  // ignore-duplicates: a post already pasted (or swept) keeps its first row.
+  const inserted = await db("otto_jason?on_conflict=fp&select=*", { method: "POST",
+    headers: { prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify(rows) });
+  const fps = new Set(rows.map((r) => r.fp));
+  const all = (await db(`otto_jason?select=*&day=eq.${day}&limit=200`).catch(() => inserted)).filter((r: any) => fps.has(r.fp));
+  return { inserted, all };
+}
+
+const jLine = (r: any) => `#${r.id} ${r.posted_label || "?"} ${r.kind.toUpperCase()}${r.late ? " (LATE)" : ""}${r.ticker ? " " + r.ticker : ""}${r.direction ? " " + r.direction : ""}` +
+  `${r.entry ? " entry $" + r.entry : ""}${r.level ? " level $" + r.level : ""}${r.option ? " option " + r.option : ""}: "${r.words}"${r.chart ? " [chart: " + r.chart + "]" : ""}`;
+
+async function jasonTodayRows(day = etParts().date) {
+  return await db(`otto_jason?select=*&day=eq.${day}&order=posted_at.asc.nullslast,id.asc&limit=80`).catch(() => []);
+}
+
+// One line for the Desk context, so Jarvis knows today's calls and levels in every turn.
+async function jasonContext(): Promise<string> {
+  const rows = await jasonTodayRows();
+  if (!rows.length) return "";
+  return ` Jason's posts today in Discord (dated ideas from his chat — they expire at today's close and are NOT method; use his levels as levels): ` +
+    rows.slice(-25).map(jLine).join("; ") + ".";
+}
+
+// Called inside the Desk stream when Josh pastes a Jason post.
+async function jasonIntake(apiKey: string, img: any, text: string, who: string, author: string) {
+  const day = etParts().date;
+  const posts = await jasonExtract(apiKey, { image: img, text, day });
+  const { all } = await jasonSave(posts, day, "paste", author || who);
+  return all;
+}
+
+function jasonPrompt(rows: any[], extra: string) {
+  if (!rows.length) return `[Jason's post pasted — but no message from Jason could be read in it.] Say so in one line and ask for a clearer screenshot. ${extra}`;
+  return `[📣 Jason's post, pasted from Discord #platinum-chat and read from the screenshot. These are saved in Otto's Jason feed.]
+${rows.map(jLine).join("\n")}
+${extra ? "Note from the desk: " + extra + "\n" : ""}
+Handle each one:
+- CALL (not late, not already carded): check it against the banner, Jason's rules (first 30 minutes, delta .30–.40, volume > open interest, expiry, binary events, earnings), our limits, and whether we already hold it. Give a 2–3 line take. Then propose_action ONE opening option order with plan + exits (the v3.4 rules), plan.setup = "jason call", plan.jason_id = the #id above. Use Jason's entry/level when he gave one. Everything he did NOT give (strike, expiry, entry, stop, TP1, wrong-if) is yours: say "Jarvis, not Jason" for those in your take. Size inside our limits.
+- CALL marked LATE: no card. Say the move happened before the post and chasing breaks Jason's entry rules; offer to watch for a pullback to a level.
+- LEVEL: one line on what it means for us; no card.
+- NOTE: one line at most; no card.
+Josh and Ifoma decide direction. If the banner or a rule argues against a call, say so plainly but still draft the card so they can decide.`;
+}
+
+/* ----- scoring: every call, carded or not, on Yahoo 5-minute bars, post → close */
+async function yBars5(ticker: string): Promise<{ t: number; o: number; h: number; l: number; c: number }[]> {
+  return cached(`yb5|${ticker}`, 5 * 60e3, async () => {
+    const r = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(ticker) + "?range=5d&interval=5m", { headers: UA });
+    if (!r.ok) throw new Error("yahoo HTTP " + r.status);
+    const j = await r.json(); const x = j?.chart?.result?.[0];
+    if (!x?.timestamp) throw new Error("no bars for " + ticker);
+    const q = x.indicators?.quote?.[0] || {};
+    return x.timestamp.map((t: number, i: number) => ({ t, o: q.open?.[i], h: q.high?.[i], l: q.low?.[i], c: q.close?.[i] }))
+      .filter((b: any) => [b.o, b.h, b.l, b.c].every((v) => typeof v === "number"));
+  });
+}
+
+async function jasonScoreRow(r: any, actsById: Record<string, any>) {
+  const a = r.action_id ? actsById[r.action_id] : null;
+  const card = a ? { status: a.status, outcome: a.outcome?.state || null, r: a.outcome?.r ?? null } : null;
+  if (r.kind !== "call" || !r.ticker || !r.posted_at) return { state: "unscored", why: !r.ticker ? "no ticker" : r.kind !== "call" ? "not a call" : "no time", card };
+  const t0 = Date.parse(r.posted_at) / 1000;
+  const bars = await yBars5(r.ticker);
+  const close = Date.parse(nyIso(r.day, "4:00 PM") || "") / 1000;
+  const day = bars.filter((b) => b.t + 300 > t0 && b.t < close);
+  if (!day.length) return { state: "unscored", why: "no bars after the post", card };
+  const ref = day[0].c;                     // close of the 5-min bar the post landed in
+  const dir = r.direction === "short" ? -1 : 1;
+  const after = day.slice(1);
+  const hi = Math.max(ref, ...after.map((b) => b.h)), lo = Math.min(ref, ...after.map((b) => b.l));
+  const last = (after[after.length - 1] || day[0]).c;
+  const pct = (v: number) => +(((v - ref) / ref) * 100 * dir).toFixed(2);
+  const close_pct = pct(last);
+  return { state: close_pct > 0.05 ? "worked" : close_pct < -0.05 ? "failed" : "flat", ref: +ref.toFixed(2), close: +last.toFixed(2),
+    close_pct, best_pct: dir > 0 ? pct(hi) : pct(lo), worst_pct: dir > 0 ? pct(lo) : pct(hi), card, assumed_long: !r.direction };
+}
+
+// Score finished days (or today after 4:05 PM). Bounded per call.
+async function jasonScoreDue(budget = 15) {
+  const now = etParts();
+  const doneToday = !["Sat", "Sun"].includes(now.wd) && now.min >= 965;
+  const rows = await db(`otto_jason?select=*&kind=eq.call&score=is.null&order=day.desc&limit=60`).catch(() => []);
+  const due = rows.filter((r: any) => r.day < now.date || (r.day === now.date && doneToday) || ["Sat", "Sun"].includes(now.wd));
+  if (!due.length) return 0;
+  const ids = [...new Set(due.map((r: any) => r.action_id).filter(Boolean))];
+  const acts = ids.length ? await db("otto_actions?select=id,status,outcome&id=in.(" + ids.join(",") + ")").catch(() => []) : [];
+  const by: Record<string, any> = Object.fromEntries(acts.map((a: any) => [a.id, a]));
+  let n = 0;
+  for (const r of due.slice(0, budget)) {
+    let s: any;
+    try { s = await jasonScoreRow(r, by); } catch (e) { s = { state: "unscored", why: String((e as Error).message).slice(0, 120) }; }
+    await db("otto_jason?id=eq." + r.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ score: s }) }).catch(() => {});
+    n++;
+  }
+  return n;
+}
+
+async function jasonToday() {
+  const day = etParts().date;
+  const rows = await jasonTodayRows(day);
+  const ids = [...new Set(rows.map((r: any) => r.action_id).filter(Boolean))];
+  const acts = ids.length ? await db("otto_actions?select=id,status,title&id=in.(" + ids.join(",") + ")").catch(() => []) : [];
+  const by: Record<string, any> = Object.fromEntries(acts.map((a: any) => [a.id, a]));
+  return { ok: true, day, rows: rows.map((r: any) => ({ id: r.id, at: r.posted_at, label: r.posted_label, kind: r.kind, ticker: r.ticker,
+    direction: r.direction, late: r.late, entry: r.entry, level: r.level, option: r.option, words: r.words, summary: r.summary,
+    source: r.source, card: r.action_id && by[r.action_id] ? { id: r.action_id, status: by[r.action_id].status, title: by[r.action_id].title } : null,
+    score: r.score || null })) };
+}
+
+// The banner at the time of a post, from otto_sentiment history.
+async function bannerAt(iso: string): Promise<string | null> {
+  const r = await db(`otto_sentiment?select=verdict,at&at=lte.${encodeURIComponent(iso)}&order=at.desc&limit=1`).catch(() => []);
+  return r?.[0] && Date.parse(iso) - Date.parse(r[0].at) < 3 * 3600e3 ? r[0].verdict : null;
+}
+
+async function jasonScorecard() {
+  await jasonScoreDue(10).catch(() => 0);
+  const rows = await db("otto_jason?select=*&kind=eq.call&order=day.desc,posted_at.desc&limit=400").catch(() => []);
+  const ids = [...new Set(rows.map((r: any) => r.action_id).filter(Boolean))];
+  const acts = ids.length ? await db("otto_actions?select=id,status,outcome&id=in.(" + ids.join(",") + ")").catch(() => []) : [];
+  const by: Record<string, any> = Object.fromEntries(acts.map((a: any) => [a.id, a]));
+  const pnl: Record<string, number> = {};
+  if (ids.length) (await db("otto_trades?select=action_id,pnl&action_id=in.(" + ids.join(",") + ")").catch(() => []))
+    .forEach((t: any) => { if (t.pnl != null) pnl[t.action_id] = (pnl[t.action_id] || 0) + Number(t.pnl); });
+  // banner tone at post time (cached per row in score.banner once known)
+  for (const r of rows.slice(0, 60)) {
+    if (r.score && r.score.banner === undefined && r.posted_at) {
+      const v = await bannerAt(r.posted_at);
+      r.score.banner = v;
+      await db("otto_jason?id=eq." + r.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ score: r.score }) }).catch(() => {});
+    }
+  }
+  const tone = (v: string | null) => !v ? null : /long/i.test(v) ? "long" : /short/i.test(v) ? "short" : "none";
+  const scored = (l: any[]) => l.filter((r) => r.score && ["worked", "failed", "flat"].includes(r.score.state));
+  const agg = (l: any[]) => { const s = scored(l), w = s.filter((r) => r.score.state === "worked").length;
+    return { n: l.length, scored: s.length, worked: w, rate: s.length ? w / s.length : null,
+      avg_close: s.length ? s.reduce((x, r) => x + r.score.close_pct, 0) / s.length : null,
+      avg_best: s.length ? s.reduce((x, r) => x + r.score.best_pct, 0) / s.length : null }; };
+  const minOf = (r: any) => r.posted_at ? etParts(new Date(r.posted_at)).min : -1;
+  const fresh = rows.filter((r: any) => !r.late);
+  const taken = rows.filter((r: any) => r.action_id && by[r.action_id]?.status === "done");
+  const passed = rows.filter((r: any) => !(r.action_id && by[r.action_id]?.status === "done"));
+  const cardWL = taken.map((r: any) => by[r.action_id]?.outcome?.state).filter((s: any) => s === "win" || s === "loss");
+  const splits = [
+    ["Posted 9:30–10:00 (first 30 min)", fresh.filter((r: any) => minOf(r) >= 570 && minOf(r) < 600)],
+    ["Posted 10:00–11:00", fresh.filter((r: any) => minOf(r) >= 600 && minOf(r) < 660)],
+    ["Posted 11:00–2:00", fresh.filter((r: any) => minOf(r) >= 660 && minOf(r) < 840)],
+    ["Posted after 2:00", fresh.filter((r: any) => minOf(r) >= 840)],
+    ["With the banner", fresh.filter((r: any) => { const t = tone(r.score?.banner); return t && t !== "none" && t === r.direction; })],
+    ["Against the banner", fresh.filter((r: any) => { const t = tone(r.score?.banner); return t && t !== "none" && r.direction && t !== r.direction; })],
+    ["Banner said No edge / No read", fresh.filter((r: any) => tone(r.score?.banner) === "none")],
+    ["Late calls (\"should have called it\")", rows.filter((r: any) => r.late)],
+  ].map(([k, l]: any) => ({ key: k, ...agg(l) }));
+  return { ok: true, since: rows.length ? rows[rows.length - 1].day : null,
+    all: agg(rows), fresh: agg(fresh), taken: { ...agg(taken), pnl: taken.reduce((s: number, r: any) => s + (pnl[r.action_id] || 0), 0),
+      card_wins: cardWL.filter((s: any) => s === "win").length, card_losses: cardWL.filter((s: any) => s === "loss").length },
+    passed: agg(passed), splits,
+    recent: rows.slice(0, 20).map((r: any) => ({ day: r.day, label: r.posted_label, ticker: r.ticker, direction: r.direction, late: r.late,
+      words: r.words, taken: !!(r.action_id && by[r.action_id]?.status === "done"), score: r.score || null })) };
+}
+
+// 5 PM sweep: the scheduled task reads today's Jason posts in Discord and sends the texts here.
+async function jasonSweep(body: any, who: string) {
+  const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(String(body.date || "")) ? String(body.date) : etParts().date;
+  const posts = Array.isArray(body.posts) ? body.posts.slice(0, 200) : [];
+  const before = await db(`otto_jason?select=id&day=eq.${day}`).catch(() => []);
+  let found: any[] = [];
+  if (posts.length) {
+    const text = posts.map((p: any) => `[${String(p.time || "").slice(0, 12)}] Jason: ${String(p.text || "").slice(0, 600)}`).join("\n");
+    found = await jasonExtract(apiKey, { text, day });
+  }
+  const { inserted } = await jasonSave(found, day, "sweep", "5 PM sweep");
+  await jasonScoreDue(20).catch(() => 0);
+  const rows = await jasonTodayRows(day);
+  const calls = rows.filter((r: any) => r.kind === "call");
+  const sc = (r: any) => !r.score ? "not scored yet" : r.score.state === "unscored" ? "not scored (" + (r.score.why || "?") + ")"
+    : `${r.score.state}: ${r.score.close_pct >= 0 ? "+" : ""}${r.score.close_pct}% by the close, best ${r.score.best_pct >= 0 ? "+" : ""}${r.score.best_pct}%`;
+  const note = `Discord sweep (${etLabel(new Date().toISOString())} ET, Jason only): ${rows.length} post${rows.length === 1 ? "" : "s"} today` +
+    `${posts.length ? "" : " — the sweep found no Jason messages"}, ${before.length} already pasted, ${inserted.length} caught now.\n\n` +
+    (calls.length ? "Today's calls, scored from the post to the close (5-min bars, in the called direction):\n" +
+      calls.map((r: any) => `· ${r.posted_label || "?"} ${r.ticker || "?"} ${r.direction || ""}${r.late ? " (late)" : ""} — ${sc(r)}`).join("\n") : "No calls today.") +
+    (inserted.length ? "\n\nCaught by the sweep (not pasted during the day):\n" + inserted.map((r: any) => `· ${r.posted_label || "?"} ${r.kind}: ${r.words}`).join("\n") : "");
+  await logDesk("assistant", "Jarvis · Discord sweep", note);
+  return { ok: true, day, read: posts.length, posts: rows.length, caught: inserted.length, by: who };
 }
 
 /* ===================================================================== v3.5
@@ -2584,6 +2920,7 @@ async function closeNow(input: any, who: string) {
   }) });
   const id = rows?.[0]?.id || null;
   await logDesk("system", "Otto", `🤖 Jarvis closed: ${title} at market. Why: ${reason} (Auto-close is on; turn it off in Settings → Limits & goals.)`, id);
+  await notify("auto_close", `🤖 Jarvis closed: ${title.replace(/^Auto-close /, "")}`, `Sold at market. Why: ${reason}`);
   return { ok: true, title, order_id: orderId, card: id };
 }
 
@@ -2620,6 +2957,153 @@ For each position: fetch the underlying's live price and recent 5-minute bars (a
   const said = res.said.trim();
   if (said && !/^HOLD\.?$/i.test(said)) await logDesk("assistant", "Jarvis · position check", said);
   return { ok: true, said: said.slice(0, 300) };
+}
+
+/* ===================================================================== v3.6
+   5 Oct 2026 — phone notifications (Web Push, both phones).
+
+   No third-party service and no extra secrets: the VAPID key pair is made on
+   first use and kept in otto_settings ("push_vapid", service role only).
+   Subscriptions live in otto_settings ("push_subs"), one per phone, each with
+   its own choices. Messages are encrypted per RFC 8291 (aes128gcm) with
+   WebCrypto and sent straight to Apple's / Google's push service.
+   Quiet outside 9:00 AM–4:30 PM ET weekdays, except "no_stop" (a trade with
+   no stop working), which always goes through. iPhone needs Otto opened from
+   the home-screen icon (iOS 16.4+). */
+
+const PUSH_KINDS: Record<string, { label: string; on: boolean; always?: boolean }> = {
+  auto_close:  { label: "Jarvis closed a trade", on: true },
+  no_stop:     { label: "A trade has NO stop working", on: true, always: true },
+  fill:        { label: "Entry filled · stop on", on: true },
+  stopped:     { label: "Stop filled (stopped out)", on: true },
+  trade_alert: { label: "Your trade's wrong-if / TP1 hit", on: true },
+  card:        { label: "A card is waiting for Approve", on: true },
+  jason_alert: { label: "Jason level alerts", on: false },
+  morning:     { label: "8:45 morning read is ready", on: false },
+};
+const PUSH_SUB_URL = "https://proagentmax.github.io/otto-trader/";
+
+const b64u = (u: Uint8Array) => b64(u).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64u = (s: string) => unb64(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4));
+function cat(...a: Uint8Array[]) { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let i = 0; for (const x of a) { o.set(x, i); i += x.length; } return o; }
+async function hmac(key: Uint8Array, data: Uint8Array) {
+  const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, data));
+}
+const te = new TextEncoder();
+
+async function setting(key: string): Promise<any> {
+  const r = await db("otto_settings?key=eq." + key + "&select=value");
+  return r?.[0]?.value ?? null;
+}
+async function putSetting(key: string, value: any, by = "otto") {
+  await db("otto_settings?on_conflict=key", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ key, value, updated_by: by, updated_at: new Date().toISOString() }) });
+}
+
+let VAPID: { pub: string; jwk: any } | null = null;
+async function vapid() {
+  if (VAPID) return VAPID;
+  let v = await setting("push_vapid");
+  if (!v?.pub || !v?.jwk) {
+    const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const pub = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
+    v = { pub: b64u(pub), jwk: await crypto.subtle.exportKey("jwk", kp.privateKey) };
+    await putSetting("push_vapid", v, "setup");
+    const again = await setting("push_vapid");                 // another copy may have won the race
+    if (again?.pub) v = again;
+  }
+  VAPID = v;
+  return v;
+}
+
+async function vapidAuth(endpoint: string) {
+  const v = await vapid();
+  const key = await crypto.subtle.importKey("jwk", v.jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const head = b64u(te.encode(JSON.stringify({ typ: "JWT", alg: "ES256" })));
+  const body = b64u(te.encode(JSON.stringify({ aud: new URL(endpoint).origin, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: PUSH_SUB_URL })));
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, te.encode(head + "." + body)));
+  return `vapid t=${head}.${body}.${b64u(sig)}, k=${v.pub}`;
+}
+
+// RFC 8291 / 8188: one aes128gcm record.
+async function encryptPush(sub: any, payload: Uint8Array) {
+  const uaPub = unb64u(sub.keys.p256dh), auth = unb64u(sub.keys.auth);
+  const eph = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]) as CryptoKeyPair;
+  const asPub = new Uint8Array(await crypto.subtle.exportKey("raw", eph.publicKey));
+  const uaKey = await crypto.subtle.importKey("raw", uaPub, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  const shared = new Uint8Array(await crypto.subtle.deriveBits({ name: "ECDH", public: uaKey }, eph.privateKey, 256));
+  const prkKey = await hmac(auth, shared);
+  const ikm = await hmac(prkKey, cat(te.encode("WebPush: info\0"), uaPub, asPub, new Uint8Array([1])));
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const prk = await hmac(salt, ikm);
+  const cek = (await hmac(prk, cat(te.encode("Content-Encoding: aes128gcm\0"), new Uint8Array([1])))).slice(0, 16);
+  const nonce = (await hmac(prk, cat(te.encode("Content-Encoding: nonce\0"), new Uint8Array([1])))).slice(0, 12);
+  const k = await crypto.subtle.importKey("raw", cek, { name: "AES-GCM" }, false, ["encrypt"]);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, k, cat(payload, new Uint8Array([2]))));
+  const rs = new Uint8Array([0, 0, 16, 0]);                   // record size 4096
+  return cat(salt, rs, new Uint8Array([asPub.length]), asPub, ct);
+}
+
+async function sendPush(sub: any, msg: any) {
+  const body = await encryptPush(sub, te.encode(JSON.stringify(msg).slice(0, 3000)));
+  const r = await fetch(sub.endpoint, { method: "POST", headers: {
+    authorization: await vapidAuth(sub.endpoint), "content-encoding": "aes128gcm", "content-type": "application/octet-stream",
+    ttl: "3600", urgency: msg.kind === "no_stop" || msg.kind === "auto_close" ? "high" : "normal" }, body });
+  return r.status;
+}
+
+function quietNow() { const e = etParts(); return ["Sat", "Sun"].includes(e.wd) || e.min < 540 || e.min > 990; }
+
+// The one call everything else uses. Never throws: a notification is a convenience.
+async function notify(kind: string, title: string, body: string, url = "./#desk") {
+  try {
+    const K = PUSH_KINDS[kind]; if (!K) return;
+    if (quietNow() && !K.always) return;
+    const subs: Record<string, any> = (await setting("push_subs")) || {};
+    let changed = false;
+    for (const [id, s] of Object.entries(subs)) {
+      const want = s.prefs && kind in s.prefs ? !!s.prefs[kind] : K.on;
+      if (!want) continue;
+      try {
+        const st = await sendPush(s.sub, { kind, title: title.slice(0, 120), body: body.slice(0, 300), url, tag: kind + "-" + Date.now() });
+        if (st === 404 || st === 410) { delete subs[id]; changed = true; }
+      } catch (e) { console.error("push", (e as Error).message); }
+    }
+    if (changed) await putSetting("push_subs", subs);
+  } catch (e) { console.error("notify", (e as Error).message); }
+}
+
+async function pushSubscribe(b: any, who: string) {
+  const sub = b?.subscription;
+  if (!sub?.endpoint || !/^https:\/\//.test(sub.endpoint) || !sub?.keys?.p256dh || !sub?.keys?.auth) throw new Error("bad subscription");
+  const subs: Record<string, any> = (await setting("push_subs")) || {};
+  const id = b64u(new Uint8Array(await crypto.subtle.digest("SHA-256", te.encode(sub.endpoint)))).slice(0, 16);
+  const prefs: Record<string, boolean> = {};
+  for (const k of Object.keys(PUSH_KINDS)) prefs[k] = b.prefs && k in b.prefs ? !!b.prefs[k] : (subs[id]?.prefs?.[k] ?? PUSH_KINDS[k].on);
+  subs[id] = { sub: { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
+    label: String(b.label || subs[id]?.label || "Phone").slice(0, 40), prefs, at: new Date().toISOString(), by: who };
+  await putSetting("push_subs", subs, who);
+  return { id, label: subs[id].label, prefs };
+}
+async function pushList(endpoint?: string) {
+  const subs: Record<string, any> = (await setting("push_subs")) || {};
+  const list = Object.entries(subs).map(([id, s]) => ({ id, label: s.label, at: s.at, prefs: s.prefs, mine: !!endpoint && s.sub.endpoint === endpoint }));
+  return { kinds: PUSH_KINDS, list };
+}
+async function pushRemove(b: any) {
+  const subs: Record<string, any> = (await setting("push_subs")) || {};
+  for (const [id, s] of Object.entries(subs)) if (id === b.id || s.sub.endpoint === b.endpoint) delete subs[id];
+  await putSetting("push_subs", subs);
+  return { ok: true };
+}
+async function pushTest(b: any) {
+  const subs: Record<string, any> = (await setting("push_subs")) || {};
+  const hit = Object.values(subs).find((s: any) => s.sub.endpoint === b.endpoint) as any;
+  if (!hit) throw new Error("This phone isn't turned on yet");
+  const st = await sendPush(hit.sub, { kind: "test", title: "✓ Otto notifications work", body: `${hit.label}: this is what a Desk alert looks like.`, url: "./#desk", tag: "test" });
+  if (st >= 300) throw new Error("Push service answered " + st);
+  return { ok: true, status: st };
 }
 
 /* ===================================================================== v3.3
@@ -2887,7 +3371,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, email: claims.email || null, anonymous: !!claims.is_anonymous, desk: !!deskUser(claims) });
     }
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
-         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "performance", "help"].includes(fn)) {
+         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "performance", "help", "jason_today", "jason_sweep", "jason_score"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -2920,7 +3404,16 @@ Deno.serve(async (req) => {
         return json({ ok: true, review: await weeklyReview(apiKey, who) });
       }
       if (fn === "score") return json(await scorecard());
+      // ---- v3.7 Jason's calls
+      if (fn === "jason_today") return json(await jasonToday());
+      if (fn === "jason_score") return json(await jasonScorecard());
+      if (fn === "jason_sweep") return json(await jasonSweep(body, who));
       if (fn === "limits_get") return json({ ok: true, limits: await getLimits() });
+      if (fn === "push_key") return json({ ok: true, key: (await vapid()).pub });
+      if (fn === "push_sub") return json({ ok: true, ...(await pushSubscribe(body, who)) });
+      if (fn === "push_list") return json({ ok: true, ...(await pushList(String(body?.endpoint || ""))) });
+      if (fn === "push_remove") return json(await pushRemove(body));
+      if (fn === "push_test") return json(await pushTest(body));
       if (fn === "limits_set") return json({ ok: true, limits: await setLimits(body, who) });
       if (fn === "performance") return json(await performance(Deno.env.get("ANTHROPIC_KEY") || "", new URL(req.url).searchParams.get("read") !== "0", new URL(req.url).searchParams.get("fresh") === "1"));
       if (fn === "help") return json({ ok: true, text: await helpAnswer(body, Deno.env.get("ANTHROPIC_KEY") || "") });
