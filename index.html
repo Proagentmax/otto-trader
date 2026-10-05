@@ -510,6 +510,28 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .dk-checks{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;font-size:12.5px}
 .dk-ck{display:flex;gap:7px;align-items:baseline}.dk-ck i{font-style:normal;font-weight:700;width:12px;flex:none}
 .dk .ink2{color:var(--ink-2)}
+/* v3.3 Results / Help */
+.pf-g2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:1099px){.pf-g2{grid-template-columns:1fr}}
+.pf-range{margin-left:auto;display:flex;gap:6px;align-items:center}.pf-range .dk-btn{white-space:nowrap}
+.pf-read{border-left:3px solid var(--up);background:rgba(0,200,5,.05);border-radius:0 10px 10px 0;padding:9px 12px;font-size:13.5px;line-height:1.5}
+.pf-bars{display:flex;gap:8px;height:170px;position:relative;margin:6px 0 24px;border-bottom:1px solid var(--rule)}
+.pf-bar{flex:1;position:relative;height:100%}
+.pf-bar i{position:absolute;left:18%;right:18%;border-radius:3px}
+.pf-bar .v{position:absolute;left:0;right:0;text-align:center;font-size:10.5px;font-family:var(--mono)}
+.pf-bar .lab{position:absolute;left:0;right:0;bottom:-19px;text-align:center;font-size:10.5px;color:var(--ink-3)}
+.pf-zero{position:absolute;left:0;right:0;border-top:1px dashed var(--ink-3);opacity:.5}
+.pf-limit{position:absolute;left:0;right:0;border-top:1px solid var(--warn);opacity:.8}
+.pf-goal{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:8px 0;border-bottom:1px solid var(--rule)}.pf-goal:last-child{border:0}
+.pf-prog{grid-column:1/3;height:10px;border-radius:5px;background:var(--surface-3);overflow:hidden;margin:4px 0 2px}.pf-prog>i{display:block;height:100%}
+.pf-goal small{grid-column:1/3;font-size:11.5px;color:var(--ink-3)}
+.hp{display:grid;grid-template-columns:300px minmax(0,1fr);height:100%;min-height:0}
+.hp-q{border-right:1px solid var(--rule);padding:14px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.hp-q button{border:1px solid var(--rule);border-radius:9px;padding:7px 10px;font-size:12.5px;color:var(--ink-2);text-align:left}
+.hp-q button:hover{color:var(--ink);border-color:var(--ink-3)}
+.hp-chat{display:flex;flex-direction:column;min-height:0;height:100%}
+.dk.v-help .dk-page{overflow:hidden}
+@media (max-width:1099px){.hp{grid-template-columns:1fr;height:auto}.hp-q{border-right:0;border-bottom:1px solid var(--rule)}.dk.v-help .dk-page{overflow:auto}.hp-chat{min-height:70vh}}
 @media (max-width:1099px){
   .dk-banner{order:-2;grid-template-columns:1fr}.dk-sentR{align-items:flex-start;text-align:left}
   .dk-page{order:-1}.dkp-cols3,.dkp-grid2,.dkp-grid3{grid-template-columns:1fr}.dkp-grid4{grid-template-columns:1fr 1fr}
@@ -525,11 +547,13 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <div class="dk-logo">O</div>
     <button data-go="desk" class="on"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5a8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4z"/></svg>Desk</button>
     <button data-go="market"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>Market</button>
+    <button data-go="perf"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Results</button>
     <button data-go="journal"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Journal</button>
     <button data-go="review"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review</button>
     <button data-go="score"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Score</button>
     <button data-go="jason"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Calls</button>
     <div class="sp"></div>
+    <button data-go="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>Help</button>
     <button data-go="classic" title="The phone layout: Week, Coach, Journal, Market"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Classic</button>
     <button data-go="settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Settings</button>
   </nav>
@@ -760,6 +784,11 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
       <p class="hint">Connect once and the Desk keeps the sign-in (encrypted, on the server). Nothing is ever changed without an Approve click.</p>
     </div>
     <div style="margin-bottom:20px">
+      <label class="f">Limits &amp; goals</label>
+      <p class="hint" style="margin-top:0" id="sLimSum">Max loss per trade, weekly loss limit, trades per day, monthly goal.</p>
+      <button class="btn wide" id="sLimits">Change limits &amp; goals</button>
+    </div>
+    <div style="margin-bottom:20px">
       <input class="f" id="sKey" type="hidden">
       <p class="hint" style="margin-top:0">Market data needs no key any more — the routine and the bias card both read from the server.</p>
     </div>
@@ -774,6 +803,24 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <p class="hint" id="verStamp" style="margin-top:26px;text-align:center"></p>
   </div>
   <div class="ft"><button class="btn danger" id="sWipe">Erase all</button><button class="btn" id="sClose">Close</button><button class="btn solid" id="sSave">Save</button></div>
+</dialog>
+
+<dialog id="dlgLimits">
+  <div class="grip"></div><div class="hd"><h3>Limits &amp; goals</h3></div>
+  <div class="bd">
+    <p class="hint" style="margin-top:0">Change these any time. They apply straight away to the Results page and every new card. They're warnings, never blocks. The change is posted on the Desk.</p><div style="height:8px"></div>
+    <div class="grid g2">
+      <div style="grid-column:1/-1"><label class="f" for="lmPhase">Phase</label><select class="f" id="lmPhase"><option value="1">Phase 1 · Stop the big losses</option><option value="2">Phase 2 · Prove the edge</option><option value="3">Phase 3 · Scale</option></select></div>
+      <div><label class="f" for="lmTrade">Max loss on one trade ($)</label><input class="f" id="lmTrade" type="number" min="1" step="1" inputmode="numeric"></div>
+      <div><label class="f" for="lmWeek">Weekly loss limit ($): stop for the week</label><input class="f" id="lmWeek" type="number" min="1" step="1" inputmode="numeric"></div>
+      <div><label class="f" for="lmDay">Max trades per day</label><input class="f" id="lmDay" type="number" min="1" step="1" inputmode="numeric"></div>
+      <div><label class="f" for="lmGoal">Monthly profit goal (%)</label><input class="f" id="lmGoal" type="number" min="0" step="0.5" inputmode="decimal"></div>
+      <div><label class="f" for="lmWarn">Warn when one trade is over (% of account)</label><input class="f" id="lmWarn" type="number" min="1" step="1" inputmode="numeric"></div>
+      <div><label class="f" for="lmBig">A big-loss day is ($ or worse)</label><input class="f" id="lmBig" type="number" min="1" step="1" inputmode="numeric"></div>
+    </div>
+    <p class="hint" id="lmMsg">On a card, when a limit is crossed you'll see a ! flag, e.g. "Weekly limit hit: stop for the week". You can still approve.</p>
+  </div>
+  <div class="ft"><button class="btn" id="lmCancel">Cancel</button><button class="btn solid" id="lmSave">Save</button></div>
 </dialog>
 
 <dialog id="dlgTicket">
@@ -1744,7 +1791,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.2.0";
+const BUILD="3.3.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2751,16 +2798,16 @@ async function dkOauthReturn(){
    4 Oct 2026, approved mockup otto-v3.1-mockup.html. The sentiment banner
    (Josh's intermarket sheet on live TradingView data, verdict only, no sizing),
    desktop Market / Journal / Review / Score / Jason pages inside the Desk shell. */
-const DK_VIEWS=["desk","market","journal","review","score","jason"];
+const DK_VIEWS=["desk","market","perf","journal","review","score","jason","help"];
 function dkShow(v){
   if(!DK_VIEWS.includes(v))v="desk";
   DK.view=v;LS.set("dkView",v);
-  $("#dk").classList.toggle("v-page",v!=="desk");
+  $("#dk").classList.toggle("v-page",v!=="desk");$("#dk").classList.toggle("v-help",v==="help");
   $$(".dk-rail button").forEach(b=>b.classList.toggle("on",b.dataset.go===v));
   if(v==="desk"){dkRenderMsgs(true);return}
   const pg=$("#dkPage");pg.scrollTop=0;
   if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see this page.</p></div>`;return}
-  ({market:dkMarket,journal:dkJournal,review:dkReview,score:dkScore,jason:dkJason})[v]();
+  ({market:dkMarket,perf:dkPerf,journal:dkJournal,review:dkReview,score:dkScore,jason:dkJason,help:dkHelp})[v]();
 }
 const dkLoading=t=>`<div class="dk-empty" style="margin:60px auto">${esc(t||"Loading…")}</div>`;
 const dkErr=e=>`<div class="dk-empty dk-err" style="margin:60px auto">${esc(String(e&&e.message||e))}</div>`;
@@ -2990,6 +3037,147 @@ async function dkScore(){
   </div>`;
 }
 
+
+/* ================================================================ v3.3
+   5 Oct 2026, approved mockup otto-v3.3-mockup.html. Results (one team view:
+   both Robinhood accounts, P&L against the Phase goals), Limits & goals that
+   anyone on the Otto login can change (server: otto_settings), and Help, an
+   app-questions-only chat kept off the Desk. */
+const PHASES={1:"Phase 1 · Stop the big losses",2:"Phase 2 · Prove the edge",3:"Phase 3 · Scale"};
+const dk$=n=>n==null||!isFinite(n)?"—":`${n<0?"−":""}$${Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+const dk$0=n=>n==null||!isFinite(n)?"—":`${n<0?"−":n>0?"+":""}$${Math.abs(Math.round(n)).toLocaleString()}`;
+const dkMD=d=>{try{return new Date(d+"T12:00:00Z").toLocaleDateString([], {month:"short",day:"numeric"})}catch(e){return d}};
+
+async function dkPerf(force){
+  const pg=$("#dkPage");
+  if(!DK.perf||force)pg.innerHTML=dkLoading("Reading both Robinhood accounts…");
+  let j;try{j=await dkApi("performance",null,force?"&fresh=1":"");DK.perf=j}catch(e){if(DK.view==="perf")pg.innerHTML=dkErr(e);return}
+  if(DK.view!=="perf")return;
+  const L=j.limits,g=j.goals,r=j.realized;
+  // weekly bars, last 12 weeks, zero in the middle, yellow line at −weekly limit
+  const wk=(j.weeks||[]).slice(-12);
+  const top=Math.max(L.weekly_loss*1.15,...wk.map(w=>Math.abs(w.pnl)),1);
+  const y=v=>50-(v/top)*40;   // % from the top
+  const bars=wk.map(w=>{const h=Math.abs(w.pnl)/top*40,pos=w.pnl>=0;
+    return `<div class="pf-bar" title="Week of ${esc(dkMD(w.week))}: ${dk$(w.pnl)} · ${w.trades} trades">
+      ${w.pnl?`<i style="${pos?`bottom:50%`:`top:50%`};height:${h.toFixed(1)}%;background:${pos?"var(--up)":w.pnl<=-L.weekly_loss?"var(--down)":"rgba(255,80,0,.55)"}"></i>`:""}
+      <span class="v ${w.pnl>0?"up":w.pnl<0?"dn":"mut"}" style="${pos?`bottom:calc(50% + ${h.toFixed(1)}% + 2px)`:`top:calc(50% + ${h.toFixed(1)}% + 2px)`}">${w.pnl?dk$0(w.pnl):"$0"}</span>
+      <span class="lab">${esc(dkMD(w.week).replace(/^(\w+) /,(m,a)=>a.slice(0,3)+" "))}</span></div>`}).join("");
+  // goal rows
+  const goal=(lab,val,lim,txt,note,good)=>{const p=Math.max(0,Math.min(1,lim?Math.abs(val)/Math.abs(lim):0));
+    const col=good?"var(--blue)":p>=1?"var(--down)":p>=.7?"var(--warn)":"var(--up)";
+    return `<div class="pf-goal"><span>${lab}</span><span class="mono">${txt}</span><div class="pf-prog"><i style="width:${Math.round(p*100)}%;background:${col}"></i></div>${note?`<small>${note}</small>`:""}</div>`};
+  const wkLoss=Math.min(0,g.week_pnl),worst=Math.min(0,g.worst_trade_week);
+  const goals=[
+    goal("Weekly loss limit",wkLoss,L.weekly_loss,`${dk$0(g.week_pnl)} / −$${L.weekly_loss}`,g.week_pnl<=-L.weekly_loss?`<span class="dn">Limit hit: stop for the week.</span>`:g.week_pnl<0?`$${Math.round(L.weekly_loss+g.week_pnl)} left before the stop`:"On track"),
+    goal("Biggest single loss this week",worst,L.max_trade_loss,`${dk$0(worst)} / −$${L.max_trade_loss}`,worst<-L.max_trade_loss?`<span class="dn">Over the per-trade limit.</span>`:"On track"),
+    goal("Trades today",g.trades_today,L.max_trades_day,`${g.trades_today} / ${L.max_trades_day}`,g.trades_today>=L.max_trades_day?`<span class="warn">That's the limit for today.</span>`:""),
+    goal(`Weeks in a row without a −$${L.big_day} week`,Math.min(g.clean_weeks,8),8,`${g.clean_weeks} / 8`,L.phase<2?"Phase 2 unlocks at 8":"",true),
+  ];
+  if(L.phase>=2)goals.push(goal(`Monthly goal (${L.monthly_goal_pct}% of the account)`,Math.max(0,g.month_pnl),g.month_goal||1,`${dk$0(g.month_pnl)} / +$${Math.round(g.month_goal)}`,"",true));
+  const row=(a,b)=>`<div class="dk-row"><span>${a}</span><span class="mono">${b}</span></div>`;
+  const big=(j.big_days||[]).map(d=>row(`${esc(dkMD(d.date))} · ${d.trades} trade${d.trades===1?"":"s"}`,`<span class="dn">${dk$(d.pnl)}</span>`)).join("")||`<div class="mut">None. Keep it that way.</div>`;
+  const h=j.how||{},ru=j.rules||{},dy=j.days||{};
+  const cpTxt=c=>c&&c.n?`${c.n} · ${dk$0(c.pnl)}`:"—";
+  const ruTxt=c=>c&&c.n?`${c.n} · ${dk$0(c.pnl)}`:`<span class="mut">starts now</span>`;
+  const accts=(j.accounts||[]).map(a=>`${esc(a.label)} ${dk$(a.value)}`).join(" · ");
+  pg.innerHTML=`<div class="dkp">
+    <div class="dkp-head"><h2>Results</h2><span class="mut">You and Josh, one team · options (stocks and futures slot in later)</span>
+      <span class="dk-tag near">${esc(PHASES[L.phase]||"Phase "+L.phase)}</span>
+      <span class="pf-range"><button class="dk-btn sec" id="pfLim">Limits &amp; goals</button><button class="dk-btn j" id="pfRef">Refresh</button></span></div>
+    ${j.read?`<div class="pf-read"><b>Jarvis:</b> ${esc(j.read)}</div>`:""}
+    <div class="dkp-grid4">
+      <div class="dk-cardx dk-stat"><div class="n ${r.since_start<0?"dn":"up"}">${dk$(r.since_start)}</div><div class="l">Realized P&amp;L${j.first_trade_day?` since ${esc(dkMD(j.first_trade_day))}`:""}${r.trades?` · ${r.trades} closing trades`:""}</div></div>
+      <div class="dk-cardx dk-stat"><div class="n">${dk$(j.combined)}</div><div class="l">Combined account value${accts?` · ${accts}`:""}</div></div>
+      <div class="dk-cardx dk-stat"><div class="n">${(j.big_days||[]).length}</div><div class="l">Big-loss days (−$${L.big_day} or worse) · ${dk$0(j.big_total)}</div></div>
+      <div class="dk-cardx dk-stat"><div class="n ${j.rest_total>=0?"up":"dn"}">${dk$0(j.rest_total)}</div><div class="l">Every other day, combined</div></div></div>
+    <div class="pf-g2">
+      <div class="dk-cardx"><div class="dk-h">Weekly P&amp;L <b>yellow line = your weekly loss limit (−$${L.weekly_loss})</b></div>
+        ${wk.length?`<div class="pf-bars"><div class="pf-zero" style="top:50%"></div><div class="pf-limit" style="top:${y(-L.weekly_loss).toFixed(1)}%"></div>${bars}</div>`:`<div class="dk-empty" style="margin:30px auto">No closed trades yet.</div>`}</div>
+      <div class="dk-cardx"><div class="dk-h">${esc((PHASES[L.phase]||"").split(" · ")[0]||"Phase")} goals · this week <b><a href="#" id="pfLim2" class="dk-why">change in Limits &amp; goals</a></b></div>${goals.join("")}</div></div>
+    <div class="dkp-grid3">
+      <div class="dk-cardx"><div class="dk-h">Big-loss days <b>where the money went</b></div>${big}</div>
+      <div class="dk-cardx"><div class="dk-h">How we trade</div>
+        ${row("Winning days / losing days",`${dy.winning||0} / ${dy.losing||0}`)}
+        ${row("Average winning day",dy.avg_win!=null?`<span class="up">${dk$0(dy.avg_win)}</span>`:"—")}
+        ${row("Average losing day",dy.avg_loss!=null?`<span class="dn">${dk$0(dy.avg_loss)}</span>`:"—")}
+        ${row("Calls (trades · P&amp;L)",cpTxt(h.calls))}${row("Puts (trades · P&amp;L)",cpTxt(h.puts))}
+        ${row("Best ticker",h.best?`${esc(h.best.s)} ${dk$0(h.best.pnl)}`:"—")}${row("Worst ticker",h.worst?`${esc(h.worst.s)} ${dk$0(h.worst.pnl)}`:"—")}</div>
+      <div class="dk-cardx"><div class="dk-h">Rules vs results <b>from the rule check</b></div>
+        ${row("Trades that followed every rule",ruTxt(ru.followed))}${row("Trades that broke one",ruTxt(ru.broke))}
+        ${row(`Lost more than $${L.max_trade_loss} on one trade`,ru.over_limit&&ru.over_limit.n?`<span class="dn">${ru.over_limit.n} · ${dk$0(ru.over_limit.pnl)}</span>`:"0")}
+        <div class="mut" style="font-size:11.5px;margin-top:6px">Followed / broke fill in as trades go through Desk cards with a rule check. The over-the-limit count uses every closed trade in the Journal.</div></div></div>
+    <div class="mut" style="font-size:11.5px">Robinhood's realized P&amp;L for both accounts, as of ${esc(dkDate(j.as_of))}. Weeks run Monday to Friday, New York time. Trade counts and calls vs puts come from the Journal.</div>
+  </div>`;
+  $("#pfRef").addEventListener("click",()=>dkPerf(true));
+  $("#pfLim").addEventListener("click",openLimits);
+  $("#pfLim2").addEventListener("click",e=>{e.preventDefault();openLimits()});
+}
+
+/* ---------- Limits & goals ---------- */
+async function openLimits(){
+  if(DK.locked)return toast("Sign in with the Otto login first");
+  const m=$("#lmMsg");m.className="hint";m.textContent="Loading…";
+  $("#dlgLimits").showModal();
+  try{const j=await dkApi("limits_get");const L=j.limits;
+    $("#lmPhase").value=String(L.phase);$("#lmTrade").value=L.max_trade_loss;$("#lmWeek").value=L.weekly_loss;$("#lmDay").value=L.max_trades_day;
+    $("#lmGoal").value=L.monthly_goal_pct;$("#lmWarn").value=L.warn_pct;$("#lmBig").value=L.big_day;
+    m.textContent="On a card, when a limit is crossed you'll see a ! flag, e.g. “Weekly limit hit: stop for the week”. You can still approve.";
+  }catch(e){m.className="hint dk-err";m.textContent=String(e.message).slice(0,200)}
+}
+$("#sLimits").addEventListener("click",()=>{$("#dlgSet").close();openLimits()});
+$("#lmCancel").addEventListener("click",()=>$("#dlgLimits").close());
+$("#lmSave").addEventListener("click",async()=>{
+  const b=$("#lmSave"),m=$("#lmMsg");
+  const body={phase:+$("#lmPhase").value,max_trade_loss:+$("#lmTrade").value,weekly_loss:+$("#lmWeek").value,max_trades_day:+$("#lmDay").value,
+    monthly_goal_pct:+$("#lmGoal").value,warn_pct:+$("#lmWarn").value,big_day:+$("#lmBig").value,author:($("#dkWho")&&$("#dkWho").value)||"Ifoma"};
+  b.disabled=true;b.textContent="Saving…";
+  try{await dkApi("limits_set",body);$("#dlgLimits").close();toast("Limits saved");DK.perf=null;
+    if(DK.open&&DK.view==="perf")dkPerf(true);else if(DK.open&&DK.view==="desk")dkLoadLog().catch(()=>{});
+  }catch(e){m.className="hint dk-err";m.textContent=String(e.message).slice(0,200)}
+  b.disabled=false;b.textContent="Save";
+});
+
+/* ---------- Help (app questions only) ---------- */
+const HELP_QS=["Does the order ticket place my trade right away?","What's the difference between my two Robinhood accounts?","What does the sentiment banner mean?",
+  "Why did a card say “rule check: 2 flags”?","How do I add Jason's levels to my TradingView chart?","How do I log a new call?","How do I change my limits?",
+  "What does the yellow line on the Results chart mean?","What does R mean on the Scorecard?","Why is the Desk locked?","What happens when a TradingView alert fires?"];
+function dkHelp(){
+  const pg=$("#dkPage");
+  pg.innerHTML=`<div class="hp">
+    <div class="hp-q"><div class="dk-h">Common questions</div>${HELP_QS.map(q=>`<button data-q="${esc(q)}">${esc(q)}</button>`).join("")}
+      <button id="hpClear" style="margin-top:10px;border-style:dashed;color:var(--ink-3)">Clear this chat</button></div>
+    <div class="hp-chat">
+      <div class="dk-head"><b>Help</b><span class="dk-pill">questions about the app only · separate from the Desk</span></div>
+      <div class="dk-msgs" id="hpMsgs"></div>
+      <div class="dk-compose"><textarea id="hpIn" rows="1" placeholder="Ask anything about how Otto works…"></textarea><button class="dk-go" id="hpGo">Ask</button></div>
+    </div></div>`;
+  dkHelpRender();
+  $$("#dkPage [data-q]").forEach(b=>b.addEventListener("click",()=>dkHelpAsk(b.dataset.q)));
+  $("#hpClear").addEventListener("click",()=>{LS.set("help",[]);dkHelpRender()});
+  $("#hpGo").addEventListener("click",()=>dkHelpAsk($("#hpIn").value));
+  $("#hpIn").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();dkHelpAsk($("#hpIn").value)}});
+}
+function dkHelpRender(){
+  const el=$("#hpMsgs");if(!el)return;const h=LS.get("help",[]);
+  el.innerHTML=h.length?h.map(m=>m.role==="user"?`<div class="dk-m me"><div class="dk-mw">${esc(m.who||"You")}</div>${esc(m.content)}</div>`
+      :`<div class="dk-m ai${m.err?" dk-err":""}"><div class="dk-mw">Otto Help</div><div class="md">${m.pending?`<span class="mut">Thinking…</span>`:md(m.content)}</div></div>`).join("")
+    :`<div class="dk-empty">Ask how any part of Otto works: a screen, a button, a word on a card. Trading questions go to Jarvis on the Desk.</div>`;
+  el.scrollTop=el.scrollHeight;
+}
+async function dkHelpAsk(q){
+  q=String(q||"").trim();if(!q||DK.helpBusy)return;
+  if(DK.locked)return toast("Sign in with the Otto login first");
+  DK.helpBusy=true;$("#hpIn")&&($("#hpIn").value="");
+  const h=LS.get("help",[]).filter(m=>!m.pending&&!m.err);
+  h.push({role:"user",content:q,who:($("#dkWho")&&$("#dkWho").value)||"You"});
+  LS.set("help",h.concat([{role:"assistant",content:"",pending:true}]));dkHelpRender();
+  let a;
+  try{const j=await dkApi("help",{messages:h.slice(-12).map(m=>({role:m.role,content:m.content}))});a={role:"assistant",content:j.text||"(no answer)"}}
+  catch(e){a={role:"assistant",content:"Couldn't answer: "+String(e.message).slice(0,160),err:true}}
+  LS.set("help",h.concat([a]).slice(-40));DK.helpBusy=false;
+  if(DK.view==="help")dkHelpRender();
+}
 
 /* ---------- v3.2: order ticket ---------- */
 $("#dkTicketBtn").addEventListener("click",()=>{

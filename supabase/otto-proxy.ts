@@ -1,5 +1,7 @@
 // Otto Trader — server side. One Edge Function.
 //
+//   v3.3 (5 Oct 2026): ?fn=performance (Results page), limits_get/limits_set
+//   (editable limits & goals, otto_settings), ?fn=help (app-questions chat).
 //   v3.2 (5 Oct 2026): the AI is called Jarvis; ?fn=ticket (Buy/Sell form);
 //   ?fn=cron_alerts (TradingView alert watcher, posts fires to the Desk).
 //   v3.0 THE DESK (4 Oct 2026): ?fn=desk act panel desk_log oauth_start
@@ -1057,14 +1059,16 @@ async function proposeAction(input: any, who: string, opts: { manual?: boolean }
     } catch { /* shown as unknown */ }
   }
   const pct = account_value && costKnown ? cost / account_value : null;
+  const LIM = await getLimits().catch(() => LIMIT_DEFAULTS);
   const risk = {
-    cost: costKnown ? cost : null, account_value, pct,
-    flag: pct !== null && pct > RISK_FLAG, notes, account: out.some((c) => c.service === "rh") ? mask(await agenticAccount().catch(() => "????")) : null,
+    cost: costKnown ? cost : null, account_value, pct, warn_pct: LIM.warn_pct,
+    flag: pct !== null && pct > LIM.warn_pct / 100, notes, account: out.some((c) => c.service === "rh") ? mask(await agenticAccount().catch(() => "????")) : null,
   };
   let banner: any = null, checks: any[] = [];
   if (opening) {
     try { const b = await sentimentNow(); banner = { verdict: b.verdict, score: b.score, fresh: b.fresh, at: b.at }; } catch { /* */ }
     try { checks = await ruleChecks(out, plan, risk, banner); } catch (e) { checks = [{ ok: null, text: "Rule check failed: " + (e as Error).message }]; }
+    try { checks = checks.concat(await limitChecks(risk.cost)); } catch { /* */ }
   }
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
     title: String(input.title || "Action").slice(0, 140),
@@ -1440,7 +1444,8 @@ async function desk(req: Request, who: string, _apiKey: string) {
   const now = new Date().toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short",
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const bn = sent.ok ? `Banner: ${sent.v.verdict} (score ${sent.v.score}, ${sent.v.fresh}/${sent.v.total} legs fresh; fired: ${sent.v.rows.filter((r: any) => r.fired).map((r: any) => "row " + r.row).join(", ") || "none"}).` : "Banner: unavailable.";
-  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn}]`;
+  const LIM = await getLimits().catch(() => LIMIT_DEFAULTS);
+  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their own limits (Phase ${LIM.phase}): max loss per trade $${LIM.max_trade_loss}, weekly loss limit $${LIM.weekly_loss}, ${LIM.max_trades_day} trades/day, warn over ${LIM.warn_pct}% of the account — size ideas inside these and say so when an idea would break one.]`;
 
   const msgs: any[] = history.map((m: any, i: number) => {
     const role = m.role === "assistant" ? "assistant" : "user";
@@ -1742,7 +1747,7 @@ async function ruleChecks(out: any[], plan: any, risk: any, banner: any) {
   else add(null, "Delta: couldn't read the quote");
   if (q?.volume != null && q?.open_interest != null) add(Number(q.volume) > Number(q.open_interest), `Volume ${q.volume} vs open interest ${q.open_interest} (Jason: volume > OI)`);
   else add(null, "Volume vs open interest: not available");
-  if (risk?.pct != null) add(risk.pct <= RISK_FLAG, `${Math.round(risk.pct * 100)}% of the account (flag above 20%)`);
+  if (risk?.pct != null) add(risk.pct <= (risk.warn_pct || 20) / 100, `${Math.round(risk.pct * 100)}% of the account (flag above ${risk.warn_pct || 20}%)`);
   else add(null, "Size vs account: unknown (no limit price)");
 
   const exp = ins?.expiration_date || null;
@@ -2136,6 +2141,215 @@ In 3–4 short sentences for Ifoma and Josh: what this level is (search Jason's 
   return { ok: true, fired: fresh.length };
 }
 
+
+/* ===================================================================== v3.3
+   5 Oct 2026 — Results page, editable limits & goals, Help chat.
+   Limits live in otto_settings (007_v33.sql) so Ifoma and Josh change them in
+   Settings with no code. They are warnings on cards, never blocks. */
+
+const LIMIT_DEFAULTS = { phase: 1, max_trade_loss: 100, weekly_loss: 150, max_trades_day: 2, monthly_goal_pct: 5, warn_pct: 20, big_day: 500 };
+async function getLimits(): Promise<any> {
+  return cached("limits", 30e3, async () => {
+    try {
+      const r = await db("otto_settings?key=eq.limits&select=value,updated_by,updated_at");
+      return { ...LIMIT_DEFAULTS, ...(r?.[0]?.value || {}), _by: r?.[0]?.updated_by || null, _at: r?.[0]?.updated_at || null };
+    } catch { return { ...LIMIT_DEFAULTS }; }
+  });
+}
+async function setLimits(body: any, who: string) {
+  const cur: any = await getLimits();
+  const v: any = { ...cur, ...Object.fromEntries(Object.entries(body || {}).filter(([, x]) => x !== "" && x != null)) };
+  const by = String(body?.author || "").trim().slice(0, 40) || who.split("@")[0];
+  const num = (k: string, lo: number, hi: number) => {
+    const n = Number(v[k]); if (!isFinite(n) || n < lo || n > hi) throw new Error(`${k.replace(/_/g, " ")} must be between ${lo} and ${hi}`); return n;
+  };
+  const value = { phase: num("phase", 1, 3), max_trade_loss: num("max_trade_loss", 1, 1e6), weekly_loss: num("weekly_loss", 1, 1e6),
+    max_trades_day: num("max_trades_day", 1, 100), monthly_goal_pct: num("monthly_goal_pct", 0, 100), warn_pct: num("warn_pct", 1, 100),
+    big_day: num("big_day", 1, 1e7) };
+  await db("otto_settings?on_conflict=key", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ key: "limits", value, updated_by: by + " (" + who + ")", updated_at: new Date().toISOString() }) });
+  delete CACHE.limits;
+  await logDesk("system", "Otto", `Limits updated by ${by}: max loss/trade $${value.max_trade_loss}, weekly loss limit $${value.weekly_loss}, ${value.max_trades_day} trades/day, goal ${value.monthly_goal_pct}%/month, warn over ${value.warn_pct}% of the account.`);
+  return { ...value, _by: who, _at: new Date().toISOString() };
+}
+
+// Daily realized P&L, both accounts combined (Robinhood's own P&L numbers).
+async function dailyPnl(): Promise<{ days: any[]; total_all: number | null; trades: number }> {
+  return cached("dailypnl", 5 * 60e3, async () => {
+    const by: Record<string, { pnl: number; trades: number }> = {};
+    let totalAll = 0, gotAll = false, trades = 0;
+    for (const a of await allAccounts()) {
+      try {
+        const j = mcpJson(await call("rh", "get_realized_pnl", { account_number: a.n, span: "3month", timezone: "America/New_York" }));
+        for (const d of j?.data?.data_points || []) {
+          if (d.realized_gain == null && !d.number_of_trades) continue;
+          const day = etParts(new Date(Date.parse(d.start_time) + 6 * 3600e3)).date;
+          const e = by[day] ||= { pnl: 0, trades: 0 };
+          e.pnl += Number(d.realized_gain || 0); e.trades += Number(d.number_of_trades || 0); trades += Number(d.number_of_trades || 0);
+        }
+      } catch { /* one account failing shouldn't blank the page */ }
+      try {
+        const y = mcpJson(await call("rh", "get_realized_pnl", { account_number: a.n, span: "all" }));
+        if (y?.data?.total_returns != null) { totalAll += Number(y.data.total_returns); gotAll = true; }
+      } catch { /* */ }
+    }
+    const days = Object.entries(by).map(([date, v]) => ({ date, pnl: +v.pnl.toFixed(2), trades: v.trades })).sort((a, b) => a.date.localeCompare(b.date));
+    return { days, total_all: gotAll ? +totalAll.toFixed(2) : null, trades };
+  });
+}
+
+async function performance(apiKey: string, wantRead: boolean, fresh = false) {
+  const L = await getLimits();
+  if (fresh) delete CACHE["dailypnl"];
+  const now = etParts();
+  const [pnl, accts] = await Promise.all([dailyPnl(), allAccounts()]);
+  const values = await Promise.all(accts.map(async (a) => {
+    try { const p = mcpJson(await call("rh", "get_portfolio", { account_number: a.n })); return { label: a.label, value: Number(p?.data?.total_value || 0), cash: Number(p?.data?.cash || 0) }; }
+    catch { return { label: a.label, value: null, cash: null }; }
+  }));
+  const combined = values.reduce((s, v) => s + (v.value || 0), 0);
+  const days = pnl.days;
+  const first = days.find((d) => d.trades > 0)?.date || null;
+  // weeks (Mon–Fri, New York time)
+  const weeks: Record<string, { pnl: number; trades: number }> = {};
+  days.forEach((d) => { const w = mondayOf(d.date); const e = weeks[w] ||= { pnl: 0, trades: 0 }; e.pnl += d.pnl; e.trades += d.trades; });
+  const thisWeek = mondayOf(now.date);
+  if (!weeks[thisWeek]) weeks[thisWeek] = { pnl: 0, trades: 0 };
+  const weekList = Object.entries(weeks).map(([week, v]) => ({ week, pnl: +v.pnl.toFixed(2), trades: v.trades })).sort((a, b) => a.week.localeCompare(b.week))
+    .filter((w) => !first || w.week >= mondayOf(first));
+  const traded = days.filter((d) => d.trades > 0 && d.pnl !== 0);
+  const wins = traded.filter((d) => d.pnl > 0), losses = traded.filter((d) => d.pnl < 0);
+  const big = traded.filter((d) => d.pnl <= -L.big_day).sort((a, b) => a.pnl - b.pnl);
+  const sum = (l: any[]) => l.reduce((s, d) => s + d.pnl, 0);
+  // weeks in a row (most recent completed weeks) without a big week
+  let cleanWeeks = 0;
+  for (const w of weekList.filter((w) => w.week < thisWeek).reverse()) { if (w.pnl > -L.big_day) cleanWeeks++; else break; }
+  // this week / today, from the Journal (single-trade detail) and Robinhood orders
+  let trades: any[] = [];
+  try { await syncJournal(); trades = await db("otto_trades?select=*&order=opened_at.desc&limit=400"); } catch { /* */ }
+  const inWeek = (t: string | null) => !!t && etParts(new Date(t)).date >= thisWeek;
+  const weekTrades = trades.filter((t) => t.pnl != null && inWeek(t.closed_at));
+  const worstThisWeek = weekTrades.reduce((m, t) => Math.min(m, Number(t.pnl)), 0);
+  const tradesToday = trades.filter((t) => t.opened_at && etParts(new Date(t.opened_at)).date === now.date).length;
+  const monthStart = now.date.slice(0, 8) + "01";
+  const monthPnl = days.filter((d) => d.date >= monthStart).reduce((s, d) => s + d.pnl, 0);
+  // how we trade (from the Journal)
+  const closed = trades.filter((t) => t.pnl != null && (t.status === "closed" || t.status === "expired"));
+  const cp: any = { calls: { n: 0, pnl: 0 }, puts: { n: 0, pnl: 0 } };
+  const tick: Record<string, number> = {};
+  closed.forEach((t) => { const k = / \d+(\.\d+)?P /.test(t.contract + " ") ? "puts" : "calls"; cp[k].n++; cp[k].pnl += Number(t.pnl); tick[t.symbol] = (tick[t.symbol] || 0) + Number(t.pnl); });
+  const tickers = Object.entries(tick).map(([s, v]) => ({ s, pnl: +v.toFixed(2) })).sort((a, b) => b.pnl - a.pnl);
+  // rules vs results (trades linked to a Desk card with a rule check)
+  const ids = [...new Set(closed.map((t) => t.action_id).filter(Boolean))];
+  const acts = ids.length ? await db("otto_actions?select=id,checks&id=in.(" + ids.join(",") + ")").catch(() => []) : [];
+  const chk: Record<string, any[]> = Object.fromEntries(acts.map((a: any) => [a.id, a.checks || []]));
+  const followed = closed.filter((t) => chk[t.action_id] && chk[t.action_id].every((c: any) => c.ok !== false));
+  const broke = closed.filter((t) => chk[t.action_id] && chk[t.action_id].some((c: any) => c.ok === false));
+  const overLimit = closed.filter((t) => Number(t.pnl) < -L.max_trade_loss);
+  const out: any = {
+    ok: true, limits: L, as_of: new Date().toISOString(), first_trade_day: first,
+    accounts: values, combined: +combined.toFixed(2),
+    realized: { since_start: pnl.total_all ?? +sum(days).toFixed(2), last_90d: +sum(days).toFixed(2), trades: pnl.trades },
+    weeks: weekList,
+    days: { winning: wins.length, losing: losses.length, avg_win: wins.length ? +(sum(wins) / wins.length).toFixed(2) : null,
+      avg_loss: losses.length ? +(sum(losses) / losses.length).toFixed(2) : null },
+    big_days: big.map((d) => ({ date: d.date, pnl: d.pnl, trades: d.trades })), big_total: +sum(big).toFixed(2),
+    rest_total: +(sum(traded) - sum(big)).toFixed(2),
+    goals: {
+      week_pnl: +(weeks[thisWeek]?.pnl || 0).toFixed(2), worst_trade_week: +worstThisWeek.toFixed(2), trades_today: tradesToday,
+      clean_weeks: cleanWeeks, month_pnl: +monthPnl.toFixed(2), month_goal: +(combined * L.monthly_goal_pct / 100).toFixed(2),
+    },
+    how: { calls: { n: cp.calls.n, pnl: +cp.calls.pnl.toFixed(2) }, puts: { n: cp.puts.n, pnl: +cp.puts.pnl.toFixed(2) },
+      best: tickers[0] || null, worst: tickers.length > 1 ? tickers[tickers.length - 1] : null },
+    rules: { followed: { n: followed.length, pnl: +sum(followed.map((t) => ({ pnl: Number(t.pnl) }))).toFixed(2) },
+      broke: { n: broke.length, pnl: +sum(broke.map((t) => ({ pnl: Number(t.pnl) }))).toFixed(2) },
+      over_limit: { n: overLimit.length, pnl: +sum(overLimit.map((t) => ({ pnl: Number(t.pnl) }))).toFixed(2) } },
+  };
+  // Jarvis's read — one short paragraph, cached per day and per change in the numbers
+  const readKey = `read|${now.date}|${out.realized.since_start}|${out.goals.week_pnl}|${L.max_trade_loss}|${L.weekly_loss}`;
+  if (CACHE[readKey]) out.read = CACHE[readKey].v;
+  else if (wantRead && apiKey) {
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: MODEL, max_tokens: 300,
+          system: "You are Jarvis on the Otto trading desk, writing the 2–3 sentence summary at the top of Ifoma and Josh's Results page. They trade as one team. Plain words, numbers first, no hype, no lecturing. Say where they are against their limits and the one thing that matters most. Never give sizing beyond their own limits.",
+          messages: [{ role: "user", content: JSON.stringify({ realized_since_start: out.realized.since_start, combined_value: out.combined, weeks: out.weeks.slice(-8),
+            big_days: out.big_days, rest_total: out.rest_total, days: out.days, goals: out.goals, limits: { phase: L.phase, max_trade_loss: L.max_trade_loss, weekly_loss: L.weekly_loss, max_trades_day: L.max_trades_day } }) }] }) });
+      const j = await r.json();
+      out.read = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("").trim();
+      CACHE[readKey] = { at: Date.now(), v: out.read };
+    } catch { /* page works without it */ }
+  }
+  return out;
+}
+
+// Limit checks that go on every opening card, next to the rule check.
+async function limitChecks(cost: number | null): Promise<any[]> {
+  const L = await getLimits();
+  const out: any[] = [];
+  if (cost != null) out.push({ ok: cost <= L.max_trade_loss, text: `Most this trade can lose: $${cost.toFixed(0)} (your limit $${L.max_trade_loss})` });
+  try {
+    const p = await dailyPnl();
+    const wk = mondayOf(etParts().date);
+    const weekPnl = p.days.filter((d) => d.date >= wk).reduce((s, d) => s + d.pnl, 0);
+    out.push({ ok: weekPnl > -L.weekly_loss, text: weekPnl <= -L.weekly_loss
+      ? `Weekly limit hit ($${weekPnl.toFixed(0)} of −$${L.weekly_loss}): stop for the week`
+      : `This week $${weekPnl.toFixed(0)} (stop at −$${L.weekly_loss})` });
+  } catch { out.push({ ok: null, text: "Weekly P&L: couldn't read Robinhood" }); }
+  try {
+    const today = etParts().date;
+    const t = await db("otto_trades?select=opened_at&opened_at=gte." + new Date(Date.now() - 864e5).toISOString());
+    const n = t.filter((x: any) => etParts(new Date(x.opened_at)).date === today).length;
+    out.push({ ok: n < L.max_trades_day, text: `Trade ${n + 1} today (limit ${L.max_trades_day})` });
+  } catch { /* */ }
+  return out;
+}
+
+/* ------------------------------------------------------------ Help chat
+   App questions only, kept off the Desk. No tools, no account access. */
+const HELP_SYS = `You are Otto Help, the in-app guide for Otto Trader. You answer questions about HOW THE APP WORKS — what a screen shows, what a button does, how to change a setting, what a term on the screen means. You do not give trading advice or market opinions: if someone asks whether to take a trade, what a stock will do, or anything about live prices or their positions, say in one line that that's a question for Jarvis on the Desk, and stop. Be short and concrete: name the exact screen and button. If you don't know or the app doesn't do something, say so plainly — never invent a feature.
+
+THE APP (Otto Trader, desktop-first; phones get a stacked layout)
+- Left rail: Desk, Market, Results, Journal, Review, Score, Calls, Classic (the older phone-style screens), Help, Settings.
+- The Desk is locked to the Otto login (one shared login for Ifoma and Josh; they're one team). "At the desk" picker labels who is typing.
+- Jarvis = the AI on the Desk. Built on Jason Murray's method (his recorded calls), plus live TradingView data and Robinhood. One shared conversation on every laptop.
+- Sentiment banner (top of every Desk screen): Josh's Intermarket Sentiment Cheat Sheet on live TradingView data — 10Y yield, DXY, USD/JPY, crude, ES/NQ/YM futures. Verdicts: Leaning long / Mildly long — small size / No edge / Choppy — stand aside / Mildly short / Leaning short / No read. Chips show which rows of Josh's sheet fired. "Why this verdict?" explains. Refreshes every 5 minutes in market hours. It's Josh's sheet, not Jason's; it never sizes trades. The flag line shows where Josh's sheet and Jason disagree (Jason: don't trade the first 30 minutes).
+- Cards: anything that would change something (an order, a cancel, an alert, a watchlist edit) appears as a card with Approve / Reject. Nothing runs until someone clicks Approve and confirms "Place this with real money?". Cards expire after 20 minutes (prices move) — ask again for a fresh one. A card shows: the ticket, max cost and % of the account, Robinhood's own pre-check ("review"), the rule check, and limit checks.
+- Rule check: first 30 minutes, delta 0.30–0.40, volume > open interest, % of account vs the warn line, expiry (no this-Friday after Wednesday, no 0DTE), binary events (CPI/NFP/Fed etc.) before expiry, earnings before expiry, and whether it agrees with the banner. ✓ pass, ! flag, ? couldn't check. Flags are warnings; you can still approve.
+- Limit checks: most the trade can lose vs "max loss per trade", this week's P&L vs the weekly loss limit, and trade count vs trades per day. Change them in Settings → Limits & goals. Warnings only.
+- Order ticket (button next to "+ Chart" on the Desk): Buy to open / Sell to close, ticker, call/put, expiry, strike, contracts, limit price (per share — $2.10 means $210 per contract), setup, optional TP1 and "wrong if" price. It does NOT place the order; it makes a card. After Approve it is sent as a limit order good for the day: it fills only if price reaches the limit, otherwise it expires at the close. Robinhood may also ask for a confirm in its own app.
+- Robinhood: two accounts. Individual (read-only to Otto: positions, history, P&L). Agentic (the only one Otto can trade in, only after Approve). Otto can't move or withdraw money. Options level 2: long calls/puts, covered calls, cash-secured puts; no spreads.
+- TradingView alerts: during market hours Otto checks the alert log every 2 minutes; a fired alert posts to the Desk with a short read from Jarvis (in-app, not a phone push). Jarvis can't draw on TradingView charts.
+- Calls page: every processed call with Jason (homework, rules, setups, insights, levels, glossary, questions for the next call). "TradingView levels" card → Copy script → TradingView Pine Editor → paste over everything → Save → Add to chart. Draws the last ~5 weeks of call levels on the ticker you're viewing (newest call orange, older gray). Re-copy after each call. Levels are dated marks, not live prices.
+- Log a call (Review page): pick the call's transcript file (.vtt from Zoom); it's read into the brain and Jarvis proposes alerts for the new levels as a card.
+- Market page: Josh's 8 rows live, Jason's six-step routine, Mag 7, what's moving, plan of attack, economic calendar, watchlist earnings.
+- Results page: combined P&L for both accounts (Robinhood's realized numbers), account values, weekly bars with the weekly-limit line, Phase goals (weekly loss, biggest single loss this week, trades today, weeks in a row without a big week), big-loss days, how we trade (winning/losing days, calls vs puts, best/worst ticker), rules vs results, and a short read from Jarvis. Options today; stocks and futures will slot in later.
+- Limits & goals (Settings): phase (1 stop the big losses / 2 prove the edge / 3 scale), max loss per trade ($), weekly loss limit ($), max trades per day, monthly goal (%), warn when a trade is over X% of the account, and what counts as a big-loss day ($). Starting values: $100, $150, 2, 5%, 20%, $500. Anyone on the Otto login can change them; the change is posted on the Desk.
+- Journal: fills from both Robinhood accounts (last 120 days), round trips matched automatically; each trade asks for one line on why (Jason's rule). Desk card trades link to their ticket and rule check.
+- Review: builds itself Friday after the close — biggest wins/losses, rules followed/broken, the pattern, one thing for next week. "Build this week now" runs it any time. "For Jason" packet drafts what to send him before the next call.
+- Score: every opening card is tracked, taken or not, and graded on the underlying: did price reach TP1 before the "wrong if" price (5-minute bars; if one bar touches both it counts as a loss). R = result measured in units of the planned risk (+2R = made twice what you risked). Passed ideas are hypothetical.
+- 8:45 morning read: every weekday at 8:45 ET Jarvis posts a read on the Desk automatically.
+- Settings: sign in with the Otto email (6-digit code or paste the sign-in link), connect/disconnect TradingView and Robinhood (Robinhood: paste the "This site can't be reached" localhost address back into Otto once), Limits & goals, the older bias thresholds.
+- "the call" = the coaching call with Jason; the day changes week to week.`;
+
+async function helpAnswer(body: any, apiKey: string) {
+  const hist = (Array.isArray(body.messages) ? body.messages : []).slice(-12)
+    .map((m: any) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content || "").slice(0, 2000) }))
+    .filter((m: any) => m.content);
+  while (hist.length && hist[0].role !== "user") hist.shift();
+  if (!hist.length || hist[hist.length - 1].role !== "user") throw new Error("ask a question");
+  const L = await getLimits();
+  const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: MODEL, max_tokens: 700,
+      system: [{ type: "text", text: HELP_SYS + `\n\nCURRENT LIMITS: ${JSON.stringify({ phase: L.phase, max_trade_loss: L.max_trade_loss, weekly_loss: L.weekly_loss, max_trades_day: L.max_trades_day, monthly_goal_pct: L.monthly_goal_pct, warn_pct: L.warn_pct, big_day: L.big_day })}`, cache_control: { type: "ephemeral" } }],
+      messages: hist }) });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message || "API error");
+  return (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
+}
+
 /* --------------------------------------------------------------- transport */
 
 Deno.serve(async (req) => {
@@ -2189,7 +2403,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, email: claims.email || null, anonymous: !!claims.is_anonymous, desk: !!deskUser(claims) });
     }
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
-         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket"].includes(fn)) {
+         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "performance", "help"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -2222,6 +2436,10 @@ Deno.serve(async (req) => {
         return json({ ok: true, review: await weeklyReview(apiKey, who) });
       }
       if (fn === "score") return json(await scorecard());
+      if (fn === "limits_get") return json({ ok: true, limits: await getLimits() });
+      if (fn === "limits_set") return json({ ok: true, limits: await setLimits(body, who) });
+      if (fn === "performance") return json(await performance(Deno.env.get("ANTHROPIC_KEY") || "", new URL(req.url).searchParams.get("read") !== "0", new URL(req.url).searchParams.get("fresh") === "1"));
+      if (fn === "help") return json({ ok: true, text: await helpAnswer(body, Deno.env.get("ANTHROPIC_KEY") || "") });
       if (fn === "ticket") return json({ ok: true, action: await orderTicket(body, who, String(body.author || "Ifoma").slice(0, 30)) });
       if (fn === "morning_now") {
         const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
