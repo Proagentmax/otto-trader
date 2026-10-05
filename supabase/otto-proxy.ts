@@ -2577,7 +2577,7 @@ const JASON_TOOL = {
   },
 };
 
-const JASON_READ_SYS = `You read Jason Murray's posts from the iBelieve Investments Club Discord (#platinum-chat). Jason writes in ALL CAPS, in short bursts across several lines, and usually pings @Platinum Members when he calls something. A call is often just a ticker and a direction ("SPCX LONG"); levels are often only drawn on his chart screenshot. Record ONLY Jason's messages (display name Jason, username jmoney915). Group lines that belong to the same thought into one post (e.g. "SPCX LONG" + "BREAK HAPPENED IN CASE YOU MISSED IT" + the ping = one call). Never invent numbers: entry/level/option only when Jason wrote them or the chart labels them with a number. If nothing from Jason is visible, return an empty list.`;
+const JASON_READ_SYS = `You read Jason Murray's posts from the iBelieve Investments Club Discord (#platinum-chat). Jason writes in ALL CAPS, in short bursts across several lines, and usually pings @Platinum Members when he calls something. A call is often just a ticker and a direction ("SPCX LONG"); levels are often only drawn on his chart screenshot. Record ONLY Jason's messages (display name Jason, username jmoney915). Group lines that belong to the same thought into one post (e.g. "SPCX LONG" + "BREAK HAPPENED IN CASE YOU MISSED IT" + the ping = one call). Never invent numbers: entry/level/option only when Jason wrote them or the chart labels them with a number. A message that is only a ping (@Platinum Members, @Josh) is not a post; fold it into the post it belongs to. If nothing from Jason is visible, return an empty list.`;
 
 async function jasonExtract(apiKey: string, src: { image?: { media_type: string; data: string } | null; text?: string; day: string }) {
   const content: any[] = [];
@@ -2595,7 +2595,9 @@ async function jasonExtract(apiKey: string, src: { image?: { media_type: string;
   const j = await r.json();
   const tu = (j.content || []).find((b: any) => b.type === "tool_use");
   const posts = Array.isArray(tu?.input?.posts) ? tu.input.posts : [];
-  return posts.filter((p: any) => p && J_KINDS.has(p.kind) && String(p.words || "").trim());
+  // A bare ping ("@💎・Platinum Members", "@Josh") is not a post.
+  return posts.filter((p: any) => p && J_KINDS.has(p.kind) && String(p.words || "").trim() &&
+    !/^\s*(@\S+(\s+Members)?[\s/]*)+$/i.test(String(p.words)));
 }
 
 // "10:02 AM" on a New York date → ISO. Tries EDT then EST and keeps the one
@@ -3371,7 +3373,8 @@ Deno.serve(async (req) => {
       return json({ ok: true, email: claims.email || null, anonymous: !!claims.is_anonymous, desk: !!deskUser(claims) });
     }
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
-         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "performance", "help", "jason_today", "jason_sweep", "jason_score"].includes(fn)) {
+         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "performance", "help", "jason_today", "jason_sweep", "jason_score",
+         "push_key", "push_sub", "push_list", "push_remove", "push_test"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
