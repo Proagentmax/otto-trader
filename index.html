@@ -821,6 +821,9 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
       <div><label class="f" for="lmGoal">Monthly profit goal (%)</label><input class="f" id="lmGoal" type="number" min="0" step="0.5" inputmode="decimal"></div>
       <div><label class="f" for="lmWarn">Warn when one trade is over (% of account)</label><input class="f" id="lmWarn" type="number" min="1" step="1" inputmode="numeric"></div>
       <div><label class="f" for="lmBig">A big-loss day is ($ or worse)</label><input class="f" id="lmBig" type="number" min="1" step="1" inputmode="numeric"></div>
+      <div style="grid-column:1/-1;border-top:1px solid var(--line,#2a2f2c);padding-top:10px;margin-top:4px"><label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" id="lmAuto"> Jarvis can close positions on his own (auto-close)</label>
+        <p class="hint" style="margin:4px 0 0">Agentic account only, market hours only, closing only (never opens or adds). Every auto-close is posted on the Desk with the reason. Turn it off any time.</p></div>
+      <div><label class="f" for="lmReview">Jarvis checks open positions every (minutes)</label><input class="f" id="lmReview" type="number" min="5" max="120" step="1" inputmode="numeric"></div>
     </div>
     <p class="hint" id="lmMsg">On a card, when a limit is crossed you'll see a ! flag, e.g. "Weekly limit hit: stop for the week". You can still approve.</p>
   </div>
@@ -1797,7 +1800,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.4.1";
+const BUILD="3.5.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2551,6 +2554,7 @@ function dkRenderRight(){
   else if(p.agentic){
     const a=p.agentic,pf=a.portfolio||{},tot=+pf.total_value,bp=pf.buying_power&&+pf.buying_power.buying_power;
     h+=`<div class="dk-row"><span><b>Agentic</b> ${esc(a.account)} <span class="dk-tag ok">AI trades here</span></span><span class="mono">$${dkNum(tot)}</span></div>`+
+       `<div class="dk-row"><span class="mut">Auto-close</span><span class="dk-tag ${p.auto_close?"ok":""}">${p.auto_close?"ON · Jarvis can sell":"OFF · closes need Approve"}</span></div>`+
        `<div class="dk-row"><span class="mut">Buying power</span><span class="mono">$${dkNum(bp)}</span></div>`+
        `<div class="dk-row"><span class="mut">20% flag at</span><span class="mono">$${dkNum(tot*0.2)}</span></div>`;
     const ops=Array.isArray(a.options)?a.options:[];
@@ -3153,7 +3157,7 @@ async function openLimits(){
   $("#dlgLimits").showModal();
   try{const j=await dkApi("limits_get");const L=j.limits;
     $("#lmPhase").value=String(L.phase);$("#lmTrade").value=L.max_trade_loss;$("#lmWeek").value=L.weekly_loss;$("#lmDay").value=L.max_trades_day;
-    $("#lmGoal").value=L.monthly_goal_pct;$("#lmWarn").value=L.warn_pct;$("#lmBig").value=L.big_day;
+    $("#lmGoal").value=L.monthly_goal_pct;$("#lmWarn").value=L.warn_pct;$("#lmBig").value=L.big_day;$("#lmAuto").checked=L.auto_close!==false;$("#lmReview").value=L.review_min||15;
     m.textContent="On a card, when a limit is crossed you'll see a ! flag, e.g. “Weekly limit hit: stop for the week”. You can still approve.";
   }catch(e){m.className="hint dk-err";m.textContent=String(e.message).slice(0,200)}
 }
@@ -3162,7 +3166,7 @@ $("#lmCancel").addEventListener("click",()=>$("#dlgLimits").close());
 $("#lmSave").addEventListener("click",async()=>{
   const b=$("#lmSave"),m=$("#lmMsg");
   const body={phase:+$("#lmPhase").value,max_trade_loss:+$("#lmTrade").value,weekly_loss:+$("#lmWeek").value,max_trades_day:+$("#lmDay").value,
-    monthly_goal_pct:+$("#lmGoal").value,warn_pct:+$("#lmWarn").value,big_day:+$("#lmBig").value,author:($("#dkWho")&&$("#dkWho").value)||"Ifoma"};
+    monthly_goal_pct:+$("#lmGoal").value,warn_pct:+$("#lmWarn").value,big_day:+$("#lmBig").value,auto_close:$("#lmAuto").checked,review_min:+$("#lmReview").value||15,author:($("#dkWho")&&$("#dkWho").value)||"Ifoma"};
   b.disabled=true;b.textContent="Saving…";
   try{await dkApi("limits_set",body);$("#dlgLimits").close();toast("Limits saved");DK.perf=null;
     if(DK.open&&DK.view==="perf")dkPerf(true);else if(DK.open&&DK.view==="desk")dkLoadLog().catch(()=>{});

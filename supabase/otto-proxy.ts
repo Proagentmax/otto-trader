@@ -1,5 +1,7 @@
 // Otto Trader — server side. One Edge Function.
 //
+//   v3.5 (5 Oct 2026): auto-close. Jarvis may sell to close any Agentic position
+//   on his own (close_position) when the Settings switch is ON; scheduled position check.
 //   v3.4 (5 Oct 2026): enter with the exit already set. Opening cards carry
 //   plan.stop_option; after the fill Otto places the stop + TradingView alerts
 //   and puts up a close card when one fires (otto_actions.exit, 008_v34.sql).
@@ -1233,6 +1235,7 @@ async function panel() {
   }
   const pend = await settle(db("otto_actions?status=in.(pending,running)&order=created_at.desc&limit=10&select=*"));
   out.pending = pend.ok ? pend.v.map(publicAction) : [];
+  out.auto_close = !!(await getLimits().catch(() => LIMIT_DEFAULTS)).auto_close;
   const ex = await settle(db("otto_actions?select=id,title,exit,created_at&exit->>state=in.(waiting_fill,armed,closed,dead)&order=created_at.desc&limit=8"));
   out.exits = ex.ok ? ex.v.filter((r: any) => ["waiting_fill", "armed"].includes(r.exit.state) ||
     Date.now() - Date.parse(r.exit.closed_at || r.created_at) < 18 * 3600e3).slice(0, 5) : [];
@@ -1250,7 +1253,7 @@ const DESK_SYS = `You are Jarvis, the AI on the trading desk inside Otto Trader.
 You're talking with Ifoma (the trader; it's his money) and sometimes Josh (his son, learning alongside him, same login, same authority). Each message is prefixed with who wrote it when known. Talk like a trading partner at the next desk: direct, numbers first, caveat second. Short paragraphs. No hype, no congratulating; say plainly when a trade is a bad idea.
 
 HOW ACTIONS WORK — THE ONE HARD RULE
-You can READ anything with the tv__ and rh__ tools, as often as you need. You can NEVER change anything yourself. To place, cancel, or change an order, or create/edit/delete an alert or watchlist entry, call propose_action with the exact calls. That puts an Approve / Reject card in front of them; nothing happens until a human clicks Approve. After proposing, say in one line what the card does — never say an order "is placed" or "went through" until you see the result (the app will post it).
+You can READ anything with the tv__ and rh__ tools, as often as you need. You can NEVER change anything yourself — with ONE exception: when the desk context says Auto-close is ON, close_position sells to close a position in the Agentic account immediately, no card. Use it only to get OUT of a position (when they ask you to close, or when in your judgment the trade is broken or its exit has come), say why in one sentence, and never to open, add or flip. To place, cancel, or change an order, or create/edit/delete an alert or watchlist entry, call propose_action with the exact calls. That puts an Approve / Reject card in front of them; nothing happens until a human clicks Approve. After proposing, say in one line what the card does — never say an order "is placed" or "went through" until you see the result (the app will post it).
 - Before proposing an option order: get the chain (rh__get_option_chains → rh__get_option_instruments) for the real option_id, check the quote (rh__get_option_quotes), and use a limit price. The server runs Robinhood's review and computes the risk vs the Agentic account.
 - One idea = one card. Several suggestions at once = several cards, each with its own title.
 - Don't propose new TradingView alerts or Jason-level alerts unless they explicitly ask for one. For now the desk shows prices only.
@@ -1356,7 +1359,7 @@ async function deskTools() {
   return { tools, help: help.join("\n") || "(no connector is connected yet)", status };
 }
 
-type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; maxRounds?: number };
+type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; allowClose?: boolean; maxRounds?: number };
 
 // The tool loop, shared by the live Desk (streamed) and the 8:45 run (silent).
 async function runDesk(o: DeskRun): Promise<{ said: string; cards: string[] }> {
@@ -1433,6 +1436,12 @@ async function runDesk(o: DeskRun): Promise<{ said: string; cards: string[] }> {
           send({ t: "action", v: card });
           content = `Card ${card.id} is on screen, status pending. Nothing has run. ` +
             `Risk: ${JSON.stringify(card.risk)}. Rule check: ${JSON.stringify(card.checks || [])}. Robinhood review: ${(card.review || "n/a").slice(0, 1500)}`;
+        } else if (b.name === "close_position") {
+          if (!o.allowClose) throw new Error("auto-close isn't available in this run — use propose_action");
+          send({ t: "tool", v: "Auto-close: " + String(input.reason || "").slice(0, 80) });
+          const r = await closeNow(input, who);
+          content = `DONE, no card needed: ${r.title}. Market sell sent (order ${r.order_id || "id not returned"}). It's posted on the Desk.`;
+          send({ t: "tool", v: "Closed: " + r.title });
         } else {
           const m = /^(tv|rh)__(.+)$/.exec(b.name);
           if (!m || !READ[m[1]].has(m[2])) throw new Error("unknown tool " + b.name);
@@ -1469,6 +1478,8 @@ async function desk(req: Request, who: string, _apiKey: string) {
     ...mcpToolDefs,
     PROPOSE_TOOL(help),
   ];
+  const LIMa = await getLimits().catch(() => LIMIT_DEFAULTS);
+  if (LIMa.auto_close) tools.push(CLOSE_TOOL);
   const now = new Date().toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short",
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const bn = sent.ok ? `Banner: ${sent.v.verdict} (score ${sent.v.score}, ${sent.v.fresh}/${sent.v.total} legs fresh; fired: ${sent.v.rows.filter((r: any) => r.fired).map((r: any) => "row " + r.row).join(", ") || "none"}).` : "Banner: unavailable.";
@@ -1476,7 +1487,7 @@ async function desk(req: Request, who: string, _apiKey: string) {
   const prot = await settle(db("otto_actions?select=title,exit&exit->>state=in.(waiting_fill,armed)&limit=5"));
   const protLine = prot.ok && prot.v.length ? " Protected trades (Otto runs their stop and alerts; to close one early, cancel_option_order its stop_order_id first, then sell, in one card): " +
     prot.v.map((r: any) => `${r.title} [${r.exit.state}${r.exit.stop_order_id ? `, stop_order_id ${r.exit.stop_order_id} at $${r.exit.stop_option}` : ""}, wrong-if ${r.exit.wrong_if}, TP1 ${r.exit.tp1}]`).join("; ") + "." : "";
-  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their own limits (Phase ${LIM.phase}): max loss per trade $${LIM.max_trade_loss}, weekly loss limit $${LIM.weekly_loss}, ${LIM.max_trades_day} trades/day, warn over ${LIM.warn_pct}% of the account — size ideas inside these and say so when an idea would break one.${protLine}]`;
+  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their own limits (Phase ${LIM.phase}): max loss per trade $${LIM.max_trade_loss}, weekly loss limit $${LIM.weekly_loss}, ${LIM.max_trades_day} trades/day, warn over ${LIM.warn_pct}% of the account — size ideas inside these and say so when an idea would break one.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.]`;
 
   const msgs: any[] = history.map((m: any, i: number) => {
     const role = m.role === "assistant" ? "assistant" : "user";
@@ -1511,7 +1522,7 @@ async function desk(req: Request, who: string, _apiKey: string) {
       const send = (o: unknown) => { try { ctrl.enqueue(encS.encode("data: " + JSON.stringify(o) + "\n\n")); } catch { /* client left */ } };
       let res = { said: "", cards: [] as string[] };
       try {
-        res = await runDesk({ msgs, sys, tools, cs, who, send, allowPropose: true });
+        res = await runDesk({ msgs, sys, tools, cs, who, send, allowPropose: true, allowClose: !!LIMa.auto_close });
         send({ t: "done" });
       } catch (e) {
         send({ t: "error", v: String((e as Error).message ?? e).slice(0, 300) });
@@ -2424,6 +2435,18 @@ async function exitTick(a: any) {
     if (fresh.length) {
       ex.fired = [...(ex.fired || []), ...fresh.map(key)].slice(-60);
       const recent = ex.close_at && Date.now() - Date.parse(ex.close_at) < 10 * 60_000;
+      const LIMx = await getLimits().catch(() => LIMIT_DEFAULTS);
+      if (LIMx.auto_close && rthNow() && !recent) {
+        // v3.5: auto-close is on, so Jarvis decides and closes himself (no card).
+        const wrong = fresh.some((e: any) => String(e.tv_alert_id ?? e.alert_id) === String(ex.alerts.wrong));
+        const why = wrong ? `wrong-if ${ex.wrong_if} hit (15-minute close)` : `TP1 ${ex.tp1} reached`;
+        ex.close_at = new Date().toISOString();
+        exitLog(ex, `${why} → Jarvis deciding (auto-close on)`);
+        await saveExit(a.id, ex);
+        try { await positionReview(`${a.title}: ${why}. option_id ${ex.option_id}. The plan says ${wrong ? "OUT" : "take profit"}.`); }
+        catch (e) { await logDesk("system", "Otto", `⚠ ${a.title}: ${why}, but Jarvis's auto-close check failed (${(e as Error).message.slice(0, 200)}). The stop is still working. Close by hand if needed.`, a.id); }
+        return { id: a.id, state: ex.state, held, auto: true };
+      }
       if (!(await cardBusy(ex.close_card)) && !recent) {
         const wrong = fresh.some((e: any) => String(e.tv_alert_id ?? e.alert_id) === String(ex.alerts.wrong));
         const why = wrong ? `wrong-if ${ex.wrong_if} hit (15-minute close)` : `TP1 ${ex.tp1} reached`;
@@ -2461,12 +2484,150 @@ async function exitsTick(force = false) {
   return { ok: true, n: (rows || []).length, out };
 }
 
+/* ===================================================================== v3.5
+   5 Oct 2026 — Jarvis can close positions on his own (auto-close).
+
+   Ifoma's decisions: Jarvis may close ANY position in the Agentic account
+   whenever he judges it, at market, with no Approve click; there's an on/off
+   switch in Settings → Limits & goals (default ON). Guard rails that stay:
+   closing only (it can't open, add or flip; shares can't go short), Agentic
+   account only, regular market hours only, a one-sentence reason every time,
+   and every auto-close is posted on the Desk and recorded as a done card.
+   Jarvis gets the close_position tool on the Desk (when ON), on a scheduled
+   position check (every review_min minutes while something is open), and
+   when one of a protected trade's own alerts fires. */
+
+const CLOSE_TOOL = {
+  name: "close_position",
+  description: "AUTO-CLOSE, no Approve card: immediately sells to close a position in the Robinhood Agentic account at market. " +
+    "Works only while auto-close is ON in their settings and the market is open (9:30–4:00 ET); otherwise it errors and you use propose_action for a close card. " +
+    "Closing only: it can never open, add to, flip, or short anything. Any working sell orders on that option (e.g. Otto's protective stop) are cancelled first. " +
+    "Use it when, in your judgment under Jason's method, the trade is broken or its exit has come: wrong-if through, TP1 reached, first red candle on short-dated options, " +
+    "price closing back through the entry candle's open, a binary event ahead, expiry day. Don't use it on a whim or because of a few cents of noise. " +
+    "Give the reason in one plain sentence; it is posted on the Desk.",
+  input_schema: {
+    type: "object",
+    properties: {
+      option_id: { type: "string", description: "Instrument id of the LONG option to close (from rh__get_option_positions)" },
+      symbol: { type: "string", description: "Stock symbol, only to sell shares held in the Agentic account" },
+      quantity: { type: "number", description: "Optional. Default = everything held." },
+      reason: { type: "string", description: "One sentence: why it's closing now" },
+    },
+    required: ["reason"],
+  },
+};
+
+async function closeNow(input: any, who: string) {
+  const L = await getLimits();
+  if (!L.auto_close) throw new Error("Auto-close is OFF (Settings → Limits & goals). Use propose_action for a close card instead.");
+  if (!rthNow()) throw new Error("Market is closed: auto-close only works 9:30 AM–4:00 PM ET. Use a close card.");
+  const reason = String(input.reason || "").trim().slice(0, 400);
+  if (reason.length < 8) throw new Error("Give the reason in one sentence; it goes on the Desk.");
+  const acct = await agenticAccount();
+  const calls: any[] = [], results: any[] = [];
+  let title = "", orderId: string | null = null;
+  if (input.option_id) {
+    const optId = String(input.option_id);
+    const pos = (mcpJson(await call("rh", "get_option_positions", { account_number: acct, option_ids: optId }))?.data?.positions || [])
+      .filter((p: any) => p.type === "long");
+    const held = pos.reduce((s: number, p: any) => s + Number(p.quantity || 0), 0);
+    if (!(held > 0)) throw new Error("No long position in that option on the Agentic account.");
+    const qty = input.quantity ? Math.min(held, Math.floor(Number(input.quantity))) : held;
+    if (!(qty >= 1)) throw new Error("quantity must be at least 1 contract");
+    // Free the contracts: cancel any working sell-to-close on this option (Otto's stop, a stale limit).
+    const since = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
+    const oj = mcpJson(await call("rh", "get_option_orders", { account_number: acct, created_at_gte: since }));
+    let cancelled = 0;
+    for (const o of (oj?.data?.orders || [])) {
+      if (EXIT_OPEN_ORDER.has(o.state) && (o.legs || []).some((l: any) => l.option_id === optId && l.position_effect === "close")) {
+        try { await call("rh", "cancel_option_order", { account_number: acct, order_id: o.id }); cancelled++;
+              calls.push({ service: "rh", tool: "cancel_option_order", args: { order_id: o.id } });
+              results.push({ tool: "cancel_option_order", ok: true, text: "cancelled " + o.id }); }
+        catch (e) { results.push({ tool: "cancel_option_order", ok: false, text: (e as Error).message.slice(0, 300) }); }
+      }
+    }
+    if (cancelled) await new Promise((r) => setTimeout(r, 2000));
+    const args = { account_number: acct, legs: [{ option_id: optId, side: "sell", position_effect: "close" }],
+      quantity: String(qty), type: "market", time_in_force: "gfd", ref_id: crypto.randomUUID() };
+    let r: any;
+    try { r = await call("rh", "place_option_order", args); }
+    catch (e) {                                   // a just-cancelled stop can hold the contracts for a moment
+      await new Promise((res) => setTimeout(res, 3000));
+      r = await call("rh", "place_option_order", { ...args, ref_id: crypto.randomUUID() });
+      void e;
+    }
+    orderId = orderIdOf(mcpJson(r));
+    calls.push({ service: "rh", tool: "place_option_order", args: { ...args, account_number: mask(acct) } });
+    results.push({ tool: "place_option_order", ok: true, text: mcpText(r).slice(0, 1500) });
+    title = `Auto-close ${qty} ${pos[0]?.chain_symbol || ""} option${qty > 1 ? "s" : ""} (exp ${pos[0]?.expiration_date || "?"})`;
+  } else if (input.symbol) {
+    const sym = String(input.symbol).toUpperCase().replace(/[^A-Z.]/g, "");
+    const ej = mcpJson(await call("rh", "get_equity_positions", { account_number: acct }));
+    const list: any[] = ej?.data?.positions || ej?.positions || ej?.data || [];
+    const p = (Array.isArray(list) ? list : []).find((x: any) => String(x.symbol || x.ticker || "").toUpperCase() === sym);
+    const held = Number(p?.quantity || 0);
+    if (!(held > 0)) throw new Error(`No ${sym} shares in the Agentic account.`);
+    const qty = input.quantity ? Math.min(held, Number(input.quantity)) : held;
+    const args = { account_number: acct, symbol: sym, side: "sell", type: "market", quantity: String(qty), time_in_force: "gfd",
+      market_hours: "regular_hours", ref_id: crypto.randomUUID() };
+    const r = await call("rh", "place_equity_order", args);
+    orderId = orderIdOf(mcpJson(r));
+    calls.push({ service: "rh", tool: "place_equity_order", args: { ...args, account_number: mask(acct) } });
+    results.push({ tool: "place_equity_order", ok: true, text: mcpText(r).slice(0, 1500) });
+    title = `Auto-close ${qty} ${sym} shares`;
+  } else throw new Error("Give option_id (for an option) or symbol (for shares).");
+
+  const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
+    title, summary: `Reason   ${reason}\nOrder    sell to close at market (auto-close, no Approve)\nBy       Jarvis, on ${who}`,
+    calls, risk: { cost: 0, notes: ["closing order: no new risk"] }, review: "", status: "done", created_by: "Jarvis (auto)",
+    decided_by: "auto-close", decided_at: new Date().toISOString(), result: results, ...(orderId ? { order_id: String(orderId) } : {}),
+  }) });
+  const id = rows?.[0]?.id || null;
+  await logDesk("system", "Otto", `🤖 Jarvis closed: ${title} at market. Why: ${reason} (Auto-close is on; turn it off in Settings → Limits & goals.)`, id);
+  return { ok: true, title, order_id: orderId, card: id };
+}
+
+// Scheduled / triggered check of everything open in the Agentic account.
+async function positionReview(trigger: string | null = null) {
+  const L = await getLimits();
+  if (!L.auto_close || !rthNow()) return { ok: true, skipped: "off or market closed" };
+  const every = Math.max(5, Number(L.review_min) || 15) * 60e3;
+  if (!trigger) {
+    const last = await db("otto_settings?key=eq.review_at&select=value").then((r: any) => Number(r?.[0]?.value?.at || 0)).catch(() => 0);
+    if (Date.now() - last < every) return { ok: true, skipped: "recent" };
+  }
+  const acct = await agenticAccount();
+  const [op, eq] = await Promise.all([
+    settle((async () => mcpJson(await call("rh", "get_option_positions", { account_number: acct, nonzero: true })))()),
+    settle((async () => mcpJson(await call("rh", "get_equity_positions", { account_number: acct })))()),
+  ]);
+  const opts = op.ok ? (op.v?.data?.positions || []).filter((p: any) => Number(p.quantity) > 0) : [];
+  const eqRaw: any = eq.ok ? (eq.v?.data?.positions || eq.v?.positions || eq.v?.data || []) : [];
+  const shares = (Array.isArray(eqRaw) ? eqRaw : []).filter((p: any) => Number(p.quantity) > 0);
+  if (!opts.length && !shares.length) return { ok: true, skipped: "nothing open" };
+  await db("otto_settings?on_conflict=key", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ key: "review_at", value: { at: Date.now() }, updated_by: "cron", updated_at: new Date().toISOString() }) }).catch(() => {});
+  const plans = await db("otto_actions?select=title,plan,exit&exit->>state=eq.armed&limit=10").catch(() => []);
+  const calls = await loadBrain();
+  const sys = DESK_SYS.replace("{{RULES}}", alwaysOn(calls));
+  const { tools: mcpToolDefs } = await deskTools();
+  const prompt = `[Automatic position check — nobody typed this. ${trigger ? "TRIGGER: " + trigger : `Scheduled check (every ${Math.round(every / 60e3)} min).`}]
+Open in the Agentic account — options: ${JSON.stringify(opts.map((p: any) => ({ option_id: p.option_id, symbol: p.chain_symbol, qty: p.quantity, avg: p.average_price, exp: p.expiration_date })))}; shares: ${JSON.stringify(shares.map((p: any) => ({ symbol: p.symbol, qty: p.quantity })))}.
+Plans on file: ${JSON.stringify((plans || []).map((r: any) => ({ title: r.title, setup: r.plan?.setup, direction: r.exit?.direction, tp1: r.exit?.tp1, wrong_if: r.exit?.wrong_if, stop_option: r.exit?.stop_option, option_id: r.exit?.option_id })))}.
+For each position: fetch the underlying's live price and recent 5-minute bars (and the option quote), compare with its plan and Jason's exit rules, and decide HOLD or CLOSE. If CLOSE, call close_position with a one-sentence reason. Auto-close is ON. If every position is a HOLD, reply with exactly the single word HOLD and nothing else; otherwise one short line per position saying what you did and why.`;
+  const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: [TOOLS[0], ...mcpToolDefs, CLOSE_TOOL], cs: chunksOf(calls),
+    who: "auto-review", send: () => {}, allowPropose: false, allowClose: true, maxRounds: 8 });
+  const said = res.said.trim();
+  if (said && !/^HOLD\.?$/i.test(said)) await logDesk("assistant", "Jarvis · position check", said);
+  return { ok: true, said: said.slice(0, 300) };
+}
+
 /* ===================================================================== v3.3
    5 Oct 2026 — Results page, editable limits & goals, Help chat.
    Limits live in otto_settings (007_v33.sql) so Ifoma and Josh change them in
    Settings with no code. They are warnings on cards, never blocks. */
 
-const LIMIT_DEFAULTS = { phase: 1, max_trade_loss: 100, weekly_loss: 150, max_trades_day: 2, monthly_goal_pct: 5, warn_pct: 20, big_day: 500 };
+const LIMIT_DEFAULTS: any = { phase: 1, max_trade_loss: 100, weekly_loss: 150, max_trades_day: 2, monthly_goal_pct: 5, warn_pct: 20, big_day: 500, auto_close: true, review_min: 15 };
 async function getLimits(): Promise<any> {
   return cached("limits", 30e3, async () => {
     try {
@@ -2484,11 +2645,11 @@ async function setLimits(body: any, who: string) {
   };
   const value = { phase: num("phase", 1, 3), max_trade_loss: num("max_trade_loss", 1, 1e6), weekly_loss: num("weekly_loss", 1, 1e6),
     max_trades_day: num("max_trades_day", 1, 100), monthly_goal_pct: num("monthly_goal_pct", 0, 100), warn_pct: num("warn_pct", 1, 100),
-    big_day: num("big_day", 1, 1e7) };
+    big_day: num("big_day", 1, 1e7), auto_close: v.auto_close === true || v.auto_close === "true", review_min: num("review_min", 5, 120) };
   await db("otto_settings?on_conflict=key", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify({ key: "limits", value, updated_by: by + " (" + who + ")", updated_at: new Date().toISOString() }) });
   delete CACHE.limits;
-  await logDesk("system", "Otto", `Limits updated by ${by}: max loss/trade $${value.max_trade_loss}, weekly loss limit $${value.weekly_loss}, ${value.max_trades_day} trades/day, goal ${value.monthly_goal_pct}%/month, warn over ${value.warn_pct}% of the account.`);
+  await logDesk("system", "Otto", `Limits updated by ${by}: max loss/trade $${value.max_trade_loss}, weekly loss limit $${value.weekly_loss}, ${value.max_trades_day} trades/day, goal ${value.monthly_goal_pct}%/month, warn over ${value.warn_pct}% of the account. Auto-close ${value.auto_close ? `ON (Jarvis can sell to close on his own; checks every ${value.review_min} min)` : "OFF (closes need an Approve)"}.`);
   return { ...value, _by: who, _at: new Date().toISOString() };
 }
 
@@ -2692,6 +2853,7 @@ Deno.serve(async (req) => {
     if (!force && (["Sat", "Sun"].includes(et.wd) || et.min < 540 || et.min > 990)) return json({ ok: true, skipped: et });
     background((async () => {
       try { await exitsTick(true); } catch (e) { console.error("exits", e); }
+      try { await positionReview(); } catch (e) { console.error("review", e); }
       await alertWatch(Deno.env.get("ANTHROPIC_KEY") || "");
     })());
     return json({ ok: true, started: "alerts" }, 202);
