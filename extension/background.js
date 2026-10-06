@@ -3,7 +3,7 @@
    to finish (he posts a call over several quick lines), shrinks any chart
    images, and sends the burst to Otto. Every minute it tells Otto it's alive,
    so Otto can ping both phones if the watcher goes quiet. */
-const VER = "1.1.0";
+const VER = "1.2.0";
 const QUIET_MS = 12000;     // send once he's been quiet this long…
 const MAX_WAIT_MS = 30000;  // …or this long after the first new line, whichever comes first
 
@@ -121,8 +121,28 @@ async function overall() {
   if (other.includes("unpaired")) return { state: "unpaired", detail: "paste the pairing code" };
   return { state: "stale", detail: "the Discord tab isn't reporting (asleep or still loading)" };
 }
+// v1.2: New York market hours (weekdays 9:00–4:30), for reopening a closed watcher window.
+function marketHours() {
+  const f = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
+  const g = (t) => (f.find((x) => x.type === t) || {}).value || "";
+  const m = Number(g("hour")) % 24 * 60 + Number(g("minute"));
+  return !["Sat", "Sun"].includes(g("weekday")) && m >= 540 && m <= 990;
+}
+async function openWatcher(minimized) {
+  const cfg = await store.get("cfg");
+  if (!cfg) return false;
+  const w = await chrome.windows.create({ url: `https://discord.com/channels/${cfg.guild}/${cfg.channel}`, type: "normal", width: 1000, height: 820,
+    focused: !minimized, ...(minimized ? { state: "minimized" } : {}) }).catch(() => null);
+  if (w && w.tabs && w.tabs[0]) chrome.tabs.update(w.tabs[0].id, { autoDiscardable: false }).catch(() => {});
+  return !!w;
+}
 async function beat() {
-  const o = await overall();
+  let o = await overall();
+  // v1.2 (Ifoma OK'd 6 Oct): the watcher window was closed during market hours → reopen it, minimized.
+  if (o.state === "no_tab" && marketHours() && (await store.get("pair")) && !(await store.get("paused"))) {
+    const last = (await store.get("reopenAt")) || 0;
+    if (Date.now() - last > 5 * 60e3) { await store.set({ reopenAt: Date.now() }); if (await openWatcher(true)) o = { state: "stale", detail: "watcher window was closed — reopened it (minimized)" }; }
+  }
   const q = (await store.get("queue")) || [];
   const ls = (await store.get("lastSend")) || {};
   const oldestQ = q.length ? Math.min(...q.map((m) => (m.queuedAt || Date.now()))) : Date.now();
@@ -145,10 +165,8 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
     if (m.type === "pause") { await store.set({ paused: !!m.on }); await pushCfg(); await beat(); return reply({ ok: true }); }
     if (m.type === "beat") { await beat(); return reply({ ok: true }); }
     if (m.type === "open") {
-      const cfg = await store.get("cfg");
-      if (!cfg) return reply({ ok: false, error: "Pair with Otto first." });
-      const w = await chrome.windows.create({ url: `https://discord.com/channels/${cfg.guild}/${cfg.channel}`, type: "normal", width: 1000, height: 820, focused: true });
-      if (w.tabs && w.tabs[0]) chrome.tabs.update(w.tabs[0].id, { autoDiscardable: false }).catch(() => {});
+      if (!(await store.get("cfg"))) return reply({ ok: false, error: "Pair with Otto first." });
+      await openWatcher(false);
       return reply({ ok: true });
     }
     if (m.type === "state") return reply({ pair: !!(await store.get("pair")), cfg: await store.get("cfg"), paused: !!(await store.get("paused")),
@@ -166,5 +184,13 @@ async function pushCfg() {
 chrome.alarms.create("beat", { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((a) => { if (a.name === "beat") { beat(); flush(); } });
 chrome.runtime.onStartup.addListener(beat);
-chrome.runtime.onInstalled.addListener(beat);
+// v1.2: after an update, already-open Discord tabs still run the OLD reader (it can't reach the new
+// extension → "stale"). Refresh them so the new reader loads. (Happened 6 Oct after the 1.1.0 update.)
+chrome.runtime.onInstalled.addListener(async (d) => {
+  if (d.reason === "update") {
+    const tabs = await chrome.tabs.query({ url: "https://discord.com/*" }).catch(() => []);
+    for (const t of tabs) chrome.tabs.reload(t.id).catch(() => {});
+  }
+  beat();
+});
 chrome.tabs.onRemoved.addListener(async (id) => { const st = (await store.get("tabs")) || {}; delete st[id]; await store.set({ tabs: st }); });

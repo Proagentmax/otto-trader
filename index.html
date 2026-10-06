@@ -495,6 +495,20 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .dk-jbtn{background:rgba(232,69,90,.15);color:#E8455A;border:1px solid rgba(232,69,90,.55);font-weight:700}
 .dk-jtag{display:inline-block;background:rgba(232,69,90,.15);color:#E8455A;border:1px solid rgba(232,69,90,.45);border-radius:6px;font-size:10.5px;font-weight:700;padding:1px 6px;letter-spacing:.03em;margin-left:4px}
 .dk-m.me.jason{border:1px solid rgba(232,69,90,.45)}
+/* v3.10 */
+.dk-appr{display:flex;justify-content:space-between;gap:8px;padding:6px;margin:0 -6px;border-radius:8px;cursor:pointer}
+.dk-appr:hover{background:var(--surface-2)}.dk-appr small{display:block;color:var(--ink-3);font-size:11px}
+.dk-compose [hidden],.dk-pend [hidden]{display:none!important}
+.more-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start}
+.sg-tools{display:flex;justify-content:flex-end;gap:6px;margin-bottom:-4px}
+.sg-tools button,.sg-askbtn,.sg-ask button,.sg-open{font-size:12px;border:1px solid var(--rule);border-radius:8px;padding:4px 10px;color:var(--ink-2);background:var(--surface-2)}
+.sg-askbtn{margin-top:8px}.sg-tools button:hover,.sg-askbtn:hover{color:var(--ink)}
+.sg-thread{margin-top:8px;border:1px dashed #3a3f48;border-radius:10px;padding:8px 10px;background:#101216}
+.sg-th{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);display:flex;justify-content:space-between;margin-bottom:4px}
+.sg-th span{text-transform:none;letter-spacing:0}
+.sg-q{font-size:13px;margin:6px 0}.sg-a{font-size:13px;margin:4px 0 8px;padding-left:10px;border-left:2px solid #a78bfa}
+.sg-ask{display:flex;gap:6px;margin-top:6px}.sg-ask input{flex:1;background:var(--surface-2);border:1px solid var(--rule);border-radius:8px;color:var(--ink);padding:7px 9px;font:inherit;font-size:13px}
+.dlg-card{max-width:620px;width:94vw}
 /* v3.9 Otto Signals */
 .dk-ctabs{display:flex;gap:4px;align-items:flex-end;padding:8px 18px 0;border-bottom:1px solid var(--rule)}
 .dk-ctabs button{padding:8px 14px;border:1px solid transparent;border-bottom:0;border-radius:9px 9px 0 0;color:var(--ink-3);font-weight:600;font-size:13px}
@@ -618,6 +632,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <button data-go="review"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review</button>
     <button data-go="score"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Score</button>
     <button data-go="jason"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Calls</button>
+    <button data-go="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
     <button data-go="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>Help</button>
     <button data-go="classic" title="The phone layout: Week, Coach, Journal, Market"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Classic</button>
     </div>
@@ -660,10 +675,10 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
       <button data-q="Pull my Robinhood order history and build my 5 biggest wins and 5 biggest losses, with which of Jason's rules each one followed or broke.">5 wins / 5 losses</button>
       <button data-fill="What did Jason say about ">What did Jason say about…</button>
     </div>
-    <div class="dk-pend" id="dkPend" hidden><img id="dkPendImg" alt=""><span>Chart attached</span><button class="dk-att dk-jbtn" id="dkPendJ" style="padding:3px 8px">📣 Send as Jason's post</button><button class="dk-btn j" id="dkPendX" style="padding:3px 8px">Remove</button></div>
+    <div class="dk-pend" id="dkPend" hidden><img id="dkPendImg" alt=""><span>Chart attached</span><button class="dk-att dk-jbtn" id="dkPendJ" hidden style="padding:3px 8px">📣 Send as Jason's post</button><button class="dk-btn j" id="dkPendX" style="padding:3px 8px">Remove</button></div>
     <div class="sg-foot" id="sgFoot">Read-only: the watcher on Ifoma's PC fills this tab live. Ask Jarvis about any signal in the Jarvis tab, so this feed stays clean.</div>
     <div class="dk-compose">
-      <button class="dk-att dk-jbtn" id="dkJason" title="Screenshot Jason's Discord post, then click (or paste it first with Ctrl+V)">📣 Jason's call</button>
+      <button class="dk-att dk-jbtn" id="dkJason" hidden title="Screenshot Jason's Discord post, then click (or paste it first with Ctrl+V)">📣 Jason's call</button>
       <input type="file" id="dkJFile" accept="image/*" hidden>
       <button class="dk-att" id="dkAtt" title="Attach a chart (or paste with Ctrl+V)">＋ Chart</button>
       <button class="dk-att" id="dkTicketBtn" title="Buy or sell yourself — makes an Approve card">Order ticket</button>
@@ -919,6 +934,12 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <p class="hint" id="sgMsg"></p>
   </div>
   <div class="ft" style="flex-wrap:wrap;gap:8px"><button class="btn" id="sgClose">Close</button><button class="btn" id="sgNewKey">New code</button><button class="btn" id="sgCopy">Copy code</button><button class="btn solid" id="sgSave">Save</button></div>
+</dialog>
+
+<dialog id="dlgCard" class="dlg-card">
+  <div class="grip"></div><div class="hd" style="display:flex;justify-content:space-between;align-items:baseline"><h3>Card</h3><span id="dlgCardLeft" class="hint" style="margin:0;color:var(--warn)"></span></div>
+  <div class="bd" id="dlgCardBody"></div>
+  <div class="ft"><button class="btn" id="dlgCardX">Close</button></div>
 </dialog>
 
 <dialog id="dlgPush">
@@ -1928,7 +1949,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.9.3";
+const BUILD="3.10.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2667,9 +2688,10 @@ function dkRenderStrip(){
   }else if(DK.locked){h=`<span class="mut">Sign in with the Otto login to load the desk.</span>`}
   else h=`<span class="mut">${p.error?esc(p.error):"Loading prices…"}</span>`;
   const c=p.conn||{},dot=(ok,err)=>`<span class="dk-dot ${err?"bad":ok?"on":""}"></span>`;
-  h+=`<span class="dk-chips"><span class="dk-chip" data-set="1">${dot(c.tv,p.quotes_error)}TradingView</span>`+
+  const qs=p.quotes_source||(p.fallback_quotes?"free":"");
+  h+=`<span class="dk-chips">${qs?`<span class="dk-chip" title="Where the prices on this screen come from. Yahoo is ~10–15 min delayed; Jarvis prices cards from Robinhood (real-time).">Prices: ${qs==="yahoo"?"Yahoo · ~10 min delay":qs==="yahoo+tradingview"?"Yahoo + TradingView":qs==="free"?"backup quotes":esc(qs)}</span>`:""}<span class="dk-chip" data-set="1">${dot(c.tv,p.quotes_error)}TradingView</span>`+
      `<span class="dk-chip" data-set="1">${dot(c.rh,p.rh_error)}Robinhood</span>`+
-     `<span class="dk-chip">${dot(CALLS.length)}Jarvis brain · ${CALLS.length} calls</span>`+
+
      `<span class="dk-chip">v${BUILD}</span></span>`;
   $("#dkStrip").innerHTML=h;
   $$("#dkStrip [data-set]").forEach(x=>x.addEventListener("click",openSettings));
@@ -2690,22 +2712,13 @@ function dkRenderLeft(){
   else if(!w.length)h+=`<div class="mut">Your active TradingView watchlist is empty.</div>`;
   else h+=w.map(s=>{const q=dkQ(Q,s);return `<div class="dk-row"><span><b>${esc(s.split(":")[1]||s)}</b></span><span class="mono">${q?dkNum(q.close):"—"} ${q?dkPct(q.change):""}</span></div>`}).join("");
   h+=`</div>`;
-  // Jason's homework from the newest call
-  const c=CALLS[0];
-  if(c&&(c.assignments||[]).length){
-    const d=(c.call&&c.call.date)||"";
-    h+=`<div class="dk-cardx"><div class="dk-h">Jason's homework <b>${esc(d)}</b></div>`+
-      c.assignments.slice(0,8).map(a=>{let on=false;try{on=!!DONE[hwKey(a,d)]}catch(e){}
-        return `<div class="dk-check"><span class="dk-box ${on?"on":""}">${on?"✓":""}</span><span>${esc(a.task||"")}</span></div>`}).join("")+
-      `<button class="dk-link" data-go2="week">Open the week →</button></div>`;
-  }
-  h+=dkJasonLevels();
+  // v3.10: Jason's homework and levels moved to More.
   laySetCards("left",h,box=>{dkBindQuick(box);
     box.querySelectorAll("[data-go2]").forEach(b=>b.addEventListener("click",()=>{closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.go2);if(t)t.click()}))});
 }
 
 function dkRenderRight(){
-  const p=DK.panel||{};let h=dkJasonFeed();
+  const p=DK.panel||{};let h="";      // v3.10: "Jason today" moved to More
   // Robinhood
   h+=`<div class="dk-cardx"><div class="dk-h">Robinhood <b>${p.agentic?"live":""}</b></div>`;
   if(!p.conn||!p.conn.rh)h+=`<div class="mut">Connect Robinhood in Settings. Orders only ever go to the Agentic account.</div>`;
@@ -2729,8 +2742,10 @@ function dkRenderRight(){
         (x.state==="armed"?`<div class="mut" style="font-size:11.5px;margin:-2px 0 6px">stop $${(+x.stop_option).toFixed(2)} ${x.stop_order_id?"✓":"✗"} · wrong if ${esc(x.wrong_if)} · TP1 ${esc(x.tp1)}</div>`:"")}).join("")+`</div>`;
   // Cards waiting
   const pend=Object.values(DK.acts).filter(a=>a.status==="pending"||a.status==="running").sort((a,b)=>String(b.created_at).localeCompare(a.created_at));
-  h+=`<div class="dk-cardx"><div class="dk-h">Waiting for approval <b>${pend.length}</b></div>`+
-    (pend.length?pend.map(a=>`<div class="dk-row"><span>${esc(a.title)}</span><span class="dk-tag near">${esc(a.status)}</span></div>`).join(""):`<div class="mut">Nothing waiting.</div>`)+`</div>`;
+  // v3.10: "Cards to approve" — expired ones drop off; tap one to open it with Approve / Reject.
+  const live=pend.filter(a=>a.status==="running"||dkLeft(a)>0);
+  h+=`<div class="dk-cardx"><div class="dk-h">Cards to approve <b>${live.length}</b></div>`+
+    (live.length?live.map(a=>`<div class="dk-appr" data-opencard="${esc(a.id)}" role="button" tabindex="0"><span>${esc(a.title)}<small>${/otto signal/i.test((a.plan&&a.plan.setup)||"")?"Otto Signal":esc((a.created_by||"").split("@")[0]||"Jarvis")}</small></span><span class="dk-tag near">${a.status==="running"?"placing…":dkLeft(a)+" min ›"}</span></div>`).join(""):`<div class="mut">Nothing waiting.</div>`)+`</div>`;
   // TradingView alerts
   const al=[];const walk=o=>{if(!o||typeof o!=="object")return;if(Array.isArray(o)){o.forEach(walk);return}
     if(o.alert_id!=null||(o.name&&o.symbol))al.push(o);else Object.values(o).forEach(walk)};
@@ -2740,12 +2755,8 @@ function dkRenderRight(){
      :p.alerts_error?`<div class="dk-err">${esc(p.alerts_error)}</div>`
      :al.length?al.slice(0,8).map(a=>`<div class="dk-row"><span>${esc(a.name||a.symbol||"alert")}</span></div>`).join("")+(al.length>8?`<div class="mut" style="margin-top:4px">+ ${al.length-8} more</div>`:"")
      :`<div class="mut">No active alerts.</div>`)+`</div>`;
-  // Brain
-  const c=CALLS[0];
-  h+=`<div class="dk-cardx"><div class="dk-h">Jarvis brain <b>${CALLS.length} calls</b></div>`+
-    (c?`<div class="dk-row"><span class="mut">Newest</span><span>${esc((c.call&&c.call.date)||"")}</span></div><div class="mut" style="margin-top:4px">${esc((c.call&&c.call.title)||"")}</div>`:`<div class="mut">Loading…</div>`)+
-    (c&&(c.questions||[]).length?`<div class="mut" style="margin-top:8px">Open questions for Jason:</div><ul style="margin:4px 0 0;padding-left:16px;color:var(--ink-2)">${c.questions.slice(0,3).map(q=>`<li>${esc(q.q||q.question||q.text||String(q))}</li>`).join("")}</ul>`:"")+`</div>`;
-  laySetCards("right",h);
+  // v3.10: Jarvis brain moved to More.
+  laySetCards("right",h,box=>box.querySelectorAll("[data-opencard]").forEach(x=>{const go=()=>dkOpenCard(x.dataset.opencard);x.addEventListener("click",go);x.addEventListener("keydown",e=>{if(e.key==="Enter")go()})}));
 }
 
 /* ---------- messages ---------- */
@@ -2983,7 +2994,7 @@ async function dkOauthReturn(){
    4 Oct 2026, approved mockup otto-v3.1-mockup.html. The sentiment banner
    (Josh's intermarket sheet on live TradingView data, verdict only, no sizing),
    desktop Market / Journal / Review / Score / Jason pages inside the Desk shell. */
-const DK_VIEWS=["desk","market","perf","journal","review","score","jason","help"];
+const DK_VIEWS=["desk","market","perf","journal","review","score","jason","more","help"];
 function dkShow(v){
   if(!DK_VIEWS.includes(v))v="desk";
   DK.view=v;LS.set("dkView",v);
@@ -2992,7 +3003,7 @@ function dkShow(v){
   if(v==="desk"){dkRenderMsgs(true);return}
   const pg=$("#dkPage");pg.scrollTop=0;
   if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see this page.</p></div>`;return}
-  ({market:dkMarket,perf:dkPerf,journal:dkJournal,review:dkReview,score:dkScore,jason:dkJason,help:dkHelp})[v]();
+  ({market:dkMarket,perf:dkPerf,journal:dkJournal,review:dkReview,score:dkScore,jason:dkJason,more:dkMore,help:dkHelp})[v]();
 }
 const dkLoading=t=>`<div class="dk-empty" style="margin:60px auto">${esc(t||"Loading…")}</div>`;
 const dkErr=e=>`<div class="dk-empty dk-err" style="margin:60px auto">${esc(String(e&&e.message||e))}</div>`;
@@ -3389,7 +3400,9 @@ async function sgLoad(){
   SG.loading=true;
   try{SG.data=await dkApi("signals_feed",null,"&days=3")}catch(e){SG.data=Object.assign(SG.data||{},{error:e.message})}
   SG.loading=false;
-  sgWatch();sgBadge();if(SG.on)sgRender();
+  sgWatch();sgBadge();
+  const typing=document.activeElement&&document.activeElement.matches&&document.activeElement.matches("#sgFeed input");
+  if(SG.on&&!typing)sgRender();
 }
 function sgWatch(){
   const el=$("#sgWatch");if(!el)return;
@@ -3417,7 +3430,7 @@ function sgRender(stick){
   if(!d){box.innerHTML=dkLoading("Loading Otto Signals…");return}
   const near=box.scrollHeight-box.scrollTop-box.clientHeight<120;
   const m=esc(d.mentor||"Mentor"),bs=(d.batches||[]).slice().reverse();
-  let h=d.error?`<div class="dk-err">${esc(d.error)}</div>`:"";
+  let h=`<div class="sg-tools"><button data-sgpaste="1" title="Backup for when the watcher is down: paste a screenshot of his post">📋 Paste a post</button><button data-sgclear="1" title="Clears every signal conversation. Posts, reads and cards stay.">🧹 Clear chats</button></div>`+(d.error?`<div class="dk-err">${esc(d.error)}</div>`:"");
   if(!bs.length)h+=`<div class="dk-empty"><b style="color:var(--ink)">⚡ Otto Signals</b><br>Nothing from ${m} in the last 3 days yet. When he posts in ${esc(d.channel_name||"Discord")}, it shows up here within seconds, Jarvis builds the card, and both phones ping.</div>`;
   let day="";
   for(const b of bs){
@@ -3439,6 +3452,7 @@ function sgRender(stick){
       h+=a&&(a.status==="pending"||a.status==="running")?dkCard(a)
         :`<div class="sg-cardline">🃏 ${esc(c.title||"card")} — <b>${esc(SG_CARD[(a&&a.status)||c.status]||c.status)}</b></div>`;
     }
+    h+=sgThread(b);
     h+=`</div></div>`;
   }
   box.innerHTML=h;
@@ -3486,6 +3500,69 @@ function sgFromHash(){if(location.hash!=="#signals")return;try{if(!DK.open&&type
 window.addEventListener("load",()=>setTimeout(sgFromHash,1500));
 window.addEventListener("hashchange",sgFromHash);
 if(LS.get("sgOn",false))setTimeout(()=>{try{if(DK.open&&!SG.on)sgShow(true)}catch(e){}},1600);
+
+/* ---------- v3.10: "More" page, tap-to-approve, per-signal chat ---------- */
+function dkHomeworkCard(){
+  const c=CALLS[0];if(!c||!(c.assignments||[]).length)return "";
+  const d=(c.call&&c.call.date)||"";
+  return `<div class="dk-cardx"><div class="dk-h">Jason's homework <b>${esc(d)}</b></div>`+
+    c.assignments.slice(0,8).map(a=>{let on=false;try{on=!!DONE[hwKey(a,d)]}catch(e){}
+      return `<div class="dk-check"><span class="dk-box ${on?"on":""}">${on?"✓":""}</span><span>${esc(a.task||"")}</span></div>`}).join("")+
+    `<button class="dk-link" data-go2="week">Open the week →</button></div>`;
+}
+function dkBrainCard(){
+  const c=CALLS[0];
+  return `<div class="dk-cardx"><div class="dk-h">Jarvis brain <b>${CALLS.length} calls</b></div>`+
+    (c?`<div class="dk-row"><span class="mut">Newest</span><span>${esc((c.call&&c.call.date)||"")}</span></div><div class="mut" style="margin-top:4px">${esc((c.call&&c.call.title)||"")}</div>`:`<div class="mut">Loading…</div>`)+
+    (c&&(c.questions||[]).length?`<div class="mut" style="margin-top:8px">Open questions for Jason:</div><ul style="margin:4px 0 0;padding-left:16px;color:var(--ink-2)">${c.questions.slice(0,3).map(q=>`<li>${esc(q.q||q.question||q.text||String(q))}</li>`).join("")}</ul>`:"")+`</div>`;
+}
+function dkMore(){
+  const pg=$("#dkPage");
+  pg.innerHTML=`<div class="dkp"><div class="dkp-head"><h2>More</h2><span class="mut">Out of the way, still one tap away. Nothing here is live market data.</span></div>
+    <div class="more-grid">${dkJasonFeed()||`<div class="dk-cardx"><div class="dk-h">Jason today</div><div class="mut">Loading…</div></div>`}${dkJasonLevels()||`<div class="dk-cardx"><div class="dk-h">Jason's levels today</div><div class="mut">No levels from Jason today.</div></div>`}${dkHomeworkCard()}${dkBrainCard()}</div></div>`;
+  pg.querySelectorAll("[data-go2]").forEach(b=>b.addEventListener("click",()=>{closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.go2);if(t)t.click()}));
+}
+// Cards to approve: tap one → it opens with Approve / Reject.
+function dkLeft(a){const ttl=((DK.panel&&DK.panel.card_ttl_min)||20)*60e3;return Math.max(0,Math.round((Date.parse(a.created_at)+ttl-Date.now())/60e3))}
+function dkOpenCard(id){
+  const a=DK.acts[id];if(!a)return toast("That card isn't loaded yet — try again in a moment");
+  $("#dlgCardBody").innerHTML=dkCard(a);
+  $("#dlgCardLeft").textContent=a.status==="pending"?`expires in ${dkLeft(a)} min`:a.status;
+  if(!$("#dlgCard").open)$("#dlgCard").showModal();
+}
+$("#dlgCardBody").addEventListener("click",async e=>{await dkCardClick(e);const card=$("#dlgCardBody [data-act]");if(card&&DK.acts[card.dataset.act])dkOpenCard(card.dataset.act)});
+$("#dlgCardX").addEventListener("click",()=>$("#dlgCard").close());
+// Otto Signals: Paste a post (backup when the watcher is down) and Clear chats.
+SG.open={};SG.draft={};SG.busy={};
+function sgThread(b){
+  const chat=b.chat||[],open=SG.open[b.id]||chat.length||SG.busy[b.id];
+  if(!open)return `<button class="sg-askbtn" data-sgopen="${b.id}">💬 Ask Jarvis about this signal</button>`;
+  const line=m=>m.role==="assistant"
+    ?`<div class="sg-a"><div class="md">${md(m.content)}</div>${(m.cards||[]).map(c=>{const a=DK.acts[c.id];return a&&(a.status==="pending"||a.status==="running")?`<div class="sg-cardline">🃏 ${esc(c.title)} — <b style="color:var(--warn)">waiting</b> <button class="sg-open" data-opencard="${esc(c.id)}">Open card</button></div>`:`<div class="sg-cardline">🃏 ${esc(c.title)} — <b>${esc(SG_CARD[(a&&a.status)||c.status]||c.status)}</b></div>`}).join("")}</div>`
+    :`<div class="sg-q"><b>${esc(m.author||"You")}:</b> ${esc(m.content)}</div>`;
+  return `<div class="sg-thread"><div class="sg-th">Ask Jarvis about this signal <span>${chat.length} message${chat.length===1?"":"s"}</span></div>${chat.map(line).join("")}`+
+    (SG.busy[b.id]?`<div class="sg-a mut">Jarvis is working on it…</div>`:"")+
+    `<div class="sg-ask"><input data-sgin="${b.id}" placeholder="Ask about this signal or card… (e.g. “make it the 10/24 expiry”)" value="${esc(SG.draft[b.id]||"")}" ${SG.busy[b.id]?"disabled":""}><button data-sgsend="${b.id}" ${SG.busy[b.id]?"disabled":""}>Send</button></div></div>`;
+}
+async function sgSend(bid){
+  const t=(SG.draft[bid]||"").trim();if(!t||SG.busy[bid])return;
+  SG.busy[bid]=true;sgRender();
+  try{await dkApi("signal_chat",{batch_id:bid,text:t,author:($("#dkWho")&&$("#dkWho").value)||"Ifoma"});SG.draft[bid]="";}
+  catch(e){toast("Jarvis: "+String(e.message).slice(0,120))}
+  SG.busy[bid]=false;await dkPanel(true);await sgLoad();sgRender();
+}
+$("#sgFeed").addEventListener("click",async e=>{
+  const o=e.target.closest("[data-sgopen]");if(o){SG.open[o.dataset.sgopen]=true;sgRender();const i=$(`[data-sgin="${o.dataset.sgopen}"]`);if(i)i.focus();return}
+  const s=e.target.closest("[data-sgsend]");if(s)return sgSend(Number(s.dataset.sgsend));
+  const oc=e.target.closest("[data-opencard]");if(oc)return dkOpenCard(oc.dataset.opencard);
+  if(e.target.closest("[data-sgpaste]")){sgShow(false);$("#dkJason").click();return}
+  if(e.target.closest("[data-sgclear]")){
+    if(!confirm("Clear every Otto Signals conversation?\n\nJason's posts, Jarvis's reads and the cards stay. Only the chats are cleared."))return;
+    try{await dkApi("signal_chat_clear",{});SG.open={};SG.draft={};toast("Signal chats cleared");await sgLoad()}catch(err){toast(String(err.message).slice(0,100))}
+  }
+});
+$("#sgFeed").addEventListener("input",e=>{const i=e.target.closest("[data-sgin]");if(i)SG.draft[i.dataset.sgin]=i.value});
+$("#sgFeed").addEventListener("keydown",e=>{const i=e.target.closest("[data-sgin]");if(i&&e.key==="Enter"&&!e.shiftKey){e.preventDefault();sgSend(Number(i.dataset.sgin))}});
 
 /* ---------- v3.7: Jason's calls scorecard (on Results) ---------- */
 async function dkJasonScore(){

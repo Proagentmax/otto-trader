@@ -4,6 +4,8 @@
 //   Discord channel live and posts each new message to ?fn=signal_in (x-otto-signal key);
 //   Jarvis builds the card, both phones ping. Watcher-offline alert on the 2-min cron.
 //   ?fn=signals_feed signal_img signals_cfg signals_cfg_set. No quiet hours on pings. 010_v39.sql.
+//   v3.10: a conversation under each Otto Signal (?fn=signal_chat / signal_chat_clear, otto_signal_chat — 011_v310.sql);
+//   expired cards are marked expired and dropped from the panel's pending list.
 //   v3.9.4: protected-trade alerts retried + honest fill push; stalled Otto Signals reads ping raw words; card builds skip TradingView.
 //   v3.9.3: per-trade loss limit can be OFF (0); Otto Signals adds an ALT card when the best contract doesn't fit; feed read = final READ: only.
 //   v3.9.2: Yahoo FIRST for banner + panel prices (TradingView = backup); watchlist from TV at most every 10 min;
@@ -1310,8 +1312,13 @@ async function panel() {
     const fq = await settle(fetchQuotes());
     if (fq.ok) out.fallback_quotes = fq.v.quotes;
   }
-  const pend = await settle(db("otto_actions?status=in.(pending,running)&order=created_at.desc&limit=10&select=*"));
-  out.pending = pend.ok ? pend.v.map(publicAction) : [];
+  const pend = await settle(db("otto_actions?status=in.(pending,running)&order=created_at.desc&limit=20&select=*"));
+  // v3.10: a pending card past its 20 minutes can't be approved — mark it expired so it stops showing as waiting.
+  const stale = pend.ok ? pend.v.filter((a: any) => a.status === "pending" && Date.now() - Date.parse(a.created_at) > ACTION_TTL_MS) : [];
+  if (stale.length) background(db("otto_actions?status=eq.pending&id=in.(" + stale.map((a: any) => a.id).join(",") + ")", { method: "PATCH",
+    headers: { prefer: "return=minimal" }, body: JSON.stringify({ status: "expired", decided_by: "otto (20 min)", decided_at: new Date().toISOString() }) }));
+  out.pending = pend.ok ? pend.v.filter((a: any) => !stale.includes(a)).slice(0, 10).map(publicAction) : [];
+  out.card_ttl_min = ACTION_TTL_MS / 60000;
   out.auto_close = !!(await getLimits().catch(() => LIMIT_DEFAULTS)).auto_close;
   const ex = await settle(db("otto_actions?select=id,title,exit,created_at&exit->>state=in.(waiting_fill,armed,closed,dead)&order=created_at.desc&limit=8"));
   out.exits = ex.ok ? ex.v.filter((r: any) => ["waiting_fill", "armed"].includes(r.exit.state) ||
@@ -3205,6 +3212,44 @@ async function signalStale() {
   }
 }
 
+/* ---- v3.10 (6 Oct 2026): a conversation under each Otto Signal (Ifoma: "chat in Otto Signals,
+   only to talk about the signal he dropped / the card Jarvis made"). Kept out of the main Desk
+   chat. "Clear chats" hides every signal conversation (the signals, reads and cards stay). */
+async function signalChat(b: any, who: string) {
+  const bid = Number(b.batch_id), text = String(b.text || "").trim().slice(0, 2000), author = String(b.author || "Ifoma").slice(0, 30);
+  if (!bid || !text) throw new Error("say what you want to ask");
+  const batch = (await db(`otto_signal_batches?select=*&id=eq.${bid}`))?.[0];
+  if (!batch) throw new Error("that signal wasn't found");
+  const cfg = await sigCfg();
+  const [msgs, rows, cards, hist] = await Promise.all([
+    (batch.msg_ids || []).length ? db("otto_signal_msgs?select=posted_at,text&msg_id=in.(" + batch.msg_ids.join(",") + ")&order=posted_at.asc").catch(() => []) : [],
+    (batch.rows || []).length ? db("otto_jason?select=*&id=in.(" + batch.rows.join(",") + ")").catch(() => []) : [],
+    (batch.cards || []).length ? db("otto_actions?select=id,title,summary,status&id=in.(" + batch.cards.join(",") + ")").catch(() => []) : [],
+    db(`otto_signal_chat?select=role,author,content&batch_id=eq.${bid}&cleared=eq.false&order=id.asc&limit=30`).catch(() => []),
+  ]);
+  await db("otto_signal_chat", { method: "POST", headers: { prefer: "return=minimal" }, body: JSON.stringify({ batch_id: bid, role: "user", author, content: text }) });
+  const { cs, sys, tools, ctxLine } = await deskSetup();
+  const ctx = `[A conversation about ONE Otto Signal — stay on this signal only.
+${cfg.mentor}'s message(s): ${msgs.map((m: any) => `[${nyTime(m.posted_at)}] ${m.text || "(chart)"}`).join(" / ") || "(none saved)"}
+Posts read from it: ${rows.map(jLine).join("; ") || "(none)"}
+Your read at the time: ${String(batch.read || "(none)").slice(0, 2500)}
+Cards made for it: ${cards.map((c: any) => `"${c.title}" (${c.status}) — ${String(c.summary || "").slice(0, 400)}`).join(" | ") || "(none)"}
+Answer questions about this signal and its card(s). If they ask for a change (strike, expiry, size, cheaper, puts instead of calls), make a NEW card with propose_action (plan.setup "otto signal", plan.jason_id = the post #id) — never say a card exists unless propose_action returned it. Use Robinhood for prices and chains (no TradingView here). Don't narrate your lookups: when done, write a line that is exactly ANSWER: and then your reply, short and plain.]`;
+  const convo = hist.map((h: any) => `${h.role === "assistant" ? "Jarvis" : (h.author || "Ifoma")}: ${h.content}`).join("\n");
+  const res = await runDesk({ msgs: [{ role: "user", content: `${ctxLine}\n${ctx}\n${convo ? "\nConversation so far:\n" + convo + "\n" : ""}\n${author}: ${text}` }], sys,
+    tools: tools.filter((t: any) => t.name !== "close_position" && !/^tv__/.test(String(t.name || ""))),
+    cs, who, send: () => {}, allowPropose: true, allowClose: false, maxRounds: 8 });
+  const raw = res.said.trim(), cut = raw.lastIndexOf("ANSWER:");
+  const answer = (cut >= 0 ? raw.slice(cut + 7) : raw).trim() || (res.cards.length ? "Card's up." : "(no answer)");
+  await db("otto_signal_chat", { method: "POST", headers: { prefer: "return=minimal" }, body: JSON.stringify({ batch_id: bid, role: "assistant", author: "Jarvis", content: answer.slice(0, 8000), cards: res.cards }) });
+  if (res.cards.length) await sigBatch(bid, { cards: [...(batch.cards || []), ...res.cards] });
+  return { ok: true, answer, cards: res.cards };
+}
+async function signalChatClear(who: string) {
+  await db("otto_signal_chat?cleared=eq.false", { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ cleared: true, cleared_by: who }) });
+  return { ok: true };
+}
+
 // The Otto Signals tab: newest bursts first, each with the mentor's messages, the posts read from them, Jarvis's read and the cards.
 async function signalsFeed(days = 2) {
   const cfg = await sigCfg();
@@ -3217,7 +3262,8 @@ async function signalsFeed(days = 2) {
     msgIds.length ? db("otto_signal_imgs?select=id,msg_id&msg_id=in.(" + msgIds.join(",") + ")").catch(() => []) : [],
     rowIds.length ? db("otto_jason?select=id,kind,ticker,direction,late,summary,words,action_id,score&id=in.(" + rowIds.join(",") + ")").catch(() => []) : [],
   ]);
-  const actIds = [...new Set([...rows.map((r: any) => r.action_id), ...batches.flatMap((b: any) => b.cards || [])].filter(Boolean))];
+  const chats = batches.length ? await db("otto_signal_chat?select=id,batch_id,role,author,content,cards,created_at&cleared=eq.false&batch_id=in.(" + batches.map((b: any) => b.id).join(",") + ")&order=id.asc").catch(() => []) : [];
+  const actIds = [...new Set([...rows.map((r: any) => r.action_id), ...batches.flatMap((b: any) => b.cards || []), ...chats.flatMap((c: any) => c.cards || [])].filter(Boolean))];
   const acts = actIds.length ? await db("otto_actions?select=id,status,title&id=in.(" + actIds.join(",") + ")").catch(() => []) : [];
   const A: Record<string, any> = Object.fromEntries(acts.map((a: any) => [a.id, a]));
   const M: Record<string, any> = Object.fromEntries(msgs.map((m: any) => [m.msg_id, m]));
@@ -3231,7 +3277,9 @@ async function signalsFeed(days = 2) {
       posts: (b.rows || []).map((id: number) => R[id]).filter(Boolean).map((r: any) => ({ id: r.id, kind: r.kind, ticker: r.ticker,
         direction: r.direction, late: r.late, summary: r.summary || r.words, score: r.score || null,
         card: r.action_id && A[r.action_id] ? { id: r.action_id, status: A[r.action_id].status, title: A[r.action_id].title } : null })),
-      cards: (b.cards || []).map((id: string) => A[id]).filter(Boolean).map((a: any) => ({ id: a.id, status: a.status, title: a.title })) })) };
+      cards: (b.cards || []).map((id: string) => A[id]).filter(Boolean).map((a: any) => ({ id: a.id, status: a.status, title: a.title })),
+      chat: chats.filter((c: any) => c.batch_id === b.id).map((c: any) => ({ role: c.role, author: c.author, content: c.content, at: c.created_at,
+        cards: (c.cards || []).map((id: string) => A[id]).filter(Boolean).map((a: any) => ({ id: a.id, status: a.status, title: a.title })) })) })) };
 }
 
 async function signalImg(id: number) {
@@ -3842,7 +3890,7 @@ Deno.serve(async (req) => {
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
          "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "performance", "help", "jason_today", "jason_sweep", "jason_score",
          "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set",
-         "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set"].includes(fn)) {
+         "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -3884,6 +3932,8 @@ Deno.serve(async (req) => {
       if (fn === "signal_img") return json(await signalImg(Number(new URL(req.url).searchParams.get("id") || 0)));
       if (fn === "signals_cfg") return json({ ok: true, cfg: await sigCfg(), beat: await setting("signal_beat") });
       if (fn === "signals_cfg_set") return json({ ok: true, cfg: await signalsCfgSet(body, who) });
+      if (fn === "signal_chat") return json(await signalChat(body, who));
+      if (fn === "signal_chat_clear") return json(await signalChatClear(who));
       if (fn === "layout_get") return json({ ok: true, layout: await setting("layout") });
       if (fn === "layout_set") return json({ ok: true, layout: await layoutSet(body, who) });
       if (fn === "limits_get") return json({ ok: true, limits: await getLimits() });

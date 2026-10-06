@@ -4,7 +4,7 @@
    mentor's Discord account (matched by user id, not display name) goes to the
    extension's background, which sends it to Otto. */
 (() => {
-  const VER = "1.1.0";
+  const VER = "1.2.0";
   let cfg = null, paused = false;
   const seen = new Set();            // message ids already handled in this tab
   const MAX_AGE_MS = 12 * 3600e3;    // older than this on screen = ignore (yesterday's chat)
