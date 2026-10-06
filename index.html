@@ -943,7 +943,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <p class="hint" style="margin-top:0">Change these any time. They apply straight away to the Results page and every new card. They're warnings, never blocks. The change is posted on the Desk.</p><div style="height:8px"></div>
     <div class="grid g2">
       <div style="grid-column:1/-1"><label class="f" for="lmPhase">Phase</label><select class="f" id="lmPhase"><option value="1">Phase 1 · Stop the big losses</option><option value="2">Phase 2 · Prove the edge</option><option value="3">Phase 3 · Scale</option></select></div>
-      <div><label class="f" for="lmTrade">Max loss on one trade ($)</label><input class="f" id="lmTrade" type="number" min="1" step="1" inputmode="numeric"></div>
+      <div><label class="f" for="lmTrade">Max loss on one trade ($)</label><input class="f" id="lmTrade" type="number" min="0" step="1" inputmode="numeric" placeholder="0 = no limit"></div>
       <div><label class="f" for="lmWeek">Weekly loss limit ($): stop for the week</label><input class="f" id="lmWeek" type="number" min="1" step="1" inputmode="numeric"></div>
       <div><label class="f" for="lmDay">Max trades per day</label><input class="f" id="lmDay" type="number" min="1" step="1" inputmode="numeric"></div>
       <div><label class="f" for="lmGoal">Monthly profit goal (%)</label><input class="f" id="lmGoal" type="number" min="0" step="0.5" inputmode="decimal"></div>
@@ -1928,7 +1928,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.9.0";
+const BUILD="3.9.3";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3274,7 +3274,8 @@ async function dkPerf(force){
   const wkLoss=Math.min(0,g.week_pnl),worst=Math.min(0,g.worst_trade_week);
   const goals=[
     goal("Weekly loss limit",wkLoss,L.weekly_loss,`${dk$0(g.week_pnl)} / −$${L.weekly_loss}`,g.week_pnl<=-L.weekly_loss?`<span class="dn">Limit hit: stop for the week.</span>`:g.week_pnl<0?`$${Math.round(L.weekly_loss+g.week_pnl)} left before the stop`:"On track"),
-    goal("Biggest single loss this week",worst,L.max_trade_loss,`${dk$0(worst)} / −$${L.max_trade_loss}`,worst<-L.max_trade_loss?`<span class="dn">Over the per-trade limit.</span>`:"On track"),
+    L.max_trade_loss>0?goal("Biggest single loss this week",worst,L.max_trade_loss,`${dk$0(worst)} / −$${L.max_trade_loss}`,worst<-L.max_trade_loss?`<span class="dn">Over the per-trade limit.</span>`:"On track")
+      :goal("Biggest single loss this week",worst,0,`${dk$0(worst)} · no per-trade limit`,"",true),
     goal("Trades today",g.trades_today,L.max_trades_day,`${g.trades_today} / ${L.max_trades_day}`,g.trades_today>=L.max_trades_day?`<span class="warn">That's the limit for today.</span>`:""),
     goal(`Weeks in a row without a −$${L.big_day} week`,Math.min(g.clean_weeks,8),8,`${g.clean_weeks} / 8`,L.phase<2?"Phase 2 unlocks at 8":"",true),
   ];
@@ -3309,7 +3310,7 @@ async function dkPerf(force){
         ${row("Best ticker",h.best?`${esc(h.best.s)} ${dk$0(h.best.pnl)}`:"—")}${row("Worst ticker",h.worst?`${esc(h.worst.s)} ${dk$0(h.worst.pnl)}`:"—")}</div>
       <div class="dk-cardx"><div class="dk-h">Rules vs results <b>from the rule check</b></div>
         ${row("Trades that followed every rule",ruTxt(ru.followed))}${row("Trades that broke one",ruTxt(ru.broke))}
-        ${row(`Lost more than $${L.max_trade_loss} on one trade`,ru.over_limit&&ru.over_limit.n?`<span class="dn">${ru.over_limit.n} · ${dk$0(ru.over_limit.pnl)}</span>`:"0")}
+        ${row(L.max_trade_loss>0?`Lost more than $${L.max_trade_loss} on one trade`:"Per-trade loss limit (off)",ru.over_limit&&ru.over_limit.n?`<span class="dn">${ru.over_limit.n} · ${dk$0(ru.over_limit.pnl)}</span>`:"0")}
         <div class="mut" style="font-size:11.5px;margin-top:6px">Followed / broke fill in as trades go through Desk cards with a rule check. The over-the-limit count uses every closed trade in the Journal.</div></div></div>
     <div id="pfJason"></div>
     <div class="mut" style="font-size:11.5px">Robinhood's realized P&amp;L for both accounts, as of ${esc(dkDate(j.as_of))}. Weeks run Monday to Friday, New York time. Trade counts and calls vs puts come from the Journal.</div>

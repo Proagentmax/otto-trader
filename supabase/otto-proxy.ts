@@ -4,6 +4,7 @@
 //   Discord channel live and posts each new message to ?fn=signal_in (x-otto-signal key);
 //   Jarvis builds the card, both phones ping. Watcher-offline alert on the 2-min cron.
 //   ?fn=signals_feed signal_img signals_cfg signals_cfg_set. No quiet hours on pings. 010_v39.sql.
+//   v3.9.3: per-trade loss limit can be OFF (0); Otto Signals adds an ALT card when the best contract doesn't fit; feed read = final READ: only.
 //   v3.9.2: Yahoo FIRST for banner + panel prices (TradingView = backup); watchlist from TV at most every 10 min;
 //   TV breaker also trips on 429 / bad handshake. Exit engine — stop placed + saved before TradingView alerts; a TradingView failure no longer loses stop bookkeeping.
 //   v3.9.1: ping first on a call; Jarvis's card build runs as its own invocation (?fn=signal_jarvis); stalled builds pinged.
@@ -1095,7 +1096,7 @@ async function proposeAction(input: any, who: string, opts: { manual?: boolean }
     try { checks = checks.concat(await limitChecks(risk.cost)); } catch { /* */ }
     if (exit) {
       const atStop = (exit.entry_limit - exit.stop_option) * 100 * exit.qty;
-      checks.push({ ok: atStop <= LIM.max_trade_loss, text: `If the stop fills at $${exit.stop_option.toFixed(2)}: about −$${atStop.toFixed(0)} (limit $${LIM.max_trade_loss}). Option stops can fill lower on a fast move.` });
+      checks.push({ ok: LIM.max_trade_loss > 0 ? atStop <= LIM.max_trade_loss : null, text: `If the stop fills at $${exit.stop_option.toFixed(2)}: about −$${atStop.toFixed(0)}${LIM.max_trade_loss > 0 ? ` (limit $${LIM.max_trade_loss})` : ""}. Option stops can fill lower on a fast move.` });
     }
   }
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
@@ -1559,7 +1560,7 @@ async function deskSetup() {
   const protLine = prot.ok && prot.v.length ? " Protected trades (Otto runs their stop and alerts; to close one early, cancel_option_order its stop_order_id first, then sell, in one card): " +
     prot.v.map((r: any) => `${r.title} [${r.exit.state}${r.exit.stop_order_id ? `, stop_order_id ${r.exit.stop_order_id} at $${r.exit.stop_option}` : ""}, wrong-if ${r.exit.wrong_if}, TP1 ${r.exit.tp1}]`).join("; ") + "." : "";
   const jctx = await jasonContext().catch(() => "");
-  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their own limits (Phase ${LIM.phase}): max loss per trade $${LIM.max_trade_loss}, weekly loss limit $${LIM.weekly_loss}, ${LIM.max_trades_day} trades/day, warn over ${LIM.warn_pct}% of the account — size ideas inside these and say so when an idea would break one.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.${jctx}]`;
+  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their own limits (Phase ${LIM.phase}): max loss per trade ${LIM.max_trade_loss > 0 ? "$" + LIM.max_trade_loss : "OFF (Ifoma removed it 6 Oct — they size each trade themselves)"}, weekly loss limit $${LIM.weekly_loss}, ${LIM.max_trades_day} trades/day, warn over ${LIM.warn_pct}% of the account — size ideas inside these and say so when an idea would break one.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.${jctx}]`;
 
   return { cs, sys, tools, ctxLine, autoClose: !!LIMa.auto_close };
 }
@@ -3046,9 +3047,10 @@ Do this:
 1. Every post that names a ticker and implies a trade — a CALL, or a LEVEL that held / broke / rejected — gets ONE opening option card via propose_action, even when ${cfg.mentor} gave no direction. Decide long (calls) or short (puts) yourself from his words, his chart, the banner and the price right now (fetch it). plan.setup = "otto signal", plan.jason_id = the #id above. Fill in everything he did NOT give — the contract (delta .30–.40, volume > open interest, a sensible expiry), limit, quantity inside our limits, TP1, wrong-if and stop_option — as precisely as you can. In the card summary say which parts are ${cfg.mentor}'s and which are yours.
 2. A LATE post (he says he missed calling it / it already moved): still make the card, start the title with "LATE", and say plainly in the summary that chasing breaks his entry rules.
 3. If the banner, one of his rules or our limits argue against it, say so in the card summary — but still make the card. Ifoma and Josh decide.
+3b. ALTERNATIVE (Ifoma, 6 Oct): if your best contract costs more than the Agentic account's buying power right now, ALSO make ONE second card — the best contract that DOES fit the buying power (further out-of-the-money, or a different expiry), title starting "ALT —", and say in its summary why it's second-best (lower delta, less liquid, etc.). Never more than these two cards for one post.
 4. A WATCH LIST or a conditional level ("AMD ABOVE 646", "SUPPORT $379 TSLA", "WATCH LIST THIS MORNING") is not a call yet: no card. Put the trigger levels in your read. The card comes when he says it triggered / broke / held, or calls it.
 5. Commentary, chatter, or a chart with no tradeable call: no card.
-Then write the read for the Otto Signals feed. For each post, 1–3 short plain lines: what he said; for a card, your direction and WHY; and what would prove it wrong. No headers, no tables.`;
+Work quietly — don't narrate your lookups. When you're done, write the read for the Otto Signals feed, starting with a line that is exactly READ: — everything after that line is what Ifoma and Josh see. For each post, 1–3 short plain lines: what he said; for a card, your direction and WHY (and the ALT if there is one); and what would prove it wrong. No headers, no tables.`;
 }
 
 async function signalProcess(bid: number, ins: any[], imgs: { mime: string; data: string }[], cfg: any) {
@@ -3133,7 +3135,11 @@ async function signalJarvis(bid: number) {
       const row = all.find((r: any) => r.id === Number(a.plan?.jason_id)) || (open.length === 1 ? open[0] : null);
       if (row) { row.action_id = a.id; await db("otto_jason?id=eq." + row.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ action_id: a.id }) }).catch(() => {}); }
     }
-    await sigBatch(bid, { status: err ? "error" : "done", read: res.said.trim() || null, cards: res.cards, error: err || null });
+    // v3.9.3: keep only the final read (after the last "READ:" line), not Jarvis's working-out.
+    const rawRead = res.said.trim();
+    const cut = rawRead.lastIndexOf("READ:");
+    const read = (cut >= 0 ? rawRead.slice(cut + 5) : rawRead).trim();
+    await sigBatch(bid, { status: err ? "error" : "done", read: read || null, cards: res.cards, error: err || null });
     for (const a of acts) {
       const row = all.find((r: any) => r.action_id === a.id);
       await notify("signal", `🃏 Card ready: ${row?.ticker || ""} ${row?.direction ? row.direction.toUpperCase() : ""}`.trim(),
@@ -3543,13 +3549,13 @@ async function setLimits(body: any, who: string) {
   const num = (k: string, lo: number, hi: number) => {
     const n = Number(v[k]); if (!isFinite(n) || n < lo || n > hi) throw new Error(`${k.replace(/_/g, " ")} must be between ${lo} and ${hi}`); return n;
   };
-  const value = { phase: num("phase", 1, 3), max_trade_loss: num("max_trade_loss", 1, 1e6), weekly_loss: num("weekly_loss", 1, 1e6),
+  const value = { phase: num("phase", 1, 3), max_trade_loss: num("max_trade_loss", 0, 1e6), weekly_loss: num("weekly_loss", 1, 1e6),
     max_trades_day: num("max_trades_day", 1, 100), monthly_goal_pct: num("monthly_goal_pct", 0, 100), warn_pct: num("warn_pct", 1, 100),
     big_day: num("big_day", 1, 1e7), auto_close: v.auto_close === true || v.auto_close === "true", review_min: num("review_min", 5, 120) };
   await db("otto_settings?on_conflict=key", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify({ key: "limits", value, updated_by: by + " (" + who + ")", updated_at: new Date().toISOString() }) });
   delete CACHE.limits;
-  await logDesk("system", "Otto", `Limits updated by ${by}: max loss/trade $${value.max_trade_loss}, weekly loss limit $${value.weekly_loss}, ${value.max_trades_day} trades/day, goal ${value.monthly_goal_pct}%/month, warn over ${value.warn_pct}% of the account. Auto-close ${value.auto_close ? `ON (Jarvis can sell to close on his own; checks every ${value.review_min} min)` : "OFF (closes need an Approve)"}.`);
+  await logDesk("system", "Otto", `Limits updated by ${by}: max loss/trade ${value.max_trade_loss > 0 ? "$" + value.max_trade_loss : "off"}, weekly loss limit $${value.weekly_loss}, ${value.max_trades_day} trades/day, goal ${value.monthly_goal_pct}%/month, warn over ${value.warn_pct}% of the account. Auto-close ${value.auto_close ? `ON (Jarvis can sell to close on his own; checks every ${value.review_min} min)` : "OFF (closes need an Approve)"}.`);
   return { ...value, _by: who, _at: new Date().toISOString() };
 }
 
@@ -3625,7 +3631,7 @@ async function performance(apiKey: string, wantRead: boolean, fresh = false) {
   const chk: Record<string, any[]> = Object.fromEntries(acts.map((a: any) => [a.id, a.checks || []]));
   const followed = closed.filter((t) => chk[t.action_id] && chk[t.action_id].every((c: any) => c.ok !== false));
   const broke = closed.filter((t) => chk[t.action_id] && chk[t.action_id].some((c: any) => c.ok === false));
-  const overLimit = closed.filter((t) => Number(t.pnl) < -L.max_trade_loss);
+  const overLimit = L.max_trade_loss > 0 ? closed.filter((t) => Number(t.pnl) < -L.max_trade_loss) : [];
   const out: any = {
     ok: true, limits: L, as_of: new Date().toISOString(), first_trade_day: first,
     accounts: values, combined: +combined.toFixed(2),
@@ -3668,7 +3674,7 @@ async function performance(apiKey: string, wantRead: boolean, fresh = false) {
 async function limitChecks(cost: number | null): Promise<any[]> {
   const L = await getLimits();
   const out: any[] = [];
-  if (cost != null) out.push({ ok: cost <= L.max_trade_loss, text: `Most this trade can lose: $${cost.toFixed(0)} (your limit $${L.max_trade_loss})` });
+  if (cost != null) out.push({ ok: L.max_trade_loss > 0 ? cost <= L.max_trade_loss : null, text: `Most this trade can lose: $${cost.toFixed(0)}${L.max_trade_loss > 0 ? ` (your limit $${L.max_trade_loss})` : " (no per-trade limit set)"}` });
   try {
     const p = await dailyPnl();
     const wk = mondayOf(etParts().date);
