@@ -13,7 +13,7 @@ class FakeDate extends RealDate {
 const setNow = (iso: string) => { NOW = RealDate.parse(iso); };
 
 /* ---------------- fake Supabase (PostgREST subset) ---------------- */
-const T: Record<string, any[]> = { otto_actions: [], otto_desk: [], otto_settings: [], otto_trades: [] };
+const T: Record<string, any[]> = { otto_actions: [], otto_desk: [], otto_settings: [], otto_trades: [], otto_watch: [] };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function parse(path: string) {
   const [table, q = ""] = path.split("?");
@@ -29,9 +29,16 @@ function matches(row: any, params: URLSearchParams) {
       if (m) { if (!(row.exit_lock == null || row.exit_lock < m[1])) return false; continue; }
       continue;
     }
-    if (v.startsWith("eq.")) { const want = v.slice(3); const have = k.includes("->>") ? row.exit?.[k.split("->>")[1]] : row[k]; if (String(have) !== want) return false; }
+    const val = (key: string) => {           // col, col->>key, col->key->>key2
+      const m = /^(\w+)(?:->(\w+))?->>(\w+)$/.exec(key);
+      if (!m) return row[key];
+      const base = row[m[1]] || {}; const obj = m[2] ? (base[m[2]] || {}) : base; return obj[m[3]];
+    };
+    if (v === "is.null") { if (val(k) != null) return false; continue; }
+    if (v.startsWith("neq.")) { if (String(val(k)) === v.slice(4)) return false; continue; }
+    if (v.startsWith("eq.")) { const want = decodeURIComponent(v.slice(3)); const have = k === "exit->>state" ? row.exit?.state : val(k); if (String(have) !== want) return false; }
     else if (v.startsWith("gte.")) { if (!(String(row[k]) >= v.slice(4))) return false; }
-    else if (v.startsWith("in.(")) { const set = v.slice(4, -1).split(","); const have = k.includes("->>") ? row.exit?.[k.split("->>")[1]] : row[k]; if (!set.includes(String(have))) return false; }
+    else if (v.startsWith("in.(")) { const set = v.slice(4, -1).split(","); const have = val(k); if (!set.includes(String(have))) return false; }
   }
   return true;
 }
@@ -45,9 +52,15 @@ async function fakeDb(path: string, init: RequestInit = {}) {
   if (method === "GET") return rows.filter((r) => matches(r, params));
   if (method === "POST") {
     if (params.get("on_conflict")) {
-      const key = params.get("on_conflict")!;
-      for (const b of [].concat(body)) { const i = rows.findIndex((r) => r[key] === (b as any)[key]); if (i >= 0) rows[i] = { ...rows[i], ...(b as any) }; else rows.push({ ...(b as any) }); }
-      return null;
+      const keys = params.get("on_conflict")!.split(",");
+      const ignore = /ignore-duplicates/.test(String((init.headers as any)?.prefer || ""));
+      const made: any[] = [];
+      for (const b of [].concat(body) as any[]) {
+        const i = rows.findIndex((r) => keys.every((k) => String(r[k]) === String(b[k])));
+        if (i >= 0) { if (!ignore) rows[i] = { ...rows[i], ...b }; }
+        else { const row = { id: b.id || ++ID, created_at: new Date().toISOString(), fired: {}, ...b }; rows.push(row); made.push({ ...row }); }
+      }
+      return ignore ? made : null;
     }
     const out = [].concat(body).map((b: any) => ({ id: b.id || `id-${++ID}`, created_at: new Date().toISOString(), ...b }));
     rows.push(...out);
@@ -65,6 +78,8 @@ async function fakeDb(path: string, init: RequestInit = {}) {
 }
 
 /* ---------------- fake Robinhood / TradingView ---------------- */
+import { SPY_5M, NVDA_5M, toRh } from "./fixtures_2026-10-06.ts";
+const FIX: Record<string, any> = { SPY: toRh("SPY", SPY_5M), NVDA: toRh("NVDA", NVDA_5M) };
 const ACCT = "945257012";
 const OPT = "opt-spy-781c-1009";
 let orders: any[] = [];
@@ -96,6 +111,7 @@ async function fakeCall(service: string, tool: string, args: any) {
     case "mcp-tv-create-alert": return j({ alert_id: 1000 + (++ID) });
     case "mcp-tv-get-economic-calendar": return j({ events: [] });
     case "get_realized_pnl": return j({ data: { data_points: [] } });
+    case "get_equity_historicals": return j({ data: { results: (args.symbols || []).map((sy: string) => FIX[sy]).filter(Boolean) } });
     default: return j({});
   }
 }
@@ -127,7 +143,7 @@ const M = await import("../otto-proxy.ts");
 
 function assert(c: unknown, msg: string) { if (!c) throw new Error("ASSERT: " + msg); }
 function reset() {
-  T.otto_actions = []; T.otto_desk = []; T.otto_settings = []; T.otto_trades = [];
+  T.otto_actions = []; T.otto_desk = []; T.otto_settings = []; T.otto_trades = []; T.otto_watch = [];
   orders = []; calls = []; claudeBodies.length = 0; claudeScript = null;
   quote = { delta: "0.527", volume: 6911, open_interest: 2898 };
 }
@@ -299,4 +315,90 @@ Deno.test("routes: every Desk route is in the signed-in allow-list", async () =>
   const handled = [...src.slice(i, blockEnd).matchAll(/fn === "([a-z_]+)"/g)].map((m) => m[1]);
   const missing = handled.filter((f) => !allowed.has(f));
   assert(missing.length === 0, "routes handled but not allowed: " + missing.join(", "));
+});
+
+
+/* =============================== v3.14 WATCHER + SCOREBOARD =============================== */
+const at = (hhmmss: string) => RealDate.parse(`2026-10-06T${hhmmss}Z`);
+const spyBars = () => M.parseRhBars({ data: { results: [FIX.SPY] } }).SPY;
+const nvdaBars = () => M.parseRhBars({ data: { results: [FIX.NVDA] } }).NVDA;
+function replay(level: number, d: "up" | "down", bars: any[], earliest: number, from = "13:31:00", to = "15:30:00", rearm = true) {
+  const hits: string[] = []; let firedAt = 0;
+  for (let t = at(from); t <= at(to); t += 60e3) {
+    if (firedAt && (!rearm || t - firedAt < 15 * 60e3)) continue;
+    const h = M.evalLevel(level, d, bars, 5, { now: t, earliestMin: earliest });
+    if (h) { hits.push(`${new RealDate(t).toISOString().slice(11, 16)} ${h.trigger}`); firedAt = t; }
+  }
+  return hits;
+}
+Deno.test("watcher replay, real 6 Oct bars: SPY 778.60 Signal level — break at 9:45, then the 10:30 pullback-and-hold", () => {
+  const hits = replay(778.60, "up", spyBars(), 575);
+  // 13:45Z = 9:45 ET (the 9:40 bar closed 778.65 over 778.60); 14:35Z = 10:35 ET (the 10:30 bar: low 778.565, closed green 779.18).
+  assert(hits[0] === "13:45 break", JSON.stringify(hits));
+  assert(hits.includes("14:35 pullback-hold"), JSON.stringify(hits));
+});
+Deno.test("watcher replay: the bar right after a break is NOT a pullback (price must move away first)", () => {
+  const hits = replay(778.60, "up", spyBars(), 575, "13:46:00", "14:20:00", false);
+  assert(!hits.some((h) => /pullback/.test(h)), JSON.stringify(hits));
+});
+Deno.test("watcher replay: a Desk level waits until 10:00 — first trigger is the 10:35 pullback-and-hold", () => {
+  const hits = replay(778.60, "up", spyBars(), 600);
+  assert(hits[0] === "14:35 pullback-hold", JSON.stringify(hits));
+});
+Deno.test("watcher replay: NVDA 242 is flagged as chop (many crossings)", () => {
+  const n = M.crossings(242, nvdaBars());
+  assert(n === 6, "crossings " + n);   // 9:30–11:30 ET closes crossed 242 six times (≥ 4 = chop warning)
+});
+Deno.test("watcher: stale bars never fire late (a missed cron minute)", () => {
+  const h = M.evalLevel(778.60, "up", spyBars(), 5, { now: at("13:55:00"), earliestMin: 575 });
+  assert(h === null, JSON.stringify(h));
+});
+Deno.test("watcher: Signal words become levels with a side", () => {
+  const a = M.levelsFromWords("SPY ABOVE 778.60 GO / SUPPORT 776 AND 775");
+  assert(JSON.stringify(a) === JSON.stringify([{ level: 778.6, dir: "up" }, { level: 776, dir: "up" }, { level: 775, dir: "up" }]), JSON.stringify(a));
+  const b = M.levelsFromWords("NVDA BELOW 240 PUTS", "down");
+  assert(b.length === 1 && b[0].level === 240 && b[0].dir === "down", JSON.stringify(b));
+  assert(M.levelsFromWords("AMD PLAYING OUT").length === 0, "no numbers, no levels");
+});
+Deno.test("watcher tick: two overlapping cron runs fire ONE trigger; Desk line posted; Jarvis asked", async () => {
+  reset(); setNow("2026-10-06T13:45:30Z");
+  T.otto_watch.push({ id: 7, day: "2026-10-06", ticker: "SPY", level: 778.6, dir: "up", source: "signal", status: "watching", fired: {} });
+  claudeScript = () => textReply("Checked it. READ: SPY broke 778.60 on the 9:40 bar. No card — first 30 minutes and the banner is mixed.");
+  const [a, b] = await Promise.all([M.watchTick(NOW), M.watchTick(NOW)]);
+  const hits = [...(a.hits || []), ...(b.hits || [])];
+  assert(hits.length === 1 && /SPY 778.6 up break/.test(hits[0]), JSON.stringify([a, b]));
+  await sleep(150);
+  assert(/👁 Watcher\] SPY 778.6 — break-and-close/.test(deskText()), deskText());
+  assert(/Jarvis · watcher\] For: 👁 SPY 778.6 ▲ break-and-close\nSPY broke 778.60/.test(deskText()), deskText());
+  assert(T.otto_watch[0].fired.up.read && !T.otto_watch[0].fired.up.cards.length, JSON.stringify(T.otto_watch[0].fired));
+});
+Deno.test("watcher tick: a passed trigger re-arms after 15 min and the 10:30 bounce fires", async () => {
+  reset(); setNow("2026-10-06T14:35:20Z");
+  T.otto_watch.push({ id: 8, day: "2026-10-06", ticker: "SPY", level: 778.6, dir: "up", source: "signal", status: "watching",
+    fired: { up: { at: "2026-10-06T13:45:30.000Z", trigger: "break", read: "no card", cards: [] } } });
+  claudeScript = () => textReply("READ: Held 778.60 and closed green. No card in this test.");
+  const r: any = await M.watchTick(NOW);
+  assert(r.hits?.[0] === "SPY 778.6 up pullback-hold", JSON.stringify(r));
+  assert(T.otto_watch[0].fired.up.passed?.[0]?.trigger === "break", JSON.stringify(T.otto_watch[0].fired));
+});
+Deno.test("watcher tick: a level that already produced a card never fires again that day", async () => {
+  reset(); setNow("2026-10-06T14:35:20Z");
+  T.otto_watch.push({ id: 9, day: "2026-10-06", ticker: "SPY", level: 778.6, dir: "up", source: "signal", status: "watching",
+    fired: { up: { at: "2026-10-06T13:45:30.000Z", trigger: "break", read: "card", cards: ["c1"] } } });
+  const r: any = await M.watchTick(NOW);
+  assert(!(r.hits || []).length, JSON.stringify(r));
+});
+Deno.test("scoreboard: the 10:35 SPY call idea is a WIN (TP1 780.50 touched 10:55); the mirror put is a LOSS on the 15-min close", () => {
+  const win: any = M.gradeIdea({ created: at("14:35:40"), direction: "up", tp1: 780.5, wrong: 778.4, delta: 0.52, premium: 3.6 }, spyBars(), at("15:30:00"));
+  assert(win.state === "win" && new RealDate(win.at).toISOString().slice(11, 16) === "14:55", JSON.stringify(win));
+  assert(win.pnl_est > 0, JSON.stringify(win));
+  const loss: any = M.gradeIdea({ created: at("14:35:40"), direction: "down", tp1: 778.0, wrong: 780.0, delta: 0.5, premium: 3.0 }, spyBars(), at("15:30:00"));
+  assert(loss.state === "loss" && loss.pnl_est < 0 && loss.pnl_est >= -300, JSON.stringify(loss));
+});
+Deno.test("scoreboard: cards carry their source and Watcher trigger", async () => {
+  reset(); setNow("2026-10-06T14:35:40Z");
+  const c1: any = await M.proposeAction(spyCard(), "watcher", { planExtra: { source: "signal", trigger: "pullback-hold", watch_id: 8 } });
+  const c2: any = await M.proposeAction(spyCard(), "ottotrader@vinecreativestudio.com");
+  assert(c1.plan.source === "signal" && c1.plan.trigger === "pullback-hold" && c1.plan.watch_id === 8, JSON.stringify(c1.plan));
+  assert(c2.plan.source === "desk" && !c2.plan.trigger, JSON.stringify(c2.plan));
 });

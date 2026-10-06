@@ -1051,12 +1051,14 @@ function costOf(tool: string, a: any): { cost: number | null; note: string } {
 
 /* ------------------------------------------------------------ propose / act */
 
-export async function proposeAction(input: any, who: string, opts: { manual?: boolean } = {}) {
+export async function proposeAction(input: any, who: string, opts: { manual?: boolean; planExtra?: Record<string, unknown> } = {}) {
   const calls = Array.isArray(input.calls) ? input.calls.slice(0, 6) : [];
   if (!calls.length) throw new Error("no calls");
   // v3.1: an opening option order must carry its plan, so the scorecard can grade it.
   const opening = calls.some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open"));
-  const plan = input.plan && typeof input.plan === "object" ? input.plan : null;
+  // v3.14: the server stamps where the idea came from (signal / desk / scanner / alert / watcher trigger) for the Scoreboard.
+  const plan = input.plan && typeof input.plan === "object" ? { ...input.plan, ...(opening ? (opts.planExtra || {}) : {}),
+    ...(opening && !opts.planExtra?.source ? { source: who === "signals" ? "signal" : who === "alert" ? "alert" : who === "otto" ? "manual" : "desk" } : {}) } : null;
   // v3.4: ...and its exits. No exits, no card (Jarvis and the manual ticket alike).
   if (opening && (!plan || !plan.tv_symbol || !plan.direction || !plan.setup || plan.tp1 == null || plan.stop == null || !(Number(plan.stop_option) > 0))) {
     throw new Error("An opening option order needs its plan and exits: {tv_symbol (EXCHANGE:TICKER), direction ('up'|'down' on the underlying), setup, tp1, stop (underlying prices), stop_option (OPTION price for the protective stop, below the limit), entry_underlying?, expires? (YYYY-MM-DD)}. Add it and propose again.");
@@ -1118,7 +1120,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     plan: plan ? { ...plan, setup: String(plan.setup).toLowerCase().slice(0, 40) } : null, banner, checks,
     ...(exit ? { exit: { ...exit, state: "planned", log: [] } } : {}),
   }) });
-  if (rows?.[0]?.status === "pending" && who !== "signals" && who !== "alert") await notify("card", `🃏 Card waiting: ${String(rows[0].title).slice(0, 80)}`, "Tap to open the Desk and Approve or Reject (cards expire in 20 minutes).");
+  if (rows?.[0]?.status === "pending" && who !== "signals" && who !== "alert" && who !== "watcher") await notify("card", `🃏 Card waiting: ${String(rows[0].title).slice(0, 80)}`, "Tap to open the Desk and Approve or Reject (cards expire in 20 minutes).");
   return publicAction(rows[0]);
 }
 
@@ -1343,7 +1345,7 @@ async function panel() {
 const NAME_RULE = `\n\nNAMES — PRODUCT RULE (6 Oct 2026). Never write the names Jason, Jason Murray, or jmoney915 in anything Ifoma or Josh will read: replies, reads, card titles and summaries, TradingView alert names and messages. The method and its rules are "the Otto Rules" (e.g. "Otto Rules: no trades in the first 30 minutes"; cite as (Otto Rules, call date, MM:SS)). His Discord posts are "signals" ("the SPCX signal"). The person on the coaching calls is "the coach". Name a TradingView alert you create "Otto Rules MM/DD – TICKER LEVEL – note". You still know where the rules come from; just don't name him. Speak as yourself with the Otto Rules as your own playbook: never "he would / wouldn't", "he says", "ask him", "send it to him" or "get the coach on the phone" — say what the Otto Rules say and what you'd do.`;
 // v3.13 (Ifoma, 6 Oct): guardrails flag, never block; Jarvis never claims to watch what nothing is watching.
 const GUARD_RULE = `\n\nGUARDRAILS FLAG — THEY NEVER BLOCK (Ifoma, 6 Oct 2026). Ifoma and Josh make the final call on every trade. When a setup is real, ALWAYS build the card, even if it breaks a guardrail (max loss per trade, daily stop, weekly limit, size vs account, delta, expiry, first 30 minutes, banner). Never say "hard stop", "no card" or refuse a card because of a limit or size. The card shows a red banner naming each guardrail it breaks; in your reply say which ones in one line, and if a cheaper contract fits better, offer it as a second (ALT) card. Only skip a card when there is no setup.
-WHAT RUNS ON ITS OWN — SAY ONLY THIS. You do not watch the market between messages. You run only when someone writes on the Desk, when a TradingView alert Otto set fires (checked every 2 minutes), when Otto Signals catches a post, and on the open-position check (every few minutes while a trade is open). Never say "I'm watching", "watching every bar", "the card drops automatically", "I'll flag you at 1:30" or "I'll ping you" unless one of those mechanisms will actually do it. If they want a level watched, offer a TradingView alert card at that level (it wakes you when it fires) and say that's how you'll see it.
+WHAT RUNS ON ITS OWN — SAY ONLY THIS. You do not watch the market between messages. You run only when someone writes on the Desk, when the 👁 Watcher sees a trigger at a level on its list (the server checks every minute on 5- and 10-minute closes), when a TradingView alert Otto set fires (checked every 2 minutes), when Otto Signals catches a post, and on the open-position check (every few minutes while a trade is open). Never say "I'm watching", "watching every bar", "the card drops automatically", "I'll flag you at 1:30" or "I'll ping you" unless one of those mechanisms will actually do it. If they want a level watched, put it on the Watcher with add_watch_level (no card needed) and say so — that is how you'll see it.
 HOUSE RULES. The House Rules block (below the clock) is their standing instructions. Follow them every time. When Ifoma or Josh gives a standing instruction ("from now on", "always", "next time", "in the future"), call save_house_rule with it in one plain sentence, then confirm in one line. Don't save one-off requests.
 THE CLOCK. The CLOCK line is computed by the server and is always right about the date, weekday, time and whether the market is open. Tool timestamps are UTC unless they say ET. If you ever feel the market is closed, re-read the CLOCK line before saying so.
 A PROTECTED TRADE'S STOP. On a trade Otto protects, a pending sell-to-close (pending_sell_quantity 1) is Otto's own stop order. It is not a stuck or "zombie" order — never tell anyone to cancel it unless they're closing the trade.`;
@@ -1472,7 +1474,7 @@ async function deskTools() {
   return { tools, help: help.join("\n") || "(no connector is connected yet)", status };
 }
 
-type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; allowClose?: boolean; maxRounds?: number; deadline?: number; author?: string };
+type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; allowClose?: boolean; maxRounds?: number; deadline?: number; author?: string; planExtra?: Record<string, unknown> };
 
 // The tool loop, shared by the live Desk (streamed) and the 8:45 run (silent).
 // v3.13: one Claude request, retried once on 429 / 5xx / overloaded, never past the run's deadline.
@@ -1572,11 +1574,20 @@ export async function runDesk(o: DeskRun): Promise<{ said: string; cards: string
         } else if (b.name === "propose_action") {
           if (!o.allowPropose) throw new Error("no cards in this run");
           send({ t: "tool", v: "Preparing card: " + String(input.title || "") });
-          const card = await proposeAction(input, who);
+          const card = await proposeAction(input, who, { planExtra: o.planExtra });
           cards.push(card.id);
           send({ t: "action", v: card });
           content = `Card ${card.id} is on screen, status pending. Nothing has run. ` +
             `Risk: ${JSON.stringify(card.risk)}. Rule check: ${JSON.stringify(card.checks || [])}. Robinhood review: ${(card.review || "n/a").slice(0, 1500)}`;
+        } else if (b.name === "add_watch_level") {
+          send({ t: "tool", v: `Watcher: ${String(input.ticker || "").toUpperCase()} ${input.level}` });
+          const scan = who === "scanner";
+          const row = await watchAdd({ ticker: input.ticker, level: Number(input.level), dir: input.dir, note: input.note,
+            source: scan ? "scanner" : "desk", by: scan ? "Jarvis (scanner)" : `${o.author || "Desk"} via Jarvis` });
+          if (row && !scan) await logDesk("system", "Otto", `👁 Watching ${row.ticker} ${Number(row.level)} ${row.dir === "up" ? "▲" : row.dir === "down" ? "▼" : "▲▼"} today (added by Jarvis for ${o.author || "the Desk"}).`);
+          content = row ? (scan ? `Proposed: ${row.ticker} ${row.level} (${row.dir}). It shows in the Watcher panel for them to Add.`
+            : `On the Watcher for ${row.day}: ${row.ticker} ${row.level} (${row.dir}). The server checks it every minute on 5- and 10-minute closes and wakes you on a trigger.`)
+            : "Already on today's list.";
         } else if (b.name === "save_house_rule") {
           send({ t: "tool", v: "Saving a House Rule" });
           await houseRuleAdd(String(input.text || ""), `${o.author || "Desk"} via Jarvis`);
@@ -1701,7 +1712,7 @@ export async function desk(req: Request, who: string, _apiKey: string) {
           if (typeof lm.content === "string") lm.content = prompt;
           else { const tb = lm.content.filter((b: any) => b.type === "text"); if (tb.length) tb[tb.length - 1].text = prompt; else lm.content.push({ type: "text", text: prompt }); }
         }
-        res = await runDesk({ msgs, sys, tools: [...tools, HOUSE_TOOL], cs, who, send, allowPropose: true, allowClose: !!LIMa.auto_close, author });
+        res = await runDesk({ msgs, sys, tools: [...tools, HOUSE_TOOL, WATCH_TOOL], cs, who, send, allowPropose: true, allowClose: !!LIMa.auto_close, author });
         send({ t: "done" });
       } catch (e) {
         // v3.13: never go silent — the failure is posted on the Desk, not only to the open browser tab.
@@ -2286,34 +2297,40 @@ async function weeklyReview(apiKey: string, who = "Jarvis") {
    bars from the moment the card was made. Stop-first when one bar touches both
    (conservative). Passed ideas are labelled hypothetical everywhere. */
 
+// v3.14: graded on Robinhood 5-minute bars (TradingView's were rate-limited), same day only (intraday House Rule).
 async function evalIdea(a: any) {
-  const p = a.plan || {};
-  const tp1 = Number(p.tp1), stop = Number(p.stop);
-  if (!p.tv_symbol || !isFinite(tp1) || !isFinite(stop) || !p.direction) return { state: "unscored" };
+  const p = a.plan || {}, ex = a.exit || {};
+  const tp1 = Number(p.tp1), wrong = Number(p.stop);
+  const tk = String(p.tv_symbol || "").split(":").pop();
+  if (!tk || !isFinite(tp1) || !isFinite(wrong) || !p.direction) return { state: "unscored" };
   const created = Date.parse(a.created_at);
-  if (Date.now() - created < 10 * 60e3) return { state: "pending" };
-  let bars: any[];
-  try { bars = await tvBars(p.tv_symbol, "5m", 1500); } catch { return { state: "pending" }; }
-  const after = bars.filter((b) => b.t * 1000 >= created - 5 * 60e3);
-  if (!after.length) return { state: "pending" };
-  const entry = Number(p.entry_underlying) || after[0].o;
-  const risk = Math.abs(entry - stop), reward = Math.abs(tp1 - entry);
-  if (!risk) return { state: "unscored" };
-  const down = p.direction === "down";
-  for (const b of after) {
-    const hitStop = down ? b.h >= stop : b.l <= stop;
-    const hitTp = down ? b.l <= tp1 : b.h >= tp1;
-    if (hitStop) return { state: "loss", r: -1, at: b.t };
-    if (hitTp) return { state: "win", r: +(reward / risk).toFixed(2), at: b.t };
-  }
-  const deadline = Math.min(Date.parse((p.expires || "2999-01-01") + "T20:00:00Z"), created + 7 * 864e5);
-  if (Date.now() > deadline) {
-    const last = after[after.length - 1].c;
-    return { state: "scratch", r: +(((down ? entry - last : last - entry) / risk)).toFixed(2), at: after[after.length - 1].t };
-  }
-  return { state: "open" };
+  if (Date.now() - created < 5 * 60e3) return { state: "pending" };
+  const day = etParts(new Date(created)).date;
+  const start = new Date(created - 10 * 60e3).toISOString(), end = nyIso(day, "4:00 PM") || undefined;
+  let bars: Bar[];
+  try { bars = (await rhBars([tk], "5minute", start, end && Date.parse(end) < Date.now() ? end : undefined))[tk.toUpperCase()] || []; }
+  catch { return { state: "pending" }; }
+  const dm = /Delta (\d?\.\d+)/.exec((a.checks || []).map((c: any) => c.text).join(" "));
+  const g: any = gradeIdea({ created, direction: p.direction === "down" ? "down" : "up", tp1, wrong, entry: Number(p.entry_underlying) || null,
+    delta: dm ? Number(dm[1]) : null, premium: Number(ex.entry_limit) || (a.risk?.cost ? a.risk.cost / 100 : null) }, bars);
+  return g.state === "open" ? { state: "pending" } : { ...g, at: g.at ? Math.round(g.at / 1000) : undefined };
 }
-
+// v3.14: grade a few open ideas every 5 minutes from the cron, so the Scoreboard is current without opening it.
+async function scoreTick(budget = 6) {
+  const since = new Date(Date.now() - 3 * 864e5).toISOString();
+  const acts = await db(`otto_actions?select=*&created_at=gte.${since}&order=created_at.desc&limit=100`).catch(() => []);
+  let n = 0;
+  for (const a of acts) {
+    if (n >= budget) break;
+    if (!a.plan || (a.outcome && ["win", "loss", "scratch", "unscored"].includes(a.outcome.state))) continue;
+    if (!(a.calls || []).some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open"))) continue;
+    n++;
+    const o = await evalIdea(a).catch(() => null);
+    if (o && ["win", "loss", "scratch", "unscored"].includes(o.state))
+      await db("otto_actions?id=eq." + a.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ outcome: o }) }).catch(() => {});
+  }
+  return { ok: true, graded: n };
+}
 async function scorecard() {
   const acts = await db("otto_actions?select=*&order=created_at.desc&limit=400");
   const ideas = acts.filter((a: any) => (a.calls || []).some((c: any) => c.tool === "place_option_order" &&
@@ -2350,7 +2367,11 @@ async function scorecard() {
     all: agg(ideas), taken: { ...agg(taken), pnl: taken.reduce((s: number, a: any) => s + (pnlBy[a.id] || 0), 0) },
     passed: agg(passed),
     by_setup: group((a) => a.plan?.setup), by_verdict: group((a) => a.banner?.verdict),
-    recent: ideas.slice(0, 25).map((a: any) => ({ id: a.id, title: a.title, at: a.created_at, status: a.status,
+    by_source: group((a) => srcOf(a)), by_trigger: group((a) => a.plan?.trigger ? (TRIG_LABEL[a.plan.trigger] || a.plan.trigger) : "not a Watcher trigger"),
+    est: (() => { const s2 = scored(ideas).filter((a: any) => a.outcome.pnl_est != null);
+      return { n: s2.length, total: s2.reduce((x: number, a: any) => x + Number(a.outcome.pnl_est), 0), per: s2.length ? Math.round(s2.reduce((x: number, a: any) => x + Number(a.outcome.pnl_est), 0) / s2.length) : null }; })(),
+    proof: await (async () => { const st = await proofStart(); const today = marketClock().date; return { start: st, day: Math.max(0, Math.min(14, tradingDaysBetween(st, today))), of: 14 }; })(),
+    recent: ideas.slice(0, 25).map((a: any) => ({ id: a.id, title: a.title, at: a.created_at, status: a.status, source: srcOf(a), trigger: a.plan?.trigger || null,
       setup: a.plan?.setup || null, verdict: a.banner?.verdict || null, outcome: a.outcome || null, pnl: pnlBy[a.id] ?? null })),
   };
 }
@@ -3012,6 +3033,7 @@ async function jasonSave(posts: any[], day: string, source: string, who: string)
     headers: { prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify(rows) });
   const fps = new Set(rows.map((r) => r.fp));
   const all = (await db(`otto_jason?select=*&day=eq.${day}&limit=200`).catch(() => inserted)).filter((r: any) => fps.has(r.fp));
+  try { await watchFromSignals(inserted || []); } catch { /* the Watcher never breaks Signals */ }   // v3.14
   return { inserted, all };
 }
 
@@ -4126,6 +4148,317 @@ export async function limitChecks(cost: number | null, atStop: number | null = n
   return out;
 }
 
+/* ===================================================================== v3.14
+   6 Oct 2026 — the Watcher (Phase 1) and the Scoreboard upgrade (Phase 2).
+
+   Why: on 6 Oct SPY pulled back to the 778.60 Signal level and the 10:30 5-minute bar
+   closed green off it. Nobody was watching between messages, so the bounce came and
+   went. Now the server watches: every minute 9:30–4:00 ET (pg_cron → ?fn=cron_watch)
+   it reads Robinhood 5- and 10-minute bars for every level on today's list and checks
+   three triggers IN CODE on completed bars:
+     up   · break           previous close at/below the level, this close above it
+     up   · pullback-hold   previous close above, this bar dipped to the level and closed green above it
+     down · break           previous close at/above, this close below it
+     down · rejection       previous close below, this bar reached the level and closed red below it
+   A hit is claimed atomically (one card per level per direction per day), posted on the
+   Desk, and handed to Jarvis in its own invocation (?fn=watch_jarvis) to decide whether
+   it's a real setup; a card + ONE ping only when he makes one. Levels come from Signal
+   posts (automatic), the Desk (Jarvis's add_watch_level tool or the panel) and the
+   9:20 scanner on SPY/QQQ/Mag-7 (proposed — Ifoma or Josh tap Add). Levels expire at
+   the close (each row belongs to one day). Ifoma's decisions, approved mockup
+   otto-v3.14-watcher-mockup.html. Table otto_watch (013_v314.sql). */
+
+export type Bar = { t: number; o: number; h: number; l: number; c: number };   // t = bar START, epoch ms
+const WATCH_SCAN = ["SPY", "QQQ", "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA"];
+const TRIG_LABEL: Record<string, string> = { break: "break-and-close", "pullback-hold": "pullback-and-hold", rejection: "rejection" };
+
+// The trading day a new level belongs to: today until the close, then the next trading day.
+function watchDay(now = new Date()) {
+  const c = marketClock(now);
+  return c.status === "after" || c.status === "closed" ? nextTradingDay(c.date) : c.date;
+}
+
+export function parseRhBars(j: any): Record<string, Bar[]> {
+  const out: Record<string, Bar[]> = {};
+  for (const r of (j?.data?.results || j?.results || [])) {
+    out[String(r.symbol).toUpperCase()] = (r.bars || []).filter((b: any) => !b.interpolated).map((b: any) => ({
+      t: Date.parse(b.begins_at), o: Number(b.open_price), h: Number(b.high_price), l: Number(b.low_price), c: Number(b.close_price) }))
+      .filter((b: Bar) => [b.o, b.h, b.l, b.c].every((v) => isFinite(v) && v > 0));
+  }
+  return out;
+}
+// Robinhood bars for up to 10 symbols per call, cached ~45 s so one cron minute makes at most one call per batch.
+async function rhBars(tickers: string[], interval: "5minute" | "10minute", startIso: string, endIso?: string): Promise<Record<string, Bar[]>> {
+  const out: Record<string, Bar[]> = {};
+  const uniq = [...new Set(tickers.map((t) => t.toUpperCase()))];
+  for (let i = 0; i < uniq.length; i += 10) {
+    const part = uniq.slice(i, i + 10);
+    const key = `rhb|${interval}|${part.join(",")}|${startIso}|${endIso || ""}`;
+    Object.assign(out, await cached(key, 45e3, async () =>
+      parseRhBars(mcpJson(await call("rh", "get_equity_historicals", { symbols: part, interval, start_time: startIso, ...(endIso ? { end_time: endIso } : {}) })))));
+  }
+  return out;
+}
+// Only bars that have finished (start + length ≤ now).
+export function completedBars(bars: Bar[], mins: number, now = Date.now()) { return bars.filter((b) => b.t + mins * 60e3 <= now); }
+export const watchTol = (level: number) => Math.max(level * 0.00035, 0.02);
+
+/** The trigger on the LAST completed bar, if any. earliestMin = ET minute a trigger bar must close at or after. */
+export function evalLevel(level: number, d: "up" | "down", bars: Bar[], mins: number, o: { now?: number; earliestMin?: number; maxAgeMs?: number } = {}) {
+  const now = o.now ?? Date.now();
+  const done = completedBars(bars, mins, now);
+  if (done.length < 2) return null;
+  const b = done[done.length - 1], p = done[done.length - 2];
+  const closeAt = b.t + mins * 60e3;
+  if (now - closeAt > (o.maxAgeMs ?? (mins + 2) * 60e3)) return null;          // stale: a missed minute must not fire late
+  if (etParts(new Date(closeAt)).min < (o.earliestMin ?? 600)) return null;
+  const tol = watchTol(level);
+  // A pullback / rejection needs price to have moved AWAY from the level first (≥ 3× tolerance since it last
+  // crossed), so the bar right after a break doesn't count as a "retest".
+  const prior = done.slice(0, -1);
+  const awayFrom = (side: 1 | -1) => {
+    let k = prior.length - 1; while (k >= 0 && side * (prior[k].c - level) > 0) k--;
+    const run = prior.slice(k + 1);
+    return run.length > 0 && Math.max(...run.map((x) => side * (x.c - level))) >= 3 * tol;
+  };
+  let trigger: string | null = null;
+  if (d === "up") {
+    if (p.c <= level && b.c > level) trigger = "break";
+    else if (p.c > level && b.l <= level + tol && b.c > level && b.c > b.o && awayFrom(1)) trigger = "pullback-hold";
+  } else {
+    if (p.c >= level && b.c < level) trigger = "break";
+    else if (p.c < level && b.h >= level - tol && b.c < level && b.c < b.o && awayFrom(-1)) trigger = "rejection";
+  }
+  return trigger ? { trigger, d, tf: mins, bar: b, prev: p, close_at: new Date(closeAt).toISOString() } : null;
+}
+// How many times today's 5-minute closes crossed the level — Jarvis is told when a level is chop.
+export function crossings(level: number, bars: Bar[]) {
+  let n = 0; for (let i = 1; i < bars.length; i++) if ((bars[i - 1].c - level) * (bars[i].c - level) < 0) n++; return n;
+}
+
+/* ------------------------------------------------------------ levels in */
+async function watchRows(day = marketClock().date, statuses = "watching,proposed") {
+  return await db(`otto_watch?select=*&day=eq.${day}&status=in.(${statuses})&order=created_at.asc&limit=200`).catch(() => []);
+}
+export async function watchAdd(x: { ticker: string; level: number; dir?: string; source: "signal" | "desk" | "scanner"; note?: string; source_ref?: string; by?: string; status?: string }) {
+  const ticker = String(x.ticker || "").toUpperCase().replace(/[^A-Z.]/g, "").slice(0, 8);
+  const level = Math.round(Number(x.level) * 100) / 100;
+  if (!ticker || !(level > 0)) throw new Error("need a ticker and a price level");
+  const dir = ["up", "down", "both"].includes(String(x.dir)) ? String(x.dir) : "both";
+  const row = { day: watchDay(), ticker, level, dir, source: x.source, status: x.status || (x.source === "scanner" ? "proposed" : "watching"),
+    note: String(x.note || "").slice(0, 200) || null, source_ref: x.source_ref || null, added_by: String(x.by || "").slice(0, 60) || null };
+  const r = await db("otto_watch?on_conflict=day,ticker,level,dir&select=*", { method: "POST",
+    headers: { prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify([row]) });
+  return r?.[0] || null;
+}
+// "SPY ABOVE 778.60 / SUPPORT 776 AND 775 / NVDA BELOW 240 PUTS" → levels with a side.
+export function levelsFromWords(words: string, fallbackDir = "both"): { level: number; dir: string }[] {
+  const out: { level: number; dir: string }[] = [];
+  const W = String(words || "").toUpperCase().replace(/,/g, "");
+  const re = /\b(ABOVE|OVER|BREAKS? ABOVE|RECLAIMS?|BELOW|UNDER|LOSES?|BREAKS? BELOW|SUPPORTS?|SUP|RESISTANCE|RES|LEVEL|AT)\s*(?:IS|OF|AT|=)?\s*\$?(\d{1,5}(?:\.\d{1,2})?)((?:\s*(?:AND|&|\/|,)\s*\$?\d{1,5}(?:\.\d{1,2})?)*)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(W))) {
+    const k = m[1];
+    const dir = /ABOVE|OVER|RECLAIM/.test(k) ? "up" : /BELOW|UNDER|LOSE/.test(k) ? "down" : /SUP/.test(k) ? "up" : /RES/.test(k) ? "down" : fallbackDir;
+    for (const n of [m[2], ...((m[3] || "").match(/\d{1,5}(?:\.\d{1,2})?/g) || [])]) {
+      const v = Number(n); if (v > 0 && !out.some((o) => o.level === v && o.dir === dir)) out.push({ level: v, dir });
+    }
+  }
+  return out;
+}
+// v3.14: every Signal post with a ticker and a price level goes on today's watch list (Ifoma, 6 Oct).
+async function watchFromSignals(rows: any[]) {
+  let n = 0;
+  const c = marketClock();
+  if (c.status === "after" || c.status === "closed") return 0;      // the 5 PM sweep must not seed tomorrow
+  rows = (rows || []).filter((r: any) => !r?.day || r.day === c.date);
+  for (const r of rows || []) {
+    if (!r?.ticker || r.late || r.kind === "note") continue;
+    const fb = r.direction === "long" ? "up" : r.direction === "short" ? "down" : "both";
+    const lv = levelsFromWords(String(r.words || ""), fb);
+    if (!lv.length && Number(r.level) > 0) lv.push({ level: Number(r.level), dir: fb });
+    for (const x of lv.slice(0, 4)) {
+      try { if (await watchAdd({ ticker: r.ticker, level: x.level, dir: x.dir, source: "signal", note: String(r.summary || r.words || "").slice(0, 160), source_ref: String(r.id ?? ""), by: SIG_LABEL })) n++; }
+      catch { /* a bad number never breaks Signals */ }
+    }
+  }
+  return n;
+}
+const WATCH_TOOL = {
+  name: "add_watch_level",
+  description: "Put a price level on the Watcher's list for today. The server checks it every minute on 5- and 10-minute closes and wakes you with the trigger (break-and-close, pullback-and-hold, rejection) so you can build the card. Use when Ifoma or Josh ask you to watch a level, or when you want a level watched. Never say you're watching something you didn't add here.",
+  input_schema: { type: "object", properties: {
+    ticker: { type: "string" }, level: { type: "number" },
+    dir: { type: "string", enum: ["up", "down", "both"], description: "up = calls side (break above / hold above), down = puts side (break below / rejection), both" },
+    note: { type: "string", description: "one short line: why this level" } }, required: ["ticker", "level", "dir"] },
+};
+
+/* ------------------------------------------------------------ the minute tick */
+export async function watchTick(now = Date.now()) {
+  const c = marketClock(new Date(now));
+  if (c.status !== "open") return { ok: true, skipped: c.status };
+  const rows = (await watchRows(c.date, "watching")) as any[];
+  if (!rows.length) return { ok: true, levels: 0 };
+  const start = nyIso(c.date, "9:30 AM") || new Date(now - 7 * 3600e3).toISOString();
+  const tickers = [...new Set(rows.map((r) => r.ticker))];
+  const [b5, b10] = await Promise.all([rhBars(tickers, "5minute", start), rhBars(tickers, "10minute", start).catch(() => ({} as Record<string, Bar[]>))]);
+  const hits: any[] = [];
+  for (const r of rows) {
+    const bars5 = b5[r.ticker] || [];
+    const last = bars5[bars5.length - 1];
+    const dirs: ("up" | "down")[] = r.dir === "both" ? ["up", "down"] : [r.dir];
+    // House Rule: a Signal level posted before the open may trade the open; everything else waits for 10:00.
+    const earliest = r.source === "signal" ? 575 : 600;
+    for (const d of dirs) {
+      const prev = r.fired?.[d];
+      // One CARD per level per side per day. A fire Jarvis passed on (no card) re-arms after 15 minutes.
+      if (prev && (prev.cards?.length || !prev.read || now - Date.parse(prev.at) < 15 * 60e3)) continue;
+      const hit = evalLevel(Number(r.level), d, bars5, 5, { now, earliestMin: earliest }) ||
+        evalLevel(Number(r.level), d, b10[r.ticker] || [], 10, { now, earliestMin: earliest });
+      if (!hit) continue;
+      const fire = { at: new Date(now).toISOString(), trigger: hit.trigger, tf: hit.tf, bar: hit.bar, close_at: hit.close_at,
+        crossings: crossings(Number(r.level), completedBars(bars5, 5, now)) };
+      // Claim it atomically: only one run can set fired.<d>.
+      const cond = prev ? `fired->${d}->>at=eq.${encodeURIComponent(prev.at)}` : `fired->>${d}=is.null`;
+      const claimed = await db(`otto_watch?id=eq.${r.id}&${cond}&select=*`, { method: "PATCH",
+        body: JSON.stringify({ fired: { ...(r.fired || {}), [d]: { ...fire, ...(prev ? { passed: [...(prev.passed || []), { at: prev.at, trigger: prev.trigger }] } : {}) } } }) }).catch(() => []);
+      if (!claimed?.length) continue;
+      r.fired = claimed[0].fired;
+      hits.push({ r, d, fire });
+    }
+    if (last) await db("otto_watch?id=eq." + r.id, { method: "PATCH", headers: { prefer: "return=minimal" },
+      body: JSON.stringify({ last: { price: last.c, at: new Date(last.t + 5 * 60e3).toISOString(), dist: +(last.c - Number(r.level)).toFixed(2) } }) }).catch(() => {});
+  }
+  for (const h of hits) {
+    const b = h.fire.bar, side = h.d === "up" ? "calls side ▲" : "puts side ▼";
+    await logDesk("assistant", "👁 Watcher", `${h.r.ticker} ${Number(h.r.level)} — ${TRIG_LABEL[h.fire.trigger]} (${side}) on the ${h.fire.tf}-minute bar that closed at ${etLabel(h.fire.close_at)} ET: ` +
+      `O ${b.o.toFixed(2)} H ${b.h.toFixed(2)} L ${b.l.toFixed(2)} C ${b.c.toFixed(2)}.` +
+      (h.fire.crossings >= 4 ? ` ⚠ It has crossed this level ${h.fire.crossings} times today (chop).` : "") + " Asking Jarvis for a card…");
+    if (!(await kick("watch_jarvis", { id: h.r.id, d: h.d }))) background(watchJarvis(h.r.id, h.d));
+  }
+  return { ok: true, levels: rows.length, hits: hits.map((h) => `${h.r.ticker} ${h.r.level} ${h.d} ${h.fire.trigger}`) };
+}
+
+const SETUP_FOR: Record<string, string> = { "break|up": "breakout", "break|down": "breakdown", "pullback-hold|up": "support bounce", "rejection|down": "rejection at resistance" };
+export async function watchJarvis(id: number, d: "up" | "down") {
+  const r = (await db(`otto_watch?select=*&id=eq.${id}`))?.[0];
+  const f = r?.fired?.[d];
+  if (!r || !f || f.read) return { ok: true, skipped: true };
+  const { cs, sys, tools, ctxLine } = await deskSetup();
+  const runTools = tools.filter((t: any) => t.name !== "close_position" && !/^tv__/.test(String(t.name || "")));
+  const b = f.bar;
+  const prompt = `${ctxLine}
+[👁 WATCHER TRIGGER — no one typed this; Ifoma and Josh are away from the screen.]
+${r.ticker} level ${Number(r.level)} (${r.source === "signal" ? "a Signal level" : r.source === "scanner" ? "a level the scanner found" : "a level added on the Desk"}${r.note ? ": " + r.note : ""}).
+Trigger: ${TRIG_LABEL[f.trigger]} on the ${d === "up" ? "calls" : "puts"} side, on the ${f.tf}-minute bar that closed at ${etLabel(f.close_at)} ET — O ${b.o} H ${b.h} L ${b.l} C ${b.c}.${f.crossings >= 4 ? ` The 5-minute closes have crossed this level ${f.crossings} times today: treat it as chop unless the read is clear.` : ""}
+Is this a real ${d === "up" ? "call" : "put"} setup RIGHT NOW under the Otto Rules and the House Rules? Get the live quote and the option chain from Robinhood, check the banner and any binary event.
+- Real → call propose_action ONCE: one opening option card. Title starts with "SCALP · " when it's a quick trade. plan.setup "${SETUP_FOR[f.trigger + "|" + d] || "other"}", plan.direction "${d}", plan.signal_level ${r.source === "signal"}, TP1 at the next level, plan.stop (wrong-if) just beyond ${Number(r.level)}, stop_option sized for their max loss. If the best contract is over buying power or the max, make the cheaper ALT too, as usual. Guardrails flag, never block.
+- Not real → no card.
+Work quietly. Finish with a line that is exactly READ: and then 2 short plain sentences: what happened at the level and why you made the card — or why not.
+(Robinhood tools only in this run.)`;
+  let res = { said: "", cards: [] as string[] }, err = "";
+  try {
+    res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: runTools, cs, who: "watcher", send: () => {},
+      allowPropose: true, allowClose: false, maxRounds: 8, planExtra: { source: r.source === "signal" ? "signal" : r.source, trigger: f.trigger, watch_id: r.id } });
+  } catch (e) { err = String((e as Error).message || e).slice(0, 200); }
+  const raw = res.said.trim(), cut = raw.lastIndexOf("READ:");
+  const read = (cut >= 0 ? raw.slice(cut + 5) : raw).trim();
+  const acts = res.cards.length ? await db("otto_actions?select=id,title&id=in.(" + res.cards.join(",") + ")").catch(() => []) : [];
+  await db("otto_watch?id=eq." + r.id, { method: "PATCH", headers: { prefer: "return=minimal" },
+    body: JSON.stringify({ fired: { ...(r.fired || {}), [d]: { ...f, read: read || err || "no read", cards: res.cards, error: err || null } } }) }).catch(() => {});
+  await logDesk("assistant", "Jarvis · watcher", `For: 👁 ${r.ticker} ${Number(r.level)} ${d === "up" ? "▲" : "▼"} ${TRIG_LABEL[f.trigger]}\n` +
+    (err ? `No card — Jarvis hit an error checking it: ${err}` : (read || (acts.length ? "Card's up." : "No setup — no card."))), acts[0]?.id || null);
+  if (acts.length) {
+    await notify("card", `🃏 ${r.ticker} card ready — ${TRIG_LABEL[f.trigger]} at ${Number(r.level)}`,
+      `${String(acts[0].title || "").slice(0, 90)}. Tap to Approve or Reject (expires in 20 min).`, "./#desk");
+  }
+  return { ok: true, cards: acts.length };
+}
+
+/* ------------------------------------------------------------ 9:20 scanner (SPY, QQQ, Mag-7) */
+export async function watchScan(by = "scanner 9:20") {
+  const { cs, sys, tools, ctxLine } = await deskSetup();
+  const runTools = [...tools.filter((t: any) => t.name !== "close_position" && t.name !== "propose_action" && !/^tv__/.test(String(t.name || ""))), WATCH_TOOL];
+  const prompt = `${ctxLine}
+[🔎 Scanner — no one typed this.] Look at ${WATCH_SCAN.join(", ")}: yesterday's high/low/close, today's pre-market or intraday price (Robinhood quotes and 5-minute / daily bars), and the Otto Rules levels from the calls. Pick the 2–4 price levels most worth watching TODAY — a level price is likely to test, where a break, a pullback-hold or a rejection would be a real setup. For each, call add_watch_level once (dir up, down or both; note = one short reason). Skip levels already very far from price (over ~1.5%). No cards. Finish with one line: READ: which levels and why, in one sentence.
+(Robinhood tools only.)`;
+  const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: runTools, cs, who: "scanner", send: () => {},
+    allowPropose: false, allowClose: false, maxRounds: 8 });
+  const raw = res.said.trim(), cut = raw.lastIndexOf("READ:");
+  const read = (cut >= 0 ? raw.slice(cut + 5) : raw).trim();
+  const props = (await watchRows(watchDay(), "proposed")).filter((r: any) => r.source === "scanner");
+  await logDesk("assistant", "Jarvis · scanner", `🔎 ${props.length ? `${props.length} level${props.length === 1 ? "" : "s"} proposed for the Watcher (tap Add in the 👁 Watcher panel): ` +
+    props.map((r: any) => `${r.ticker} ${Number(r.level)}${r.dir === "up" ? " ▲" : r.dir === "down" ? " ▼" : " ▲▼"}`).join(", ") + "." : "No levels worth watching right now."}${read ? "\n" + read : ""}`);
+  await putSetting("watch_scan_day", { day: marketClock().date, by }).catch(() => {});
+  return { ok: true, proposed: props.length };
+}
+
+/* ------------------------------------------------------------ panel + edits */
+async function watchGet() {
+  const day = watchDay();
+  const rows = await db(`otto_watch?select=*&day=eq.${day}&status=neq.removed&order=created_at.asc&limit=200`).catch(() => []);
+  return { ok: true, day, clock: marketClock().status, rows };
+}
+async function watchSet(b: any, who: string) {
+  const by = String(b?.author || who.split("@")[0]).slice(0, 40);
+  if (b?.add) {
+    const r = await watchAdd({ ticker: b.add.ticker, level: b.add.level, dir: b.add.dir, source: "desk", note: b.add.note, by });
+    if (r) await logDesk("system", "Otto", `👁 ${by} added ${r.ticker} ${Number(r.level)} ${r.dir === "up" ? "▲" : r.dir === "down" ? "▼" : "▲▼"} to the Watcher.`);
+    return { ok: true, row: r };
+  }
+  const id = Number(b?.id);
+  if (!id || !["watching", "removed"].includes(String(b?.status))) throw new Error("need id and status watching|removed");
+  const r = (await db(`otto_watch?id=eq.${id}&select=*`, { method: "PATCH", body: JSON.stringify({ status: b.status }) }))?.[0];
+  if (r && b.status === "watching") await logDesk("system", "Otto", `👁 ${by} added the scanner's ${r.ticker} ${Number(r.level)} to the Watcher.`);
+  return { ok: true, row: r || null };
+}
+
+/* ------------------------------------------------------------ Scoreboard (Phase 2) on Robinhood bars
+   Every opening card is graded on the underlying from the moment it was made: TP1 touched (win) before a
+   15-minute close through the wrong-if (loss); neither by 3:55 PM ET the same day = flat ("scratch",
+   intraday-only House Rule). Dollars are an estimate for 1 contract (move × delta × 100, capped at the
+   premium) — real P&L replaces it for cards that were taken. */
+export function gradeIdea(o: { created: number; direction: "up" | "down"; tp1: number; wrong: number; entry?: number | null; delta?: number | null; premium?: number | null }, bars5: Bar[], now = Date.now()) {
+  const day = etParts(new Date(o.created)).date;
+  const endAt = Date.parse(nyIso(day, "3:55 PM") || "") || o.created + 6 * 3600e3;
+  const after = bars5.filter((b) => b.t + 5 * 60e3 > o.created && b.t < endAt && b.t + 5 * 60e3 <= now);
+  if (!after.length) return { state: now > endAt + 10 * 60e3 ? "unscored" : "open" };
+  const entry = Number(o.entry) || after[0].o, up = o.direction === "up";
+  const risk = Math.abs(entry - o.wrong) || null;
+  const est = (exit: number) => {
+    const move = (up ? exit - entry : entry - exit), dl = Math.abs(Number(o.delta) || 0.5);
+    let v = move * dl * 100; if (o.premium) v = Math.max(v, -o.premium * 100);
+    return Math.round(v);
+  };
+  const q: Bar[] = [];                         // 5-minute bars of the current 15-minute bucket
+  for (const b of after) {
+    if (up ? b.h >= o.tp1 : b.l <= o.tp1) return { state: "win", at: b.t, r: risk ? +(Math.abs(o.tp1 - entry) / risk).toFixed(2) : null, pnl_est: est(o.tp1), entry };
+    q.push(b);
+    const endsBucket = new Date(b.t + 5 * 60e3).getUTCMinutes() % 15 === 0;
+    if (endsBucket) {
+      const close15 = q[q.length - 1].c; q.length = 0;
+      if (up ? close15 < o.wrong : close15 > o.wrong) return { state: "loss", at: b.t, r: -1, pnl_est: est(close15), entry };
+    }
+  }
+  if (now >= endAt) { const last = after[after.length - 1].c; return { state: "scratch", at: after[after.length - 1].t, r: risk ? +(((up ? last - entry : entry - last) / risk)).toFixed(2) : null, pnl_est: est(last), entry }; }
+  return { state: "open" };
+}
+
+function srcOf(a: any) {
+  const p = a.plan || {};
+  if (p.source) return p.source;
+  const w = String(a.created_by || "");
+  return w === "signals" ? "signal" : w === "alert" ? "alert" : w === "watcher" ? "watcher" : /@/.test(w) ? "desk" : w || "desk";
+}
+async function proofStart(): Promise<string> {
+  const v = await setting("proof_start").catch(() => null);
+  if (v?.day) return v.day;
+  const day = isTradingDay(marketClock().date) ? marketClock().date : nextTradingDay(marketClock().date);
+  await putSetting("proof_start", { day }, "otto").catch(() => {});
+  return day;
+}
+function tradingDaysBetween(a: string, b: string) { let n = 0; for (let d = a; d <= b; d = addDays(d, 1)) if (isTradingDay(d)) n++; return n; }
+
 /* ------------------------------------------------------------ Help chat
    App questions only, kept off the Desk. No tools, no account access. */
 const HELP_SYS = `You are Otto Help, the in-app guide for Otto Trader. You answer questions about HOW THE APP WORKS — what a screen shows, what a button does, how to change a setting, what a term on the screen means. You do not give trading advice or market opinions: if someone asks whether to take a trade, what a stock will do, or anything about live prices or their positions, say in one line that that's a question for Jarvis on the Desk, and stop. Be short and concrete: name the exact screen and button. If you don't know or the app doesn't do something, say so plainly — never invent a feature.
@@ -4151,7 +4484,7 @@ THE APP (Otto Trader, desktop-first; phones get a stacked layout)
 - Score: every opening card is tracked, taken or not, and graded on the underlying: did price reach TP1 before the "wrong if" price (5-minute bars; if one bar touches both it counts as a loss). R = result measured in units of the planned risk (+2R = made twice what you risked). Passed ideas are hypothetical.
 - 8:45 morning read: every weekday at 8:45 ET Jarvis posts a read on the Desk automatically.
 - Settings: sign in with the Otto email (6-digit code or paste the sign-in link), connect/disconnect TradingView and Robinhood (Robinhood: paste the "This site can't be reached" localhost address back into Otto once), Limits & goals, the older bias thresholds.
-- "the call" = the coaching call with Jason; the day changes week to week.`;
+- "the call" = the coaching call with Jason; the day changes week to week. The 👁 Watcher card (Desk, left column) lists today's price levels; the server checks them every minute 9:30–4:00 ET on 5- and 10-minute closes for a break-and-close, a pullback-and-hold or a rejection, and Jarvis builds a card (one ping) when it's a real setup. Signal levels are added automatically; add your own by typing 'NVDA 242 up' in the card or telling Jarvis 'watch NVDA 242'; the 9:20 scanner proposes levels on SPY, QQQ and the Mag-7 that you tap Add on. Levels clear at the close. The Score tab is the 2-week proof run: every card graded win / loss / flat on the same day, by source and trigger. House Rules (Settings) are standing instructions Jarvis follows; guardrails (Settings → Limits) flag with a red banner and never block.`;
 
 async function helpAnswer(body: any, apiKey: string) {
   const hist = (Array.isArray(body.messages) ? body.messages : []).slice(-12)
@@ -4201,6 +4534,27 @@ Deno.serve(async (req) => {
     background(alertJarvis(Array.isArray(bj.fires) ? bj.fires : []));
     return json({ ok: true, started: "alert_jarvis" }, 202);
   }
+  // v3.14: the Watcher — every minute 9:30–4:00 ET; the 9:20 scanner; the Scoreboard every 5 minutes.
+  if (fn0 === "cron_watch") {
+    if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
+    const c = marketClock();
+    const force = new URL(req.url).searchParams.get("force") === "1";
+    background((async () => {
+      if (c.status === "open" || force) { try { await watchTick(); } catch (e) { console.error("watch", e); } }
+      if (isTradingDay(c.date) && c.min >= 560 && c.min < 570) {
+        const s = await setting("watch_scan_day").catch(() => null);
+        if (s?.day !== c.date) { await putSetting("watch_scan_day", { day: c.date, by: "starting" }).catch(() => {}); try { await watchScan(); } catch (e) { console.error("scan", e); } }
+      }
+      if (isTradingDay(c.date) && c.min >= 575 && c.min <= 975 && c.min % 5 === 0) { try { await scoreTick(); } catch (e) { console.error("score", e); } }
+    })());
+    return json({ ok: true, started: "watch", clock: c.status }, 202);
+  }
+  if (fn0 === "watch_jarvis") {
+    if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
+    const bj = await req.json().catch(() => ({}));
+    background(watchJarvis(Number(bj.id), bj.d === "down" ? "down" : "up"));
+    return json({ ok: true, started: "watch_jarvis" }, 202);
+  }
   if (fn0 === "cron_alerts") {
     if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
     const et = etParts();
@@ -4243,7 +4597,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, email: claims.email || null, anonymous: !!claims.is_anonymous, desk: !!deskUser(claims) });
     }
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
-         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "performance", "help", "jason_today", "jason_sweep", "jason_score",
+         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "watch_get", "watch_set", "watch_scan", "performance", "help", "jason_today", "jason_sweep", "jason_score",
          "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set",
          "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear"].includes(fn)) {
       const who = deskUser(claims);
@@ -4293,6 +4647,9 @@ Deno.serve(async (req) => {
       if (fn === "layout_set") return json({ ok: true, layout: await layoutSet(body, who) });
       if (fn === "limits_get") return json({ ok: true, limits: await getLimits() });
       if (fn === "house_rules_get") return json({ ok: true, rules: await houseRules() });
+      if (fn === "watch_get") return json(await watchGet());
+      if (fn === "watch_set") return json(await watchSet(body, who));
+      if (fn === "watch_scan") { background(watchScan(String(body?.author || who.split("@")[0]) + " (Scan now)")); return json({ ok: true, started: "scan" }); }
       if (fn === "house_rules_set") {
         const list = await houseRulesSet(body, who);
         await logDesk("system", "Otto", `📌 House Rules updated by ${String(body?.author || who.split("@")[0]).slice(0, 40)} (${list.length} rule${list.length === 1 ? "" : "s"}). Jarvis follows them from the next message on.`);

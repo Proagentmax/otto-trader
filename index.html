@@ -419,6 +419,14 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .dk-tool{font-size:11px;color:var(--ink-3);font-family:var(--mono);margin:2px 0 6px}
 .dk-sys{align-self:center;font-size:11.5px;color:var(--ink-3);background:var(--surface);border-radius:999px;padding:3px 12px}
 .dk-err{color:var(--down)}
+.wt-lv{padding:7px 0;border-top:1px solid var(--rule)}.wt-lv:first-of-type{border-top:0}
+.wt-top{display:flex;align-items:center;gap:8px}.wt-top b{font-family:var(--mono)}.wt-top .wt-x{margin-left:auto;background:none;border:0;color:var(--ink-3);cursor:pointer;font-size:13px}
+.wt-sub{font-size:11.5px;color:var(--ink-2);display:flex;gap:6px;flex-wrap:wrap;margin-top:3px}
+.wt-src{font:600 10.5px var(--mono);padding:2px 6px;border-radius:5px;background:var(--surface-3);color:var(--ink-2)}
+.wt-src.signal{background:rgba(245,180,0,.15);color:var(--warn)}.wt-src.desk{background:rgba(90,169,255,.14);color:var(--blue)}.wt-src.scanner{background:rgba(0,200,5,.12);color:var(--up)}
+.wt-fire{color:var(--up);font-weight:600}
+.wt-add{display:flex;gap:6px;margin-top:8px}.wt-add input{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--rule);color:var(--ink);border-radius:8px;padding:7px 9px;font:12.5px var(--mono)}
+.wt-add button,.wt-btn{background:var(--surface-3);border:1px solid var(--rule);color:var(--ink);border-radius:8px;padding:6px 10px;font-weight:600;font-size:12px;cursor:pointer}
 .dk-guard{margin:8px 0 2px;padding:9px 11px;border:1.5px solid #ff4545;border-radius:10px;background:rgba(255,59,48,.14);font-size:13px;line-height:1.4}.dk-guard b{color:#ff5a52;display:block;margin-bottom:3px;letter-spacing:.02em}.dk-guard div{display:flex;gap:6px}.dk-guard div::before{content:"⚠";color:#ff5a52;flex:none}
 .dk-thumb{max-width:220px;max-height:140px;border-radius:8px;display:block;margin-bottom:6px;border:1px solid var(--rule)}
 .dk-act{border:1px solid rgba(0,200,5,.35);background:rgba(0,200,5,.05);border-radius:12px;padding:11px 12px;margin-top:8px}
@@ -2006,7 +2014,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.13.0";
+const BUILD="3.14.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2681,7 +2689,7 @@ async function dkPanel(force){
   try{DK.panel=await dkApi("panel")}catch(e){DK.panel={error:e.message}}
   (DK.panel.pending||[]).forEach(a=>DK.acts[a.id]=a);
   dkRenderStrip();dkRenderLeft();dkRenderRight();
-  dkJasonLoad();laySync();sgLoad();
+  dkJasonLoad();laySync();sgLoad();dkWatchLoad();
 }
 // v3.7: today's Jason posts (feed on the right, levels on the left)
 async function dkJasonLoad(){
@@ -2754,10 +2762,47 @@ function dkRenderStrip(){
   $$("#dkStrip [data-set]").forEach(x=>x.addEventListener("click",openSettings));
 }
 
+/* ---------- v3.14 Watcher ---------- */
+const WT_TRIG={up:"break · pullback-hold",down:"break · rejection"};
+const WT_NAME={break:"break","pullback-hold":"pullback-hold",rejection:"rejection"};
+async function dkWatchLoad(){if(DK.locked)return;try{DK.watch=await dkApi("watch_get")}catch(e){DK.watch={error:e.message}}dkRenderLeft()}
+function dkWatchCard(){
+  const W=DK.watch;if(!W)return `<div class="dk-cardx"><div class="dk-h">👁 Watcher</div><div class="mut">Loading…</div></div>`;
+  const rows=(W.rows||[]),on=rows.filter(r=>r.status==="watching"),prop=rows.filter(r=>r.status==="proposed");
+  const st=W.clock==="open"?`<span style="color:var(--up)">● ON · every minute</span>`:W.clock==="pre"?"starts 9:30":"off · market closed";
+  let h=`<div class="dk-cardx"><div class="dk-h">👁 Watcher <b>${st}</b></div>`;
+  if(W.error)return h+`<div class="dk-err">${esc(W.error)}</div></div>`;
+  if(!on.length&&!prop.length)h+=`<div class="mut">No levels yet${W.day?" for "+esc(W.day):""}. Signal levels land here on their own; add one below or tell Jarvis "watch NVDA 242".</div>`;
+  h+=on.map(r=>{
+    const dirs=r.dir==="both"?["up","down"]:[r.dir];
+    const tr=dirs.map(d=>{const f=(r.fired||{})[d];return f?`<span class="wt-fire">${d==="up"?"▲":"▼"} ${esc(WT_NAME[f.trigger]||f.trigger)} ✓ ${esc(dkTime(f.close_at||f.at))}${f.cards&&f.cards.length?" · card":f.read?" · no card":" · checking…"}</span>`:`<span>${d==="up"?"▲":"▼"} ${WT_TRIG[d]}</span>`}).join(" · ");
+    const L=r.last;const dist=L&&L.dist!=null?`${L.dist>=0?"+":""}${(+L.dist).toFixed(2)} · now ${(+L.price).toFixed(2)}`:"";
+    return `<div class="wt-lv"><div class="wt-top"><b>${esc(r.ticker)}</b><b>${esc(+r.level)}</b><span class="wt-src ${esc(r.source)}">${r.source==="signal"?"Signal":r.source==="scanner"?"Jarvis-found":"Desk"}</span><button class="wt-x" data-wtrm="${r.id}" title="Stop watching">✕</button></div>
+      <div class="wt-sub">${tr}${dist?`<span class="mut">${esc(dist)}</span>`:""}</div>${r.note?`<div class="wt-sub mut">${esc(r.note)}</div>`:""}</div>`}).join("");
+  if(prop.length)h+=`<div class="mut" style="margin:10px 0 2px;font-weight:600;font-size:12px">🔎 Scanner found · tap Add to watch</div>`+prop.map(r=>`<div class="wt-lv"><div class="wt-top"><b>${esc(r.ticker)}</b><b>${esc(+r.level)} ${r.dir==="up"?"▲":r.dir==="down"?"▼":"▲▼"}</b><span class="wt-src scanner">Jarvis-found</span><button class="wt-btn" data-wtadd="${r.id}" style="margin-left:auto">Add</button><button class="wt-x" data-wtrm="${r.id}" style="margin-left:0">✕</button></div>${r.note?`<div class="wt-sub mut">${esc(r.note)}</div>`:""}</div>`).join("");
+  h+=`<div class="wt-add"><input id="wtNew" placeholder="NVDA 242 up · SPY 780 down · AAPL 336.5" autocomplete="off" aria-label="Add a level to the Watcher"><button id="wtGo">Add</button></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span class="mut" style="font-size:11px;flex:1;min-width:0">5/10-min closes · clears at 4 PM · 1 card per level per side</span><button class="wt-btn" id="wtScan" style="flex:none;white-space:nowrap">🔎 Scan now</button></div></div>`;
+  return h;
+}
+function dkWatchBind(box){
+  box.querySelectorAll("[data-wtrm]").forEach(b=>b.addEventListener("click",async()=>{try{await dkApi("watch_set",{id:+b.dataset.wtrm,status:"removed",author:dkWho()});dkWatchLoad()}catch(e){toast(String(e.message).slice(0,80))}}));
+  box.querySelectorAll("[data-wtadd]").forEach(b=>b.addEventListener("click",async()=>{try{await dkApi("watch_set",{id:+b.dataset.wtadd,status:"watching",author:dkWho()});dkWatchLoad()}catch(e){toast(String(e.message).slice(0,80))}}));
+  const go=box.querySelector("#wtGo"),inp=box.querySelector("#wtNew");
+  const add=async()=>{const m=/^\s*([A-Za-z.]{1,8})\s+\$?(\d+(?:\.\d+)?)\s*(up|down|both|long|short|calls?|puts?)?\s*$/i.exec(inp.value||"");
+    if(!m)return toast("Type it like: NVDA 242 up");
+    const w=(m[3]||"both").toLowerCase(),dir=/up|long|call/.test(w)?"up":/down|short|put/.test(w)?"down":"both";
+    try{await dkApi("watch_set",{add:{ticker:m[1],level:+m[2],dir},author:dkWho()});inp.value="";DK.wtDraft="";dkWatchLoad();toast("Watching "+m[1].toUpperCase()+" "+m[2])}catch(e){toast(String(e.message).slice(0,80))}};
+  if(go)go.addEventListener("click",add);
+  if(inp){inp.value=DK.wtDraft||"";inp.addEventListener("keydown",e=>{if(e.key==="Enter")add()});
+    inp.addEventListener("input",()=>DK.wtDraft=inp.value);inp.addEventListener("focus",()=>DK.wtFocus=1);inp.addEventListener("blur",()=>DK.wtFocus=0);
+    if(DK.wtFocus)setTimeout(()=>{inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length)},0)}
+  const sc=box.querySelector("#wtScan");if(sc)sc.addEventListener("click",async()=>{sc.disabled=true;sc.textContent="Scanning…";try{await dkApi("watch_scan",{author:dkWho()});toast("Jarvis is scanning — proposals land here in ~1 min");setTimeout(dkWatchLoad,60e3)}catch(e){toast(String(e.message).slice(0,80))}sc.disabled=false;sc.textContent="🔎 Scan now"});
+}
+function dkWho(){return ($("#dkWho")&&$("#dkWho").value)||"Ifoma"}
 function dkRenderLeft(){
   const p=DK.panel||{},Q=dkQuotes();
   const cal=(DK.sent&&DK.sent.calendar)||[];
-  let h=cal.length||DK.sent?`<div class="dk-cardx"><div class="dk-h">Today <b>${new Date().toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}</b></div>${cal.length?cal.map(e=>`<div class="dk-row"><span>${esc(dkTime(e.date))} · ${esc(e.title)}</span><span class="dk-tag ${e.importance>=1?(Date.parse(e.date)>Date.now()?"near":""):""}">${e.importance>=1?(Date.parse(e.date)>Date.now()?"binary":"passed"):"med"}</span></div>`).join(""):`<div class="mut">No US releases today.</div>`}</div>`:"";
+  let h=dkWatchCard()+cal.length||DK.sent?`<div class="dk-cardx"><div class="dk-h">Today <b>${new Date().toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}</b></div>${cal.length?cal.map(e=>`<div class="dk-row"><span>${esc(dkTime(e.date))} · ${esc(e.title)}</span><span class="dk-tag ${e.importance>=1?(Date.parse(e.date)>Date.now()?"near":""):""}">${e.importance>=1?(Date.parse(e.date)>Date.now()?"binary":"passed"):"med"}</span></div>`).join(""):`<div class="mut">No US releases today.</div>`}</div>`:"";
   h+=`<div class="dk-cardx"><div class="dk-h">Morning read <b>${new Date().toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}</b></div>
     <div class="mut" style="color:var(--ink-2)">Ask the desk for today's read: the three inputs, SPY/QQQ, the Mag 7, the calendar.</div>
     <button class="dk-link" data-q="Morning read: the three macro inputs, SPY/QQQ and the Mag 7, today's calendar and earnings on my watchlist. Bias and the 2–3 setups worth watching. No orders.">Run the morning read →</button></div>`;
@@ -2770,7 +2815,7 @@ function dkRenderLeft(){
   else h+=w.map(s=>{const q=dkQ(Q,s);return `<div class="dk-row"><span><b>${esc(s.split(":")[1]||s)}</b></span><span class="mono">${q?dkNum(q.close):"—"} ${q?dkPct(q.change):""}</span></div>`}).join("");
   h+=`</div>`;
   // v3.10: Jason's homework and levels moved to More.
-  laySetCards("left",h,box=>{dkBindQuick(box);
+  laySetCards("left",h,box=>{dkBindQuick(box);dkWatchBind(box);
     box.querySelectorAll("[data-go2]").forEach(b=>b.addEventListener("click",()=>{closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.go2);if(t)t.click()}))});
 }
 
@@ -3300,19 +3345,22 @@ async function dkScore(){
   const st=o=>!o?"pending":o.state;
   $("#dkPage").innerHTML=`<div class="dkp">
     <div class="dkp-head"><h2>Scorecard</h2><span class="mut">Do the Otto Rules plus the Desk have an edge? Every opening option card is tracked, taken or not.</span></div>
+    ${j.proof?`<div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Proof run <b>day ${j.proof.day} of ${j.proof.of} · since ${esc(j.proof.start)}</b></div>
+      <div class="dk-bar"><i style="width:${Math.round(100*j.proof.day/j.proof.of)}%;background:var(--blue)"></i></div>
+      <div class="mut" style="font-size:12px;margin-top:6px">Size goes up only on these numbers. Win = TP1 touched before a 15-minute close through the wrong-if. Loss = the reverse. Flat = neither by 3:55 PM the same day. $ is an estimate for 1 contract (move × delta); real P&amp;L replaces it for trades you took.${j.est&&j.est.n?` <b style="color:var(${j.est.per>=0?"--up":"--down"})">Estimated ${dkMoney(j.est.per)} per scored card</b> over ${j.est.n}.`:""}</div></div>`:""}
     <div class="dkp-grid4">
       <div class="dk-cardx dk-stat"><div class="n">${j.all.n}</div><div class="l">Desk ideas tracked${j.since?` since ${esc(new Date(j.since).toLocaleDateString())}`:""}</div></div>
       <div class="dk-cardx dk-stat"><div class="n">${j.taken.n}</div><div class="l">Taken · ${j.passed.n} passed</div></div>
       <div class="dk-cardx dk-stat"><div class="n ${j.all.hit!=null&&j.all.hit>=.5?"up":""}">${pct(j.all.hit)}</div><div class="l">Hit TP1 before the stop (${j.all.wins}W / ${j.all.losses}L)</div></div>
       <div class="dk-cardx dk-stat"><div class="n">${R(j.all.avg_r)}</div><div class="l">Average result per scored idea (R = planned risk)</div></div></div>
-    <div class="dkp-grid3">${grp(j.by_setup,"By setup <b>n · hit · avg R</b>")}${grp(j.by_verdict,"By banner verdict at the time")}
+    <div class="dkp-grid3">${grp(j.by_source,"By source <b>n · hit · avg R</b>")}${grp(j.by_trigger,"By Watcher trigger")}${grp(j.by_setup,"By setup <b>n · hit · avg R</b>")}${grp(j.by_verdict,"By banner verdict at the time")}
       <div class="dk-cardx"><div class="dk-h">Taken vs passed</div>
         <div class="dk-row"><span>Ideas you took (real P&amp;L)</span><span class="mono">${dkMoney(j.taken.pnl)} · ${R(j.taken.avg_r)}</span></div>
         <div class="dk-row"><span>Ideas you passed (hypothetical)</span><span class="mono">${R(j.passed.avg_r)}</span></div>
-        <div class="mut" style="font-size:11.5px;margin-top:6px">Every idea is graded on the underlying: did price touch TP1 before the stop, on 5-minute TradingView bars from the moment the card was made. If one bar touches both, it counts as a loss. Passed ideas are hypothetical.</div></div></div>
-    <div class="dk-cardx" style="padding:0;overflow:auto">${j.recent.length?`<table class="dkt"><tr><th>When</th><th>Idea</th><th>Setup</th><th>Banner</th><th>Status</th><th>Outcome</th><th>P&amp;L</th></tr>
-      ${j.recent.map(i=>`<tr><td>${esc(dkDate(i.at))}</td><td>${esc(i.title)}</td><td class="mut">${esc(i.setup||"—")}</td><td class="mut">${esc(i.verdict||"—")}</td><td>${esc(i.status)}</td>
-        <td><span class="dk-tag ${st(i.outcome)==="win"?"ok":st(i.outcome)==="loss"?"bad":""}">${esc(st(i.outcome))}${i.outcome&&i.outcome.r!=null?" "+R(+i.outcome.r):""}</span></td><td class="mono">${i.pnl!=null?dkMoney(+i.pnl):"—"}</td></tr>`).join("")}</table>`
+        <div class="mut" style="font-size:11.5px;margin-top:6px">Every idea is graded on the underlying from the moment the card was made, on Robinhood 5-minute bars, same day only. Passed ideas are hypothetical.</div></div></div>
+    <div class="dk-cardx" style="padding:0;overflow:auto">${j.recent.length?`<table class="dkt"><tr><th>When</th><th>Idea</th><th>Source</th><th>Setup</th><th>Banner</th><th>Status</th><th>Outcome</th><th>P&amp;L</th></tr>
+      ${j.recent.map(i=>`<tr><td>${esc(dkDate(i.at))}</td><td>${esc(i.title)}</td><td class="mut">${esc(i.source||"—")}${i.trigger?" · "+esc(i.trigger):""}</td><td class="mut">${esc(i.setup||"—")}</td><td class="mut">${esc(i.verdict||"—")}</td><td>${esc(i.status)}</td>
+        <td><span class="dk-tag ${st(i.outcome)==="win"?"ok":st(i.outcome)==="loss"?"bad":""}">${esc(st(i.outcome))}${i.outcome&&i.outcome.r!=null?" "+R(+i.outcome.r):""}</span></td><td class="mono">${i.pnl!=null?dkMoney(+i.pnl):i.outcome&&i.outcome.pnl_est!=null?`<span class="mut">≈${dkMoney(+i.outcome.pnl_est)}</span>`:"—"}</td></tr>`).join("")}</table>`
       :`<div class="dk-empty" style="margin:30px auto">Starts empty on the day v3.1 goes live and fills itself as the Desk proposes trades.</div>`}</div>
   </div>`;
 }
@@ -3747,7 +3795,7 @@ async function dkJasonScore(){
 var LAY_TABS=[...document.querySelectorAll("#dkTabs button[data-go]")].map(b=>b.dataset.go);
 var LAY_LABEL=Object.fromEntries([...document.querySelectorAll("#dkTabs button[data-go]")].map(b=>[b.dataset.go,b.lastChild.textContent.trim()]));
 var LAY_LOCK=new Set(["desk"]);
-var LAY_CARDS={left:["today","morning-read","watchlist","jason-s-homework","jason-s-levels-today"],
+var LAY_CARDS={left:["watcher","today","morning-read","watchlist","jason-s-homework","jason-s-levels-today"],
   right:["robinhood","protected-trades","waiting-for-approval","jason-today","tradingview-alerts","jarvis-brain"]};
 var LAY=(()=>{try{return JSON.parse(localStorage.getItem("otto:layout")||"null")}catch(e){return null}})();
 var LAY_DRAFT=null,LAY_NODES=LAY_NODES||{left:{},right:{}},LAY_DRAG=null,LAY_SYNC=0;
