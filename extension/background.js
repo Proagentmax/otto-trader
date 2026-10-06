@@ -3,7 +3,7 @@
    to finish (he posts a call over several quick lines), shrinks any chart
    images, and sends the burst to Otto. Every minute it tells Otto it's alive,
    so Otto can ping both phones if the watcher goes quiet. */
-const VER = "1.0.0";
+const VER = "1.1.0";
 const QUIET_MS = 12000;     // send once he's been quiet this long…
 const MAX_WAIT_MS = 30000;  // …or this long after the first new line, whichever comes first
 
@@ -52,7 +52,7 @@ async function queueMsgs(msgs) {
   const sent = new Set((await store.get("sent")) || []);
   const q = (await store.get("queue")) || [];
   const have = new Set(q.map((m) => m.id));
-  const fresh = msgs.filter((m) => !sent.has(m.id) && !have.has(m.id));
+  const fresh = msgs.filter((m) => !sent.has(m.id) && !have.has(m.id)).map((m) => ({ ...m, queuedAt: Date.now() }));
   if (!fresh.length) return;
   const now = Date.now();
   await store.set({ queue: q.concat(fresh), lastAdd: now, firstAdd: q.length ? (await store.get("firstAdd")) || now : now });
@@ -63,14 +63,19 @@ async function schedule() {
   const q = (await store.get("queue")) || [];
   if (!q.length) return;
   const last = (await store.get("lastAdd")) || 0, first = (await store.get("firstAdd")) || 0;
-  const wait = Math.max(0, Math.min(last + QUIET_MS, first + MAX_WAIT_MS) - Date.now());
+  const retryAt = (await store.get("retryAt")) || 0;
+  const wait = Math.max(0, Math.min(last + QUIET_MS, first + MAX_WAIT_MS) - Date.now(), retryAt - Date.now());
   flushTimer = setTimeout(flush, wait);
 }
 let flushing = false;
+const CHUNK = 20;            // v1.1: send at most 20 at a time, newest first, so a backlog never pushes out the live call
 async function flush() {
   if (flushing) return;
-  const q = (await store.get("queue")) || [];
-  if (!q.length) return;
+  const all = (await store.get("queue")) || [];
+  if (!all.length) return;
+  const retryAt = (await store.get("retryAt")) || 0;
+  if (Date.now() < retryAt) { schedule(); return; }
+  const q = all.slice().sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, CHUNK);
   flushing = true;
   try {
     const msgs = [];
@@ -79,12 +84,17 @@ async function flush() {
       for (const u of (m.imageUrls || []).slice(0, 3)) { try { images.push(await shrink(u)); } catch (e) { /* send the words anyway */ } }
       msgs.push({ id: m.id, at: m.at, author: m.author, author_id: m.author_id, channel: m.channel, text: m.text, images });
     }
-    await otto({ kind: "msgs", msgs });
-    const sent = ((await store.get("sent")) || []).concat(q.map((m) => m.id)).slice(-3000);
-    const left = ((await store.get("queue")) || []).filter((m) => !q.some((x) => x.id === m.id));
-    await store.set({ sent, queue: left, lastSend: { at: Date.now(), n: q.length, ok: true } });
+    const j = await otto({ kind: "msgs", msgs });
+    // Only what Otto confirms it received is marked sent; anything else stays queued and is retried.
+    const ok = new Set(Array.isArray(j.accepted) ? j.accepted.map(String) : q.map((m) => m.id));
+    const done = q.filter((m) => ok.has(m.id)).map((m) => m.id);
+    const sent = ((await store.get("sent")) || []).concat(done).slice(-3000);
+    const left = ((await store.get("queue")) || []).filter((m) => !done.includes(m.id));
+    await store.set({ sent, queue: left, fails: 0, retryAt: 0, firstAdd: left.length ? Date.now() : 0, lastAdd: 0, lastSend: { at: Date.now(), n: done.length, ok: true } });
   } catch (e) {
-    await store.set({ lastSend: { at: Date.now(), n: q.length, ok: false, error: String(e.message || e) } });
+    const fails = ((await store.get("fails")) || 0) + 1;     // back off: 5s, 10s, 20s … max 2 min
+    await store.set({ fails, retryAt: Date.now() + Math.min(120000, 5000 * 2 ** (fails - 1)),
+      lastSend: { at: Date.now(), n: q.length, ok: false, error: String(e.message || e) } });
   }
   flushing = false;
   schedule();
@@ -113,7 +123,11 @@ async function overall() {
 }
 async function beat() {
   const o = await overall();
-  try { await otto({ kind: "beat", ver: VER, ...o }); await store.set({ lastBeat: { at: Date.now(), ok: true, ...o } }); }
+  const q = (await store.get("queue")) || [];
+  const ls = (await store.get("lastSend")) || {};
+  const oldestQ = q.length ? Math.min(...q.map((m) => (m.queuedAt || Date.now()))) : Date.now();
+  const extra = { queue: q.length, queue_age: Math.round((Date.now() - oldestQ) / 1000), send_error: ls.ok === false ? ls.error : "" };
+  try { await otto({ kind: "beat", ver: VER, ...o, ...extra }); await store.set({ lastBeat: { at: Date.now(), ok: true, ...o } }); }
   catch (e) { await store.set({ lastBeat: { at: Date.now(), ok: false, error: String(e.message || e), ...o } }); }
   schedule();
 }

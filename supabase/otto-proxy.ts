@@ -4,6 +4,8 @@
 //   Discord channel live and posts each new message to ?fn=signal_in (x-otto-signal key);
 //   Jarvis builds the card, both phones ping. Watcher-offline alert on the 2-min cron.
 //   ?fn=signals_feed signal_img signals_cfg signals_cfg_set. No quiet hours on pings. 010_v39.sql.
+//   v3.9.2: Yahoo FIRST for banner + panel prices (TradingView = backup); watchlist from TV at most every 10 min;
+//   TV breaker also trips on 429 / bad handshake. Exit engine — stop placed + saved before TradingView alerts; a TradingView failure no longer loses stop bookkeeping.
 //   v3.9.1: ping first on a call; Jarvis's card build runs as its own invocation (?fn=signal_jarvis); stalled builds pinged.
 //   v3.6 (5 Oct 2026): phone notifications (Web Push). ?fn=push_key push_sub push_list
 //   push_remove push_test; notify() hooked into auto-close, fills, stops, alerts, cards.
@@ -1208,7 +1210,7 @@ const tvSlow = () => Date.now() < TV_SLOW_UNTIL;
 function tvBudget<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   if (tvSlow()) return Promise.reject(new Error("TradingView is slow right now — using backups for a couple of minutes"));
   return withTimeout(p, ms, label).catch((e) => {
-    if (/slow right now|timed out/.test(String(e?.message))) { TV_SLOW_UNTIL = Date.now() + 120_000; putSetting("tv_slow_until", TV_SLOW_UNTIL).catch(() => {}); }
+    if (/slow right now|timed out|HTTP 429|429|rate.?limit|bad handshake|unreachable/i.test(String(e?.message))) { TV_SLOW_UNTIL = Date.now() + 120_000; putSetting("tv_slow_until", TV_SLOW_UNTIL).catch(() => {}); }
     throw e;
   });
 }
@@ -1241,7 +1243,11 @@ async function panel() {
   const tvPart = async () => {
     if (!has("tv")) return;
     await tvSlowLoad();
-    const wl = await settle(tvBudget((async () => mcpJson(await call("tv", "mcp-watchlist-get-active-watchlist", {})))(), 6000, "TradingView watchlist"));
+    // v3.9.2: ask TradingView for the watchlist at most every 10 minutes; use the saved copy in between.
+    const wcFresh = await setting("watch_cache").catch(() => null);
+    const wl: any = wcFresh?.syms?.length && wcFresh.at && Date.now() - Date.parse(wcFresh.at) < 10 * 60e3
+      ? { ok: true, v: { name: wcFresh.name, symbols: wcFresh.syms } }
+      : await settle(tvBudget((async () => mcpJson(await call("tv", "mcp-watchlist-get-active-watchlist", {})))(), 6000, "TradingView watchlist"));
     let wsyms: string[] = [];
     if (wl.ok) {
       const found: string[] = [];
@@ -1253,7 +1259,7 @@ async function panel() {
       wsyms = [...new Set(found)].slice(0, 30);
       out.watchlist_name = wl.v?.name || wl.v?.watchlist?.name || wl.v?.data?.name || null;
       const wk = JSON.stringify(wsyms);
-      if (wsyms.length && wk !== WC_LAST) { WC_LAST = wk; putSetting("watch_cache", { syms: wsyms, name: out.watchlist_name || null }).catch(() => {}); }
+      if (wsyms.length && (wk !== WC_LAST || !wcFresh?.at || Date.now() - Date.parse(wcFresh.at) >= 10 * 60e3)) { WC_LAST = wk; putSetting("watch_cache", { syms: wsyms, name: out.watchlist_name || null, at: new Date().toISOString() }).catch(() => {}); }
     } else {
       // TradingView slow: keep showing the last watchlist we saw, priced from Yahoo.
       const wc = await setting("watch_cache").catch(() => null);
@@ -1263,15 +1269,20 @@ async function panel() {
     const syms = [...new Set([...MACRO.map((m) => m.sym), ...wsyms])];
     // v3.1: quotesFor() falls back to OHLCV bars when the screener is rate-limited (429).
     out.macro = MACRO; out.watch = wsyms;
-    const [q, al] = await Promise.all([
-      settle(tvBudget(quotesFor(syms), 7000, "TradingView prices")),
+    // v3.9.2: prices from Yahoo first; TradingView only fills what Yahoo couldn't price.
+    const [yq0, al] = await Promise.all([
+      yahooQuotes(syms),
       settle(tvBudget((async () => mcpJson(await call("tv", "mcp-tv-list-alerts", { active: true })))(), 7000, "TradingView alerts")),
     ]);
-    let qv: Record<string, any> = q.ok ? q.v : {};
+    let qv: Record<string, any> = { ...yq0 };
+    out.quotes_source = "yahoo";
     const missing = syms.filter((s) => !qv[s]);
-    if (missing.length) { const y = await yahooQuotes(missing); qv = { ...qv, ...y }; if (Object.keys(y).length) out.quotes_source = q.ok ? "tradingview+yahoo" : "yahoo"; }
+    if (missing.length) {
+      const q = await settle(tvBudget(quotesFor(missing), 7000, "TradingView prices"));
+      if (q.ok && Object.keys(q.v).length) { qv = { ...qv, ...q.v }; out.quotes_source = "yahoo+tradingview"; }
+      else if (!q.ok) out.quotes_note = `${missing.length} not on Yahoo; TradingView: ${q.error}`;
+    }
     if (Object.keys(qv).length) out.quotes = { data: Object.entries(qv).map(([symbol, v]: any) => ({ symbol, close: v.close, change: v.change })) };
-    if (!q.ok) out.quotes_note = q.error + " — prices from Yahoo";
     if (al.ok) out.alerts = al.v; else out.alerts_error = al.error;
   };
 
@@ -1819,16 +1830,19 @@ async function yahooLeg(l: any) {
     spark: closes.slice(-8) };
 }
 
+// v3.9.2 (Ifoma, 6 Oct): Yahoo FIRST for the banner, TradingView only as the backup.
+// TradingView has been rate-limiting / dropping every day since 4 Oct and its bars are
+// 15+ min delayed anyway; Yahoo has been as fresh and steadier.
 async function legData(l: any) {
+  let y: any = null, yErr = "";
+  try { y = await withTimeout(yahooLeg(l), 6000, "Yahoo"); } catch (e) { yErr = String((e as Error).message ?? e).slice(0, 160); }
+  if (y && y.live) return y;
   let tv: any = null, tvErr = "";
   try { tv = await tvBudget(tvLeg(l), 8000, "TradingView"); } catch (e) { tvErr = String((e as Error).message ?? e).slice(0, 160); }
-  if (tv && tv.live) return tv;
-  let y: any = null, yErr = "";
-  try { y = await yahooLeg(l); } catch (e) { yErr = String((e as Error).message ?? e).slice(0, 160); }
-  // Yahoo only replaces TradingView when TradingView failed or Yahoo is fresher.
-  if (y && (!tv || y.age < tv.age)) return { ...y, tv_error: tvErr || (tv ? `TradingView bar ${Math.round(tv.age / 60)} min old` : "") };
-  if (tv) return yErr ? { ...tv, yahoo_error: yErr } : tv;
-  throw new Error(`TradingView: ${tvErr || "no data"} · Yahoo: ${yErr || "no data"}`);
+  // TradingView only replaces Yahoo when Yahoo failed or TradingView is fresher.
+  if (tv && (!y || tv.age < y.age)) return { ...tv, yahoo_error: yErr || (y ? `Yahoo quote ${Math.round(y.age / 60)} min old` : "") };
+  if (y) return tvErr ? { ...y, tv_error: tvErr } : y;
+  throw new Error(`Yahoo: ${yErr || "no data"} · TradingView: ${tvErr || "no data"}`);
 }
 
 async function sentimentNow(force = false, kind = "live"): Promise<any> {
@@ -2494,9 +2508,12 @@ async function exitTick(a: any) {
     ex.qty = Math.floor(Number(o.processed_quantity || ex.qty));
     ex.state = "armed"; ex.armed_at = new Date().toISOString(); ex.fired = [];
     exitLog(ex, `Entry filled: ${ex.qty} @ $${ex.fill_price.toFixed(2)}`);
-    await armAlerts(a, ex);
+    // v3.9.2: the stop goes on (and is saved) BEFORE the TradingView alerts, so a slow or
+    // failing TradingView can never delay the stop or lose its order id.
     let stopOk = false;
     if (rthNow()) { ex.stop_try_day = today; ex.stop_tries = 1; stopOk = await placeStop(a, ex, acct); }
+    await saveExit(a.id, ex);
+    await armAlerts(a, ex);
     await saveExit(a.id, ex);
     const loss = (ex.fill_price - ex.stop_option) * 100 * ex.qty;
     await logDesk("system", "Otto", `✓ ${a.title}: filled at $${ex.fill_price.toFixed(2)}. ` +
@@ -2528,13 +2545,23 @@ async function exitTick(a: any) {
     let need = !ex.stop_order_id;
     if (ex.stop_order_id) { try { const s = await optOrder(acct, ex.stop_order_id); need = !s || EXIT_DEAD_ORDER.has(s.state); } catch { need = false; } }
     if (ex.stop_try_day !== today) { ex.stop_try_day = today; ex.stop_tries = 0; }
-    if (need && (ex.stop_tries || 0) < 3 && !(await cardBusy(ex.close_card))) { ex.stop_tries = (ex.stop_tries || 0) + 1; await placeStop(a, ex, acct); }
+    if (need && (ex.stop_tries || 0) < 3 && !(await cardBusy(ex.close_card))) {
+      ex.stop_tries = (ex.stop_tries || 0) + 1; await placeStop(a, ex, acct);
+      await saveExit(a.id, ex);                     // v3.9.2: remember the new stop's id even if TradingView fails next
+    }
   }
 
   // Did one of this trade's own alerts fire?
   const ids = [ex.alerts?.wrong, ex.alerts?.tp1].filter((x) => x != null).map(String);
   if (ids.length) {
-    const j = mcpJson(await call("tv", "mcp-tv-get-alerts-log", { days: 1, limit: 100 }));
+    // v3.9.2: a TradingView outage here must not skip the save at the end of this tick.
+    let j: any = null;
+    try { j = mcpJson(await call("tv", "mcp-tv-get-alerts-log", { days: 1, limit: 100 })); ex.tv_check_error = null; }
+    catch (e) {
+      const m = String((e as Error).message || e).slice(0, 160);
+      if (!ex.tv_check_error) exitLog(ex, "TradingView alert check failed (will keep retrying; the stop is unaffected): " + m);
+      ex.tv_check_error = { at: new Date().toISOString(), m };
+    }
     const evs = (j?.events || j?.data?.events || []).filter((e: any) => ids.includes(String(e.tv_alert_id ?? e.alert_id)) &&
       Date.parse(e.fired_at || e.fire_time || 0) > Date.parse(ex.armed_at));
     const key = (e: any) => String(e.fire_id ?? e.fired_at);
@@ -2969,8 +2996,9 @@ async function signalIn(req: Request) {
     const now = new Date().toISOString();
     const beat = { at: now, state, detail: String(body.detail || "").slice(0, 200), ver: String(body.ver || "").slice(0, 20),
       seen: Number(body.seen) || 0, bad_since: state === "ok" ? null : (prev.bad_since || now),
+      queue: Number(body.queue) || 0, queue_age: Number(body.queue_age) || 0, send_error: String(body.send_error || "").slice(0, 160),
       offline_sent: !!prev.offline_sent, last_msg_at: prev.last_msg_at || null };
-    if (prev.offline_sent && state === "ok") {
+    if (prev.offline_sent && state === "ok" && !(Number(body.queue_age) > SIG_OFFLINE_MS / 1000)) {
       beat.offline_sent = false;
       await notify("watcher", "✅ Otto Signals watcher is back", `Watching ${cfg.mentor}'s posts again. Anything posted while it was down is picked up when the window catches up.`, "./#signals");
     }
@@ -2981,7 +3009,8 @@ async function signalIn(req: Request) {
   if (body.kind !== "msgs") throw new Error("unknown kind");
   const list = (Array.isArray(body.msgs) ? body.msgs : []).slice(0, 30)
     .filter((m: any) => /^\d{5,24}$/.test(String(m.id || "")) && String(m.author_id || "") === cfg.author_id);
-  if (!list.length) return { ok: true, new: 0, cfg: pub };
+  const accepted = list.map((m: any) => String(m.id));
+  if (!list.length) return { ok: true, new: 0, accepted, cfg: pub };
   const rows = list.map((m: any) => {
     const at = Date.parse(m.at) ? new Date(m.at).toISOString() : new Date().toISOString();
     const imgs = (Array.isArray(m.images) ? m.images : []).filter((i: any) => typeof i?.data === "string" && i.data.length > 100 && i.data.length < 7_000_000).slice(0, 4);
@@ -2991,7 +3020,7 @@ async function signalIn(req: Request) {
   const ins = await db("otto_signal_msgs?on_conflict=msg_id&select=msg_id,posted_at,text,imgs", { method: "POST",
     headers: { prefer: "resolution=ignore-duplicates,return=representation" },
     body: JSON.stringify(rows.map(({ _imgs, ...r }: any) => r)) });
-  if (!ins?.length) return { ok: true, new: 0, cfg: pub };
+  if (!ins?.length) return { ok: true, new: 0, accepted, cfg: pub };
   const fresh = new Set(ins.map((r: any) => r.msg_id));
   const imgRows = rows.filter((r: any) => fresh.has(r.msg_id)).flatMap((r: any) => r._imgs.map((i: any) => ({ msg_id: r.msg_id, mime: String(i.mime || "image/jpeg").slice(0, 30), data: i.data })));
   if (imgRows.length) await db("otto_signal_imgs", { method: "POST", headers: { prefer: "return=minimal" }, body: JSON.stringify(imgRows) }).catch(() => {});
@@ -3001,7 +3030,7 @@ async function signalIn(req: Request) {
   const prev = (await setting("signal_beat").catch(() => null)) || {};
   await putSetting("signal_beat", { ...prev, last_msg_at: new Date().toISOString() }, "watcher").catch(() => {});
   background(signalProcess(bid, ins, imgRows.map((i: any) => ({ mime: i.mime, data: i.data })), cfg));
-  return { ok: true, new: ins.length, batch: bid, cfg: pub };
+  return { ok: true, new: ins.length, batch: bid, accepted, cfg: pub };
 }
 
 async function sigBatch(id: number, patch: any) {
@@ -3033,12 +3062,18 @@ async function signalProcess(bid: number, ins: any[], imgs: { mime: string; data
     const line = (r: any) => `[${nyTime(r.posted_at)}] ${r.text || "(no text)"}${r.imgs ? " [chart image attached]" : ""}`;
     const text = (earlier.length ? "EARLIER (already recorded — context only):\n" + earlier.map(line).join("\n") + "\n\n" : "") + "NEW:\n" + ins.map(line).join("\n");
     const posts = await sigExtract(apiKey, cfg.mentor, text, imgs, day);
-    const { all } = await jasonSave(posts, day, "watcher", "Otto Signals");
+    const { inserted, all } = await jasonSave(posts, day, "watcher", "Otto Signals");
     const ids = all.map((r: any) => r.id);
-    const tradeable = all.filter((r: any) => r.ticker && (r.kind === "call" || r.kind === "level"));
-    if (!fresh) { await sigBatch(bid, { rows: ids, status: "caught_up", read: null }); return; }
-    if (!tradeable.length && !imgs.length) {
-      await sigBatch(bid, { rows: ids, status: all.length ? "chatter" : "nothing" });
+    // v3.9.2: judge EACH post — only posts that are new to the log AND posted in the last 20 min
+    // can ping or get a card. Old posts in a catch-up batch (reload / PC wake) are logged only.
+    const newIds = new Set((inserted || []).map((r: any) => r.id));
+    const live = all.filter((r: any) => newIds.has(r.id) &&
+      (r.posted_at ? Date.now() - Date.parse(r.posted_at) < SIG_FRESH_MS : fresh));
+    const tradeable = live.filter((r: any) => r.ticker && (r.kind === "call" || r.kind === "level"));
+    const freshImg = ins.some((m: any) => m.imgs && Date.now() - Date.parse(m.posted_at) < SIG_FRESH_MS);
+    if (!live.length && !freshImg) { await sigBatch(bid, { rows: ids, status: all.length ? "caught_up" : "nothing", read: null }); return; }
+    if (!tradeable.length && !freshImg) {
+      await sigBatch(bid, { rows: ids, status: "chatter" });
       return;
     }
     await sigBatch(bid, { rows: ids, status: "jarvis" });
@@ -3074,6 +3109,9 @@ async function signalJarvis(bid: number) {
   let all: any[] = [];
   try {
     all = (b.rows || []).length ? await db("otto_jason?select=*&id=in.(" + b.rows.join(",") + ")&order=id.asc") : [];
+    // v3.9.2: only posts saved by THIS batch and posted within 20 min of it go to Jarvis.
+    const bAt = Date.parse(b.created_at);
+    all = all.filter((r: any) => Date.parse(r.created_at) >= bAt - 5000 && (!r.posted_at || bAt - Date.parse(r.posted_at) < SIG_FRESH_MS));
     const ids = all.map((r: any) => r.id);
     const tradeable = all.filter((r: any) => r.ticker && (r.kind === "call" || r.kind === "level"));
     const day = all[0]?.day || etParts().date;
@@ -3170,7 +3208,8 @@ async function watcherCheck() {
   const age = Date.now() - Date.parse(b.at);
   const badFor = b.bad_since ? Date.now() - Date.parse(b.bad_since) : 0;
   let why = "";
-  if (age > SIG_OFFLINE_MS) why = `No check-in for ${Math.round(age / 60e3)} minutes — the PC may be asleep, Chrome closed, or the internet down.`;
+  if (b.queue_age > SIG_OFFLINE_MS / 1000) why = `${b.queue} of ${cfg.mentor}'s posts are stuck in the watcher (can't send to Otto${b.send_error ? ": " + b.send_error : ""}).`;
+  else if (age > SIG_OFFLINE_MS) why = `No check-in for ${Math.round(age / 60e3)} minutes — the PC may be asleep, Chrome closed, or the internet down.`;
   else if (badFor > SIG_OFFLINE_MS) why = ({ logged_out: "Discord is signed out in the watcher window.", wrong_channel: `The watcher window isn't on ${cfg.channel_name}.`,
     no_tab: "The Discord watcher window is closed.", paused: "The watcher is paused in the extension." } as any)[b.state] || `The watcher reports "${b.state}".`;
   if (!why) return;

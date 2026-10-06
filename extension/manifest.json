@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Otto Signals Watcher",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Watches your mentor's Discord channel and sends his new posts to Otto the moment they land.",
   "permissions": ["storage", "alarms", "tabs"],
   "host_permissions": [
