@@ -2,7 +2,7 @@
    Network-first for anything that changes, cache-first only for static assets.
    A cache-first HTML strategy would pin users to an old build forever, which is
    exactly the failure we already hit once by hand. */
-const VERSION = 'otto-v3.10.0';
+const VERSION = 'otto-v3.11.0';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',   // config.js is deliberately NOT precached
   './icon-192.png', './icon-512.png',
@@ -94,7 +94,7 @@ self.addEventListener('notificationclick', e => {
   e.notification.close();
   const url = new URL((e.notification.data && e.notification.data.url) || './#desk', self.registration.scope).href;
   e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-    for (const c of list) { if (c.url.startsWith(self.registration.scope) && 'focus' in c) { c.navigate(url).catch(() => {}); return c.focus(); } }
+    for (const c of list) { if (c.url.startsWith(self.registration.scope) && 'focus' in c) { try { c.postMessage({ otto_go: url }); } catch (e) {} if (c.url !== url) c.navigate(url).catch(() => {}); return c.focus(); } }
     return clients.openWindow(url);
   }));
 });

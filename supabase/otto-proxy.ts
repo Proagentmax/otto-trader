@@ -4,6 +4,8 @@
 //   Discord channel live and posts each new message to ?fn=signal_in (x-otto-signal key);
 //   Jarvis builds the card, both phones ping. Watcher-offline alert on the 2-min cron.
 //   ?fn=signals_feed signal_img signals_cfg signals_cfg_set. No quiet hours on pings. 010_v39.sql.
+//   v3.11: alertWatch posts + pushes each fire before marking it seen (no 5-per-run cap); a burst on a ticker whose card is
+//   still being built is a 'followup' (no 2nd card / ping).
 //   v3.10: a conversation under each Otto Signal (?fn=signal_chat / signal_chat_clear, otto_signal_chat — 011_v310.sql);
 //   expired cards are marked expired and dropped from the panel's pending list.
 //   v3.9.4: protected-trade alerts retried + honest fill push; stalled Otto Signals reads ping raw words; card builds skip TradingView.
@@ -1320,7 +1322,7 @@ async function panel() {
   out.pending = pend.ok ? pend.v.filter((a: any) => !stale.includes(a)).slice(0, 10).map(publicAction) : [];
   out.card_ttl_min = ACTION_TTL_MS / 60000;
   out.auto_close = !!(await getLimits().catch(() => LIMIT_DEFAULTS)).auto_close;
-  const ex = await settle(db("otto_actions?select=id,title,exit,created_at&exit->>state=in.(waiting_fill,armed,closed,dead)&order=created_at.desc&limit=8"));
+  const ex = await settle(db("otto_actions?select=id,title,exit,created_at&exit->>state=in.(waiting_fill,armed,closed)&order=created_at.desc&limit=8"));
   out.exits = ex.ok ? ex.v.filter((r: any) => ["waiting_fill", "armed"].includes(r.exit.state) ||
     Date.now() - Date.parse(r.exit.closed_at || r.created_at) < 18 * 3600e3).slice(0, 5) : [];
   if (has("rh") && out.exits.some((r: any) => ["waiting_fill", "armed"].includes(r.exit.state))) background(exitsTick());
@@ -2336,27 +2338,40 @@ async function alertWatch(apiKey: string) {
   const j = mcpJson(await call("tv", "mcp-tv-get-alerts-log", { days: 1, limit: 50 }));
   const events: any[] = j?.events || j?.data?.events || [];
   if (!events.length) return { ok: true, fired: 0 };
+  // v3.11: TradingView's log has a fire_id per fire; fall back to the old name|time key so nothing already seen repeats.
   const keyOf = (e: any) => [e.alert_id ?? e.id ?? e.name ?? "", e.fire_time ?? e.time ?? e.timestamp ?? e.fired_at ?? e.created ?? ""].join("|");
   const keys = events.map(keyOf);
   const seen = await db("otto_alert_fires?select=key&key=in.(" + encodeURIComponent(keys.map((k) => '"' + k.replace(/"/g, "") + '"').join(",")) + ")").catch(() => []);
   const have = new Set(seen.map((r: any) => r.key));
-  const fresh = events.filter((e, i) => !have.has(keys[i]));
+  const fresh = events.filter((e, i) => !have.has(keys[i]))
+    .sort((x, y) => Date.parse(x.fired_at || x.fire_time || 0) - Date.parse(y.fired_at || y.fire_time || 0));
   if (!fresh.length) return { ok: true, fired: 0 };
-  await db("otto_alert_fires?on_conflict=key", { method: "POST", headers: { prefer: "resolution=ignore-duplicates,return=minimal" },
-    body: JSON.stringify(fresh.map((e) => ({ key: keyOf(e), payload: e }))) });
+  const markSeen = (list: any[]) => db("otto_alert_fires?on_conflict=key", { method: "POST", headers: { prefer: "resolution=ignore-duplicates,return=minimal" },
+    body: JSON.stringify(list.map((e) => ({ key: keyOf(e), payload: e }))) });
   // First run ever: just remember the backlog, don't flood the Desk.
-  const total = await db("otto_alert_fires?select=key&limit=60");
-  if (total.length <= fresh.length && fresh.length > 3) return { ok: true, fired: 0, primed: fresh.length };
-  const recentReads = await db("otto_desk?select=id&author=eq.Jarvis%20%C2%B7%20alert%20read&created_at=gte." + new Date(Date.now() - 3600e3).toISOString()).catch(() => []);
-  let reads = recentReads.length;
-  for (const e of fresh.slice(0, 5)) {
+  const any = await db("otto_alert_fires?select=key&limit=1").catch(() => [{}]);
+  if (!any.length && fresh.length > 3) { await markSeen(fresh); return { ok: true, fired: 0, primed: fresh.length }; }
+  // v3.11: post the Desk line + phone push FIRST, then mark that fire seen — one at a time — so a run that's cut
+  // off never swallows a fire. Every fire gets its line and push (no 5-per-run cap); only the Jarvis reads are capped.
+  const posted: any[] = [];
+  for (const e of fresh.slice(0, 25)) {
     const name = e.name || e.alert_name || "", sym = e.symbol || e.ticker || "", msg = e.message || "";
     const line = `🔔 TradingView alert fired: ${name || sym}${msg && msg !== name ? " — " + msg : ""}`;
     await logDesk("system", "TradingView", line.slice(0, 500));
-    if (/^Otto ·/.test(name)) continue;           // v3.4: the exit engine handles its own alerts
-    await notify("jason_alert", `📈 ${String(name || sym).slice(0, 90)}`, String(msg || "TradingView alert fired").slice(0, 200));
-    if (reads >= 6) continue;                     // cap the reads, never the log lines
+    if (!/^Otto ·/.test(name)) {                  // v3.4: the exit engine handles its own alerts
+      await notify("jason_alert", `📈 ${String(name || sym).slice(0, 90)}`, String(msg || "TradingView alert fired").slice(0, 200));
+      posted.push(e);
+    }
+    await markSeen([e]).catch(() => {});
+  }
+  if (fresh.length > 25) await markSeen(fresh.slice(25)).catch(() => {});
+  // Jarvis's short read on each (capped at 6 an hour), after every fire is already on the Desk.
+  const recentReads = await db("otto_desk?select=id&author=eq.Jarvis%20%C2%B7%20alert%20read&created_at=gte." + new Date(Date.now() - 3600e3).toISOString()).catch(() => []);
+  let reads = recentReads.length;
+  for (const e of posted.slice(0, 3)) {
+    if (reads >= 6) break;
     reads++;
+    const name = e.name || e.alert_name || "", sym = e.symbol || e.ticker || "", msg = e.message || "";
     const calls = await loadBrain();
     const sys = DESK_SYS.replace("{{RULES}}", alwaysOn(calls));
     const { tools: mcpToolDefs } = await deskTools();
@@ -3109,6 +3124,15 @@ async function signalProcess(bid: number, ins: any[], imgs: { mime: string; data
     if (!live.length && !freshImg) { await sigBatch(bid, { rows: ids, status: all.length ? "caught_up" : "nothing", read: null }); return; }
     if (!tradeable.length && !freshImg) {
       await sigBatch(bid, { rows: ids, status: "chatter" });
+      return;
+    }
+    // v3.11: is a card for the same ticker already being built (another burst a moment ago)? Then this burst is a
+    // follow-up ("BREAK HAPPENED…"): no second card, no second ping. Ask about it in the signal's chat if needed.
+    const building = await db(`otto_signal_batches?select=id,rows&status=eq.jarvis&id=neq.${bid}&created_at=gte.${new Date(Date.now() - 5 * 60e3).toISOString()}`).catch(() => []);
+    const bRows = building.flatMap((x: any) => x.rows || []);
+    const bTick = bRows.length ? new Set((await db("otto_jason?select=ticker&id=in.(" + bRows.join(",") + ")").catch(() => [])).map((r: any) => r.ticker).filter(Boolean)) : new Set();
+    if (tradeable.length && tradeable.every((r: any) => bTick.has(r.ticker))) {
+      await sigBatch(bid, { rows: ids, status: "followup", read: `Follow-up to the ${[...new Set(tradeable.map((r: any) => r.ticker))].join(", ")} call a moment ago — Jarvis's card for it covers this. Ask below if you want a different card.` });
       return;
     }
     await sigBatch(bid, { rows: ids, status: "jarvis" });
