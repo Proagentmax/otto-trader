@@ -286,3 +286,17 @@ Deno.test("jarvis: Desk failure is posted on the Desk (no more silent 10:03–10
   await res.text();
   assert(/Jarvis couldn't answer Josh's last message \(Claude is overloaded/.test(deskText()), deskText());
 });
+
+/* =============================== 5. ROUTES =============================== */
+// Added after the first v3.13 deploy: house_rules_get answered "unknown fn" because it was
+// missing from the Desk route allow-list. Every route the Desk block handles must be listed.
+Deno.test("routes: every Desk route is in the signed-in allow-list", async () => {
+  const src = await Deno.readTextFile(new URL("../otto-proxy.ts", import.meta.url));
+  const i = src.indexOf('if (["desk", "act", "panel"');
+  const list = src.slice(i, src.indexOf("].includes(fn)", i));
+  const allowed = new Set([...list.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]));
+  const blockEnd = src.indexOf('if (fn === "market")', i);
+  const handled = [...src.slice(i, blockEnd).matchAll(/fn === "([a-z_]+)"/g)].map((m) => m[1]);
+  const missing = handled.filter((f) => !allowed.has(f));
+  assert(missing.length === 0, "routes handled but not allowed: " + missing.join(", "));
+});

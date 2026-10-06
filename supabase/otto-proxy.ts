@@ -4243,7 +4243,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, email: claims.email || null, anonymous: !!claims.is_anonymous, desk: !!deskUser(claims) });
     }
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
-         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "performance", "help", "jason_today", "jason_sweep", "jason_score",
+         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "performance", "help", "jason_today", "jason_sweep", "jason_score",
          "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set",
          "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear"].includes(fn)) {
       const who = deskUser(claims);
