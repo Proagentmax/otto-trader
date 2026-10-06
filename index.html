@@ -521,6 +521,13 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .sg-feed{flex:1;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;gap:14px;min-height:0;background:var(--s1)}
 .sg-feed[hidden],.dk.sg-on .dk-msgs,.dk.sg-on .dk-quick,.dk.sg-on .dk-pend,.dk.sg-on .dk-compose{display:none}
 .sg-day{text-align:center;color:var(--ink-3);font-size:11.5px}
+.dk.al-on .dk-msgs,.dk.al-on .dk-quick,.dk.al-on .dk-pend,.dk.al-on .dk-compose{display:none}
+.al-it{display:grid;grid-template-columns:34px 1fr;gap:10px}
+.al-ic{width:34px;height:34px;border-radius:9px;background:var(--surface-3);display:grid;place-items:center;font-size:16px}
+.al-t{font-weight:600;line-height:1.35}.al-msg{font-size:12.5px;color:var(--ink-2);white-space:pre-wrap;margin-top:1px}
+.al-st{display:inline-block;font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 8px;margin-top:4px}
+.al-st.chk{background:rgba(167,139,250,.16);color:#a78bfa}.al-st.q{background:var(--surface-3);color:var(--ink-3)}.al-st.pro{background:rgba(0,200,5,.12);color:var(--up)}
+.al-note{font-size:12px;color:var(--ink-3)}
 .sg-b{display:grid;grid-template-columns:34px 1fr;gap:10px}
 .sg-av{width:34px;height:34px;border-radius:50%;background:#3b2a6b;color:#d8ccff;display:grid;place-items:center;font-weight:800}
 .sg-who{font-size:12px;color:var(--ink-3)}.sg-who b{color:#E8455A}
@@ -664,21 +671,23 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <div class="dk-ctabs" id="dkCtabs">
       <button data-ct="jarvis" class="on">Jarvis</button>
       <button data-ct="signals">⚡ Otto Signals<span class="sg-badge" id="sgBadge" hidden></span></button>
+      <button data-ct="alerts">🔔 TradingView Alerts<span class="sg-badge" id="alBadge" hidden></span></button>
       <span class="sg-watch" id="sgWatch"></span>
     </div>
     <div class="sg-feed" id="sgFeed" hidden></div>
+    <div class="sg-feed" id="alFeed" hidden></div>
     <div class="dk-msgs" id="dkMsgs"></div>
     <div class="dk-quick" id="dkQuick">
       <button data-q="Morning read: the three macro inputs, SPY/QQQ and the Mag 7, today's calendar and earnings on my watchlist. Bias and the 2–3 setups worth watching. No orders.">Morning read</button>
       <button data-q="Check my positions in the Agentic account: hold, trim or close, and the exact level that would change the answer.">Check my positions</button>
-      <button data-q="Grade this chart against Jason's method: Take it / Wait / Pass, and the one reason that matters most.">Grade this chart</button>
-      <button data-q="Pull my Robinhood order history and build my 5 biggest wins and 5 biggest losses, with which of Jason's rules each one followed or broke.">5 wins / 5 losses</button>
-      <button data-fill="What did Jason say about ">What did Jason say about…</button>
+      <button data-q="Grade this chart against the Otto Rules: Take it / Wait / Pass, and the one reason that matters most.">Grade this chart</button>
+      <button data-q="Pull my Robinhood order history and build my 5 biggest wins and 5 biggest losses, with which of the Otto Rules each one followed or broke.">5 wins / 5 losses</button>
+      <button data-fill="What do the Otto Rules say about ">What do the Otto Rules say about…</button>
     </div>
-    <div class="dk-pend" id="dkPend" hidden><img id="dkPendImg" alt=""><span>Chart attached</span><button class="dk-att dk-jbtn" id="dkPendJ" hidden style="padding:3px 8px">📣 Send as Jason's post</button><button class="dk-btn j" id="dkPendX" style="padding:3px 8px">Remove</button></div>
+    <div class="dk-pend" id="dkPend" hidden><img id="dkPendImg" alt=""><span>Chart attached</span><button class="dk-att dk-jbtn" id="dkPendJ" hidden style="padding:3px 8px">📣 Send as a signal post</button><button class="dk-btn j" id="dkPendX" style="padding:3px 8px">Remove</button></div>
     <div class="sg-foot" id="sgFoot">Read-only: the watcher on Ifoma's PC fills this tab live. Ask Jarvis about any signal in the Jarvis tab, so this feed stays clean.</div>
     <div class="dk-compose">
-      <button class="dk-att dk-jbtn" id="dkJason" hidden title="Screenshot Jason's Discord post, then click (or paste it first with Ctrl+V)">📣 Jason's call</button>
+      <button class="dk-att dk-jbtn" id="dkJason" hidden title="Screenshot the Discord post, then click (or paste it first with Ctrl+V)">📣 Signal post</button>
       <input type="file" id="dkJFile" accept="image/*" hidden>
       <button class="dk-att" id="dkAtt" title="Attach a chart (or paste with Ctrl+V)">＋ Chart</button>
       <button class="dk-att" id="dkTicketBtn" title="Buy or sell yourself — makes an Approve card">Order ticket</button>
@@ -834,7 +843,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
       <label class="f" for="tWhy">Why you took it</label>
       <textarea class="f" id="tWhy" rows="3" placeholder="What did you see? Which level? Why was this the best trade available, not just a trade?"></textarea>
       <p class="err" id="tWhyErr" hidden></p>
-      <p class="hint">This is the field Jason will ask about on Friday. A trade won't save without it.</p>
+      <p class="hint">This is the field your coach will ask about on Friday. A trade won't save without it.</p>
     </div>
     <div><label class="f" for="tRev">What you'd do differently</label><textarea class="f" id="tRev" rows="2"></textarea></div>
   </div>
@@ -847,7 +856,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <label class="f" for="wWhy">Why you took it</label>
     <textarea class="f" id="wWhy" rows="4" placeholder="What did you see? Which level? Why was this the best trade available, not just a trade?"></textarea>
     <p class="err" id="wErr" hidden></p>
-    <p class="hint">Imported trades arrive with no reason. Jason's assignment is to defend every one.</p>
+    <p class="hint">Imported trades arrive with no reason. The Otto Rules: defend every one.</p>
   </div>
   <div class="ft"><button class="btn" id="wCancel">Cancel</button><button class="btn solid" id="wSave">Save</button></div>
 </dialog>
@@ -921,7 +930,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <p class="hint" style="margin-top:0">A Chrome extension keeps the mentor's Discord channel open in a minimized window on one PC and sends each new post to Otto the moment it lands. Jarvis builds the card; both phones ping.</p>
     <p class="hint" id="sgStat">—</p>
     <div class="grid g2">
-      <div><label class="f" for="sgMentor">Mentor's name</label><input class="f" id="sgMentor" placeholder="Jason"></div>
+      <div><label class="f" for="sgMentor">Mentor's name (internal — never shown; signals show as “Signal”)</label><input class="f" id="sgMentor" placeholder="name"></div>
       <div><label class="f" for="sgAuthorName">Discord display name</label><input class="f" id="sgAuthorName"></div>
       <div><label class="f" for="sgAuthorId">Discord user ID</label><input class="f" id="sgAuthorId" inputmode="numeric"></div>
       <div><label class="f" for="sgChanName">Channel name</label><input class="f" id="sgChanName"></div>
@@ -1018,7 +1027,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 </dialog>
 
 <dialog id="dlgMail">
-  <div class="grip"></div><div class="hd"><h3>Email Jason</h3></div>
+  <div class="grip"></div><div class="hd"><h3>Email your coach</h3></div>
   <div class="bd">
     <p class="hint" style="margin-top:0">He asked you these on the call. Answer them here and the Coach writes the email in your words — you read it, you send it.</p>
     <div id="mailQs"></div>
@@ -1194,6 +1203,35 @@ window.addEventListener("beforeunload",()=>{ if(DIRTY.size)flush() });
 })();
 let tT;const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(tT);tT=setTimeout(()=>t.classList.remove("on"),2800)};
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+/* v3.12 (Ifoma, 6 Oct): the mentor's name is never shown — Otto may be sold. His method/rules read
+   "the Otto Rules", his Discord posts "Signal". The brain keeps the source internally. A watcher
+   rewrites any text that still carries the name (Jarvis's words, saved notes, old rows) as it is
+   drawn. Not touched: what people type (chat bubbles, inputs), his raw posts, and the email draft
+   to the coach (a real person). */
+function noName(t){
+  return String(t??"")
+    .replace(/\bJason(?: Murray)?'s (?:rules|method)\b/g,"the Otto Rules").replace(/\bJason(?: Murray)?'s rule\b/g,"Otto Rule")
+    .replace(/\bJason(?: Murray)?'s posts?\b/g,"the signal").replace(/\bJason(?: Murray)?'s calls\b/g,"the coaching calls")
+    .replace(/\bJASON'S CALL\b/g,"SIGNAL").replace(/\bJason(?: Murray)?'s\b/g,"Otto Rules").replace(/\bJason(?: Murray)?\b/g,"Otto Rules")
+    .replace(/\bjmoney915\b/gi,"").replace(/\bthe the Otto\b/g,"the Otto").replace(/Otto Rules Rules/g,"Otto Rules")
+    .replace(/(^|[.!?:]\s+|\n)the (Otto|signal|coaching)/g,(_m,a,b)=>a+"The "+b);
+}
+const NN_SKIP="script,style,textarea,input,select,.dk-m.me,.sg-q,.sg-txt,#mailDraft,[data-raw]";
+function nnWalk(root){
+  if(!root)return;
+  if(root.nodeType===3){const p=root.parentElement;if(p&&!p.closest(NN_SKIP)&&/Jason|jmoney/i.test(root.nodeValue)){const v=noName(root.nodeValue);if(v!==root.nodeValue)root.nodeValue=v}return}
+  if(root.nodeType!==1||root.closest&&root.closest(NN_SKIP))return;
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let n;
+  while((n=w.nextNode()))if(/Jason|jmoney/i.test(n.nodeValue)){const p=n.parentElement;if(p&&!p.closest(NN_SKIP)){const v=noName(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v}}
+  root.querySelectorAll&&root.querySelectorAll("[title],[placeholder],[alt]").forEach(el=>{if(el.closest(NN_SKIP.replace("input,","").replace("textarea,","")))return;
+    for(const a of ["title","placeholder","alt"]){const v=el.getAttribute(a);if(v&&/Jason/.test(v))el.setAttribute(a,noName(v))}});
+}
+function nnStart(){
+  nnWalk(document.body);
+  new MutationObserver(ms=>{for(const m of ms){if(m.type==="characterData")nnWalk(m.target);else m.addedNodes.forEach(nnWalk)}})
+    .observe(document.body,{childList:true,subtree:true,characterData:true});
+}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",nnStart);else nnStart();
 const money=n=>(n<0?"-":"+")+"$"+Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
 const today=()=>new Date().toISOString().slice(0,10);
 const week=()=>CALLS[CUR]||null;
@@ -1401,7 +1439,7 @@ function renderWeek(){
         ? `<div class="allclear"><b>All clear</b><span>Nothing due. The nightly and weekly ones come back on their own.</span></div>`
         : (mails.length>1?`<div class="mailbox"><b>${mails.length} of these are one email</b>
              <p>He asked them all on the same call. Answer them once and send it.</p>
-             <button class="btn wide solid" id="mailBtn" style="margin-top:12px">Draft my email to Jason</button></div>`:"")
+             <button class="btn wide solid" id="mailBtn" style="margin-top:12px">Draft my email to my coach</button></div>`:"")
           + groups))
     + (done.length?`<div class="donewrap" data-shut="1" id="doneWrap">
         <button class="donehead" id="doneHead" aria-expanded="false">
@@ -1780,7 +1818,7 @@ $("#q").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&window.i
 const MIN_WHY=10;
 const undefended=t=>!(t.why&&t.why.trim().length>=MIN_WHY);
 function whyError(why){
-  return !why ? "Write why you took it. Jason asks about this one on Friday."
+  return !why ? "Write why you took it. Your coach asks about this one on Friday."
        : why.length<MIN_WHY ? "That isn't a defence. Say what you saw and which level."
        : "";
 }
@@ -1795,7 +1833,7 @@ function renderJournal(){
   const nd=TRADES.filter(undefended).length,ub=$("#undefBox");
   ub.hidden=!nd;
   if(nd)ub.innerHTML=`<div class="undef"><div class="h">${nd} undefended trade${nd>1?"s":""}</div>
-    <div class="b">${nd>1?"These have":"This one has"} no written reason — almost always a CSV import. Jason's assignment is to defend every trade, and Friday's recap reads from this field. Tap <b>Undefended</b> on any card below to write one.</div></div>`;
+    <div class="b">${nd>1?"These have":"This one has"} no written reason — almost always a CSV import. Your coach's assignment is to defend every trade, and Friday's recap reads from this field. Tap <b>Undefended</b> on any card below to write one.</div></div>`;
   $("#tradeList").innerHTML=TRADES.length?TRADES.map(t=>{const p=Number(t.pnl)||0,ud=undefended(t);
     return `<div class="trade${ud?" nodef":""}"><div class="hd">
       <span class="sym">${esc(t.sym||"—")}</span><span class="dir">${esc(t.dir)} ×${esc(t.qty)}</span>
@@ -1949,7 +1987,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.11.0";
+const BUILD="3.12.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2156,7 +2194,7 @@ function standDown(){
 const FENCE=`<div class="fence"><b>Jason's rule stands over this.</b> As a new trader you don't trade the first thirty minutes — the gap up is what traps new buyers (Intro Call, 17 Aug 2026, 03:16). Your sheet resolves to an entry at the 9:30 opening range. They disagree, and this app won't pick for you. Ask him.</div>`;
 function fenceNow(){
   const w=standDown();
-  if(w==="in")return `<div class="fence hot"><b>It's the first thirty minutes. Jason says stand down.</b> The gap up is what traps new buyers (Intro Call, 17 Aug 2026, 03:16). Your sheet wants the opening-range break right now — that is the one place it and your mentor flatly disagree. This app won't pick for you. Ask him.</div>`;
+  if(w==="in")return `<div class="fence hot"><b>It's the first thirty minutes. The Otto Rules say stand down.</b> The gap up is what traps new buyers (Intro Call, 17 Aug 2026, 03:16). Your sheet wants the opening-range break right now — that is the one place it and your mentor flatly disagree. This app won't pick for you. Ask him.</div>`;
   if(w==="soon")return `<div class="fence"><b>Read it now, act after 10:00.</b> Jason's rule: a new trader doesn't trade the first thirty minutes (Intro Call, 17 Aug 2026, 03:16). Your sheet resolves to an entry at the 9:30 opening range. They disagree, and this app won't pick for you. Ask him.</div>`;
   return FENCE;
 }
@@ -2259,7 +2297,7 @@ function renderBias(){
       <span class="ag">${esc(mins(l.age))}</span></div>`;
   }).join("");
   box.innerHTML=`<div class="bias ${b.tone}">
-    <div class="lab">Morning bias · your checklist, not Jason's</div>
+    <div class="lab">Morning bias · your checklist, not the Otto Rules</div>
     <div class="vd">${esc(b.verdict)}</div>
     <div class="cov">${esc(b.note)}</div>
     ${whyNoRead?`<div class="cov" style="margin-top:7px">${esc(whyNoRead)}</div>`:""}
@@ -2636,9 +2674,9 @@ const JF_CARD={pending:"card waiting for Approve",running:"placing…",done:"tak
 function dkJasonFeed(){
   const J=DK.jason;if(!J)return "";
   const rows=J.rows||[];
-  let h=`<div class="dk-cardx"><div class="dk-h">Jason today <b>${J.error?"":rows.length+" post"+(rows.length===1?"":"s")}</b></div>`;
+  let h=`<div class="dk-cardx"><div class="dk-h">Signals today <b>${J.error?"":rows.length+" post"+(rows.length===1?"":"s")}</b></div>`;
   if(J.error)return h+`<div class="dk-err">${esc(J.error)}</div></div>`;
-  if(!rows.length)return h+`<div class="mut">Nothing yet. When Jason posts in #platinum-chat, screenshot it and click <b style="color:#E8455A">📣 Jason's call</b>.</div></div>`;
+  if(!rows.length)return h+`<div class="mut">Nothing yet. When a signal is posted and the watcher misses it, screenshot it and click <b style="color:#E8455A">📣 Signal post</b>.</div></div>`;
   h+=rows.slice().reverse().map(r=>{
     const st=r.kind==="call"?(r.late?"late — no card":r.card?(JF_CARD[r.card.status]||r.card.status):"no card yet")
       :r.kind==="level"?"watch level":"context for Jarvis";
@@ -2650,7 +2688,7 @@ function dkJasonLevels(){
   const J=DK.jason;if(!J||J.error)return "";
   const lv=(J.rows||[]).filter(r=>r.level||r.entry||r.kind==="level");
   if(!lv.length)return "";
-  return `<div class="dk-cardx"><div class="dk-h">Jason's levels today <b>from his posts</b></div>`+
+  return `<div class="dk-cardx"><div class="dk-h">Signal levels today <b>from the posts</b></div>`+
     lv.map(r=>`<div class="dk-row"><span><b>${esc(r.ticker||"—")}</b> <span class="mut">${esc(String(r.summary||r.words).replace(new RegExp("^"+(r.ticker||"#")+":\\s*"),"").slice(0,60))}</span></span><span class="mono">${r.level?"$"+dkNum(r.level):r.entry?"entry $"+dkNum(r.entry):""}</span></div>`).join("")+`</div>`;
 }
 // For the 5 PM sweep (scheduled task, run inside this page): ottoJasonSweep("2026-10-05",[{time:"10:02 AM",text:"SPCX LONG"}])
@@ -2772,7 +2810,7 @@ function dkCard(a){
       (r.pct!=null?` · <b>${(r.pct*100).toFixed(0)}%</b> of $${dkNum(r.account_value)}`:"")+(r.account?` · Agentic ${esc(r.account)}`:"")+
       ((r.notes||[]).length?` <span class="mut">(${esc(r.notes.join("; "))})</span>`:"")+`</div>`;
   }
-  if(r.flag)risk+=`<div class="dk-warnbox">⚠ This risks ${(r.pct*100).toFixed(0)}% of the account — over your 20% flag. Jason called ~40% in one trade "crazy" (Oct 1). You can still approve.</div>`;
+  if(r.flag)risk+=`<div class="dk-warnbox">⚠ This risks ${(r.pct*100).toFixed(0)}% of the account — over your 20% flag. The Otto Rules call ~40% in one trade "crazy" (Oct 1). You can still approve.</div>`;
   const res=(a.result||[]).map(x=>`<div class="${x.ok?"up":"dn"}" style="font-size:12px;margin-top:6px">${x.ok?"✓":"✗"} ${esc(x.tool)}</div><pre style="white-space:pre-wrap;font-size:11.5px;margin:2px 0 0;color:var(--ink-2)">${esc(String(x.text||"").slice(0,700))}</pre>`).join("");
   const tag={pending:"near",running:"near",done:"ok",failed:"bad"}[st]||"";
   const label={pending:"needs your approval",running:"running…",done:"done",failed:"failed",rejected:"rejected",expired:"expired — ask again for fresh prices"}[st]||st;
@@ -2786,7 +2824,7 @@ function dkCard(a){
     <div class="dk-calls">${calls}</div>
     ${a.review?`<details><summary>Robinhood's own review</summary><pre>${esc(a.review)}</pre></details>`:""}
     ${res}
-    <div class="dk-btns">${st==="pending"?`<button class="dk-btn go" data-ok="1">${a.exit?"Approve entry + exits":`Approve &amp; ${(a.calls||[]).some(c=>/^place_/.test(c.tool))?"place":"run"}`}</button><button class="dk-btn sec" data-no="1">Reject</button>`:""}<button class="dk-btn j" data-jason="1">Send to Jason</button></div>
+    <div class="dk-btns">${st==="pending"?`<button class="dk-btn go" data-ok="1">${a.exit?"Approve entry + exits":`Approve &amp; ${(a.calls||[]).some(c=>/^place_/.test(c.tool))?"place":"run"}`}</button><button class="dk-btn sec" data-no="1">Reject</button>`:""}<button class="dk-btn j" data-jason="1">Send to coach</button></div>
   </div>`;
 }
 function dkRenderMsgs(stick){
@@ -2798,15 +2836,17 @@ function dkRenderMsgs(stick){
   }
   const near=box.scrollHeight-box.scrollTop-box.clientHeight<120;
   let h="";
-  if(!DK.rows.length&&!DK.streaming)h=`<div class="dk-empty"><b style="color:var(--ink)">The Desk</b><br>Ask anything — a read on the market, a chart (paste it with Ctrl+V), a trade idea, your positions. It reads TradingView and Robinhood live and leans on Jason's calls. Anything that would change something comes back as a card; nothing happens until someone clicks Approve.</div>`;
+  if(!DK.rows.length&&!DK.streaming)h=`<div class="dk-empty"><b style="color:var(--ink)">The Desk</b><br>Ask anything — a read on the market, a chart (paste it with Ctrl+V), a trade idea, your positions. It reads TradingView and Robinhood live and leans on the Otto Rules. Anything that would change something comes back as a card; nothing happens until someone clicks Approve.</div>`;
+  alBadge();if(AL.on)alRender();
   for(const r of DK.rows){
+    if(alIs(r))continue;                       // v3.12: TradingView alerts live in their own tab
     if(r.role==="system"){h+=`<div class="dk-sys">${esc(r.content)} · ${dkTime(r.created_at)}</div>`;continue}
-    if(r.role==="user"){const jz=/^📣/.test(r.content||"");h+=`<div class="dk-m me${jz?" jason":""}"><div class="dk-mw">${esc(r.author||"")} · ${dkTime(r.created_at)}${jz?`<span class="dk-jtag">JASON'S CALL</span>`:""}</div>${esc(jz?String(r.content).replace(/^📣 Jason's post \(pasted\):?\n?/,""):r.content)}</div>`;continue}
+    if(r.role==="user"){const jz=/^📣/.test(r.content||"");h+=`<div class="dk-m me${jz?" jason":""}"><div class="dk-mw">${esc(r.author||"")} · ${dkTime(r.created_at)}${jz?`<span class="dk-jtag">SIGNAL</span>`:""}</div>${esc(jz?String(r.content).replace(/^📣 Jason's post \(pasted\):?\n?/,""):r.content)}</div>`;continue}
     h+=`<div class="dk-m ai"><div class="dk-mw">${esc(/^otto$/i.test(r.author||"")?"Jarvis":(r.author||"Jarvis"))} · ${dkTime(r.created_at)}</div>${r.content?`<div class="md">${md(r.content)}</div>`:""}${r.action_id?dkCard(DK.acts[r.action_id]):""}</div>`;
   }
   const s=DK.streaming;
   if(s){
-    h+=`<div class="dk-m me${s.jason?" jason":""}"><div class="dk-mw">${esc(s.author)} · now${s.jason?`<span class="dk-jtag">JASON'S CALL</span>`:""}</div>${s.img?`<img class="dk-thumb" src="${s.img}">`:""}${esc(s.jason?s.q.replace(/^📣 Jason's post\n?/,""):s.q)}</div>`;
+    h+=`<div class="dk-m me${s.jason?" jason":""}"><div class="dk-mw">${esc(s.author)} · now${s.jason?`<span class="dk-jtag">SIGNAL</span>`:""}</div>${s.img?`<img class="dk-thumb" src="${s.img}">`:""}${esc(s.jason?s.q.replace(/^📣 (?:Jason's|Signal) post\n?/,""):s.q)}</div>`;
     h+=`<div class="dk-m ai"><div class="dk-mw">Jarvis</div>${s.tools.length?`<div class="dk-tool">↳ ${s.tools.slice(-6).map(esc).join(" · ")}</div>`:""}`+
       (s.err?`<div class="dk-err">${esc(s.err)}</div>`:s.text?`<div class="md">${md(s.text)}</div>`:`<span class="mut">working…</span>`)+
       s.cards.map(id=>dkCard(DK.acts[id])).join("")+`</div>`;
@@ -2818,8 +2858,8 @@ async function dkCardClick(e){
   const card=e.target.closest("[data-act]");if(!card)return;
   const a=DK.acts[card.dataset.act];if(!a)return;
   if(e.target.closest("[data-jason]")){
-    const t=`Jason — quick look before I take this?\n${a.title}\n${a.summary||""}`.trim();
-    try{await navigator.clipboard.writeText(t);toast("Copied — paste it to Jason")}catch(err){prompt("Copy this to Jason:",t)}
+    const t=`Coach — quick look before I take this?\n${a.title}\n${a.summary||""}`.trim();
+    try{await navigator.clipboard.writeText(t);toast("Copied — paste it to your coach")}catch(err){prompt("Copy this to your coach:",t)}
     return;
   }
   const ok=e.target.closest("[data-ok]"),no=e.target.closest("[data-no]");
@@ -2868,7 +2908,7 @@ $("#dkSend").addEventListener("click",dkSend);
 async function dkSend(opts){
   const el=$("#dkIn"),q=el.value.trim();
   const jason=!!(opts&&opts.jason===true);
-  if(jason&&!DK.img&&!q)return toast("Screenshot Jason's post first, then click 📣");
+  if(jason&&!DK.img&&!q)return toast("Screenshot the post first, then click 📣");
   if(!q&&!DK.img)return;
   if(DK.streaming)return toast("One moment — the desk is still answering");
   if(DK.locked)return toast("Sign in with the Otto login first");
@@ -2878,7 +2918,7 @@ async function dkSend(opts){
     :r.role==="user"?{role:"user",author:r.author,content:r.content}
     :{role:"assistant",content:r.content||(r.action_id&&DK.acts[r.action_id]?`[Showed card: ${DK.acts[r.action_id].title} — ${DK.acts[r.action_id].status}]`:"(card shown)")});
   hist.push({role:"user",author,content:q||"(chart attached)",image:img?{media_type:img.media_type,data:img.data}:undefined});
-  DK.streaming={q:jason?("📣 Jason's post"+(q?"\n"+q:"")):(q||"(chart attached)"),author,img:img&&img.url,text:"",tools:[],cards:[],err:"",jason};
+  DK.streaming={q:jason?("📣 Signal post"+(q?"\n"+q:"")):(q||"(chart attached)"),author,img:img&&img.url,text:"",tools:[],cards:[],err:"",jason};
   $("#dkSend").disabled=true;dkRenderMsgs(true);
   const s=DK.streaming;
   try{
@@ -3041,18 +3081,18 @@ function dkRenderBanner(){
   const ev=s.next_event?`<span class="dk-leg warnc">Calendar <b>${esc(s.next_event.title)} ${esc(dkTime(s.next_event.date))}</b><span class="src">binary</span></span>`
     :`<span class="dk-leg flat">Calendar <b>no high-impact left today</b></span>`;
   const nw=s.news&&s.news.text?`<span class="dk-leg flat" title="${esc(s.news.text.slice(0,600))}">News <b>${esc(s.news.text.replace(/[#*_>]/g,"").trim().split(/(?<=[.!?])\s/)[0].slice(0,70))}</b><span class="src">8:45 research</span></span>`:"";
-  const conflict=s.window==="in"?"⚑ First 30 minutes: Jason says stand down · Josh's sheet trades the opening range"
-    :s.window==="soon"?"⚑ Read now, act after 10:00 (Jason) · Josh's sheet trades the 9:30 range"
-    :"⚑ Josh's sheet trades the 9:30 range · Jason: no first 30 min";
+  const conflict=s.window==="in"?"⚑ First 30 minutes: Otto Rules say stand down · Josh's sheet trades the opening range"
+    :s.window==="soon"?"⚑ Read now, act after 10:00 (Otto Rules) · Josh's sheet trades the 9:30 range"
+    :"⚑ Josh's sheet trades the 9:30 range · Otto Rules: no first 30 min";
   const J=s.jason||{},jr=x=>x?`${x.pct==null?"—":(x.pct>=0?"▲":"▼")} <span class="${x.read==="headwind"?"dn":x.read==="tailwind"?"up":""}">${esc(x.read)}</span>`:"—";
   el.innerHTML=`<div class="dk-verdict"><span class="k">Sentiment · Josh's sheet · ${esc(s.et||"")} ET</span><span class="big">${esc(s.verdict)}</span>
       <span class="sub">Score ${s.score>0?"+":""}${s.score} · ${s.fresh} of ${s.total} legs fresh${s.backup?` · ${s.backup} via Yahoo backup`:""} · refreshes every 5 min in market hours</span></div>
     <div class="dk-legs">${chip("yield")}${chip("jpy")}${chip("dollar")}${chip("crude")}${idx}${ev}${nw}</div>
     <div class="dk-sentR"><span class="dk-conflict">${esc(conflict)}</span>
-      <span>Jason's inputs: capital ${jr(J.capital)} · transport ${jr(J.transport)} · currency ${jr(J.currency)}</span>
+      <span>Otto Rules inputs: capital ${jr(J.capital)} · transport ${jr(J.transport)} · currency ${jr(J.currency)}</span>
       <button class="dk-why" id="dkWhy">${DK.whyOpen?"Hide":"Why this verdict?"}</button></div>
     ${DK.whyOpen?`<div class="dk-whybox"><b>${esc(s.verdict)}.</b> ${esc(s.note||"")}<ul>${(s.rows||[]).map(r=>`<li class="${r.fired?"":"mut"}">Row ${r.row} · ${esc(r.label)}: ${r.fired?"<b>fired</b> — "+esc(r.why):"not firing"}</li>`).join("")}</ul>
-      <span class="mut">Thresholds are the same as the v2.4 bias card built from Josh's cheat sheet. It's his sheet, not Jason's: no sizing here; size is the 20% check on each card.</span></div>`:""}`;
+      <span class="mut">Thresholds are the same as the v2.4 bias card built from Josh's cheat sheet. It's his sheet, not the Otto Rules: no sizing here; size is the 20% check on each card.</span></div>`:""}`;
   $("#dkWhy").onclick=()=>{DK.whyOpen=!DK.whyOpen;dkRenderBanner()};
 }
 
@@ -3099,7 +3139,7 @@ async function dkMarket(){
     <div class="dk-col"><div class="dk-cardx"><div class="dk-h">Josh's intermarket sheet <b>${esc(s.verdict||"")}</b></div>${rows||`<div class="mut">Unavailable</div>`}
       <div class="mut" style="font-size:11.5px;margin-top:6px">From Josh's cheat sheet, labelled as his. Live TradingView: US10Y, DXY, USDJPY, CL1!, ES1!, NQ1!, YM1!.</div></div>
       <div class="dk-cardx"><div class="dk-h">Legs <b>${s.fresh||0}/${s.total||7} fresh</b></div>${(s.legs||[]).map(l=>`<div class="dk-row"><span>${esc(l.label)} <span class="mut">${esc(l.sym)}</span></span><span class="mono">${l.price!=null?dkNum(l.price,l.k==="yield"?3:2):"—"} ${l.pct!=null?dkPct(l.pct):""}${l.live?"":` <span class="dk-tag">stale</span>`}${l.src==="yahoo"?` <span class="dk-tag">Yahoo · ${Math.round((l.age||0)/60)}m</span>`:""}</span></div>`).join("")}</div></div>
-    <div class="dk-col"><div class="dk-cardx"><div class="dk-h">Jason's six-step routine <b>live</b></div>
+    <div class="dk-col"><div class="dk-cardx"><div class="dk-h">Otto Rules six-step routine <b>live</b></div>
       <div class="dk-row"><span>1 · 10-year (cost of capital)</span>${jr(J.capital)}</div>
       <div class="dk-row"><span>2 · USD/JPY (cost of currency)</span>${jr(J.currency)}</div>
       <div class="dk-row"><span>3 · Crude (cost of transportation)</span>${jr(J.transport)}</div>
@@ -3108,7 +3148,7 @@ async function dkMarket(){
       <div class="dk-row"><span>6 · Mag 7 health</span><span>${mag.length?`<span class="up">${green} green</span> · <span class="dn">${red} red</span>`:`<span class="mut">unavailable</span>`}</span></div></div>
       <div class="dk-cardx"><div class="dk-h">What's moving <b>${s.news?"8:45 research":""}</b></div><div class="md" id="dkNews">${s.news&&s.news.text?md(s.news.text):`<span class="mut">No research yet today.</span>`}</div>
         <button class="dk-link" id="dkNewsBtn">Research now →</button></div>
-      <div class="dk-cardx"><div class="dk-h">Plan of attack <b>today</b></div><div class="mut">Your plan for the day, graded against Jason's method, with your marked-up chart.</div><button class="dk-link" id="dkPlanBtn">Open plan of attack →</button></div>
+      <div class="dk-cardx"><div class="dk-h">Plan of attack <b>today</b></div><div class="mut">Your plan for the day, graded against the Otto Rules, with your marked-up chart.</div><button class="dk-link" id="dkPlanBtn">Open plan of attack →</button></div>
       <div class="dk-cardx"><div class="dk-h">Mag 7</div>${mag.map(m=>`<div class="dk-row"><b>${esc(m.sym.split(":")[1])}</b><span class="mono">${m.close!=null?dkNum(m.close):"—"} ${m.change!=null?dkPct(m.change):""}</span></div>`).join("")||`<div class="mut">Unavailable</div>`}</div></div>
     <div class="dk-col r"><div class="dk-cardx"><div class="dk-h">Economic calendar <b>next 7 days</b></div>${cal.length?cal.slice(0,20).map(e=>`<div class="dk-row"><span>${esc(dkDate(e.date))} · ${esc(e.title)}</span><span class="dk-tag ${e.importance>=1?"near":""}">${e.importance>=1?"high":"med"}</span></div>`).join(""):`<div class="mut">${j.calendar_week&&j.calendar_week.error?esc(j.calendar_week.error):"Nothing scheduled"}</div>`}</div>
       <div class="dk-cardx"><div class="dk-h">Earnings on your watchlist <b>14 days</b></div>${earn.length?earn.map(e=>`<div class="dk-row"><b>${esc(e.sym.split(":")[1])}</b><span>${esc(e.date)}</span></div>`).join(""):`<div class="mut">None of your ${j.watchlist?j.watchlist.n:""} names report in the next 2 weeks.</div>`}</div></div>
@@ -3135,7 +3175,7 @@ function dkRenderJournal(){
   const src=r=>r.action_id?`<span class="dk-tag ok">Desk card</span>`:r.agent==="agentic"?`<span class="dk-tag">agent</span>`:`<span class="dk-tag">placed in app</span>`;
   $("#dkPage").innerHTML=`<div class="dkp">
     <div class="dkp-head"><h2>Journal</h2><span class="dk-tag blue">auto-filled from Robinhood</span>
-      <span class="mut" style="margin-left:auto">Jason's rule: every trade needs your reason${missing?` · <b class="warn">${missing} missing</b>`:" · all in"}</span>
+      <span class="mut" style="margin-left:auto">Otto Rules: every trade needs your reason${missing?` · <b class="warn">${missing} missing</b>`:" · all in"}</span>
       <button class="dk-btn sec" id="dkJSync">Sync now</button></div>
     ${j.sync_error?`<div class="dk-warnbox">Couldn't refresh from Robinhood just now (${esc(j.sync_error)}). Showing the last sync.</div>`:""}
     <div class="dkp-grid2"><div class="dk-cardx" style="padding:0;overflow:auto">
@@ -3183,7 +3223,7 @@ function dkRenderReview(){
       <span style="margin-left:auto;display:flex;gap:8px">
         ${list.length>1?`<select id="dkRWeek" class="dk-sel">${list.map((x,i)=>`<option value="${i}" ${i===(DK.rIdx||0)?"selected":""}>Week of ${esc(x.week_start)}</option>`).join("")}</select>`:""}
         <button class="dk-btn sec" id="dkRBuild">Build this week now</button>
-        <button class="dk-btn sec" id="dkRJason">Build "For Jason" packet</button>
+        <button class="dk-btn sec" id="dkRJason">Build "For my coach" packet</button>
         <button class="dk-btn sec" id="dkRCall">Log a call</button></span></div>
     ${p?`<div class="dkp-grid4">
         <div class="dk-cardx dk-stat"><div class="n">${p.n}</div><div class="l">Closed trades</div></div>
@@ -3191,22 +3231,22 @@ function dkRenderReview(){
         <div class="dk-cardx dk-stat"><div class="n">${(p.wins||[]).length} / ${(p.losses||[]).length}</div><div class="l">Winners / losers</div></div>
         <div class="dk-cardx dk-stat"><div class="n ${p.missing_reasons?"warn":""}">${p.missing_reasons||0}</div><div class="l">Trades with no reason</div></div></div>
       <div class="dkp-grid3">
-        <div class="dk-cardx"><div class="dk-h">Biggest wins <b>Jason's ask · Oct 1</b></div>${(p.wins||[]).map(line).join("")||`<div class="mut">None this week.</div>`}</div>
+        <div class="dk-cardx"><div class="dk-h">Biggest wins <b>coach's ask · Oct 1</b></div>${(p.wins||[]).map(line).join("")||`<div class="mut">None this week.</div>`}</div>
         <div class="dk-cardx"><div class="dk-h">Biggest losses</div>${(p.losses||[]).map(line).join("")||`<div class="mut">None this week.</div>`}</div>
         <div class="dk-cardx"><div class="dk-h">Rules followed / broken</div>${(p.rules||[]).map(x=>`<div class="dk-row"><span>${esc(x.rule)}</span><span><span class="dk-tag ok">${+x.followed||0} ✓</span> ${+x.broken?`<span class="dk-tag bad">${+x.broken} ✗</span>`:""}</span></div>`).join("")||`<div class="mut">—</div>`}</div></div>
       <div class="dk-cardx"><div class="dk-h">The pattern</div><div class="ink2">${esc(p.pattern||"")}</div>${p.one_thing?`<p style="margin:10px 0 0"><b>One thing for next week:</b> ${esc(p.one_thing)}</p>`:""}</div>`
     :`<div class="dk-empty" style="margin:40px auto">No review yet. It builds itself every Friday after the close, or press "Build this week now".</div>`}
-    <div class="dk-callout">"For Jason" drafts your trades, his open questions and the spots you were unsure, ready to copy to him. "Log a call" takes the call's transcript (.vtt from Zoom), adds it to the brain, and asks the Desk to propose alerts as a card.</div>
+    <div class="dk-callout">"For my coach" drafts your trades, his open questions and the spots you were unsure, ready to copy to him. "Log a call" takes the call's transcript (.vtt from Zoom), adds it to the brain, and asks the Desk to propose alerts as a card.</div>
   </div>`;
   const w=$("#dkRWeek");if(w)w.onchange=()=>{DK.rIdx=+w.value;dkRenderReview()};
   $("#dkRBuild").onclick=async e=>{const b=e.target;b.disabled=true;b.textContent="Building… (about a minute)";
     try{await dkApi("review_build",{});DK.rIdx=0;await dkReview();toast("Review built")}catch(err){toast(String(err.message).slice(0,100));b.disabled=false;b.textContent="Build this week now"}};
-  $("#dkRJason").onclick=()=>{dkShow("desk");$("#dkIn").value="Build my \"For Jason\" packet for the next call with Jason: my trades since the last call from Robinhood (both accounts), the open questions from the newest call, where I was unsure or broke one of his rules, and the levels + action I'm planning next. Plain text I can copy to him. No cards.";dkSend()};
+  $("#dkRJason").onclick=()=>{dkShow("desk");$("#dkIn").value="Build my \"For my coach\" packet for the next coaching call: my trades since the last call from Robinhood (both accounts), the open questions from the newest call, where I was unsure or broke one of his rules, and the levels + action I'm planning next. Plain text I can copy to him. No cards.";dkSend()};
   $("#dkRCall").onclick=()=>$("#dkCallFile").click();
 }
 $("#dkCallFile").addEventListener("change",async e=>{
   const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;
-  if(!confirm(`Add "${f.name}" to Jason's brain?\n\nIt's read into a week file, added to the brain everyone's Desk uses, and the Desk is asked to propose alerts for the new levels (as a card; nothing is created until you approve).`))return;
+  if(!confirm(`Add "${f.name}" to the brain?\n\nIt's read into a week file, added to the brain everyone's Desk uses, and the Desk is asked to propose alerts for the new levels (as a card; nothing is created until you approve).`))return;
   toast("Reading the call — about a minute");
   try{
     const txt=await f.text();let j;
@@ -3219,7 +3259,7 @@ $("#dkCallFile").addEventListener("change",async e=>{
     if(!x.ok)throw new Error("Brain update failed: "+(x.error||r.status));
     toast("Call added — brain version "+x.version);
     dkShow("desk");
-    $("#dkIn").value=`New Jason call loaded (${(j.call&&j.call.date)||"newest"}): "${(j.call&&j.call.title)||f.name}". Give me the 5 things that matter from it, then propose TradingView alerts for its levels that are still relevant today, as ONE card (named "Jason MM/DD – TICKER level – meaning"). Skip stale or ambiguous levels and list what you skipped.`;
+    $("#dkIn").value=`New coaching call loaded (${(j.call&&j.call.date)||"newest"}): "${(j.call&&j.call.title)||f.name}". Give me the 5 things that matter from it, then propose TradingView alerts for its levels that are still relevant today, as ONE card (named "Jason MM/DD – TICKER level – meaning"). Skip stale or ambiguous levels and list what you skipped.`;
     dkSend();
   }catch(err){toast(String(err.message).slice(0,120))}
 });
@@ -3234,7 +3274,7 @@ async function dkScore(){
      <div class="dk-bar"><i style="width:${g.hit==null?0:Math.round(g.hit*100)}%;background:${g.hit!=null&&g.hit>=.5?"var(--up)":"var(--down)"}"></i></div>`).join("")||`<div class="mut">No ideas yet.</div>`}</div>`;
   const st=o=>!o?"pending":o.state;
   $("#dkPage").innerHTML=`<div class="dkp">
-    <div class="dkp-head"><h2>Scorecard</h2><span class="mut">Does Jason's method plus the Desk have an edge? Every opening option card is tracked, taken or not.</span></div>
+    <div class="dkp-head"><h2>Scorecard</h2><span class="mut">Do the Otto Rules plus the Desk have an edge? Every opening option card is tracked, taken or not.</span></div>
     <div class="dkp-grid4">
       <div class="dk-cardx dk-stat"><div class="n">${j.all.n}</div><div class="l">Desk ideas tracked${j.since?` since ${esc(new Date(j.since).toLocaleDateString())}`:""}</div></div>
       <div class="dk-cardx dk-stat"><div class="n">${j.taken.n}</div><div class="l">Taken · ${j.passed.n} passed</div></div>
@@ -3383,18 +3423,20 @@ window.addEventListener("load",()=>{if(location.hash==="#desk")setTimeout(()=>{t
    Chrome extension on Ifoma's PC fills it. Each burst of the mentor's posts
    shows his words + charts, Jarvis's read, and the card(s) Jarvis built. */
 const SG={on:false,data:null,img:{},timer:null,loading:false};
-function sgShow(on){
+function sgShow(on,noChat){
+  if(on&&AL.on){AL.on=false;LS.set("alOn",false);$("#dk").classList.remove("al-on");$("#alFeed").hidden=true}
   SG.on=!!on;LS.set("sgOn",SG.on);
   $("#dk").classList.toggle("sg-on",SG.on);
   $("#sgFeed").hidden=!SG.on;
-  $$("#dkCtabs button").forEach(b=>b.classList.toggle("on",(b.dataset.ct==="signals")===SG.on));
+  ctMark();
   clearInterval(SG.timer);SG.timer=null;
   if(SG.on){
     sgRender(true);sgLoad();
     SG.timer=setInterval(()=>{if(SG.on&&DK.open&&document.visibilityState==="visible")sgLoad()},10e3);
-  }else dkRenderMsgs(true);
+  }else if(!noChat)dkRenderMsgs(true);
 }
-$$("#dkCtabs button").forEach(b=>b.addEventListener("click",()=>sgShow(b.dataset.ct==="signals")));
+$$("#dkCtabs button").forEach(b=>b.addEventListener("click",()=>{const ct=b.dataset.ct;
+  if(ct==="signals")sgShow(true);else if(ct==="alerts")alShow(true);else{sgShow(false,true);alShow(false)}}));
 async function sgLoad(){
   if(DK.locked||SG.loading||!USER)return;
   SG.loading=true;
@@ -3430,7 +3472,7 @@ function sgRender(stick){
   if(!d){box.innerHTML=dkLoading("Loading Otto Signals…");return}
   const near=box.scrollHeight-box.scrollTop-box.clientHeight<120;
   const m=esc(d.mentor||"Mentor"),bs=(d.batches||[]).slice().reverse();
-  let h=`<div class="sg-tools"><button data-sgpaste="1" title="Backup for when the watcher is down: paste a screenshot of his post">📋 Paste a post</button><button data-sgclear="1" title="Clears every signal conversation. Posts, reads and cards stay.">🧹 Clear chats</button><button data-sgalarm="1" title="Plays a chime on this computer when Jason makes a call (Otto must be open in a tab)">🔔 Laptop alarm: ${LS.get("sgAlarm",true)?"On":"Off"}</button></div>`+(d.error?`<div class="dk-err">${esc(d.error)}</div>`:"");
+  let h=`<div class="sg-tools"><button data-sgpaste="1" title="Backup for when the watcher is down: paste a screenshot of his post">📋 Paste a post</button><button data-sgclear="1" title="Clears every signal conversation. Posts, reads and cards stay.">🧹 Clear chats</button><button data-sgalarm="1" title="Plays a chime on this computer when a signal comes in (Otto must be open in a tab)">🔔 Laptop alarm: ${LS.get("sgAlarm",true)?"On":"Off"}</button></div>`+(d.error?`<div class="dk-err">${esc(d.error)}</div>`:"");
   if(!bs.length)h+=`<div class="dk-empty"><b style="color:var(--ink)">⚡ Otto Signals</b><br>Nothing from ${m} in the last 3 days yet. When he posts in ${esc(d.channel_name||"Discord")}, it shows up here within seconds, Jarvis builds the card, and both phones ping.</div>`;
   let day="";
   for(const b of bs){
@@ -3466,6 +3508,63 @@ async function sgImg(el){
   catch(e){el.alt="Chart couldn't load";}
 }
 $("#sgFeed").addEventListener("click",e=>{const im=e.target.closest("img.sg-img");if(im)im.style.maxWidth=im.style.maxWidth==="100%"?"":"100%"});
+
+/* ---------- v3.12: TradingView Alerts tab ----------
+   Every TradingView alert fire (and Jarvis's check of it) moved out of the Jarvis chat into its
+   own tab (Ifoma, 6 Oct). Jarvis checks fresh fires against the Otto Rules: card + one ping, or a
+   quiet note. Nothing is deleted — these are the same Desk rows, shown here instead of the chat. */
+var AL={on:false};
+function alIs(r){return !!r&&(r.author==="TradingView"||/^Jarvis · alert read/.test(r.author||""))}
+function ctMark(){const m=SG.on?"signals":AL.on?"alerts":"jarvis";$$("#dkCtabs button").forEach(b=>b.classList.toggle("on",b.dataset.ct===m))}
+function alShow(on){
+  if(on&&SG.on)sgShow(false,true);
+  AL.on=!!on;LS.set("alOn",AL.on);
+  $("#dk").classList.toggle("al-on",AL.on);$("#alFeed").hidden=!AL.on;ctMark();
+  if(AL.on)alRender(true);else if(!SG.on)dkRenderMsgs(true);
+  alBadge();
+}
+function alBadge(){
+  const rows=(DK.rows||[]).filter(r=>r.author==="TradingView");
+  const seen=+LS.get("alSeen",0),top=rows.reduce((m,r)=>Math.max(m,r.id),0);
+  if(AL.on&&top>seen)LS.set("alSeen",top);
+  const n=AL.on?0:rows.filter(r=>r.id>seen).length;
+  const el=$("#alBadge");if(!el)return;el.hidden=!n;el.textContent=String(n);
+}
+function alParse(c){
+  const L=String(c||"").split("\n");let t=L[0].replace(/^🔔\s*/,"").replace(/^TradingView alert fired:\s*/,"");let msg="",st="";
+  const rest=L.slice(1);if(rest.length&&/^» /.test(rest[rest.length-1]))st=rest.pop().slice(2);
+  msg=rest.join("\n");
+  if(!rest.length&&t.includes(" — ")){const i=t.indexOf(" — ");msg=t.slice(i+3);t=t.slice(0,i)}
+  return {t,msg,st};
+}
+function alRender(stick){
+  const box=$("#alFeed");if(!box)return;
+  if(DK.locked){box.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see the alerts.</p></div>`;return}
+  const near=box.scrollHeight-box.scrollTop-box.clientHeight<120;
+  const rows=(DK.rows||[]).filter(alIs);
+  let h=`<div class="al-note">Every TradingView alert lands here. Jarvis checks a fresh one against the Otto Rules: a real setup gets a card and one ping; anything else is a quiet note. Late fires and repeats never ping.</div>`;
+  if(!rows.length)h+=`<div class="dk-empty"><b style="color:var(--ink)">🔔 TradingView Alerts</b><br>No alerts have fired yet.</div>`;
+  let day="";
+  for(const r of rows){
+    const dd=new Date(r.created_at).toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"});
+    if(dd!==day){day=dd;h+=`<div class="sg-day">${esc(dd)}</div>`}
+    if(r.author==="TradingView"){
+      const p=alParse(r.content),prot=/^Otto ·/.test(p.t)||/^🛡/.test(p.st);
+      const cls=/^👀/.test(p.st)?"chk":/^🛡/.test(p.st)?"pro":"q";
+      h+=`<div class="al-it"><div class="al-ic">${prot?"🛡️":"📈"}</div><div><div class="al-t">${esc(p.t)} <span class="mut" style="font-weight:400;font-size:12px">· ${dkTime(r.created_at)}</span></div>${p.msg?`<div class="al-msg">${esc(p.msg)}</div>`:""}${p.st?`<span class="al-st ${cls}">${esc(p.st)}</span>`:""}</div></div>`;
+    }else{
+      const c=String(r.content||""),m=/^For: (.*)\n/.exec(c),body=m?c.slice(m[0].length):c,a=r.action_id&&DK.acts[r.action_id];
+      h+=`<div class="al-it"><div class="al-ic">🤖</div><div><div class="sg-read" style="margin-top:0"><span class="k">Jarvis${m?" on "+esc(m[1]):""} · ${dkTime(r.created_at)}</span><div class="md">${md(body)}</div></div>`+
+        (a?(a.status==="pending"||a.status==="running"?dkCard(a):`<div class="sg-cardline">🃏 ${esc(a.title||"card")} — <b>${esc(SG_CARD[a.status]||a.status)}</b></div>`):"")+`</div></div>`;
+    }
+  }
+  box.innerHTML=h;
+  if(stick||near)box.scrollTop=box.scrollHeight;
+}
+function alFromHash(){if(location.hash!=="#alerts")return;try{if(!DK.open&&typeof openDesk==="function")openDesk();dkShow("desk");alShow(true)}catch(e){}}
+window.addEventListener("load",()=>setTimeout(alFromHash,1500));
+window.addEventListener("hashchange",alFromHash);
+if(LS.get("alOn",false))setTimeout(()=>{try{if(DK.open&&!AL.on&&!SG.on)alShow(true)}catch(e){}},1700);
 
 // Settings → Otto Signals: the mentor's name / Discord ids, and the extension's pairing code.
 let SGCFG=null;
@@ -3505,7 +3604,7 @@ if(LS.get("sgOn",false))setTimeout(()=>{try{if(DK.open&&!SG.on)sgShow(true)}catc
 function dkHomeworkCard(){
   const c=CALLS[0];if(!c||!(c.assignments||[]).length)return "";
   const d=(c.call&&c.call.date)||"";
-  return `<div class="dk-cardx"><div class="dk-h">Jason's homework <b>${esc(d)}</b></div>`+
+  return `<div class="dk-cardx"><div class="dk-h">Coaching homework <b>${esc(d)}</b></div>`+
     c.assignments.slice(0,8).map(a=>{let on=false;try{on=!!DONE[hwKey(a,d)]}catch(e){}
       return `<div class="dk-check"><span class="dk-box ${on?"on":""}">${on?"✓":""}</span><span>${esc(a.task||"")}</span></div>`}).join("")+
     `<button class="dk-link" data-go2="week">Open the week →</button></div>`;
@@ -3514,12 +3613,12 @@ function dkBrainCard(){
   const c=CALLS[0];
   return `<div class="dk-cardx"><div class="dk-h">Jarvis brain <b>${CALLS.length} calls</b></div>`+
     (c?`<div class="dk-row"><span class="mut">Newest</span><span>${esc((c.call&&c.call.date)||"")}</span></div><div class="mut" style="margin-top:4px">${esc((c.call&&c.call.title)||"")}</div>`:`<div class="mut">Loading…</div>`)+
-    (c&&(c.questions||[]).length?`<div class="mut" style="margin-top:8px">Open questions for Jason:</div><ul style="margin:4px 0 0;padding-left:16px;color:var(--ink-2)">${c.questions.slice(0,3).map(q=>`<li>${esc(q.q||q.question||q.text||String(q))}</li>`).join("")}</ul>`:"")+`</div>`;
+    (c&&(c.questions||[]).length?`<div class="mut" style="margin-top:8px">Open questions for the coach:</div><ul style="margin:4px 0 0;padding-left:16px;color:var(--ink-2)">${c.questions.slice(0,3).map(q=>`<li>${esc(q.q||q.question||q.text||String(q))}</li>`).join("")}</ul>`:"")+`</div>`;
 }
 function dkMore(){
   const pg=$("#dkPage");
   pg.innerHTML=`<div class="dkp"><div class="dkp-head"><h2>More</h2><span class="mut">Out of the way, still one tap away. Nothing here is live market data.</span></div>
-    <div class="more-grid">${dkJasonFeed()||`<div class="dk-cardx"><div class="dk-h">Jason today</div><div class="mut">Loading…</div></div>`}${dkJasonLevels()||`<div class="dk-cardx"><div class="dk-h">Jason's levels today</div><div class="mut">No levels from Jason today.</div></div>`}${dkHomeworkCard()}${dkBrainCard()}</div></div>`;
+    <div class="more-grid">${dkJasonFeed()||`<div class="dk-cardx"><div class="dk-h">Signals today</div><div class="mut">Loading…</div></div>`}${dkJasonLevels()||`<div class="dk-cardx"><div class="dk-h">Jason's levels today</div><div class="mut">No levels from Jason today.</div></div>`}${dkHomeworkCard()}${dkBrainCard()}</div></div>`;
   pg.querySelectorAll("[data-go2]").forEach(b=>b.addEventListener("click",()=>{closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.go2);if(t)t.click()}));
 }
 // Cards to approve: tap one → it opens with Approve / Reject.
@@ -3555,10 +3654,10 @@ $("#sgFeed").addEventListener("click",async e=>{
   const o=e.target.closest("[data-sgopen]");if(o){SG.open[o.dataset.sgopen]=true;sgRender();const i=$(`[data-sgin="${o.dataset.sgopen}"]`);if(i)i.focus();return}
   const s=e.target.closest("[data-sgsend]");if(s)return sgSend(Number(s.dataset.sgsend));
   const oc=e.target.closest("[data-opencard]");if(oc)return dkOpenCard(oc.dataset.opencard);
-  if(e.target.closest("[data-sgalarm]")){const on=!LS.get("sgAlarm",true);LS.set("sgAlarm",on);sgAudio();if(on)sgChime();toast(on?"Laptop alarm on — you'll hear this chime when Jason calls something":"Laptop alarm off on this computer");sgRender();return}
+  if(e.target.closest("[data-sgalarm]")){const on=!LS.get("sgAlarm",true);LS.set("sgAlarm",on);sgAudio();if(on)sgChime();toast(on?"Laptop alarm on — you'll hear this chime when a signal calls something":"Laptop alarm off on this computer");sgRender();return}
   if(e.target.closest("[data-sgpaste]")){sgShow(false);$("#dkJason").click();return}
   if(e.target.closest("[data-sgclear]")){
-    if(!confirm("Clear every Otto Signals conversation?\n\nJason's posts, Jarvis's reads and the cards stay. Only the chats are cleared."))return;
+    if(!confirm("Clear every Otto Signals conversation?\n\nThe signals, Jarvis's reads and the cards stay. Only the chats are cleared."))return;
     try{await dkApi("signal_chat_clear",{});SG.open={};SG.draft={};toast("Signal chats cleared");await sgLoad()}catch(err){toast(String(err.message).slice(0,100))}
   }
 });
@@ -3588,22 +3687,24 @@ function sgAlarmCheck(){
   if(!hits.length||!LS.get("sgAlarm",true))return;
   sgChime();
   const p=(hits[0].posts||[]).find(x=>x.kind==="call");
-  sgFlash(`⚡ ${(SG.data.mentor||"Jason")}: ${p&&p.ticker?p.ticker:"CALL"}`);
+  sgFlash(`⚡ Signal: ${p&&p.ticker?p.ticker:"CALL"}`);
 }
 // Keep checking even while Otto sits in a background tab (every 15 s), so the alarm can ring.
 setInterval(()=>{try{if(USER&&DK.open&&!DK.locked&&LS.get("sgAlarm",true)&&!(SG.on&&document.visibilityState==="visible"))sgLoad()}catch(e){}},15000);
 // A tap on a notification for Otto Signals switches to that tab even if Otto is already on #signals.
-if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{const u=e.data&&e.data.otto_go;if(u&&/#signals/.test(u)){try{if(!DK.open&&typeof openDesk==="function")openDesk();dkShow("desk");sgShow(true)}catch(err){}}});
+if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{const u=e.data&&e.data.otto_go;
+  if(u&&/#alerts/.test(u)){try{if(!DK.open&&typeof openDesk==="function")openDesk();dkShow("desk");alShow(true)}catch(err){}return}
+  if(u&&/#signals/.test(u)){try{if(!DK.open&&typeof openDesk==="function")openDesk();dkShow("desk");sgShow(true)}catch(err){}}});
 
 /* ---------- v3.7: Jason's calls scorecard (on Results) ---------- */
 async function dkJasonScore(){
   const el=$("#pfJason");if(!el)return;
-  el.innerHTML=`<div class="dk-cardx"><div class="dk-h">Jason's calls <b>loading…</b></div></div>`;
-  let j;try{j=await dkApi("jason_score")}catch(e){el.innerHTML=`<div class="dk-cardx"><div class="dk-h">Jason's calls</div><div class="dk-err">${esc(e.message)}</div></div>`;return}
+  el.innerHTML=`<div class="dk-cardx"><div class="dk-h">Signal calls <b>loading…</b></div></div>`;
+  let j;try{j=await dkApi("jason_score")}catch(e){el.innerHTML=`<div class="dk-cardx"><div class="dk-h">Signal calls</div><div class="dk-err">${esc(e.message)}</div></div>`;return}
   const pc=v=>v==null?"—":Math.round(v*100)+"%",sp=v=>v==null?"—":`<span class="${v>=0?"up":"dn"}">${v>=0?"+":""}${v.toFixed(2)}%</span>`;
-  if(!j.all||!j.all.n){el.innerHTML=`<div class="dk-cardx"><div class="dk-h">Jason's calls</div><div class="mut">No calls logged yet. Each one you paste with 📣 (or the 5 PM sweep catches) is scored after the close: did the stock move his way from the moment he posted to 4:00?</div></div>`;return}
+  if(!j.all||!j.all.n){el.innerHTML=`<div class="dk-cardx"><div class="dk-h">Signal calls</div><div class="mut">No calls logged yet. Each one you paste with 📣 (or the 5 PM sweep catches) is scored after the close: did the stock move his way from the moment he posted to 4:00?</div></div>`;return}
   const T=j.taken;
-  el.innerHTML=`<div class="dk-cardx"><div class="dk-h">Jason's calls <b>since ${esc(dkMD(j.since))} · scored from his post to the close, in his direction</b></div>
+  el.innerHTML=`<div class="dk-cardx"><div class="dk-h">Signal calls <b>since ${esc(dkMD(j.since))} · scored from his post to the close, in his direction</b></div>
     <div class="dkp-grid4" style="margin:6px 0 10px">
       <div class="dk-stat"><div class="n">${j.all.n}</div><div class="l">Calls logged · ${j.all.scored} scored</div></div>
       <div class="dk-stat"><div class="n ${j.fresh.rate>=.5?"up":""}">${pc(j.fresh.rate)}</div><div class="l">Worked by the close (not counting late calls)</div></div>
@@ -3611,7 +3712,7 @@ async function dkJasonScore(){
       <div class="dk-stat"><div class="n ${T.pnl>=0?"up":"dn"}">${dk$0(T.pnl)}</div><div class="l">Result on the ones we took</div></div></div>
     <table class="pf-tab" style="width:100%;border-collapse:collapse;font-size:12.5px"><tr><th style="text-align:left">Split</th><th>Calls</th><th>Worked</th><th>Avg by close</th><th>Avg best move</th></tr>
     ${j.splits.map(s=>`<tr><td>${esc(s.key)}</td><td class="mono" style="text-align:center">${s.n}</td><td class="mono" style="text-align:center">${s.scored?pc(s.rate):"—"}</td><td class="mono" style="text-align:center">${sp(s.avg_close)}</td><td class="mono" style="text-align:center">${sp(s.avg_best)}</td></tr>`).join("")}</table>
-    <div class="mut" style="font-size:11.5px;margin-top:6px">"Worked" = the stock closed the day in Jason's direction from the 5-minute bar he posted in. Cards we took are also graded TP1 vs stop. Calls are dated ideas: they never go into Jarvis's teaching brain.</div></div>`;
+    <div class="mut" style="font-size:11.5px;margin-top:6px">"Worked" = the stock closed the day in the signal's direction from the 5-minute bar he posted in. Cards we took are also graded TP1 vs stop. Calls are dated ideas: they never go into Jarvis's teaching brain.</div></div>`;
 }
 
 /* ---------- v3.8: your layout (approved mockup otto-v3.8-layout-mockup.html) ----------
@@ -3804,7 +3905,7 @@ $("#lmSave").addEventListener("click",async()=>{
 
 /* ---------- Help (app questions only) ---------- */
 const HELP_QS=["Does the order ticket place my trade right away?","What's the difference between my two Robinhood accounts?","What does the sentiment banner mean?",
-  "Why did a card say “rule check: 2 flags”?","How do I add Jason's levels to my TradingView chart?","How do I log a new call?","How do I change my limits?",
+  "Why did a card say “rule check: 2 flags”?","How do I add the Otto Rules levels to my TradingView chart?","How do I log a new call?","How do I change my limits?",
   "What does the yellow line on the Results chart mean?","What does R mean on the Scorecard?","Why is the Desk locked?","What happens when a TradingView alert fires?"];
 function dkHelp(){
   const pg=$("#dkPage");
@@ -3946,7 +4047,7 @@ function dkJason(){
         <ol style="margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--ink-2)"><li>Click <b>Copy script</b>.</li><li>In TradingView, open <b>Pine Editor</b> (bottom panel), select all, paste.</li><li><b>Save</b>, then <b>Add to chart</b>.</li><li>After each call, copy again and paste over it.</li></ol>
         <div class="dk-btns"><button class="dk-btn go" id="dkPineCopy">Copy script</button><button class="dk-btn sec" id="dkPineShow">Show it</button></div>
         <pre id="dkPinePre" hidden style="white-space:pre;overflow:auto;max-height:260px;font-size:11px;background:var(--bg);padding:8px;border-radius:8px"></pre></div>
-      <div class="dk-cardx"><div class="dk-h">Ask Jason next call <b>${(c.questions||[]).length}</b></div>${L(c.questions,q=>`<div class="dk-row"><span>${esc(q.q||q.question||"")}</span></div>`)}</div>
+      <div class="dk-cardx"><div class="dk-h">Ask the coach next call <b>${(c.questions||[]).length}</b></div>${L(c.questions,q=>`<div class="dk-row"><span>${esc(q.q||q.question||"")}</span></div>`)}</div>
       <div class="dk-cardx"><div class="dk-h">Levels <b>dated ${esc(d)}</b></div>${L(c.levels,l=>`<div class="dk-row"><span><b>${esc(l.instrument||"")}</b> ${esc(l.value||"")}<br><span class="mut">${esc(l.meaning||"")}</span></span><span class="mut mono">${esc(l.at||"")}</span></div>`)}
         <div class="mut" style="font-size:11.5px;margin-top:6px">Marks from the call, not current prices.</div></div>
       <div class="dk-cardx"><div class="dk-h">Glossary <b>${(c.glossary||[]).length}</b></div>${L(c.glossary,g=>`<div class="dk-row"><span><b>${esc(g.term||"")}</b> — <span class="ink2">${esc(g.plain||"")}</span></span></div>`)}</div></div>

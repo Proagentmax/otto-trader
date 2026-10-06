@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Otto v3.12 mockup</title>
+<style>
+:root{--bg:#0B0C0E;--s1:#131519;--s2:#1D2026;--s3:#262A31;--ink:#F2F5F8;--ink2:#98A1AD;--ink3:#646C78;--rule:#22262C;--up:#00C805;--down:#FF5000;--warn:#F5B400;--pur:#a78bfa;--blue:#5aa9ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13.5px/1.45 Inter,system-ui,Segoe UI,sans-serif}
+.note{background:#2a1f05;color:#fcd38a;border-bottom:1px solid #5a4210;padding:8px 14px;font-size:12.5px}
+.views{display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid var(--rule);font-size:12px;color:var(--ink3);align-items:center;flex-wrap:wrap}
+.views button{background:var(--s2);border:1px solid var(--rule);color:var(--ink2);border-radius:999px;padding:4px 12px;cursor:pointer;font:inherit}
+.views button.on{background:var(--warn);color:#111;border-color:var(--warn)}
+.wrap{max-width:860px;margin:0 auto;padding:14px}
+.ctabs{display:flex;gap:4px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
+.ctabs span{padding:8px 14px;border-radius:9px 9px 0 0;color:var(--ink3);font-weight:600;font-size:13px;cursor:pointer}
+.ctabs .on{background:var(--s1);border:1px solid var(--rule);border-bottom:0;color:var(--ink);margin-bottom:-1px}
+.bdg{background:var(--warn);color:#111;border-radius:999px;padding:0 6px;font-size:10.5px;margin-left:5px}
+.new{color:var(--warn);font-size:10px;margin-left:4px;font-weight:700}
+.feed{background:var(--s1);border:1px solid var(--rule);border-top:0;border-radius:0 0 12px 12px;padding:14px 16px;display:flex;flex-direction:column;gap:12px;min-height:420px}
+.tool{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--ink3);flex-wrap:wrap;gap:6px}
+.btn{background:var(--s2);border:1px solid var(--rule);color:var(--ink);border-radius:8px;padding:4px 10px;font:inherit;font-size:12px}
+.day{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);border-top:1px solid var(--rule);padding-top:8px}
+.al{display:grid;grid-template-columns:34px 1fr;gap:10px}
+.ic{width:34px;height:34px;border-radius:9px;background:var(--s3);display:grid;place-items:center;font-size:16px}
+.t{font-weight:600}.mut{color:var(--ink3);font-size:12px}
+.tag{display:inline-block;font-size:10.5px;border-radius:999px;padding:1px 8px;margin-left:6px;font-weight:600}
+.ping{background:#0d3a12;color:#7ee787}.quiet{background:var(--s3);color:var(--ink2)}
+.read{background:var(--s2);border-left:3px solid var(--pur);border-radius:8px;padding:7px 10px;margin-top:6px;font-size:12.5px}
+.read b{color:var(--pur);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em}
+.m{max-width:80%;padding:8px 11px;border-radius:12px;font-size:13px}
+.me{align-self:flex-end;background:#13301a}.ai{background:var(--s2)}
+.w{font-size:11px;color:var(--ink3);margin-bottom:2px}
+.lv{display:grid;grid-template-columns:1fr auto auto;gap:8px;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--rule);align-items:center}
+.old{color:var(--down);font-size:11px}
+.phone{width:330px;margin:10px auto;background:#000;border-radius:28px;padding:18px 12px;border:1px solid var(--rule)}
+.n{background:#1f2227;border-radius:16px;padding:10px 12px;margin-bottom:8px}
+.n .a{font-size:11px;color:var(--ink3)}.n .ti{font-weight:700;font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}td,th{border-bottom:1px solid var(--rule);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--ink3);font-weight:600;font-size:11px;text-transform:uppercase}
+.x{color:var(--down);text-decoration:line-through}.ok{color:var(--up)}
+section{display:none}section.on{display:block}
+</style></head><body>
+<div class="note">MOCKUP ONLY. Nothing is built yet. Use the buttons to switch screens.</div>
+<div class="views">Screens:
+<button data-v="a" class="on">1 · TradingView Alerts tab</button>
+<button data-v="b">2 · Jarvis chat (cleaned up)</button>
+<button data-v="c">3 · Phone pings</button>
+<button data-v="d">4 · Name changes</button>
+<button data-v="e">5 · Old alerts to delete</button></div>
+
+<div class="wrap">
+<!-- 1 -->
+<section id="a" class="on">
+<div class="ctabs"><span>Jarvis</span><span>⚡ Otto Signals</span><span class="on">🔔 TradingView Alerts<span class="bdg">3</span><span class="new">NEW</span></span></div>
+<div class="feed">
+ <div class="tool"><span>Every TradingView alert lives here now, not in the Jarvis chat.</span><span><button class="btn">Levels being watched (11)</button></span></div>
+ <div class="day">Tue Oct 6</div>
+ <div class="al"><div class="ic">📈</div><div><span class="t">META crossed up 740</span><span class="tag quiet">quiet — repeat today</span><div class="mut">10:45 AM · Otto Rules 10/01 – "above that 740 area" · already pinged at 10:15</div></div></div>
+ <div class="al"><div class="ic">📈</div><div><span class="t">META crossed up 740</span><span class="tag ping">pinged</span><div class="mut">10:15 AM · Otto Rules 10/01 – "above that 740 area"</div>
+  <div class="read"><b>Jarvis read</b><br>META is $741.20, just over the 740 line from the Oct 1 rules. The banner is risk-on, so this is a "get involved" level. Watch for a 15-min close above 740 before a card; under 730 the idea is off.</div></div></div>
+ <div class="al"><div class="ic">📈</div><div><span class="t">ZETA crossed up 33.50</span><span class="tag ping">pinged</span><div class="mut">10:00 AM · Otto Rules 10/01 – "if it gets above that, I want to be involved"</div>
+  <div class="read"><b>Jarvis read</b><br>ZETA is $33.62. This was flagged as the involvement level. Volume is light, so let it hold a 15-min close first.</div></div></div>
+ <div class="al"><div class="ic">📈</div><div><span class="t">SPY 778.60 long trigger + SPY 775 top level</span><span class="tag ping">1 ping for both</span><div class="mut">9:41 / 9:45 AM · Otto Rules 10/06 and 09/03</div></div></div>
+ <div class="al"><div class="ic">🛡️</div><div><span class="t">Otto · SPCX stop alert</span><span class="tag quiet">exit engine — no ping</span><div class="mut">Trade-protection alerts show here too, so the chat stays clean.</div></div></div>
+ <div class="day">Mon Oct 5</div>
+ <div class="al"><div class="ic">📈</div><div><span class="t">GOOGL crossed up 345</span><span class="tag quiet">quiet — fired 40 min ago (late)</span><div class="mut">Shown for the record. It's too late to ping.</div></div></div>
+</div>
+</section>
+
+<!-- 2 -->
+<section id="b">
+<div class="ctabs"><span class="on">Jarvis</span><span>⚡ Otto Signals</span><span>🔔 TradingView Alerts<span class="bdg">3</span></span></div>
+<div class="feed">
+ <div class="tool"><span>Only your conversation with Jarvis, plus trade events (fills, stops, closes).</span></div>
+ <div class="m me"><div class="w">Ifoma · 10:52</div>Is META still a buy here?</div>
+ <div class="m ai"><div class="w">Jarvis · 10:52</div>META is $741. It's over the 740 level from the Otto Rules (Oct 1). Rule: wait for a 15-min close above it…</div>
+ <div class="mut" style="text-align:center">✓ SPCX — filled at $2.10 · 11:02</div>
+ <div class="mut" style="text-align:center;opacity:.6">No more "🔔 TradingView alert fired" lines in here. They live in the new tab.</div>
+</div>
+</section>
+
+<!-- 3 -->
+<section id="c">
+<div class="phone">
+ <div class="n"><div class="a">Otto Trader · now</div><div class="ti">📈 META crossed up 740</div>Otto Rules 10/01: above that 740 area. Tap to see Jarvis's read.</div>
+ <div class="n"><div class="a">Otto Trader · 9:45</div><div class="ti">📈 2 levels hit: SPY 778.60, SPY 775</div>SPY long trigger and top level. Tap for details.</div>
+ <div class="n"><div class="a">Otto Trader · 10:20</div><div class="ti">⚡ Signal: SPCX — card ready</div>Long calls. Tap to review.</div>
+</div>
+<table><tr><th>Rule</th><th>What it does</th></tr>
+<tr><td>Late fires go quiet</td><td>A fire more than 20 min old goes in the tab without a ping.</td></tr>
+<tr><td>1 ping per alert per day</td><td>META 740 pinged at 10:15. At 10:45 it goes in the tab quietly.</td></tr>
+<tr><td>Bundle</td><td>Fires that come in together → one ping: "2 levels hit: …"</td></tr>
+<tr><td>Tap</td><td>Opens the 🔔 TradingView Alerts tab.</td></tr></table>
+</section>
+
+<!-- 4 -->
+<section id="d">
+<table><tr><th>Where</th><th>Now</th><th>After</th></tr>
+<tr><td>Alert names (TradingView)</td><td class="x">Jason 10/01 – META 740 – above the area</td><td class="ok">Otto Rules 10/01 – META 740 – above the area</td></tr>
+<tr><td>Alert messages</td><td class="x">META crossed up 740. Jason (Oct 1): "above that 740 area".</td><td class="ok">META crossed up 740. Otto Rules (Oct 1): "above that 740 area".</td></tr>
+<tr><td>Jarvis replies</td><td class="x">Jason's rule: no first 30 min</td><td class="ok">Otto Rules: no first 30 min</td></tr>
+<tr><td>Otto Signals feed</td><td class="x">J · Jason · 10:20 · Jason only</td><td class="ok">⚡ Signal · 10:20 · lead trader only</td></tr>
+<tr><td>Signal pings</td><td class="x">⚡ Jason: SPCX</td><td class="ok">⚡ Signal: SPCX</td></tr>
+<tr><td>Laptop alarm tab title</td><td class="x">⚡ Jason: SPCX</td><td class="ok">⚡ Signal: SPCX</td></tr>
+<tr><td>Rules / Learn screens</td><td class="x">Jason teaches… · Jason says stand down</td><td class="ok">Otto Rules… · Otto Rules say stand down</td></tr>
+<tr><td>Help text, Desk empty state</td><td class="x">leans on Jason's calls</td><td class="ok">leans on the Otto Rules</td></tr>
+<tr><td>Inside the brain, logs, code</td><td colspan="2">No change. The brain still knows the source. Nobody sees it.</td></tr></table>
+</section>
+
+<!-- 5 -->
+<section id="e">
+<div class="feed" style="border-top:1px solid var(--rule);border-radius:12px">
+<div class="tool"><span>Proposed: delete the September levels (7 alerts). Keep October. Nothing gets deleted without your OK.</span></div>
+<div class="lv"><span>SPY 775 – top level</span><span class="mut">Sep 3</span><span class="old">delete</span></div>
+<div class="lv"><span>US10Y 5.00% – relief</span><span class="mut">Sep 3</span><span class="old">delete</span></div>
+<div class="lv"><span>GOOGL 345 – over 343 resistance</span><span class="mut">Sep 24</span><span class="old">delete</span></div>
+<div class="lv"><span>TSLA 369 – back in the gap</span><span class="mut">Sep 24</span><span class="old">delete</span></div>
+<div class="lv"><span>TSLA 385 – bullish closes</span><span class="mut">Sep 24</span><span class="old">delete</span></div>
+<div class="lv"><span>MSFT 500 – key line</span><span class="mut">Sep 24</span><span class="old">delete</span></div>
+<div class="lv"><span>MSFT 520 – no-buy zone top</span><span class="mut">Sep 24</span><span class="old">delete</span></div>
+<div class="lv"><span>META 680 / 730 / 740, NVDA 235, SPY 760, ZETA 33.50</span><span class="mut">Oct 1</span><span class="ok">keep</span></div>
+<div class="lv"><span>Today's SPY / NVDA levels</span><span class="mut">Oct 6</span><span class="ok">keep (end at 4 PM)</span></div>
+</div>
+</section>
+</div>
+<script>
+document.querySelectorAll(".views button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".views button").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll("section").forEach(s=>s.classList.toggle("on",s.id===b.dataset.v))});
+</script>
+</body></html>
