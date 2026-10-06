@@ -1,5 +1,9 @@
 // Otto Trader — server side. One Edge Function.
 //
+//   v3.9 (6 Oct 2026): Otto Signals. A Chrome extension on Ifoma's PC watches the mentor's
+//   Discord channel live and posts each new message to ?fn=signal_in (x-otto-signal key);
+//   Jarvis builds the card, both phones ping. Watcher-offline alert on the 2-min cron.
+//   ?fn=signals_feed signal_img signals_cfg signals_cfg_set. No quiet hours on pings. 010_v39.sql.
 //   v3.6 (5 Oct 2026): phone notifications (Web Push). ?fn=push_key push_sub push_list
 //   push_remove push_test; notify() hooked into auto-close, fills, stops, alerts, cards.
 //   v3.8.1 (5 Oct 2026): time budgets on TradingView/Robinhood calls; Yahoo price fallback on the Desk panel.
@@ -98,7 +102,7 @@ TONE. Josh is new and reads this on a phone. Short paragraphs. Plain language; d
 const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET,POST,OPTIONS",
-  "access-control-allow-headers": "authorization,apikey,content-type",
+  "access-control-allow-headers": "authorization,apikey,content-type,x-otto-signal",
   "access-control-max-age": "86400",
 };
 
@@ -1098,7 +1102,7 @@ async function proposeAction(input: any, who: string, opts: { manual?: boolean }
     plan: plan ? { ...plan, setup: String(plan.setup).toLowerCase().slice(0, 40) } : null, banner, checks,
     ...(exit ? { exit: { ...exit, state: "planned", log: [] } } : {}),
   }) });
-  if (rows?.[0]?.status === "pending") await notify("card", `🃏 Card waiting: ${String(rows[0].title).slice(0, 80)}`, "Tap to open the Desk and Approve or Reject (cards expire in 20 minutes).");
+  if (rows?.[0]?.status === "pending" && who !== "signals") await notify("card", `🃏 Card waiting: ${String(rows[0].title).slice(0, 80)}`, "Tap to open the Desk and Approve or Reject (cards expire in 20 minutes).");
   return publicAction(rows[0]);
 }
 
@@ -1520,13 +1524,8 @@ async function runDesk(o: DeskRun): Promise<{ said: string; cards: string[] }> {
   return { said, cards };
 }
 
-async function desk(req: Request, who: string, _apiKey: string) {
-  const body = await req.json().catch(() => ({}));
-  const history = Array.isArray(body.messages) ? body.messages.slice(-24) : [];
-  if (!history.length) throw new Error("no messages");
-  const author = String(body.author || "Ifoma").slice(0, 30);
-  const isJason = !!body.jason;                    // v3.7: a pasted Jason post
-
+// v3.9: the Desk's system prompt, tools and context line — shared by the live Desk and Otto Signals.
+async function deskSetup() {
   const calls = await loadBrain();
   const cs = chunksOf(calls);
   const sys = DESK_SYS.replace("{{RULES}}", alwaysOn(calls));
@@ -1549,6 +1548,19 @@ async function desk(req: Request, who: string, _apiKey: string) {
     prot.v.map((r: any) => `${r.title} [${r.exit.state}${r.exit.stop_order_id ? `, stop_order_id ${r.exit.stop_order_id} at $${r.exit.stop_option}` : ""}, wrong-if ${r.exit.wrong_if}, TP1 ${r.exit.tp1}]`).join("; ") + "." : "";
   const jctx = await jasonContext().catch(() => "");
   const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their own limits (Phase ${LIM.phase}): max loss per trade $${LIM.max_trade_loss}, weekly loss limit $${LIM.weekly_loss}, ${LIM.max_trades_day} trades/day, warn over ${LIM.warn_pct}% of the account — size ideas inside these and say so when an idea would break one.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.${jctx}]`;
+
+  return { cs, sys, tools, ctxLine, autoClose: !!LIMa.auto_close };
+}
+
+async function desk(req: Request, who: string, _apiKey: string) {
+  const body = await req.json().catch(() => ({}));
+  const history = Array.isArray(body.messages) ? body.messages.slice(-24) : [];
+  if (!history.length) throw new Error("no messages");
+  const author = String(body.author || "Ifoma").slice(0, 30);
+  const isJason = !!body.jason;                    // v3.7: a pasted Jason post
+
+  const { cs, sys, tools, ctxLine, autoClose } = await deskSetup();
+  const LIMa = { auto_close: autoClose };
 
   const msgs: any[] = history.map((m: any, i: number) => {
     const role = m.role === "assistant" ? "assistant" : "user";
@@ -2876,6 +2888,251 @@ async function jasonSweep(body: any, who: string) {
   return { ok: true, day, read: posts.length, posts: rows.length, caught: inserted.length, by: who };
 }
 
+/* ===================================================================== v3.9
+   6 Oct 2026 — Otto Signals: never miss a call from the mentor again.
+
+   Ifoma's decisions (6 Oct):
+   - A Chrome extension on Ifoma's PC keeps the mentor's Discord channel open in
+     a minimized window and sends every NEW message from the mentor's account
+     (matched on his Discord user id, not his display name) here, with any chart
+     images. Nobody else's messages come over.
+   - Jarvis builds a card for every post that names a ticker and implies a trade,
+     even when the mentor gives no direction — Jarvis decides long or short and
+     says why. Ifoma or Josh decide whether to Approve.
+   - Both phones ping only when there's a call (card). No ping for chatter.
+     No quiet hours.
+   - Everything is kept permanently in otto_jason (the log). His levels are
+     dated and expire at that day's close. Never part of the teaching brain.
+   - If the watcher goes quiet in market hours, both phones get pinged.
+   The mentor's name / Discord ids live in otto_settings "signals", so the
+   feature isn't tied to Jason (Otto may be sold or shared later). */
+
+const SIG_DEFAULT: any = { mentor: "Jason", author_id: "474721184903200819", author_name: "Jason",
+  guild: "1135603258702958693", channel: "1139244584757637192", channel_name: "#💎┃platinum-chat" };
+const SIG_FRESH_MS = 20 * 60e3;          // older than this when caught = log only, no card, no ping
+const SIG_OFFLINE_MS = 5 * 60e3;
+
+async function sigCfg(): Promise<any> {
+  return { ...SIG_DEFAULT, ...((await setting("signals").catch(() => null)) || {}) };
+}
+
+async function signalsCfgSet(b: any, who: string) {
+  const cur = await sigCfg();
+  const txt = (v: any, n: number) => String(v ?? "").replace(/[<>]/g, "").trim().slice(0, n);
+  const id = (v: any) => String(v ?? "").replace(/\D/g, "").slice(0, 24);
+  const next: any = { ...cur };
+  if (b.mentor !== undefined && txt(b.mentor, 30)) next.mentor = txt(b.mentor, 30);
+  if (b.author_name !== undefined) next.author_name = txt(b.author_name, 40);
+  if (b.channel_name !== undefined) next.channel_name = txt(b.channel_name, 60);
+  for (const k of ["author_id", "guild", "channel"]) if (b[k] !== undefined && id(b[k])) next[k] = id(b[k]);
+  if (b.new_key || !next.key) next.key = b64u(crypto.getRandomValues(new Uint8Array(24)));
+  next.updated_by = who; next.updated_at = new Date().toISOString();
+  await putSetting("signals", next, who);
+  return next;
+}
+
+const SIG_TOOL = { ...JASON_TOOL, description: "Record the mentor's NEW posts (every message given was written by the mentor)." };
+const sigReadSys = (mentor: string) => `You read ${mentor}'s posts from his trading Discord. Every message you are given was written by ${mentor} (already filtered by his Discord account). He writes in short bursts, often ALL CAPS, across several lines, and usually pings his members when he calls something. A call is often just a ticker and a direction ("SPCX LONG"); levels are often only drawn on his chart screenshot. Group lines that belong to the same thought into one post (e.g. "SPCX LONG" + "BREAK HAPPENED IN CASE YOU MISSED IT" = one call). Record ONLY the messages under NEW; messages under EARLIER are context you may use to understand the new ones (which ticker he means, what the chart is), never record them again. Never invent numbers: entry/level/option only when he wrote them or the chart labels them with a number. A message that is only a ping (@Members, @someone) is not a post. Use the post's time exactly as given in [brackets].`;
+
+async function sigExtract(apiKey: string, mentor: string, text: string, imgs: { mime: string; data: string }[], day: string) {
+  const content: any[] = imgs.slice(0, 3).map((i) => ({ type: "image", source: { type: "base64",
+    media_type: /^image\/(jpeg|png|webp|gif)$/.test(i.mime) ? i.mime : "image/jpeg", data: i.data } }));
+  content.push({ type: "text", text: `Discord messages from ${mentor}, ${day} (New York time).${imgs.length ? " The image(s) above are charts attached to the NEW messages." : ""}\n\n${text.slice(0, 20000)}\n\nRecord ${mentor}'s NEW posts.` });
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: MODEL, max_tokens: 4000, system: sigReadSys(mentor), tools: [SIG_TOOL],
+      tool_choice: { type: "tool", name: "record_posts" }, messages: [{ role: "user", content }] }),
+  });
+  if (!r.ok) throw new Error("reading the post failed: claude HTTP " + r.status + " " + (await r.text()).slice(0, 160));
+  const j = await r.json();
+  const tu = (j.content || []).find((b: any) => b.type === "tool_use");
+  const posts = Array.isArray(tu?.input?.posts) ? tu.input.posts : [];
+  return posts.filter((p: any) => p && J_KINDS.has(p.kind) && String(p.words || "").trim() &&
+    !/^\s*(@\S+(\s+Members)?[\s/]*)+$/i.test(String(p.words)));
+}
+
+const nyTime = (iso: string) => fmtMin(etParts(new Date(iso)).min);
+
+// The extension calls this: heartbeats, and new messages from the mentor's account.
+async function signalIn(req: Request) {
+  const cfg = await sigCfg();
+  const key = req.headers.get("x-otto-signal") || "";
+  if (!cfg.key || key.length < 16 || key !== cfg.key) throw new Error("bad watcher key — copy a fresh pairing code from Otto → Settings → Otto Signals");
+  const body = await req.json().catch(() => ({}));
+  const pub = { mentor: cfg.mentor, author_id: cfg.author_id, author_name: cfg.author_name, guild: cfg.guild, channel: cfg.channel, channel_name: cfg.channel_name };
+
+  if (body.kind === "beat") {
+    const prev = (await setting("signal_beat").catch(() => null)) || {};
+    const state = String(body.state || "ok").slice(0, 30);
+    const now = new Date().toISOString();
+    const beat = { at: now, state, detail: String(body.detail || "").slice(0, 200), ver: String(body.ver || "").slice(0, 20),
+      seen: Number(body.seen) || 0, bad_since: state === "ok" ? null : (prev.bad_since || now),
+      offline_sent: !!prev.offline_sent, last_msg_at: prev.last_msg_at || null };
+    if (prev.offline_sent && state === "ok") {
+      beat.offline_sent = false;
+      await notify("watcher", "✅ Otto Signals watcher is back", `Watching ${cfg.mentor}'s posts again. Anything posted while it was down is picked up when the window catches up.`, "./#signals");
+    }
+    await putSetting("signal_beat", beat, "watcher");
+    return { ok: true, cfg: pub };
+  }
+
+  if (body.kind !== "msgs") throw new Error("unknown kind");
+  const list = (Array.isArray(body.msgs) ? body.msgs : []).slice(0, 30)
+    .filter((m: any) => /^\d{5,24}$/.test(String(m.id || "")) && String(m.author_id || "") === cfg.author_id);
+  if (!list.length) return { ok: true, new: 0, cfg: pub };
+  const rows = list.map((m: any) => {
+    const at = Date.parse(m.at) ? new Date(m.at).toISOString() : new Date().toISOString();
+    const imgs = (Array.isArray(m.images) ? m.images : []).filter((i: any) => typeof i?.data === "string" && i.data.length > 100 && i.data.length < 7_000_000).slice(0, 4);
+    return { msg_id: String(m.id), day: etParts(new Date(at)).date, posted_at: at, author: String(m.author || cfg.author_name).slice(0, 40),
+      text: String(m.text || "").slice(0, 4000), imgs: imgs.length, channel: String(m.channel || cfg.channel).slice(0, 24), _imgs: imgs };
+  });
+  const ins = await db("otto_signal_msgs?on_conflict=msg_id&select=msg_id,posted_at,text,imgs", { method: "POST",
+    headers: { prefer: "resolution=ignore-duplicates,return=representation" },
+    body: JSON.stringify(rows.map(({ _imgs, ...r }: any) => r)) });
+  if (!ins?.length) return { ok: true, new: 0, cfg: pub };
+  const fresh = new Set(ins.map((r: any) => r.msg_id));
+  const imgRows = rows.filter((r: any) => fresh.has(r.msg_id)).flatMap((r: any) => r._imgs.map((i: any) => ({ msg_id: r.msg_id, mime: String(i.mime || "image/jpeg").slice(0, 30), data: i.data })));
+  if (imgRows.length) await db("otto_signal_imgs", { method: "POST", headers: { prefer: "return=minimal" }, body: JSON.stringify(imgRows) }).catch(() => {});
+  const batch = await db("otto_signal_batches", { method: "POST", body: JSON.stringify({ day: etParts().date, msg_ids: [...fresh], status: "reading" }) });
+  const bid = batch?.[0]?.id;
+  await db("otto_signal_msgs?msg_id=in.(" + [...fresh].join(",") + ")", { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ batch_id: bid }) }).catch(() => {});
+  const prev = (await setting("signal_beat").catch(() => null)) || {};
+  await putSetting("signal_beat", { ...prev, last_msg_at: new Date().toISOString() }, "watcher").catch(() => {});
+  background(signalProcess(bid, ins, imgRows.map((i: any) => ({ mime: i.mime, data: i.data })), cfg));
+  return { ok: true, new: ins.length, batch: bid, cfg: pub };
+}
+
+async function sigBatch(id: number, patch: any) {
+  if (!id) return;
+  await db("otto_signal_batches?id=eq." + id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify(patch) }).catch(() => {});
+}
+
+function signalPrompt(cfg: any, rows: any[], carded: any[]) {
+  return `[⚡ OTTO SIGNAL — ${cfg.mentor} just posted in Discord ${cfg.channel_name}. The watcher caught it live; nobody typed this. Ifoma and Josh are NOT watching the chat — your card and your read are how they hear about it, so be fast and complete.]
+${rows.map(jLine).join("\n")}
+${carded.length ? "Already carded today (do NOT make a second card for these unless he gives a new direction or a new entry): " + carded.map((r: any) => `${r.ticker} ${r.direction || ""} at ${r.posted_label || "?"}`).join("; ") + "\n" : ""}
+Do this:
+1. Every post that names a ticker and implies a trade — a CALL, or a LEVEL that held / broke / rejected — gets ONE opening option card via propose_action, even when ${cfg.mentor} gave no direction. Decide long (calls) or short (puts) yourself from his words, his chart, the banner and the price right now (fetch it). plan.setup = "otto signal", plan.jason_id = the #id above. Fill in everything he did NOT give — the contract (delta .30–.40, volume > open interest, a sensible expiry), limit, quantity inside our limits, TP1, wrong-if and stop_option — as precisely as you can. In the card summary say which parts are ${cfg.mentor}'s and which are yours.
+2. A LATE post (he says he missed calling it / it already moved): still make the card, start the title with "LATE", and say plainly in the summary that chasing breaks his entry rules.
+3. If the banner, one of his rules or our limits argue against it, say so in the card summary — but still make the card. Ifoma and Josh decide.
+4. A WATCH LIST or a conditional level ("AMD ABOVE 646", "SUPPORT $379 TSLA", "WATCH LIST THIS MORNING") is not a call yet: no card. Put the trigger levels in your read. The card comes when he says it triggered / broke / held, or calls it.
+5. Commentary, chatter, or a chart with no tradeable call: no card.
+Then write the read for the Otto Signals feed. For each post, 1–3 short plain lines: what he said; for a card, your direction and WHY; and what would prove it wrong. No headers, no tables.`;
+}
+
+async function signalProcess(bid: number, ins: any[], imgs: { mime: string; data: string }[], cfg: any) {
+  const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
+  try {
+    ins.sort((a: any, b: any) => Date.parse(a.posted_at) - Date.parse(b.posted_at));
+    const first = Date.parse(ins[0].posted_at), last = Date.parse(ins[ins.length - 1].posted_at);
+    const day = etParts(new Date(last)).date;
+    const fresh = Date.now() - last < SIG_FRESH_MS;
+    const earlier = await db(`otto_signal_msgs?select=posted_at,text,imgs&posted_at=gte.${new Date(first - 45 * 60e3).toISOString()}&posted_at=lt.${new Date(first).toISOString()}&order=posted_at.asc&limit=12`).catch(() => []);
+    const line = (r: any) => `[${nyTime(r.posted_at)}] ${r.text || "(no text)"}${r.imgs ? " [chart image attached]" : ""}`;
+    const text = (earlier.length ? "EARLIER (already recorded — context only):\n" + earlier.map(line).join("\n") + "\n\n" : "") + "NEW:\n" + ins.map(line).join("\n");
+    const posts = await sigExtract(apiKey, cfg.mentor, text, imgs, day);
+    const { all } = await jasonSave(posts, day, "watcher", "Otto Signals");
+    const ids = all.map((r: any) => r.id);
+    const tradeable = all.filter((r: any) => r.ticker && (r.kind === "call" || r.kind === "level"));
+    if (!fresh) { await sigBatch(bid, { rows: ids, status: "caught_up", read: null }); return; }
+    if (!tradeable.length && !imgs.length) {
+      await sigBatch(bid, { rows: ids, status: all.length ? "chatter" : "nothing" });
+      return;
+    }
+    await sigBatch(bid, { rows: ids, status: "jarvis" });
+    const today = await jasonTodayRows(day);
+    const tick = new Set(tradeable.map((r: any) => r.ticker));
+    const carded = today.filter((r: any) => r.action_id && tick.has(r.ticker) && !ids.includes(r.id) &&
+      r.posted_at && Date.now() - Date.parse(r.posted_at) < 90 * 60e3);
+    const { cs, sys, tools, ctxLine, autoClose } = await deskSetup();
+    const prompt = ctxLine + "\n" + signalPrompt(cfg, all, carded);
+    let res = { said: "", cards: [] as string[] };
+    let err = "";
+    try {
+      res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: tools.filter((t: any) => t.name !== "close_position"),
+        cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 10 });
+    } catch (e) { err = String((e as Error).message || e).slice(0, 300); }
+    void autoClose;
+    // Link each card to the post it came from.
+    const acts = res.cards.length ? await db("otto_actions?select=id,title,plan&id=in.(" + res.cards.join(",") + ")").catch(() => []) : [];
+    const open = tradeable.filter((r: any) => !r.action_id);
+    for (const a of acts) {
+      const row = all.find((r: any) => r.id === Number(a.plan?.jason_id)) || (open.length === 1 ? open[0] : null);
+      if (row) { row.action_id = a.id; await db("otto_jason?id=eq." + row.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ action_id: a.id }) }).catch(() => {}); }
+    }
+    await sigBatch(bid, { status: err ? "error" : "done", read: res.said.trim() || null, cards: res.cards, error: err || null });
+    // Pings: one per card. A tradeable post that got no card still pings — a failure must never be silent.
+    for (const a of acts) {
+      const row = all.find((r: any) => r.action_id === a.id);
+      await notify("signal", `⚡ Otto Signal: ${row?.ticker || ""} ${row?.direction ? row.direction.toUpperCase() : ""}`.trim(),
+        `${cfg.mentor}: "${String(row?.words || "").slice(0, 90)}" → card ready: ${String(a.title || "").slice(0, 90)}. Tap to review (expires in 20 min).`, "./#signals");
+    }
+    // No card: ping only when Jarvis failed, or for an outright CALL he chose not to card (watch-list levels stay quiet).
+    for (const r of tradeable.filter((r: any) => !r.action_id && (err || r.kind === "call") && !carded.some((c: any) => c.ticker === r.ticker))) {
+      await notify("signal", `⚡ ${cfg.mentor}: ${r.ticker}${r.direction ? " " + r.direction.toUpperCase() : ""} — no card`,
+        `"${String(r.words).slice(0, 90)}" — ${err ? "Jarvis hit an error building the card" : "Jarvis didn't make a card"}. Open Otto Signals for his read.`, "./#signals");
+    }
+  } catch (e) {
+    const m = String((e as Error).message || e).slice(0, 300);
+    await sigBatch(bid, { status: "error", error: m });
+    await notify("signal", `⚡ ${cfg.mentor} posted — Otto couldn't read it`, `${String(ins.map((r: any) => r.text).join(" / ")).slice(0, 120)} · ${m.slice(0, 80)}`, "./#signals");
+  }
+}
+
+// The Otto Signals tab: newest bursts first, each with the mentor's messages, the posts read from them, Jarvis's read and the cards.
+async function signalsFeed(days = 2) {
+  const cfg = await sigCfg();
+  const since = new Date(Date.now() - Math.min(Math.max(days, 1), 14) * 86400e3).toISOString();
+  const batches = await db(`otto_signal_batches?select=*&created_at=gte.${since}&order=id.desc&limit=80`).catch(() => []);
+  const msgIds = batches.flatMap((b: any) => b.msg_ids || []);
+  const rowIds = batches.flatMap((b: any) => b.rows || []);
+  const [msgs, imgs, rows] = await Promise.all([
+    msgIds.length ? db("otto_signal_msgs?select=msg_id,posted_at,text,imgs&msg_id=in.(" + msgIds.join(",") + ")").catch(() => []) : [],
+    msgIds.length ? db("otto_signal_imgs?select=id,msg_id&msg_id=in.(" + msgIds.join(",") + ")").catch(() => []) : [],
+    rowIds.length ? db("otto_jason?select=id,kind,ticker,direction,late,summary,words,action_id,score&id=in.(" + rowIds.join(",") + ")").catch(() => []) : [],
+  ]);
+  const actIds = [...new Set([...rows.map((r: any) => r.action_id), ...batches.flatMap((b: any) => b.cards || [])].filter(Boolean))];
+  const acts = actIds.length ? await db("otto_actions?select=id,status,title&id=in.(" + actIds.join(",") + ")").catch(() => []) : [];
+  const A: Record<string, any> = Object.fromEntries(acts.map((a: any) => [a.id, a]));
+  const M: Record<string, any> = Object.fromEntries(msgs.map((m: any) => [m.msg_id, m]));
+  const R: Record<string, any> = Object.fromEntries(rows.map((r: any) => [r.id, r]));
+  const I: Record<string, number[]> = {};
+  imgs.forEach((i: any) => (I[i.msg_id] = I[i.msg_id] || []).push(i.id));
+  return { ok: true, mentor: cfg.mentor, channel_name: cfg.channel_name, beat: await setting("signal_beat").catch(() => null),
+    batches: batches.map((b: any) => ({ id: b.id, at: b.created_at, status: b.status, read: b.read, error: b.error,
+      msgs: (b.msg_ids || []).map((id: string) => M[id]).filter(Boolean).sort((x: any, y: any) => Date.parse(x.posted_at) - Date.parse(y.posted_at))
+        .map((m: any) => ({ id: m.msg_id, at: m.posted_at, text: m.text, imgs: I[m.msg_id] || [] })),
+      posts: (b.rows || []).map((id: number) => R[id]).filter(Boolean).map((r: any) => ({ id: r.id, kind: r.kind, ticker: r.ticker,
+        direction: r.direction, late: r.late, summary: r.summary || r.words, score: r.score || null,
+        card: r.action_id && A[r.action_id] ? { id: r.action_id, status: A[r.action_id].status, title: A[r.action_id].title } : null })),
+      cards: (b.cards || []).map((id: string) => A[id]).filter(Boolean).map((a: any) => ({ id: a.id, status: a.status, title: a.title })) })) };
+}
+
+async function signalImg(id: number) {
+  if (!id) throw new Error("no image id");
+  const r = await db("otto_signal_imgs?select=mime,data&id=eq." + id);
+  if (!r?.[0]) throw new Error("image not found");
+  return { ok: true, mime: r[0].mime, data: r[0].data };
+}
+
+// On the 2-minute market-hours cron: ping both phones if the watcher has gone quiet.
+async function watcherCheck() {
+  const cfg = await sigCfg();
+  if (!cfg.key) return;                                   // never paired: nothing to watch
+  const b = await setting("signal_beat").catch(() => null);
+  if (!b?.at || b.offline_sent) return;
+  const age = Date.now() - Date.parse(b.at);
+  const badFor = b.bad_since ? Date.now() - Date.parse(b.bad_since) : 0;
+  let why = "";
+  if (age > SIG_OFFLINE_MS) why = `No check-in for ${Math.round(age / 60e3)} minutes — the PC may be asleep, Chrome closed, or the internet down.`;
+  else if (badFor > SIG_OFFLINE_MS) why = ({ logged_out: "Discord is signed out in the watcher window.", wrong_channel: `The watcher window isn't on ${cfg.channel_name}.`,
+    no_tab: "The Discord watcher window is closed.", paused: "The watcher is paused in the extension." } as any)[b.state] || `The watcher reports "${b.state}".`;
+  if (!why) return;
+  await putSetting("signal_beat", { ...b, offline_sent: true }, "cron");
+  await notify("watcher", "⚠️ Otto Signals watcher is OFFLINE", `${why} ${cfg.mentor}'s calls are NOT being caught. Check Ifoma's PC.`, "./#signals");
+}
+
 /* ===================================================================== v3.5
    5 Oct 2026 — Jarvis can close positions on his own (auto-close).
 
@@ -3036,6 +3293,8 @@ const PUSH_KINDS: Record<string, { label: string; on: boolean; always?: boolean 
   card:        { label: "A card is waiting for Approve", on: true },
   jason_alert: { label: "Jason level alerts", on: false },
   morning:     { label: "8:45 morning read is ready", on: false },
+  signal:      { label: "Otto Signals: a call came in (card ready)", on: true, always: true },
+  watcher:     { label: "Otto Signals watcher went offline / came back", on: true, always: true },
 };
 const PUSH_SUB_URL = "https://proagentmax.github.io/otto-trader/";
 
@@ -3122,7 +3381,7 @@ async function sendPush(sub: any, msg: any) {
   const body = await encryptPush(sub, te.encode(JSON.stringify(msg).slice(0, 3000)));
   const r = await fetch(sub.endpoint, { method: "POST", headers: {
     authorization: await vapidAuth(sub.endpoint), "content-encoding": "aes128gcm", "content-type": "application/octet-stream",
-    ttl: "3600", urgency: msg.kind === "no_stop" || msg.kind === "auto_close" ? "high" : "normal" }, body });
+    ttl: "3600", urgency: msg.kind === "morning" || msg.kind === "jason_alert" ? "normal" : "high" }, body });
   return r.status;
 }
 
@@ -3132,7 +3391,7 @@ function quietNow() { const e = etParts(); return ["Sat", "Sun"].includes(e.wd) 
 async function notify(kind: string, title: string, body: string, url = "./#desk") {
   try {
     const K = PUSH_KINDS[kind]; if (!K) return;
-    if (quietNow() && !K.always) return;
+    // v3.9: no quiet hours — Ifoma's call (6 Oct): Otto pings at any time.
     const subs: Record<string, any> = (await setting("push_subs")) || {};
     let changed = false;
     for (const [id, s] of Object.entries(subs)) {
@@ -3403,12 +3662,17 @@ Deno.serve(async (req) => {
   // published URL would let a stranger burn the market-data and Claude quotas.
   // v3.1 scheduled runs (pg_cron → pg_net). They carry the cron secret, not a user.
   const fn0 = new URL(req.url).searchParams.get("fn") || "";
+  if (fn0 === "signal_in") {
+    try { return json(await signalIn(req)); }
+    catch (e) { const m = String((e as Error).message || e); return json({ ok: false, error: m }, /key/.test(m) ? 401 : 500); }
+  }
   if (fn0 === "cron_alerts") {
     if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
     const et = etParts();
     const force = new URL(req.url).searchParams.get("force") === "1";
     if (!force && (["Sat", "Sun"].includes(et.wd) || et.min < 540 || et.min > 990)) return json({ ok: true, skipped: et });
     background((async () => {
+      try { await watcherCheck(); } catch (e) { console.error("watcher", e); }
       try { await exitsTick(true); } catch (e) { console.error("exits", e); }
       try { await positionReview(); } catch (e) { console.error("review", e); }
       await alertWatch(Deno.env.get("ANTHROPIC_KEY") || "");
@@ -3445,7 +3709,8 @@ Deno.serve(async (req) => {
     }
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
          "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "performance", "help", "jason_today", "jason_sweep", "jason_score",
-         "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set"].includes(fn)) {
+         "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set",
+         "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -3483,6 +3748,10 @@ Deno.serve(async (req) => {
       if (fn === "jason_score") return json(await jasonScorecard());
       if (fn === "jason_sweep") return json(await jasonSweep(body, who));
       // ---- v3.8 your layout: one shared layout for the Desk (otto_settings "layout")
+      if (fn === "signals_feed") return json(await signalsFeed(Number(new URL(req.url).searchParams.get("days") || 2)));
+      if (fn === "signal_img") return json(await signalImg(Number(new URL(req.url).searchParams.get("id") || 0)));
+      if (fn === "signals_cfg") return json({ ok: true, cfg: await sigCfg(), beat: await setting("signal_beat") });
+      if (fn === "signals_cfg_set") return json({ ok: true, cfg: await signalsCfgSet(body, who) });
       if (fn === "layout_get") return json({ ok: true, layout: await setting("layout") });
       if (fn === "layout_set") return json({ ok: true, layout: await layoutSet(body, who) });
       if (fn === "limits_get") return json({ ok: true, limits: await getLimits() });

@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Otto Signals Watcher",
+  "version": "1.0.0",
+  "description": "Watches your mentor's Discord channel and sends his new posts to Otto the moment they land.",
+  "permissions": ["storage", "alarms", "tabs"],
+  "host_permissions": [
+    "https://discord.com/*",
+    "https://cdn.discordapp.com/*",
+    "https://media.discordapp.net/*",
+    "https://*.supabase.co/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    { "matches": ["https://discord.com/*"], "js": ["content.js"], "run_at": "document_idle" }
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "Otto Signals", "default_icon": { "32": "icon-32.png", "128": "icon-128.png" } },
+  "icons": { "32": "icon-32.png", "128": "icon-128.png" }
+}

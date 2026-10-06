@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Otto Signals</title>
+<style>
+body{margin:0;width:330px;background:#0d0f12;color:#e8eaed;font:13px/1.45 system-ui,Segoe UI,sans-serif}
+.w{padding:14px}h1{font-size:15px;margin:0 0 2px}.mut{color:#8b929c}.row{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid #23272e}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:#666}.ok{background:#00c805}.bad{background:#ff5000}
+button{width:100%;margin-top:8px;padding:9px;border-radius:8px;border:1px solid #2c323a;background:#171a1f;color:#e8eaed;font:inherit;font-weight:600;cursor:pointer}
+button.go{background:#f5b400;color:#111;border-color:#f5b400}
+textarea{width:100%;box-sizing:border-box;margin-top:6px;background:#171a1f;color:#e8eaed;border:1px solid #2c323a;border-radius:8px;padding:6px;font:11px monospace;height:58px}
+.err{color:#ff7a59}
+</style></head><body><div class="w">
+<h1>⚡ Otto Signals</h1><div class="mut" id="sub">Discord watcher</div>
+<div id="st" style="margin-top:10px"></div>
+<div id="pairBox"><div style="margin-top:10px;font-weight:600">Pairing code</div>
+<div class="mut">Otto → Settings → Otto Signals → Copy code, then paste here.</div>
+<textarea id="code" placeholder="Paste the pairing code"></textarea><button class="go" id="pair">Save</button></div>
+<button class="go" id="open">Open the watcher window</button>
+<div class="mut" style="margin-top:6px">Opens the channel in its own window. Leave it there and minimize it — don't close it.</div>
+<button id="pause">Pause</button>
+<button id="beat">Check in now</button>
+<button id="repair" style="display:none">Change pairing code</button>
+<div id="msg" class="err" style="margin-top:8px"></div>
+</div><script src="popup.js"></script></body></html>

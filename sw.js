@@ -2,7 +2,7 @@
    Network-first for anything that changes, cache-first only for static assets.
    A cache-first HTML strategy would pin users to an old build forever, which is
    exactly the failure we already hit once by hand. */
-const VERSION = 'otto-v3.8.0';
+const VERSION = 'otto-v3.9.0';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',   // config.js is deliberately NOT precached
   './icon-192.png', './icon-512.png',
@@ -83,7 +83,11 @@ self.addEventListener('push', e => {
   try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'Otto', body: e.data ? e.data.text() : '' }; }
   e.waitUntil(self.registration.showNotification(d.title || 'Otto', {
     body: d.body || '', tag: d.tag || undefined, icon: './icon-192.png', badge: './icon-192.png',
-    data: { url: d.url || './#desk' }, requireInteraction: d.kind === 'no_stop',
+    data: { url: d.url || './#desk' },
+    // v3.9: Otto Signals + watcher pings stay on screen until tapped, and buzz.
+    requireInteraction: d.kind === 'no_stop' || d.kind === 'signal' || d.kind === 'watcher',
+    renotify: !!d.tag, silent: false,
+    vibrate: d.kind === 'signal' || d.kind === 'watcher' || d.kind === 'no_stop' ? [300, 120, 300, 120, 600] : [200, 100, 200],
   }));
 });
 self.addEventListener('notificationclick', e => {

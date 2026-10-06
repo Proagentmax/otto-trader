@@ -495,6 +495,30 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .dk-jbtn{background:rgba(232,69,90,.15);color:#E8455A;border:1px solid rgba(232,69,90,.55);font-weight:700}
 .dk-jtag{display:inline-block;background:rgba(232,69,90,.15);color:#E8455A;border:1px solid rgba(232,69,90,.45);border-radius:6px;font-size:10.5px;font-weight:700;padding:1px 6px;letter-spacing:.03em;margin-left:4px}
 .dk-m.me.jason{border:1px solid rgba(232,69,90,.45)}
+/* v3.9 Otto Signals */
+.dk-ctabs{display:flex;gap:4px;align-items:flex-end;padding:8px 18px 0;border-bottom:1px solid var(--rule)}
+.dk-ctabs button{padding:8px 14px;border:1px solid transparent;border-bottom:0;border-radius:9px 9px 0 0;color:var(--ink-3);font-weight:600;font-size:13px}
+.dk-ctabs button.on{background:var(--s1);border-color:var(--rule);color:var(--ink);margin-bottom:-1px}
+.sg-badge{background:#E8455A;color:#fff;border-radius:999px;padding:0 7px;font-size:11px;margin-left:6px}
+.sg-badge[hidden]{display:none}
+.sg-watch{margin-left:auto;font-size:11.5px;color:var(--ink-3);padding-bottom:8px;display:flex;align-items:center;gap:6px}
+.sg-dot{width:8px;height:8px;border-radius:50%;background:var(--ink-3);display:inline-block}
+.sg-dot.ok{background:var(--up);box-shadow:0 0 6px var(--up)}.sg-dot.bad{background:var(--down);box-shadow:0 0 6px var(--down)}
+.sg-feed{flex:1;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;gap:14px;min-height:0;background:var(--s1)}
+.sg-feed[hidden],.dk.sg-on .dk-msgs,.dk.sg-on .dk-quick,.dk.sg-on .dk-pend,.dk.sg-on .dk-compose{display:none}
+.sg-day{text-align:center;color:var(--ink-3);font-size:11.5px}
+.sg-b{display:grid;grid-template-columns:34px 1fr;gap:10px}
+.sg-av{width:34px;height:34px;border-radius:50%;background:#3b2a6b;color:#d8ccff;display:grid;place-items:center;font-weight:800}
+.sg-who{font-size:12px;color:var(--ink-3)}.sg-who b{color:#E8455A}
+.sg-txt{white-space:pre-wrap;margin-top:2px;line-height:1.45}
+.sg-img{display:block;margin-top:6px;max-width:min(420px,100%);border:1px solid var(--rule);border-radius:8px;cursor:zoom-in;background:var(--surface-3);min-height:60px}
+.sg-tag{display:inline-block;font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:1px}
+.sg-tag.call{background:rgba(232,69,90,.18);color:#E8455A}.sg-tag.chat{background:var(--surface-3);color:var(--ink-3)}.sg-tag.ping{background:rgba(245,180,0,.15);color:var(--warn)}
+.sg-read{margin-top:8px;border:1px solid var(--rule);border-left:3px solid #a78bfa;border-radius:8px;padding:8px 10px;font-size:13px;background:var(--bg)}
+.sg-read .k{color:#a78bfa;font-weight:700;font-size:11.5px;display:block;margin-bottom:2px}
+.sg-cardline{font-size:12px;margin-top:6px;color:var(--ink-2)}
+.sg-foot{border-top:1px solid var(--rule);padding:10px 18px;font-size:12px;color:var(--ink-3)}
+.dk.sg-on .sg-foot{display:block}.sg-foot{display:none}
 .jf-it{display:grid;grid-template-columns:52px 1fr;gap:6px;padding:7px 0;border-top:1px solid var(--rule);font-size:12.5px}
 .jf-it:first-of-type{border-top:0}.jf-t{font-family:var(--mono);color:var(--ink-3);font-size:11.5px}
 .jf-ty{font-size:10px;font-weight:700;border-radius:5px;padding:0 5px;margin-right:5px}
@@ -622,6 +646,12 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
       <span class="dk-pill">Every change needs an Approve</span>
       <label class="dk-who">At the desk <select id="dkWho"><option>Ifoma</option><option>Josh</option></select></label>
     </div>
+    <div class="dk-ctabs" id="dkCtabs">
+      <button data-ct="jarvis" class="on">Jarvis</button>
+      <button data-ct="signals">⚡ Otto Signals<span class="sg-badge" id="sgBadge" hidden></span></button>
+      <span class="sg-watch" id="sgWatch"></span>
+    </div>
+    <div class="sg-feed" id="sgFeed" hidden></div>
     <div class="dk-msgs" id="dkMsgs"></div>
     <div class="dk-quick" id="dkQuick">
       <button data-q="Morning read: the three macro inputs, SPY/QQQ and the Mag 7, today's calendar and earnings on my watchlist. Bias and the 2–3 setups worth watching. No orders.">Morning read</button>
@@ -631,6 +661,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
       <button data-fill="What did Jason say about ">What did Jason say about…</button>
     </div>
     <div class="dk-pend" id="dkPend" hidden><img id="dkPendImg" alt=""><span>Chart attached</span><button class="dk-att dk-jbtn" id="dkPendJ" style="padding:3px 8px">📣 Send as Jason's post</button><button class="dk-btn j" id="dkPendX" style="padding:3px 8px">Remove</button></div>
+    <div class="sg-foot" id="sgFoot">Read-only: the watcher on Ifoma's PC fills this tab live. Ask Jarvis about any signal in the Jarvis tab, so this feed stays clean.</div>
     <div class="dk-compose">
       <button class="dk-att dk-jbtn" id="dkJason" title="Screenshot Jason's Discord post, then click (or paste it first with Ctrl+V)">📣 Jason's call</button>
       <input type="file" id="dkJFile" accept="image/*" hidden>
@@ -843,6 +874,11 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
       <button class="btn wide" id="sLimits">Change limits &amp; goals</button>
     </div>
     <div style="margin-bottom:20px">
+      <label class="f">Otto Signals</label>
+      <p class="hint" style="margin-top:0" id="sSigSum">The Discord watcher: catches the mentor's calls live and has Jarvis build the card.</p>
+      <button class="btn wide" id="sSig">Set up Otto Signals</button>
+    </div>
+    <div style="margin-bottom:20px">
       <label class="f">Phone notifications</label>
       <p class="hint" style="margin-top:0" id="sPushSum">Get a buzz when Jarvis closes a trade, a stop is missing, a fill lands, or a card is waiting.</p>
       <button class="btn wide" id="sPush">Set up notifications on this phone</button>
@@ -864,6 +900,27 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
   <div class="ft"><button class="btn danger" id="sWipe">Erase all</button><button class="btn" id="sClose">Close</button><button class="btn solid" id="sSave">Save</button></div>
 </dialog>
 
+<dialog id="dlgSig">
+  <div class="grip"></div><div class="hd"><h3>Otto Signals</h3></div>
+  <div class="bd">
+    <p class="hint" style="margin-top:0">A Chrome extension keeps the mentor's Discord channel open in a minimized window on one PC and sends each new post to Otto the moment it lands. Jarvis builds the card; both phones ping.</p>
+    <p class="hint" id="sgStat">—</p>
+    <div class="grid g2">
+      <div><label class="f" for="sgMentor">Mentor's name</label><input class="f" id="sgMentor" placeholder="Jason"></div>
+      <div><label class="f" for="sgAuthorName">Discord display name</label><input class="f" id="sgAuthorName"></div>
+      <div><label class="f" for="sgAuthorId">Discord user ID</label><input class="f" id="sgAuthorId" inputmode="numeric"></div>
+      <div><label class="f" for="sgChanName">Channel name</label><input class="f" id="sgChanName"></div>
+      <div><label class="f" for="sgGuild">Server ID</label><input class="f" id="sgGuild" inputmode="numeric"></div>
+      <div><label class="f" for="sgChan">Channel ID</label><input class="f" id="sgChan" inputmode="numeric"></div>
+    </div>
+    <label class="f" style="margin-top:12px">Pairing code for the extension</label>
+    <textarea class="f" id="sgCode" rows="3" readonly style="font-family:var(--mono);font-size:11px"></textarea>
+    <p class="hint">Copy this into the extension (puzzle-piece icon → Otto Signals → paste → Save). Making a new code disconnects any old watcher.</p>
+    <p class="hint" id="sgMsg"></p>
+  </div>
+  <div class="ft" style="flex-wrap:wrap;gap:8px"><button class="btn" id="sgClose">Close</button><button class="btn" id="sgNewKey">New code</button><button class="btn" id="sgCopy">Copy code</button><button class="btn solid" id="sgSave">Save</button></div>
+</dialog>
+
 <dialog id="dlgPush">
   <div class="grip"></div><div class="hd"><h3>Phone notifications</h3></div>
   <div class="bd">
@@ -872,7 +929,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <label class="f" for="puLabel" style="margin-top:10px">Name for this phone</label><input class="f" id="puLabel" placeholder="Ifoma's iPhone">
     <div class="f" style="margin-top:12px;font-weight:600">What buzzes this phone</div>
     <div id="puKinds" style="margin-top:4px"></div>
-    <p class="hint">Quiet outside 9:00 AM–4:30 PM ET on weekdays, except "no stop working", which always comes through.</p>
+    <p class="hint">Otto pings at any hour — there are no quiet hours. On Android, if a ping arrives silently: long-press it → Settings, and set Otto's notifications to "Alert" / allow sound.</p>
     <div class="f" style="margin-top:12px;font-weight:600">Phones turned on</div>
     <div id="puList" class="hint" style="margin-top:4px">—</div>
     <p class="hint" id="puMsg"></p>
@@ -1871,7 +1928,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.8.0";
+const BUILD="3.9.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2546,7 +2603,7 @@ async function dkPanel(force){
   try{DK.panel=await dkApi("panel")}catch(e){DK.panel={error:e.message}}
   (DK.panel.pending||[]).forEach(a=>DK.acts[a.id]=a);
   dkRenderStrip();dkRenderLeft();dkRenderRight();
-  dkJasonLoad();laySync();
+  dkJasonLoad();laySync();sgLoad();
 }
 // v3.7: today's Jason posts (feed on the right, levels on the left)
 async function dkJasonLoad(){
@@ -2746,7 +2803,7 @@ function dkRenderMsgs(stick){
   box.innerHTML=h;
   if(stick||near)box.scrollTop=box.scrollHeight;
 }
-$("#dkMsgs").addEventListener("click",async e=>{
+async function dkCardClick(e){
   const card=e.target.closest("[data-act]");if(!card)return;
   const a=DK.acts[card.dataset.act];if(!a)return;
   if(e.target.closest("[data-jason]")){
@@ -2764,8 +2821,10 @@ $("#dkMsgs").addEventListener("click",async e=>{
     DK.acts[a.id]=j.action;
     toast(j.action.status==="done"?"Done":j.action.status==="failed"?"It failed — see the card":j.action.status);
   }catch(err){toast(String(err.message).slice(0,100))}
-  dkRenderMsgs();dkRenderRight();dkPoll();dkPanel(true);
-});
+  dkRenderMsgs();dkRenderRight();dkPoll();dkPanel(true);sgRender();
+}
+$("#dkMsgs").addEventListener("click",dkCardClick);
+$("#sgFeed").addEventListener("click",dkCardClick);
 
 /* ---------- compose ---------- */
 function dkBindQuick(root){
@@ -3307,6 +3366,126 @@ $("#puOn").addEventListener("click",puSave);
 $("#puTest").addEventListener("click",async()=>{try{const s=await puSub();if(!s)throw new Error("Turn this phone on first");await dkApi("push_test",{endpoint:s.endpoint});puMsg("Sent. It should appear in a few seconds (lock the phone to see it like a real alert).")}catch(e){puMsg(String(e.message||e),true)}});
 $("#puOff").addEventListener("click",async()=>{try{const s=await puSub();if(s){await dkApi("push_remove",{endpoint:s.endpoint});await s.unsubscribe()}toast("Notifications off for this phone");await openPush()}catch(e){puMsg(String(e.message||e),true)}});
 window.addEventListener("load",()=>{if(location.hash==="#desk")setTimeout(()=>{try{dkShow("desk")}catch(e){}},1500)});
+/* ---------- v3.9: Otto Signals (the Discord watcher) ----------
+   Second tab in the Desk center, next to the Jarvis chat. Read-only: the
+   Chrome extension on Ifoma's PC fills it. Each burst of the mentor's posts
+   shows his words + charts, Jarvis's read, and the card(s) Jarvis built. */
+const SG={on:false,data:null,img:{},timer:null,loading:false};
+function sgShow(on){
+  SG.on=!!on;LS.set("sgOn",SG.on);
+  $("#dk").classList.toggle("sg-on",SG.on);
+  $("#sgFeed").hidden=!SG.on;
+  $$("#dkCtabs button").forEach(b=>b.classList.toggle("on",(b.dataset.ct==="signals")===SG.on));
+  clearInterval(SG.timer);SG.timer=null;
+  if(SG.on){
+    sgRender(true);sgLoad();
+    SG.timer=setInterval(()=>{if(SG.on&&DK.open&&document.visibilityState==="visible")sgLoad()},10e3);
+  }else dkRenderMsgs(true);
+}
+$$("#dkCtabs button").forEach(b=>b.addEventListener("click",()=>sgShow(b.dataset.ct==="signals")));
+async function sgLoad(){
+  if(DK.locked||SG.loading||!USER)return;
+  SG.loading=true;
+  try{SG.data=await dkApi("signals_feed",null,"&days=3")}catch(e){SG.data=Object.assign(SG.data||{},{error:e.message})}
+  SG.loading=false;
+  sgWatch();sgBadge();if(SG.on)sgRender();
+}
+function sgWatch(){
+  const el=$("#sgWatch");if(!el)return;
+  const d=SG.data||{},b=d.beat;
+  if(!b||!b.at){el.innerHTML=`<span class="sg-dot"></span>Watcher not set up · Settings → Otto Signals`;return}
+  const age=(Date.now()-Date.parse(b.at))/1000;
+  const ago=age<90?Math.round(age)+"s ago":age<5400?Math.round(age/60)+" min ago":dkDate(b.at);
+  const why={logged_out:"Discord signed out",wrong_channel:"wrong channel open",no_tab:"watcher window closed",paused:"paused"}[b.state];
+  const ok=age<180&&b.state==="ok";
+  el.innerHTML=`<span class="sg-dot ${ok?"ok":"bad"}"></span>${ok?"Watcher on":"Watcher OFFLINE"+(why?" — "+esc(why):"")} · last check ${esc(ago)}`;
+}
+function sgBadge(){
+  const d=SG.data||{},bs=d.batches||[];
+  const seen=+LS.get("sgSeen",0);
+  if(SG.on&&bs.length){LS.set("sgSeen",Math.max(seen,...bs.map(b=>b.id)))}
+  const n=SG.on?0:bs.filter(b=>b.id>seen&&(b.cards||[]).length).length;
+  const el=$("#sgBadge");if(!el)return;el.hidden=!n;el.textContent=n+" call"+(n===1?"":"s");
+}
+const SG_ST={reading:"Reading the post…",jarvis:"Jarvis is building the card…",chatter:"",nothing:"",caught_up:"Caught up after a gap — saved to the log, too old for a card",error:"Error"};
+const SG_CARD={pending:"waiting for Approve",running:"placing…",done:"taken",rejected:"passed",expired:"expired",failed:"failed"};
+function sgRender(stick){
+  const box=$("#sgFeed");if(!box)return;
+  if(DK.locked){box.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see Otto Signals.</p></div>`;return}
+  const d=SG.data;
+  if(!d){box.innerHTML=dkLoading("Loading Otto Signals…");return}
+  const near=box.scrollHeight-box.scrollTop-box.clientHeight<120;
+  const m=esc(d.mentor||"Mentor"),bs=(d.batches||[]).slice().reverse();
+  let h=d.error?`<div class="dk-err">${esc(d.error)}</div>`:"";
+  if(!bs.length)h+=`<div class="dk-empty"><b style="color:var(--ink)">⚡ Otto Signals</b><br>Nothing from ${m} in the last 3 days yet. When he posts in ${esc(d.channel_name||"Discord")}, it shows up here within seconds, Jarvis builds the card, and both phones ping.</div>`;
+  let day="";
+  for(const b of bs){
+    const dd=new Date(b.at).toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"});
+    if(dd!==day){day=dd;h+=`<div class="sg-day">${esc(dd)} · ${esc(d.channel_name||"")} · ${m} only</div>`}
+    const cards=b.cards||[],call=cards.length>0;
+    const msgs=(b.msgs||[]).map((x,i)=>`<div class="sg-txt">${esc(x.text||"")}</div>${(x.imgs||[]).map(id=>`<img class="sg-img" data-sgimg="${id}" alt="${m}'s chart">`).join("")}`).join("");
+    const first=(b.msgs||[])[0];
+    const tag=call?`<span class="sg-tag call">CALL</span><span class="sg-tag ping">pinged both phones</span>`
+      :(b.posts||[]).some(p=>p.ticker&&(p.kind==="call"||p.kind==="level"))&&b.status==="done"?`<span class="sg-tag chat">no card</span>`
+      :b.status==="chatter"||b.status==="nothing"?`<span class="sg-tag chat">no ping</span>`:"";
+    h+=`<div class="sg-b"><div class="sg-av">${esc((d.mentor||"M")[0])}</div><div>
+      <div class="sg-who"><b>${m}</b> · ${esc(first?dkTime(first.at):dkTime(b.at))}${tag}</div>${msgs}`;
+    const st=SG_ST[b.status];
+    if(b.read)h+=`<div class="sg-read"><span class="k">Jarvis read</span><div class="md">${md(b.read)}</div></div>`;
+    else if(st)h+=`<div class="sg-cardline ${b.status==="error"?"dk-err":"mut"}">${esc(st)}${b.status==="error"&&b.error?": "+esc(b.error):""}</div>`;
+    for(const c of cards){
+      const a=DK.acts[c.id];
+      h+=a&&(a.status==="pending"||a.status==="running")?dkCard(a)
+        :`<div class="sg-cardline">🃏 ${esc(c.title||"card")} — <b>${esc(SG_CARD[(a&&a.status)||c.status]||c.status)}</b></div>`;
+    }
+    h+=`</div></div>`;
+  }
+  box.innerHTML=h;
+  box.querySelectorAll("img[data-sgimg]").forEach(sgImg);
+  if(stick||near)box.scrollTop=box.scrollHeight;
+}
+async function sgImg(el){
+  const id=el.dataset.sgimg;
+  if(SG.img[id]){el.src=SG.img[id];return}
+  try{const j=await dkApi("signal_img",null,"&id="+encodeURIComponent(id));SG.img[id]=`data:${j.mime||"image/jpeg"};base64,${j.data}`;el.src=SG.img[id]}
+  catch(e){el.alt="Chart couldn't load";}
+}
+$("#sgFeed").addEventListener("click",e=>{const im=e.target.closest("img.sg-img");if(im)im.style.maxWidth=im.style.maxWidth==="100%"?"":"100%"});
+
+// Settings → Otto Signals: the mentor's name / Discord ids, and the extension's pairing code.
+let SGCFG=null;
+function sgCode(){return SGCFG&&SGCFG.key?btoa(JSON.stringify({u:SB_URL,a:SB_ANON,k:SGCFG.key})):""}
+function sgFill(cfg,beat){
+  SGCFG=cfg;
+  $("#sgMentor").value=cfg.mentor||"";$("#sgAuthorName").value=cfg.author_name||"";$("#sgAuthorId").value=cfg.author_id||"";
+  $("#sgChanName").value=cfg.channel_name||"";$("#sgGuild").value=cfg.guild||"";$("#sgChan").value=cfg.channel||"";
+  $("#sgCode").value=sgCode()||"Tap Save to make the pairing code.";
+  $("#sgStat").textContent=beat&&beat.at?`Watcher last checked in ${dkDate(beat.at)} (${beat.state||"?"}).`:"No watcher has checked in yet.";
+}
+async function openSig(){
+  if(DK.locked)return toast("Sign in with the Otto login first");
+  $("#dlgSet").close();$("#dlgSig").showModal();$("#sgMsg").textContent="";
+  try{const j=await dkApi("signals_cfg");sgFill(j.cfg,j.beat)}catch(e){$("#sgMsg").textContent=String(e.message)}
+}
+async function sgSaveCfg(extra){
+  try{
+    const j=await dkApi("signals_cfg_set",Object.assign({mentor:$("#sgMentor").value,author_name:$("#sgAuthorName").value,author_id:$("#sgAuthorId").value,
+      channel_name:$("#sgChanName").value,guild:$("#sgGuild").value,channel:$("#sgChan").value},extra||{}));
+    sgFill(j.cfg,(SG.data||{}).beat);$("#sgMsg").textContent=extra&&extra.new_key?"New code made. Paste it into the extension — the old one no longer works.":"Saved.";
+  }catch(e){$("#sgMsg").textContent=String(e.message)}
+}
+$("#sSig").addEventListener("click",openSig);
+$("#sgClose").addEventListener("click",()=>$("#dlgSig").close());
+$("#sgSave").addEventListener("click",()=>sgSaveCfg());
+$("#sgNewKey").addEventListener("click",()=>{if(confirm("Make a new pairing code? The watcher stops until you paste the new code into the extension."))sgSaveCfg({new_key:true})});
+$("#sgCopy").addEventListener("click",async()=>{const c=sgCode();if(!c)return toast("Tap Save first");try{await navigator.clipboard.writeText(c);toast("Pairing code copied")}catch(e){$("#sgCode").select()}});
+
+// A ping opens Otto at #signals.
+function sgFromHash(){if(location.hash!=="#signals")return;try{if(!DK.open&&typeof openDesk==="function")openDesk();dkShow("desk");sgShow(true)}catch(e){}}
+window.addEventListener("load",()=>setTimeout(sgFromHash,1500));
+window.addEventListener("hashchange",sgFromHash);
+if(LS.get("sgOn",false))setTimeout(()=>{try{if(DK.open&&!SG.on)sgShow(true)}catch(e){}},1600);
+
 /* ---------- v3.7: Jason's calls scorecard (on Results) ---------- */
 async function dkJasonScore(){
   const el=$("#pfJason");if(!el)return;
