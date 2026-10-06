@@ -4,6 +4,7 @@
 //   Discord channel live and posts each new message to ?fn=signal_in (x-otto-signal key);
 //   Jarvis builds the card, both phones ping. Watcher-offline alert on the 2-min cron.
 //   ?fn=signals_feed signal_img signals_cfg signals_cfg_set. No quiet hours on pings. 010_v39.sql.
+//   v3.9.1: ping first on a call; Jarvis's card build runs as its own invocation (?fn=signal_jarvis); stalled builds pinged.
 //   v3.6 (5 Oct 2026): phone notifications (Web Push). ?fn=push_key push_sub push_list
 //   push_remove push_test; notify() hooked into auto-close, fills, stops, alerts, cards.
 //   v3.8.1 (5 Oct 2026): time budgets on TradingView/Robinhood calls; Yahoo price fallback on the Desk panel.
@@ -3041,20 +3042,53 @@ async function signalProcess(bid: number, ins: any[], imgs: { mime: string; data
       return;
     }
     await sigBatch(bid, { rows: ids, status: "jarvis" });
+    // v3.9.1: ping FIRST for an outright call, so a call is never missed even if the card build dies.
+    for (const r of tradeable.filter((r: any) => r.kind === "call")) {
+      await notify("signal", `⚡ ${cfg.mentor}: ${r.ticker}${r.direction ? " " + r.direction.toUpperCase() : ""}${r.late ? " (late)" : ""}`,
+        `"${String(r.words).slice(0, 100)}" — Jarvis is building the card now.`, "./#signals");
+    }
+    // Jarvis gets his own invocation (own wall-clock budget): reading the post must not eat his time.
+    if (!(await kickJarvis(bid))) await signalJarvis(bid);
+  } catch (e) {
+    const m = String((e as Error).message || e).slice(0, 300);
+    await sigBatch(bid, { status: "error", error: m });
+    await notify("signal", `⚡ ${cfg.mentor} posted — Otto couldn't read it`, `${String(ins.map((r: any) => r.text).join(" / ")).slice(0, 120)} · ${m.slice(0, 80)}`, "./#signals");
+  }
+}
+
+// v3.9.1: start the card build as a separate run of this function.
+async function kickJarvis(bid: number): Promise<boolean> {
+  const base = Deno.env.get("SUPABASE_URL"), anon = Deno.env.get("SUPABASE_ANON_KEY"), sec = Deno.env.get("OTTO_CRON_SECRET") || "";
+  if (!base || !anon || sec.length < 16) return false;
+  try {
+    const r = await fetch(`${base}/functions/v1/otto-proxy?fn=signal_jarvis&batch=${bid}`, { method: "POST",
+      headers: { apikey: anon, authorization: "Bearer " + anon, "x-otto-cron": sec, "content-type": "application/json" }, body: "{}" });
+    return r.status === 202;
+  } catch { return false; }
+}
+
+async function signalJarvis(bid: number) {
+  const cfg = await sigCfg();
+  const b = (await db("otto_signal_batches?select=*&id=eq." + bid))?.[0];
+  if (!b || b.status !== "jarvis") return;
+  let all: any[] = [];
+  try {
+    all = (b.rows || []).length ? await db("otto_jason?select=*&id=in.(" + b.rows.join(",") + ")&order=id.asc") : [];
+    const ids = all.map((r: any) => r.id);
+    const tradeable = all.filter((r: any) => r.ticker && (r.kind === "call" || r.kind === "level"));
+    const day = all[0]?.day || etParts().date;
     const today = await jasonTodayRows(day);
     const tick = new Set(tradeable.map((r: any) => r.ticker));
     const carded = today.filter((r: any) => r.action_id && tick.has(r.ticker) && !ids.includes(r.id) &&
       r.posted_at && Date.now() - Date.parse(r.posted_at) < 90 * 60e3);
-    const { cs, sys, tools, ctxLine, autoClose } = await deskSetup();
+    const { cs, sys, tools, ctxLine } = await deskSetup();
     const prompt = ctxLine + "\n" + signalPrompt(cfg, all, carded);
     let res = { said: "", cards: [] as string[] };
     let err = "";
     try {
       res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: tools.filter((t: any) => t.name !== "close_position"),
-        cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 10 });
+        cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 8 });
     } catch (e) { err = String((e as Error).message || e).slice(0, 300); }
-    void autoClose;
-    // Link each card to the post it came from.
     const acts = res.cards.length ? await db("otto_actions?select=id,title,plan&id=in.(" + res.cards.join(",") + ")").catch(() => []) : [];
     const open = tradeable.filter((r: any) => !r.action_id);
     for (const a of acts) {
@@ -3062,21 +3096,31 @@ async function signalProcess(bid: number, ins: any[], imgs: { mime: string; data
       if (row) { row.action_id = a.id; await db("otto_jason?id=eq." + row.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ action_id: a.id }) }).catch(() => {}); }
     }
     await sigBatch(bid, { status: err ? "error" : "done", read: res.said.trim() || null, cards: res.cards, error: err || null });
-    // Pings: one per card. A tradeable post that got no card still pings — a failure must never be silent.
     for (const a of acts) {
       const row = all.find((r: any) => r.action_id === a.id);
-      await notify("signal", `⚡ Otto Signal: ${row?.ticker || ""} ${row?.direction ? row.direction.toUpperCase() : ""}`.trim(),
-        `${cfg.mentor}: "${String(row?.words || "").slice(0, 90)}" → card ready: ${String(a.title || "").slice(0, 90)}. Tap to review (expires in 20 min).`, "./#signals");
+      await notify("signal", `🃏 Card ready: ${row?.ticker || ""} ${row?.direction ? row.direction.toUpperCase() : ""}`.trim(),
+        `${String(a.title || "").slice(0, 100)} — from ${cfg.mentor}: "${String(row?.words || "").slice(0, 70)}". Tap to Approve or Reject (expires in 20 min).`, "./#signals");
     }
-    // No card: ping only when Jarvis failed, or for an outright CALL he chose not to card (watch-list levels stay quiet).
-    for (const r of tradeable.filter((r: any) => !r.action_id && (err || r.kind === "call") && !carded.some((c: any) => c.ticker === r.ticker))) {
-      await notify("signal", `⚡ ${cfg.mentor}: ${r.ticker}${r.direction ? " " + r.direction.toUpperCase() : ""} — no card`,
-        `"${String(r.words).slice(0, 90)}" — ${err ? "Jarvis hit an error building the card" : "Jarvis didn't make a card"}. Open Otto Signals for his read.`, "./#signals");
+    if (err) for (const r of tradeable.filter((r: any) => !r.action_id && !carded.some((c: any) => c.ticker === r.ticker))) {
+      await notify("signal", `⚠️ ${cfg.mentor}: ${r.ticker} — no card`, `"${String(r.words).slice(0, 90)}" — Jarvis hit an error building the card. Open Otto Signals.`, "./#signals");
     }
   } catch (e) {
     const m = String((e as Error).message || e).slice(0, 300);
     await sigBatch(bid, { status: "error", error: m });
-    await notify("signal", `⚡ ${cfg.mentor} posted — Otto couldn't read it`, `${String(ins.map((r: any) => r.text).join(" / ")).slice(0, 120)} · ${m.slice(0, 80)}`, "./#signals");
+    if (all.some((r: any) => r.kind === "call")) await notify("signal", `⚠️ ${cfg.mentor} called something — no card`, `${m.slice(0, 120)}. Open Otto Signals.`, "./#signals");
+  }
+}
+
+// v3.9.1: a card build that stalls (Supabase cut it off) is marked failed and pinged.
+async function signalStale() {
+  const cut = new Date(Date.now() - 4 * 60e3).toISOString();
+  const stuck = await db(`otto_signal_batches?select=id,rows&status=in.(reading,jarvis)&created_at=lt.${cut}&limit=10`).catch(() => []);
+  for (const b of stuck) {
+    await sigBatch(b.id, { status: "error", error: "Timed out — the server cut the run off before Jarvis finished." });
+    const rows = (b.rows || []).length ? await db("otto_jason?select=ticker,kind,words,action_id&id=in.(" + b.rows.join(",") + ")").catch(() => []) : [];
+    const calls = rows.filter((r: any) => r.kind === "call" && !r.action_id);
+    if (calls.length) await notify("signal", `⚠️ No card for ${calls.map((r: any) => r.ticker).filter(Boolean).join(", ") || "a call"}`,
+      `Jarvis timed out building it. Open Otto Signals and ask Jarvis for the card.`, "./#signals");
   }
 }
 
@@ -3120,6 +3164,7 @@ async function signalImg(id: number) {
 async function watcherCheck() {
   const cfg = await sigCfg();
   if (!cfg.key) return;                                   // never paired: nothing to watch
+  await signalStale().catch(() => {});
   const b = await setting("signal_beat").catch(() => null);
   if (!b?.at || b.offline_sent) return;
   const age = Date.now() - Date.parse(b.at);
@@ -3665,6 +3710,11 @@ Deno.serve(async (req) => {
   if (fn0 === "signal_in") {
     try { return json(await signalIn(req)); }
     catch (e) { const m = String((e as Error).message || e); return json({ ok: false, error: m }, /key/.test(m) ? 401 : 500); }
+  }
+  if (fn0 === "signal_jarvis") {
+    if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
+    background(signalJarvis(Number(new URL(req.url).searchParams.get("batch") || 0)));
+    return json({ ok: true, started: "jarvis" }, 202);
   }
   if (fn0 === "cron_alerts") {
     if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
