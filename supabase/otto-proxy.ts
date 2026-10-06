@@ -589,7 +589,7 @@ async function chat(req: Request, sys: string, cs: Chunk[], apiKey: string) {
 
           let stop = "", text = "";
           const blocks: any[] = [];
-          const reader = r.body.getReader(), dec = new TextDecoder();
+          const reader = r.body!.getReader(), dec = new TextDecoder();
           let buf = "";
           while (true) {
             const { done, value } = await reader.read();
@@ -782,6 +782,7 @@ function deskUser(claims: any): string | null {
 /* ------------------------------------------------------------ database */
 
 async function db(path: string, init: RequestInit = {}): Promise<any> {
+  if ((globalThis as any).__OTTO_TEST__?.db) return (globalThis as any).__OTTO_TEST__.db(path, init);
   const base = Deno.env.get("SUPABASE_URL"), svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!base || !svc) throw new Error("service role not available");
   const r = await fetch(base + "/rest/v1/" + path, {
@@ -993,7 +994,11 @@ function mcpJson(res: any): any {
   if (res?.structuredContent) return res.structuredContent;
   try { return JSON.parse(mcpText(res)); } catch { return null; }
 }
+// v3.13: test seam — undefined in production (only the Deno test suite sets it).
+const TEST: any = (globalThis as any).__OTTO_TEST__ || null;
+
 async function call(service: string, tool: string, args: any) {
+  if (TEST?.call) return TEST.call(service, tool, args);
   const res = await mcp(service, "tools/call", { name: tool, arguments: args || {} });
   if (res?.isError) throw new Error(mcpText(res).slice(0, 400) || "tool error");
   return res;
@@ -1046,7 +1051,7 @@ function costOf(tool: string, a: any): { cost: number | null; note: string } {
 
 /* ------------------------------------------------------------ propose / act */
 
-async function proposeAction(input: any, who: string, opts: { manual?: boolean } = {}) {
+export async function proposeAction(input: any, who: string, opts: { manual?: boolean } = {}) {
   const calls = Array.isArray(input.calls) ? input.calls.slice(0, 6) : [];
   if (!calls.length) throw new Error("no calls");
   // v3.1: an opening option order must carry its plan, so the scorecard can grade it.
@@ -1103,11 +1108,8 @@ async function proposeAction(input: any, who: string, opts: { manual?: boolean }
   if (opening) {
     try { const b = await sentimentNow(); banner = { verdict: b.verdict, score: b.score, fresh: b.fresh, at: b.at }; } catch { /* */ }
     try { checks = await ruleChecks(out, plan, risk, banner); } catch (e) { checks = [{ ok: null, text: "Rule check failed: " + (e as Error).message }]; }
-    try { checks = checks.concat(await limitChecks(risk.cost)); } catch { /* */ }
-    if (exit) {
-      const atStop = (exit.entry_limit - exit.stop_option) * 100 * exit.qty;
-      checks.push({ ok: LIM.max_trade_loss > 0 ? atStop <= LIM.max_trade_loss : null, text: `If the stop fills at $${exit.stop_option.toFixed(2)}: about −$${atStop.toFixed(0)}${LIM.max_trade_loss > 0 ? ` (limit $${LIM.max_trade_loss})` : ""}. Option stops can fill lower on a fast move.` });
-    }
+    const atStop = exit ? (exit.entry_limit - exit.stop_option) * 100 * exit.qty : null;
+    try { checks = checks.concat(await limitChecks(risk.cost, atStop)); } catch { /* */ }
   }
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
     title: unname(input.title || "Action").slice(0, 140),
@@ -1338,7 +1340,14 @@ async function panel() {
 
 /* v3.12 (Ifoma, 6 Oct): Otto may be sold later — the mentor's name is never shown to users. The brain keeps it
    internally; everything a user reads says "the Otto Rules" (his method / rules) and "Signal" (his Discord posts). */
-const NAME_RULE = `\n\nNAMES — PRODUCT RULE (6 Oct 2026). Never write the names Jason, Jason Murray, or jmoney915 in anything Ifoma or Josh will read: replies, reads, card titles and summaries, TradingView alert names and messages. The method and its rules are "the Otto Rules" (e.g. "Otto Rules: no trades in the first 30 minutes"; cite as (Otto Rules, call date, MM:SS)). His Discord posts are "signals" ("the SPCX signal"). The person on the coaching calls is "the coach". Name a TradingView alert you create "Otto Rules MM/DD – TICKER LEVEL – note". You still know where the rules come from; just don't name him.`;
+const NAME_RULE = `\n\nNAMES — PRODUCT RULE (6 Oct 2026). Never write the names Jason, Jason Murray, or jmoney915 in anything Ifoma or Josh will read: replies, reads, card titles and summaries, TradingView alert names and messages. The method and its rules are "the Otto Rules" (e.g. "Otto Rules: no trades in the first 30 minutes"; cite as (Otto Rules, call date, MM:SS)). His Discord posts are "signals" ("the SPCX signal"). The person on the coaching calls is "the coach". Name a TradingView alert you create "Otto Rules MM/DD – TICKER LEVEL – note". You still know where the rules come from; just don't name him. Speak as yourself with the Otto Rules as your own playbook: never "he would / wouldn't", "he says", "ask him", "send it to him" or "get the coach on the phone" — say what the Otto Rules say and what you'd do.`;
+// v3.13 (Ifoma, 6 Oct): guardrails flag, never block; Jarvis never claims to watch what nothing is watching.
+const GUARD_RULE = `\n\nGUARDRAILS FLAG — THEY NEVER BLOCK (Ifoma, 6 Oct 2026). Ifoma and Josh make the final call on every trade. When a setup is real, ALWAYS build the card, even if it breaks a guardrail (max loss per trade, daily stop, weekly limit, size vs account, delta, expiry, first 30 minutes, banner). Never say "hard stop", "no card" or refuse a card because of a limit or size. The card shows a red banner naming each guardrail it breaks; in your reply say which ones in one line, and if a cheaper contract fits better, offer it as a second (ALT) card. Only skip a card when there is no setup.
+WHAT RUNS ON ITS OWN — SAY ONLY THIS. You do not watch the market between messages. You run only when someone writes on the Desk, when a TradingView alert Otto set fires (checked every 2 minutes), when Otto Signals catches a post, and on the open-position check (every few minutes while a trade is open). Never say "I'm watching", "watching every bar", "the card drops automatically", "I'll flag you at 1:30" or "I'll ping you" unless one of those mechanisms will actually do it. If they want a level watched, offer a TradingView alert card at that level (it wakes you when it fires) and say that's how you'll see it.
+HOUSE RULES. The House Rules block (below the clock) is their standing instructions. Follow them every time. When Ifoma or Josh gives a standing instruction ("from now on", "always", "next time", "in the future"), call save_house_rule with it in one plain sentence, then confirm in one line. Don't save one-off requests.
+THE CLOCK. The CLOCK line is computed by the server and is always right about the date, weekday, time and whether the market is open. Tool timestamps are UTC unless they say ET. If you ever feel the market is closed, re-read the CLOCK line before saying so.
+A PROTECTED TRADE'S STOP. On a trade Otto protects, a pending sell-to-close (pending_sell_quantity 1) is Otto's own stop order. It is not a stuck or "zombie" order — never tell anyone to cancel it unless they're closing the trade.`;
+
 function unname(t: any): string {
   return String(t ?? "")
     .replace(/\bJason(?: Murray)?'s (?:rules|method)\b/g, "the Otto Rules").replace(/\bJason(?: Murray)?'s rule\b/g, "Otto Rule")
@@ -1348,8 +1357,8 @@ function unname(t: any): string {
     .replace(/(^|[.!?:]\s+|\n)the (Otto|signal|coaching)/g, (_m, a, b) => a + "The " + b);
 }
 const SIG_LABEL = "Signal";   // v3.12: what users see instead of the mentor's name
-const DESK_SYS = `You are Jarvis, the AI on the trading desk inside Otto Trader. If asked your name, you are Jarvis; your judgment is built on Jason Murray's method (his mentorship calls). You sit between three things:
-- Jason Murray's method (his recorded mentorship calls) — the judgment. Search it with search_jason.
+const DESK_SYS = `You are Jarvis, the AI on the trading desk inside Otto Trader. If asked your name, you are Jarvis. Your judgment is the Otto Rules: Otto's own brain, built from a library of recorded coaching calls plus the trading playbook. You speak as yourself ("the Otto Rules say…", "my read…") — never as anyone's student, and never "he would / wouldn't". You sit between three things:
+- The Otto Rules (the coaching-call library) — the judgment. Search it with search_jason (the tool's internal name).
 - TradingView (Ifoma's paid account) — market data, watchlists, alerts. Tools named tv__…
 - Robinhood — positions and orders. Tools named rh__…. Orders only ever go to the Robinhood Agentic account; the server enforces that, you don't pick the account.
 
@@ -1359,23 +1368,23 @@ HOW ACTIONS WORK — THE ONE HARD RULE
 You can READ anything with the tv__ and rh__ tools, as often as you need. You can NEVER change anything yourself — with ONE exception: when the desk context says Auto-close is ON, close_position sells to close a position in the Agentic account immediately, no card. Use it only to get OUT of a position (when they ask you to close, or when in your judgment the trade is broken or its exit has come), say why in one sentence, and never to open, add or flip. To place, cancel, or change an order, or create/edit/delete an alert or watchlist entry, call propose_action with the exact calls. That puts an Approve / Reject card in front of them; nothing happens until a human clicks Approve. After proposing, say in one line what the card does — never say an order "is placed" or "went through" until you see the result (the app will post it).
 - Before proposing an option order: get the chain (rh__get_option_chains → rh__get_option_instruments) for the real option_id, check the quote (rh__get_option_quotes), and use a limit price. The server runs Robinhood's review and computes the risk vs the Agentic account.
 - One idea = one card. Several suggestions at once = several cards, each with its own title.
-- Don't propose new TradingView alerts or Jason-level alerts unless they explicitly ask for one. For now the desk shows prices only.
-- Every OPENING option card must include plan {tv_symbol, direction, setup, tp1, stop, stop_option, entry_underlying, expires}. stop_option is the OPTION price that triggers the protective stop (below your limit price); size it so (limit − stop_option) × 100 × contracts stays inside their max loss per trade. Approving the card approves its exits too: once the buy fills, Otto itself places a stop_market sell-to-close at stop_option (re-placed every morning — Robinhood stop orders are day orders) and two TradingView alerts on the stock (wrong-if = plan.stop on a 15-minute close, TP1 on touch), and puts up a close card when one fires. So never propose a separate stop order or alerts for that trade, and only one single-leg buy per opening card. To close a protected trade early, include rh cancel_option_order for its stop_order_id (listed in the desk context) BEFORE the sell, in the same card. The server runs a rule check (first 30 minutes, delta 30–40, volume > OI, 20%, expiry, binary events, earnings, banner) and shows it on the card; read its result back and mention any failed check in one line.
+- Don't propose new TradingView alerts unless they ask, or they want a level watched (an alert is the only way you get woken at a level).
+- Every OPENING option card must include plan {tv_symbol, direction, setup, tp1, stop, stop_option, entry_underlying, expires}. stop_option is the OPTION price that triggers the protective stop (below your limit price); size it so (limit − stop_option) × 100 × contracts stays inside their max loss per trade. Approving the card approves its exits too: once the buy fills, Otto itself places a stop_market sell-to-close at stop_option (re-placed every morning — Robinhood stop orders are day orders) and two TradingView alerts on the stock (wrong-if = plan.stop on a 15-minute close, TP1 on touch), and puts up a close card when one fires. So never propose a separate stop order or alerts for that trade, and only one single-leg buy per opening card. To close a protected trade early, include rh cancel_option_order for its stop_order_id (listed in the desk context) BEFORE the sell, in the same card. The server runs a rule check (first 30 minutes, delta 30–40, volume > OI, size, loss at the stop vs their max, daily stop, weekly limit, expiry, binary events, earnings, banner) and shows any broken guardrail as a red banner on the card; read its result back and mention the flags in one line. The card's check is the truth: don't call a check passed in your text when the card flags it.
 
 THE SENTIMENT BANNER
-The app shows a live banner built from Josh's Intermarket Sentiment Cheat Sheet on TradingView data (10Y, DXY, USD/JPY, crude, ES/NQ/YM). Its current verdict is in the desk context line. It is Josh's sheet, not Jason's: where it disagrees with Jason (Josh's sheet trades the 9:30 opening range; Jason says no first 30 minutes) say so and don't pick. Never attach Josh's sheet sizing ($15 / 15%) to anything — sizing is only the 20% check.
+The app shows a live banner built from Josh's Intermarket Sentiment Cheat Sheet on TradingView data (10Y, DXY, USD/JPY, crude, ES/NQ/YM). Its current verdict is in the desk context line. It is Josh's sheet, not the Otto Rules: where they disagree (the sheet trades the 9:30 opening range; the Otto Rules say no first 30 minutes unless the open goes off a pre-posted Signal level) say so and don't pick. Never attach Josh's sheet sizing ($15 / 15%) to anything — sizing is only the 20% check.
 
 THE ORDER TICKET (put this in the card's summary, plain text)
-Underlying / contract · Side / qty / type / limit · Max risk ($ and % of the account; ⚠ if over 20%) · Entry trigger · Stop / exit · Targets (TP1 / TP2 / runner) · Jason basis (rule, call date, MM:SS) · Not from Jason (anything you added).
-Over 20% of the account is a warning, never a block — they can still approve. Jason called ~40% of the account in one trade "crazy" (1 Oct 2026).
+Underlying / contract · Side / qty / type / limit · Max risk ($ and % of the account; ⚠ if over 20%) · Entry trigger · Stop / exit · Targets (TP1 / TP2 / runner) · Otto Rules basis (rule, call date, MM:SS) · Not from the Otto Rules (anything you added).
+Every guardrail is a warning, never a block — they can still approve. The coach called ~40% of the account in one trade "crazy" (1 Oct 2026).
 
 FETCH, DON'T ASSUME
-Every price, position, and buying-power figure you state comes from a tool call in this conversation. Jason's levels are dated marks from a call, never current prices — say the call date when you use one. If a connector isn't connected, say so in one line (Settings → Connections) and do what you can without it.
+Every price, position, and buying-power figure you state comes from a tool call in this conversation. Levels from a call are dated marks, never current prices — say the call date when you use one. If a connector isn't connected, say so in one line (Settings → Connections) and do what you can without it.
 
-SAY WHEN JASON HASN'T COVERED SOMETHING
-He has never taught a stop rule for these option trades beyond the entry-candle exit, never given a 2026 options sizing number, and never given a full exit plan beyond TP1/TP2/runners. When one of those decides the trade, give your best answer and label it as yours.
+SAY WHEN THE OTTO RULES DON'T COVER SOMETHING
+The calls have never taught a stop rule for these option trades beyond the entry-candle exit, never given a 2026 options sizing number, and never given a full exit plan beyond TP1/TP2/runners. When one of those decides the trade, give your best answer and label it as yours.
 
-JASON'S METHOD (2026 stock options) — summary; search_jason for exact wording and timestamps
+THE OTTO RULES (2026 stock options) — summary; search_jason for exact wording and timestamps
 - Backdrop first: 10-year (cost of capital), crude (cost of transportation), USD/JPY (cost of currency). Rising rates → algorithms sell; restrictive rates → money hides in staples, health care, communications. Seasonality: September sell first; October rough early, strong late. Never swing into a binary event (NFP, earnings, Fed).
 - Instruments: SPY, QQQ, one Mag-7 name. More than one catalyst; the chart is not a catalyst. 3+ indicators agreeing is workable, 5 you take to the bank. No trading inside a trap zone; a $3 box is not a trade.
 - Entries: shorts at resistance, cover at support; longs the mirror ("where I'm covering, you're trying to enter", 1 Oct). Mark zones before the move. In this rate environment play rejections more than bounces. Daily double top or below a big unrecovered gap → scalps only. Never chase a missed fill. Not the first 30 minutes.
@@ -1386,7 +1395,7 @@ JASON'S METHOD (2026 stock options) — summary; search_jason for exact wording 
 CHARTS
 When they paste a chart, read it: timeframe, trend, the zones they drew, where price is vs those zones, and grade the idea against the method. Then check it against live data before any ticket.
 
-JASON'S STANDING RULES AND SETUPS (always in front of you):
+OTTO RULES — STANDING RULES AND SETUPS (always in front of you):
 {{RULES}}`;
 
 const PROPOSE_TOOL = (writeHelp: string) => ({
@@ -1423,6 +1432,7 @@ const PROPOSE_TOOL = (writeHelp: string) => ({
           stop: { type: "number", description: "Underlying price that proves the idea wrong (your exit level) — Otto alerts on a 15-minute close through it" },
           stop_option: { type: "number", description: "OPTION price (per share, below the limit) where Otto's protective stop_market sell-to-close triggers. Otto places it after the fill." },
           expires: { type: "string", description: "Option expiration YYYY-MM-DD" },
+          signal_level: { type: "boolean", description: "true when the entry level came from a Signal posted before the open (the House Rule lets the open be traded off it)" },
         },
         required: ["tv_symbol", "direction", "setup", "tp1", "stop", "stop_option"],
       },
@@ -1462,28 +1472,56 @@ async function deskTools() {
   return { tools, help: help.join("\n") || "(no connector is connected yet)", status };
 }
 
-type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; allowClose?: boolean; maxRounds?: number };
+type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; allowClose?: boolean; maxRounds?: number; deadline?: number; author?: string };
 
 // The tool loop, shared by the live Desk (streamed) and the 8:45 run (silent).
-async function runDesk(o: DeskRun): Promise<{ said: string; cards: string[] }> {
+// v3.13: one Claude request, retried once on 429 / 5xx / overloaded, never past the run's deadline.
+async function claudeFetch(body: any, deadline: number): Promise<Response> {
+  if (TEST?.claude) return TEST.claude(body);
   const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
+  for (let attempt = 0; ; attempt++) {
+    const left = deadline - Date.now();
+    if (left < 8000) throw new Error("out of time before Claude answered");
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", signal: AbortSignal.timeout(left - 3000),
+      headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify(body),
+    });
+    if (r.ok && r.body) return r;
+    const t = (await r.text()).slice(0, 200);
+    if (attempt === 0 && (r.status === 429 || r.status >= 500)) { await new Promise((z) => setTimeout(z, 3000)); continue; }
+    throw new Error("claude HTTP " + r.status + " " + t);
+  }
+}
+const RUN_BUDGET_MS = 118_000;            // Supabase stops a function at 150 s; leave room to save what was said.
+const OUT_OF_TIME = "\n\n⚠ I ran out of time on that one (a data source was slow), so this answer may be incomplete. Ask again and I'll keep it tighter.";
+
+export async function runDesk(o: DeskRun): Promise<{ said: string; cards: string[]; timedOut?: boolean }> {
   const { msgs, sys, tools, cs, who, send } = o;
+  const deadline = o.deadline || Date.now() + RUN_BUDGET_MS;
   let said = "";
   const cards: string[] = [];
+  // v3.13: the clock and the House Rules ride in a second, uncached system block on EVERY run
+  // (Desk, alert reads, Signals, position checks, the morning read).
+  const live = marketClock().line + "\n\n" + await houseRulesText().catch(() => "");
   for (let round = 0; round < (o.maxRounds || 12); round++) {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({
+    if (Date.now() > deadline - 15000) { said += OUT_OF_TIME; send({ t: "text", v: OUT_OF_TIME }); return { said, cards, timedOut: true }; }
+    let r: Response;
+    try {
+      r = await claudeFetch({
         model: MODEL, max_tokens: 2500, stream: true, tools,
-        system: [{ type: "text", text: sys + NAME_RULE, cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: sys + NAME_RULE + GUARD_RULE, cache_control: { type: "ephemeral" } }, { type: "text", text: live }],
         messages: msgs,
-      }),
-    });
-    if (!r.ok || !r.body) throw new Error("claude HTTP " + r.status + " " + (await r.text()).slice(0, 200));
+      }, deadline);
+    } catch (e) {
+      if (said || /out of time|timed? ?out|abort/i.test(String((e as Error).message))) {
+        said += OUT_OF_TIME; send({ t: "text", v: OUT_OF_TIME }); return { said, cards, timedOut: true };
+      }
+      throw e;
+    }
     let stop = "";
     const blocks: any[] = [];
-    const reader = r.body.getReader(), dec = new TextDecoder();
+    const reader = r.body!.getReader(), dec = new TextDecoder();
     let buf = "";
     while (true) {
       const { done, value } = await reader.read();
@@ -1539,6 +1577,10 @@ async function runDesk(o: DeskRun): Promise<{ said: string; cards: string[] }> {
           send({ t: "action", v: card });
           content = `Card ${card.id} is on screen, status pending. Nothing has run. ` +
             `Risk: ${JSON.stringify(card.risk)}. Rule check: ${JSON.stringify(card.checks || [])}. Robinhood review: ${(card.review || "n/a").slice(0, 1500)}`;
+        } else if (b.name === "save_house_rule") {
+          send({ t: "tool", v: "Saving a House Rule" });
+          await houseRuleAdd(String(input.text || ""), `${o.author || "Desk"} via Jarvis`);
+          content = "Saved. It's in Settings → House Rules and applies from the next message on.";
         } else if (b.name === "close_position") {
           if (!o.allowClose) throw new Error("auto-close isn't available in this run — use propose_action");
           send({ t: "tool", v: "Auto-close: " + String(input.reason || "").slice(0, 80) });
@@ -1551,7 +1593,8 @@ async function runDesk(o: DeskRun): Promise<{ said: string; cards: string[] }> {
           const args = { ...input };
           if (m[1] === "rh" && RH_FORCE_ACCT.has(m[2])) args.account_number = await agenticAccount();
           send({ t: "tool", v: SVC[m[1]].name + ": " + m[2].replace(/^mcp-(tv|watchlist)-/, "") });
-          content = mcpText(await call(m[1], m[2], args)).slice(0, 30000);
+          const left = Math.max(5000, Math.min(45000, deadline - Date.now() - 20000));
+          content = etAnnotate(mcpText(await withTimeout(call(m[1], m[2], args), left, SVC[m[1]].name + " " + m[2])).slice(0, 30000));
         }
       } catch (e) {
         isErr = true; content = "ERROR: " + (e as Error).message;
@@ -1559,7 +1602,9 @@ async function runDesk(o: DeskRun): Promise<{ said: string; cards: string[] }> {
       results.push({ type: "tool_result", tool_use_id: b.id, content: content || "(empty)", ...(isErr ? { is_error: true } : {}) });
     }
     msgs.push({ role: "assistant", content: assistant });
-    msgs.push({ role: "user", content: results });
+    // v3.13: a one-line clock with every round of tool results, so a long turn never loses the time.
+    const c = marketClock();
+    msgs.push({ role: "user", content: [...results, { type: "text", text: `[clock: ${fmtMin(c.min)} ET ${dayName(c.date)} ${c.date}, market ${c.status === "open" ? "OPEN" : c.status === "pre" ? "PRE-MARKET" : "CLOSED"}]` }] });
   }
   return { said, cards };
 }
@@ -1587,19 +1632,25 @@ async function deskSetup() {
   const protLine = prot.ok && prot.v.length ? " Protected trades (Otto runs their stop and alerts; to close one early, cancel_option_order its stop_order_id first, then sell, in one card): " +
     prot.v.map((r: any) => `${r.title} [${r.exit.state}${r.exit.stop_order_id ? `, stop_order_id ${r.exit.stop_order_id} at $${r.exit.stop_option}` : ""}, wrong-if ${r.exit.wrong_if}, TP1 ${r.exit.tp1}]`).join("; ") + "." : "";
   const jctx = await jasonContext().catch(() => "");
-  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their own limits (Phase ${LIM.phase}): max loss per trade ${LIM.max_trade_loss > 0 ? "$" + LIM.max_trade_loss : "OFF (Ifoma removed it 6 Oct — they size each trade themselves)"}, weekly loss limit $${LIM.weekly_loss}, ${LIM.max_trades_day} trades/day, warn over ${LIM.warn_pct}% of the account — size ideas inside these and say so when an idea would break one.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.${jctx}]`;
+  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their guardrails (Phase ${LIM.phase}; they FLAG, never block): max loss per trade at the stop ${LIM.max_trade_loss > 0 ? `$${LIM.max_trade_loss}${LIM.pct_mode && LIM.max_trade_pct > 0 ? ` (${LIM.max_trade_pct}% of the $${Math.round(LIM.account_value)} Agentic account)` : ""}` : "off"}, weekly loss limit $${LIM.weekly_loss}${LIM.pct_mode && LIM.weekly_pct > 0 ? ` (${LIM.weekly_pct}%)` : ""}, daily stop after ${LIM.daily_losses || "—"} losing trades or 2× the max loss, ${LIM.max_trades_day} trades/day, size flag over ${LIM.warn_pct}% of the account. Size ideas inside these when a contract allows it (set stop_option so the loss at the stop fits); when nothing fits, still make the card — it gets the red flag — and say so in one line.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.${jctx}]`;
 
   return { cs, sys, tools, ctxLine, autoClose: !!LIMa.auto_close };
 }
 
-async function desk(req: Request, who: string, _apiKey: string) {
+export async function desk(req: Request, who: string, _apiKey: string) {
   const body = await req.json().catch(() => ({}));
   const history = Array.isArray(body.messages) ? body.messages.slice(-24) : [];
   if (!history.length) throw new Error("no messages");
   const author = String(body.author || "Ifoma").slice(0, 30);
   const isJason = !!body.jason;                    // v3.7: a pasted Jason post
 
-  const { cs, sys, tools, ctxLine, autoClose } = await deskSetup();
+  let setup: Awaited<ReturnType<typeof deskSetup>>;
+  try { setup = await deskSetup(); }
+  catch (e) {   // v3.13: even a setup failure shows on the Desk
+    await logDesk("system", "Otto", `⚠ Jarvis couldn't start on ${author}'s message (${String((e as Error).message).slice(0, 160)}). Send it again.`).catch(() => {});
+    throw e;
+  }
+  const { cs, sys, tools, ctxLine, autoClose } = setup;
   const LIMa = { auto_close: autoClose };
 
   const msgs: any[] = history.map((m: any, i: number) => {
@@ -1642,7 +1693,7 @@ async function desk(req: Request, who: string, _apiKey: string) {
           send({ t: "tool", v: "Reading the signal" });
           const typed = String(last.content || "").replace(/^\(chart attached\)$/, "").trim();
           jrows = await jasonIntake(_apiKey, lastImg, typed && !lastImg ? typed : "", who, author);
-          await logDesk("user", author, "📣 Jason's post (pasted)" + (jrows.length ? ":\n" + jrows.map((r: any) => `${r.posted_label || "?"} · ${r.words}`).join("\n") : " — nothing from Jason could be read") +
+          await logDesk("user", author, "📣 Signal (pasted)" + (jrows.length ? ":\n" + jrows.map((r: any) => `${r.posted_label || "?"} · ${r.words}`).join("\n") : " — nothing could be read from it") +
             (typed && lastImg ? "\n" + typed : ""));
           send({ t: "jason", v: jrows.length });
           const lm = msgs[msgs.length - 1];
@@ -1650,10 +1701,13 @@ async function desk(req: Request, who: string, _apiKey: string) {
           if (typeof lm.content === "string") lm.content = prompt;
           else { const tb = lm.content.filter((b: any) => b.type === "text"); if (tb.length) tb[tb.length - 1].text = prompt; else lm.content.push({ type: "text", text: prompt }); }
         }
-        res = await runDesk({ msgs, sys, tools, cs, who, send, allowPropose: true, allowClose: !!LIMa.auto_close });
+        res = await runDesk({ msgs, sys, tools: [...tools, HOUSE_TOOL], cs, who, send, allowPropose: true, allowClose: !!LIMa.auto_close, author });
         send({ t: "done" });
       } catch (e) {
-        send({ t: "error", v: String((e as Error).message ?? e).slice(0, 300) });
+        // v3.13: never go silent — the failure is posted on the Desk, not only to the open browser tab.
+        const m = String((e as Error).message ?? e).slice(0, 300);
+        send({ t: "error", v: m });
+        await logDesk("system", "Otto", `⚠ Jarvis couldn't answer ${author}'s last message (${/429|rate/i.test(m) ? "a data source is rate-limiting" : /overload|5\d\d/.test(m) ? "Claude is overloaded" : "error"}: ${m.slice(0, 160)}). Send it again.`).catch(() => {});
       }
       if (isJason && res.cards.length) {
         // Link each card to the Jason call it came from (plan.jason_id, else the only open call).
@@ -1703,6 +1757,62 @@ function addDays(date: string, n: number) {
 const dayDiff = (a: string, b: string) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 864e5);
 function fridayOf(date: string) { const wd = new Date(date + "T12:00:00Z").getUTCDay(); return addDays(date, (5 - wd + 7) % 7); }
 function mondayOf(date: string) { const wd = new Date(date + "T12:00:00Z").getUTCDay(); return addDays(date, -((wd + 6) % 7)); }
+
+/* ------------------------------------------------------------ v3.13 market clock
+   6 Oct 2026: Jarvis read Robinhood/TradingView UTC timestamps as New York time and
+   told Josh "the market is closed" at 12:28 PM, called Tuesday "Oct 7", and got
+   expiry weekdays wrong. The clock is now computed here, in code, and handed to
+   every Jarvis run; tool timestamps are converted to ET before he sees them. */
+const NYSE_CLOSED = new Set(["2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19", "2026-07-03",
+  "2026-09-07", "2026-11-26", "2026-12-25", "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26", "2027-05-31", "2027-06-18",
+  "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24"]);
+const NYSE_HALF = new Set(["2026-11-27", "2026-12-24", "2027-11-26"]);   // 1:00 PM ET close
+const WD_LONG: Record<string, string> = { Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday", Sun: "Sunday" };
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function dayName(date: string) { return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(date + "T12:00:00Z").getUTCDay()]; }
+function prettyDate(date: string) { const [y, m, d] = date.split("-").map(Number); return `${WD_LONG[dayName(date)]}, ${MON[m - 1]} ${d}, ${y}`; }
+function isTradingDay(date: string) { return !["Sat", "Sun"].includes(dayName(date)) && !NYSE_CLOSED.has(date); }
+function nextTradingDay(date: string) { let d = addDays(date, 1); while (!isTradingDay(d)) d = addDays(d, 1); return d; }
+// The last trading day of the week that holds `date` (normally Friday; Thursday when Friday is a holiday).
+function weekExpiry(date: string) { let f = fridayOf(date); while (!isTradingDay(f)) f = addDays(f, -1); return f; }
+const hm = (mins: number) => `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}m`;
+export function marketClock(d = new Date()) {
+  const e = etParts(d);
+  const closeMin = NYSE_HALF.has(e.date) ? 780 : 960;
+  const trading = isTradingDay(e.date);
+  let status: "open" | "pre" | "after" | "closed", text: string;
+  if (!trading) {
+    status = "closed";
+    text = `CLOSED today (${NYSE_CLOSED.has(e.date) ? "market holiday" : "weekend"}). Next open: ${prettyDate(nextTradingDay(e.date))} 9:30 AM ET`;
+  } else if (e.min < 570) {
+    status = "pre"; text = `PRE-MARKET — the regular session opens at 9:30 AM ET (in ${hm(570 - e.min)}); options don't trade until then`;
+  } else if (e.min < closeMin) {
+    status = "open"; text = `OPEN — regular session 9:30 AM–${fmtMin(closeMin)} ET, ${hm(closeMin - e.min)} left` +
+      (e.min < 600 ? `; inside the first 30 minutes (until 10:00 AM)` : "");
+  } else {
+    status = "after"; text = `CLOSED for the day at ${fmtMin(closeMin)} ET (after hours; options don't trade). Next open: ${prettyDate(nextTradingDay(e.date))} 9:30 AM ET`;
+  }
+  const thisExp = weekExpiry(e.date), nextExp = weekExpiry(addDays(e.date, 7));
+  const line = `[CLOCK — computed by Otto, authoritative: it is ${prettyDate(e.date)}, ${fmtMin(e.min)} ET. Market: ${text}. ` +
+    `This week's expiry Friday = ${prettyDate(thisExp)} (${thisExp}); next week's = ${prettyDate(nextExp)} (${nextExp}). ` +
+    `Tool data shows times in UTC (ending in Z); Otto writes the ET time next to each one ("= 12:08 PM ET"). ` +
+    `Use THIS line for today's date, the weekday and whether the market is open — never work them out from a tool timestamp.]`;
+  return { ...e, status, closeMin, thisExp, nextExp, line };
+}
+// "2026-10-06T16:08:00Z" → "2026-10-06T16:08:00Z (= 12:08 PM ET)"; adds the date when the ET day differs from today.
+export function etAnnotate(text: string, now = new Date()): string {
+  if (!text) return text;
+  const today = etParts(now).date;
+  return text.replace(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]00:?00)(?![\w(])/g, (m) => {
+    const t = Date.parse(m.replace(/([+-]00)(00)$/, "$1:$2"));
+    if (!isFinite(t)) return m;
+    const p = etParts(new Date(t));
+    return `${m} (= ${p.date === today ? "" : `${dayName(p.date)} ${MON[Number(p.date.slice(5, 7)) - 1]} ${Number(p.date.slice(8))} `}${fmtMin(p.min)} ET)`;
+  }).replace(/("(?:time|t|timestamp|bar_time|begins_at_epoch)"\s*:\s*)(1[6-9]\d{8})(?=[,}\s])/g, (m, k, n) => {
+    const p = etParts(new Date(Number(n) * 1000));
+    return `${k}${n} /* = ${p.date === today ? "" : `${dayName(p.date)} ${MON[Number(p.date.slice(5, 7)) - 1]} ${Number(p.date.slice(8))} `}${fmtMin(p.min)} ET */`;
+  });
+}
 
 const CACHE: Record<string, { at: number; v: any }> = {};
 async function cached<T>(key: string, ms: number, f: () => Promise<T>): Promise<T> {
@@ -1969,23 +2079,27 @@ async function marketDesk() {
 
 /* ------------------------------------------------------------ rule check */
 
-async function ruleChecks(out: any[], plan: any, risk: any, banner: any) {
+export async function ruleChecks(out: any[], plan: any, risk: any, banner: any) {
   const checks: any[] = [];
   const add = (ok: boolean | null, text: string) => checks.push({ ok, text });
   const open = out.find((c) => c.tool === "place_option_order" && (c.args.legs || []).some((l: any) => l.position_effect === "open"));
   if (!open) return checks;
   const now = etParts();
-  if (["Sat", "Sun"].includes(now.wd) || now.min < 570 || now.min >= 960) add(null, "Market closed now: this waits for the open, and Jason says not the first 30 minutes");
-  else if (now.min < 600) add(false, "Inside the first 30 minutes (Jason: stand down until 10:00)");
+  if (["Sat", "Sun"].includes(now.wd) || now.min < 570 || now.min >= 960) add(null, "Market closed now: this waits for the open (no entries in the first 30 minutes unless the open goes off a pre-posted Signal level)");
+  else if (now.min < 600) {
+    // House Rule (6 Oct): the open is fair game when price opens on / pushes off a Signal level posted before the open.
+    if (plan?.signal_level === true) add(null, "Inside the first 30 minutes: OK by the House Rule (a pre-posted Signal level the open went off)");
+    else add(false, "Inside the first 30 minutes (Otto Rules: wait until 10:00 unless the open goes off a pre-posted Signal level)");
+  }
   else add(true, `Past the first 30 minutes (${fmtMin(now.min)} ET)`);
 
   const leg = open.args.legs.find((l: any) => l.position_effect === "open");
   let q: any = null, ins: any = null;
   try { ins = (mcpJson(await call("rh", "get_option_instruments", { ids: leg.option_id }))?.data?.instruments || [])[0] || null; } catch { /* */ }
   try { q = (mcpJson(await call("rh", "get_option_quotes", { instrument_ids: [leg.option_id] }))?.data?.results || [])[0]?.quote || null; } catch { /* */ }
-  if (q?.delta != null) { const d = Math.abs(Number(q.delta)); add(d >= 0.30 && d <= 0.40, `Delta ${d.toFixed(2)} (Jason: 0.30–0.40)`); }
+  if (q?.delta != null) { const d = Math.abs(Number(q.delta)); add(d >= 0.30 && d <= 0.40, `Delta ${d.toFixed(2)} (Otto Rules: 0.30–0.40)`); }
   else add(null, "Delta: couldn't read the quote");
-  if (q?.volume != null && q?.open_interest != null) add(Number(q.volume) > Number(q.open_interest), `Volume ${q.volume} vs open interest ${q.open_interest} (Jason: volume > OI)`);
+  if (q?.volume != null && q?.open_interest != null) add(Number(q.volume) > Number(q.open_interest), `Volume ${q.volume} vs open interest ${q.open_interest} (Otto Rules: volume > OI)`);
   else add(null, "Volume vs open interest: not available");
   if (risk?.pct != null) add(risk.pct <= (risk.warn_pct || 20) / 100, `${Math.round(risk.pct * 100)}% of the account (flag above ${risk.warn_pct || 20}%)`);
   else add(null, "Size vs account: unknown (no limit price)");
@@ -1994,7 +2108,7 @@ async function ruleChecks(out: any[], plan: any, risk: any, banner: any) {
   if (exp) {
     const days = dayDiff(now.date, exp);
     if (days <= 0) add(false, "Expires today (0DTE)");
-    else if (["Thu", "Fri"].includes(now.wd) && exp === fridayOf(now.date)) add(false, "This Friday's expiry after Wednesday (Jason: use next week's)");
+    else if (["Thu", "Fri"].includes(now.wd) && exp === fridayOf(now.date)) add(false, "This Friday's expiry after Wednesday (Otto Rules: use next week's)");
     else add(true, `Expiry ${exp} (${days} day${days === 1 ? "" : "s"})`);
     try {
       const ev = (await econEvents(now.date, exp, 1)).filter((e) => Date.parse(e.date) > Date.now());
@@ -2271,7 +2385,7 @@ async function morningRead(apiKey: string) {
 The live sentiment banner (Josh's intermarket sheet on TradingView data) says: ${JSON.stringify(lite)}
 What's moving (web research just now): ${news.slice(0, 2500) || "unavailable"}
 
-Write today's morning read for Ifoma and Josh (Workflow 1): one line each for the 10-year, crude, USD/JPY; any binary event today; SPY/QQQ and Mag-7 tone (fetch what you need); a bias that agrees with or explains any disagreement with the banner; and the 2–3 setups worth watching from the TradingView watchlist with the trigger level for each. Jason's levels are dated marks — say the call date. No order cards. Under 250 words.`;
+Write today's morning read for Ifoma and Josh (Workflow 1): one line each for the 10-year, crude, USD/JPY; any binary event today; SPY/QQQ and Mag-7 tone (fetch what you need); a bias that agrees with or explains any disagreement with the banner; and the 2–3 setups worth watching from the TradingView watchlist with the trigger level for each. Levels from the calls are dated marks — say the call date. Never name the coach. No order cards. Under 250 words.`;
   const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools, cs, who: "cron", send: () => {}, allowPropose: false, maxRounds: 8 });
   if (res.said.trim()) { await logDesk("assistant", "Jarvis · 8:45 auto", res.said.trim()); await notify("morning", "☀️ Morning read is ready", res.said.trim().slice(0, 200)); }
   return { ok: true, verdict: sent.verdict, words: res.said.split(/\s+/).length };
@@ -2509,7 +2623,22 @@ async function cardBusy(id: string | null | undefined) {
   return db("otto_actions?id=eq." + id + "&select=status").then((r: any) => ["pending", "running"].includes(r?.[0]?.status)).catch(() => false);
 }
 
+// v3.13: a sell-to-close already working on this option (Otto's own stop from an earlier run, or one set by hand).
+async function workingSell(acct: string, ex: any, since: string): Promise<any | null> {
+  const j = mcpJson(await call("rh", "get_option_orders", { account_number: acct, created_at_gte: since }));
+  return (j?.data?.orders || j?.orders || []).find((o: any) => EXIT_OPEN_ORDER.has(o.state) &&
+    (o.legs || []).some((l: any) => l.option_id === ex.option_id && l.side === "sell" && l.position_effect === "close")) || null;
+}
 async function placeStop(a: any, ex: any, acct: string) {
+  const since = new Date(Date.parse(a.decided_at || a.created_at || new Date().toISOString()) - 60e3).toISOString();
+  try {
+    const w = await workingSell(acct, ex, since);
+    if (w) {
+      ex.stop_order_id = w.id; ex.stop_error = null;
+      exitLog(ex, `Stop already working (order ${String(w.id).slice(0, 8)}, ${w.type || "stop"} ${w.stop_price ? "@ $" + Number(w.stop_price).toFixed(2) : ""}) — kept it`);
+      return true;
+    }
+  } catch { /* fall through and place one */ }
   try {
     const r = await call("rh", "place_option_order", { account_number: acct,
       legs: [{ option_id: ex.option_id, side: "sell", position_effect: "close" }],
@@ -2519,7 +2648,15 @@ async function placeStop(a: any, ex: any, acct: string) {
     exitLog(ex, `Stop placed: sell to close at $${ex.stop_option.toFixed(2)} (day order)`);
     return true;
   } catch (e) {
-    ex.stop_error = (e as Error).message.slice(0, 300);
+    const msg = (e as Error).message;
+    // "not enough contracts to close" = a sell already holds the contract. Find it and keep it; no alarm.
+    if (/enough contracts|pending|already/i.test(msg)) {
+      try {
+        const w = await workingSell(acct, ex, since);
+        if (w) { ex.stop_order_id = w.id; ex.stop_error = null; exitLog(ex, `Stop already working (order ${String(w.id).slice(0, 8)}) — kept it`); return true; }
+      } catch { /* report below */ }
+    }
+    ex.stop_error = msg.slice(0, 300);
     exitLog(ex, "Stop order FAILED: " + ex.stop_error);
     await logDesk("system", "Otto", `⚠ ${a.title}: the protective stop at $${ex.stop_option.toFixed(2)} could not be placed (${ex.stop_error}). This trade has NO stop working. Close it or set one by hand.`, a.id);
     await notify("no_stop", `⚠ No stop on ${a.title.replace(/^Buy\s+/i, "")}`, `The protective stop at $${ex.stop_option.toFixed(2)} couldn't be placed. Open the Desk.`);
@@ -2580,7 +2717,30 @@ async function heldQty(acct: string, optionId: string) {
   return (j?.data?.positions || []).filter((p: any) => p.type === "long").reduce((s: number, p: any) => s + Number(p.quantity || 0), 0);
 }
 
-async function exitTick(a: any) {
+/* v3.13: a lease so only ONE exit run works a trade at a time. On 6 Oct the 2-minute cron, the
+   Approve click and the Desk panel all ran exitTick on the same fill at once: the first placed the
+   stop, the others' stop orders were rejected ("not enough contracts") and raised false NO-stop
+   alarms. The lease is an atomic UPDATE … WHERE exit_lock is null or stale (012_v313.sql). */
+const EXIT_LEASE_MS = 90_000;
+async function exitLease(id: string): Promise<any | null> {
+  const stale = new Date(Date.now() - EXIT_LEASE_MS).toISOString();
+  try {
+    const rows = await db(`otto_actions?id=eq.${id}&or=(exit_lock.is.null,exit_lock.lt.${stale})&select=*`,
+      { method: "PATCH", body: JSON.stringify({ exit_lock: new Date().toISOString() }) });
+    return rows?.[0] || null;
+  } catch (e) {
+    // 012_v313.sql not run yet: keep the exit engine working (unlocked, as before) rather than stop it.
+    if (/exit_lock/.test(String((e as Error).message))) return (await db(`otto_actions?id=eq.${id}&select=*`))?.[0] || null;
+    throw e;
+  }
+}
+export async function exitTick(a: any) {
+  const fresh = await exitLease(a.id);
+  if (!fresh) return { id: a.id, skipped: "another run is working this trade" };
+  try { return await exitTickLocked(fresh); }
+  finally { await db("otto_actions?id=eq." + a.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ exit_lock: null }) }).catch(() => {}); }
+}
+async function exitTickLocked(a: any) {
   const ex: any = { ...(a.exit || {}) };
   const acct = await agenticAccount();
   const today = etParts().date;
@@ -2803,7 +2963,7 @@ async function jasonExtract(apiKey: string, src: { image?: { media_type: string;
     body: JSON.stringify({ model: MODEL, max_tokens: 4000, system: JASON_READ_SYS, tools: [JASON_TOOL],
       tool_choice: { type: "tool", name: "record_posts" }, messages: [{ role: "user", content }] }),
   });
-  if (!r.ok) throw new Error("reading Jason's post failed: claude HTTP " + r.status + " " + (await r.text()).slice(0, 160));
+  if (!r.ok) throw new Error("reading the signal failed: claude HTTP " + r.status + " " + (await r.text()).slice(0, 160));
   const j = await r.json();
   const tu = (j.content || []).find((b: any) => b.type === "tool_use");
   const posts = Array.isArray(tu?.input?.posts) ? tu.input.posts : [];
@@ -3543,7 +3703,7 @@ async function positionReview(trigger: string | null = null) {
   const prompt = `[Automatic position check — nobody typed this. ${trigger ? "TRIGGER: " + trigger : `Scheduled check (every ${Math.round(every / 60e3)} min).`}]
 Open in the Agentic account — options: ${JSON.stringify(opts.map((p: any) => ({ option_id: p.option_id, symbol: p.chain_symbol, qty: p.quantity, avg: p.average_price, exp: p.expiration_date })))}; shares: ${JSON.stringify(shares.map((p: any) => ({ symbol: p.symbol, qty: p.quantity })))}.
 Plans on file: ${JSON.stringify((plans || []).map((r: any) => ({ title: r.title, setup: r.plan?.setup, direction: r.exit?.direction, tp1: r.exit?.tp1, wrong_if: r.exit?.wrong_if, stop_option: r.exit?.stop_option, option_id: r.exit?.option_id })))}.
-For each position: fetch the underlying's live price and recent 5-minute bars (and the option quote), compare with its plan and Jason's exit rules, and decide HOLD or CLOSE. If CLOSE, call close_position with a one-sentence reason. Auto-close is ON. If every position is a HOLD, reply with exactly the single word HOLD and nothing else; otherwise one short line per position saying what you did and why.`;
+For each position: fetch the underlying's live price and recent 5-minute bars (and the option quote), compare with its plan, the Otto Rules exits and the House Rules (intraday only: close before 4:00 PM ET), and decide HOLD or CLOSE. If CLOSE, call close_position with a one-sentence reason. Auto-close is ON. If every position is a HOLD, reply with exactly the single word HOLD and nothing else; otherwise one short line per position saying what you did and why.`;
   const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: [TOOLS[0], ...mcpToolDefs, CLOSE_TOOL], cs: chunksOf(calls),
     who: "auto-review", send: () => {}, allowPropose: false, allowClose: true, maxRounds: 8 });
   const said = res.said.trim();
@@ -3584,6 +3744,54 @@ async function hmac(key: Uint8Array, data: Uint8Array) {
   return new Uint8Array(await crypto.subtle.sign("HMAC", k, data));
 }
 const te = new TextEncoder();
+
+/* ------------------------------------------------------------ v3.13 House Rules
+   Standing instructions from Ifoma and Josh. Stored in otto_settings "house_rules", shown and edited in
+   Settings → House Rules, loaded into every Jarvis run, and saved by Jarvis (save_house_rule) when
+   someone gives a standing instruction on the Desk. */
+const HOUSE_DEFAULTS = [
+  "Intraday only: every trade is closed the same day. Don't hold overnight unless Ifoma or Josh says so for that trade.",
+  "Trading the open: when a Signal level was posted before the open and price opens on it or pushes off it, it's a go before 10:00 AM. Otherwise no entries in the first 30 minutes.",
+  "Read entries on the 5-minute and 10-minute charts, on candle closes, not wicks.",
+  "Look for setups in both directions: calls on a break or a pullback that holds, puts on a rejection. Label a quick trade SCALP on the card.",
+  "When a setup checks the boxes, build the card without asking first. Ask only if you can't see the data.",
+  "On an open trade, warn early (lower highs, stalling near the wrong-if, the option bleeding) before the stop is anywhere close.",
+  "Guardrails flag, never block: always show the card with the red banner; Ifoma and Josh decide.",
+];
+export async function houseRules(): Promise<{ id: string; text: string; by: string; at: string }[]> {
+  return cached("house_rules", 30e3, async () => {
+    const v = await setting("house_rules").catch(() => null);
+    if (v && Array.isArray(v.rules)) return v.rules;
+    return HOUSE_DEFAULTS.map((text, i) => ({ id: "d" + (i + 1), text, by: "Ifoma (6 Oct)", at: "2026-10-06T21:00:00Z" }));
+  });
+}
+export async function houseRulesText(): Promise<string> {
+  const r = await houseRules();
+  return r.length ? "HOUSE RULES — their standing instructions; follow every one:\n" + r.map((x, i) => `${i + 1}. ${x.text}`).join("\n") : "";
+}
+async function houseRulesSet(body: any, who: string) {
+  const list = (Array.isArray(body?.rules) ? body.rules : []).map((x: any) => ({
+    id: String(x.id || crypto.randomUUID().slice(0, 8)), text: String(x.text || "").trim().slice(0, 400),
+    by: String(x.by || body?.author || who.split("@")[0]).slice(0, 40), at: String(x.at || new Date().toISOString()) })).filter((x: any) => x.text);
+  if (list.length > 40) throw new Error("40 rules max — remove some first");
+  await putSetting("house_rules", { rules: list }, String(body?.author || who).slice(0, 60));
+  delete CACHE.house_rules;
+  return list;
+}
+export async function houseRuleAdd(text: string, by: string) {
+  const t = String(text || "").trim().slice(0, 400);
+  if (t.length < 8) throw new Error("rule text too short");
+  const cur = await houseRules();
+  if (cur.some((x) => x.text.toLowerCase() === t.toLowerCase())) return cur;
+  const list = await houseRulesSet({ rules: [...cur, { text: t, by }], author: by }, by);
+  await logDesk("system", "Otto", `📌 House rule saved (${by}): ${t}  — see or edit it in Settings → House Rules.`);
+  return list;
+}
+const HOUSE_TOOL = {
+  name: "save_house_rule",
+  description: "Save a standing instruction from Ifoma or Josh to the House Rules (loaded into every future run). Use only for instructions meant to apply from now on, written as one plain sentence.",
+  input_schema: { type: "object", properties: { text: { type: "string", description: "The rule, one plain sentence" } }, required: ["text"] },
+};
 
 async function setting(key: string): Promise<any> {
   const r = await db("otto_settings?key=eq." + key + "&select=value");
@@ -3721,13 +3929,32 @@ async function pushTest(b: any) {
    Limits live in otto_settings (007_v33.sql) so Ifoma and Josh change them in
    Settings with no code. They are warnings on cards, never blocks. */
 
-const LIMIT_DEFAULTS: any = { phase: 1, max_trade_loss: 100, weekly_loss: 150, max_trades_day: 2, monthly_goal_pct: 5, warn_pct: 20, big_day: 500, auto_close: true, review_min: 15 };
-async function getLimits(): Promise<any> {
+// v3.13 (Ifoma, 6 Oct): limits are % of the Agentic account — 10% max loss per trade (at the stop),
+// 20% weekly, a daily stop after 2 losing trades or 2× the max loss. All of them FLAG; none blocks.
+const LIMIT_DEFAULTS: any = { phase: 1, max_trade_loss: 100, weekly_loss: 150, max_trades_day: 2, monthly_goal_pct: 5, warn_pct: 20, big_day: 500,
+  auto_close: true, review_min: 15, max_trade_pct: 10, weekly_pct: 20, daily_losses: 2 };
+async function agenticValue(): Promise<number | null> {
+  return cached("agentic_value", 5 * 60e3, async () => {
+    try {
+      const pj = mcpJson(await call("rh", "get_portfolio", { account_number: await agenticAccount() }));
+      return Number(pj?.data?.total_value ?? pj?.total_value) || null;
+    } catch { return null; }
+  });
+}
+export async function getLimits(): Promise<any> {
   return cached("limits", 30e3, async () => {
+    let L: any;
     try {
       const r = await db("otto_settings?key=eq.limits&select=value,updated_by,updated_at");
-      return { ...LIMIT_DEFAULTS, ...(r?.[0]?.value || {}), _by: r?.[0]?.updated_by || null, _at: r?.[0]?.updated_at || null };
-    } catch { return { ...LIMIT_DEFAULTS }; }
+      L = { ...LIMIT_DEFAULTS, ...(r?.[0]?.value || {}), _by: r?.[0]?.updated_by || null, _at: r?.[0]?.updated_at || null };
+    } catch { L = { ...LIMIT_DEFAULTS }; }
+    // % limits become today's dollars from the live account value; the stored $ stay as the fallback.
+    const v = (Number(L.max_trade_pct) > 0 || Number(L.weekly_pct) > 0) ? await agenticValue() : null;
+    L.account_value = v;
+    if (v && Number(L.max_trade_pct) > 0) L.max_trade_loss = Math.round(v * L.max_trade_pct / 100);
+    if (v && Number(L.weekly_pct) > 0) L.weekly_loss = Math.round(v * L.weekly_pct / 100);
+    L.pct_mode = !!v;
+    return L;
   });
 }
 async function setLimits(body: any, who: string) {
@@ -3739,11 +3966,13 @@ async function setLimits(body: any, who: string) {
   };
   const value = { phase: num("phase", 1, 3), max_trade_loss: num("max_trade_loss", 0, 1e6), weekly_loss: num("weekly_loss", 1, 1e6),
     max_trades_day: num("max_trades_day", 1, 100), monthly_goal_pct: num("monthly_goal_pct", 0, 100), warn_pct: num("warn_pct", 1, 100),
-    big_day: num("big_day", 1, 1e7), auto_close: v.auto_close === true || v.auto_close === "true", review_min: num("review_min", 5, 120) };
+    big_day: num("big_day", 1, 1e7), auto_close: v.auto_close === true || v.auto_close === "true", review_min: num("review_min", 5, 120),
+    max_trade_pct: num("max_trade_pct", 0, 100), weekly_pct: num("weekly_pct", 0, 100), daily_losses: num("daily_losses", 0, 20) };
   await db("otto_settings?on_conflict=key", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify({ key: "limits", value, updated_by: by + " (" + who + ")", updated_at: new Date().toISOString() }) });
   delete CACHE.limits;
-  await logDesk("system", "Otto", `Limits updated by ${by}: max loss/trade ${value.max_trade_loss > 0 ? "$" + value.max_trade_loss : "off"}, weekly loss limit $${value.weekly_loss}, ${value.max_trades_day} trades/day, goal ${value.monthly_goal_pct}%/month, warn over ${value.warn_pct}% of the account. Auto-close ${value.auto_close ? `ON (Jarvis can sell to close on his own; checks every ${value.review_min} min)` : "OFF (closes need an Approve)"}.`);
+  delete CACHE.agentic_value;
+  await logDesk("system", "Otto", `Guardrails updated by ${by} (they flag, never block): max loss/trade ${value.max_trade_pct > 0 ? value.max_trade_pct + "% of the account" : value.max_trade_loss > 0 ? "$" + value.max_trade_loss : "off"}, weekly ${value.weekly_pct > 0 ? value.weekly_pct + "%" : "$" + value.weekly_loss}, daily stop after ${value.daily_losses || "—"} losing trades or 2× the max loss, ${value.max_trades_day} trades/day, goal ${value.monthly_goal_pct}%/month, warn over ${value.warn_pct}% of the account. Auto-close ${value.auto_close ? `ON (Jarvis can sell to close on his own; checks every ${value.review_min} min)` : "OFF (closes need an Approve)"}.`);
   return { ...value, _by: who, _at: new Date().toISOString() };
 }
 
@@ -3859,23 +4088,40 @@ async function performance(apiKey: string, wantRead: boolean, fresh = false) {
 }
 
 // Limit checks that go on every opening card, next to the rule check.
-async function limitChecks(cost: number | null): Promise<any[]> {
+export async function limitChecks(cost: number | null, atStop: number | null = null): Promise<any[]> {
   const L = await getLimits();
   const out: any[] = [];
-  if (cost != null) out.push({ ok: L.max_trade_loss > 0 ? cost <= L.max_trade_loss : null, text: `Most this trade can lose: $${cost.toFixed(0)}${L.max_trade_loss > 0 ? ` (your limit $${L.max_trade_loss})` : " (no per-trade limit set)"}` });
+  const cap = L.max_trade_loss > 0 ? `${L.pct_mode && L.max_trade_pct > 0 ? `your ${L.max_trade_pct}% max, $${L.max_trade_loss}` : `your max $${L.max_trade_loss}`}` : "";
+  if (atStop != null) {
+    out.push({ ok: L.max_trade_loss > 0 ? atStop <= L.max_trade_loss : null, guard: true,
+      text: `Loss if the stop fills: about −$${atStop.toFixed(0)}${cap ? (atStop <= L.max_trade_loss ? ` (inside ${cap})` : ` — OVER ${cap}`) : " (no per-trade max set)"}. Option stops can fill lower on a fast move.` });
+    if (cost != null) out.push({ ok: null, text: `Whole premium $${cost.toFixed(0)} (lost only if the option goes to zero)` });
+  } else if (cost != null) out.push({ ok: L.max_trade_loss > 0 ? cost <= L.max_trade_loss : null, guard: true, text: `Most this trade can lose: $${cost.toFixed(0)}${cap ? (cost <= L.max_trade_loss ? ` (inside ${cap})` : ` — OVER ${cap}`) : " (no per-trade max set)"}` });
+  // Daily stop: N losing trades today, or losses of 2× the max loss (Agentic account).
+  try {
+    const today = etParts().date;
+    const t = await db("otto_trades?select=account,pnl,closed_at&closed_at=gte." + new Date(Date.now() - 864e5).toISOString());
+    const mine = (t || []).filter((x: any) => /agentic/i.test(String(x.account || "")) && x.pnl != null && etParts(new Date(x.closed_at)).date === today);
+    const losers = mine.filter((x: any) => Number(x.pnl) < 0).length, dayPnl = mine.reduce((s: number, x: any) => s + Number(x.pnl), 0);
+    const nMax = Number(L.daily_losses) || 0, dMax = L.max_trade_loss > 0 ? 2 * L.max_trade_loss : 0;
+    const hit = (nMax > 0 && losers >= nMax) || (dMax > 0 && dayPnl <= -dMax);
+    out.push({ ok: !hit, guard: true, text: hit
+      ? `DAILY STOP: ${losers} losing trade${losers === 1 ? "" : "s"} today, $${dayPnl.toFixed(0)} — your rule says done for the day`
+      : `Today: ${losers} losing trade${losers === 1 ? "" : "s"}, $${dayPnl.toFixed(0)} (daily stop at ${nMax || "—"} losers${dMax ? ` or −$${dMax}` : ""})` });
+  } catch { out.push({ ok: null, text: "Daily stop: couldn't read today's trades" }); }
   try {
     const p = await dailyPnl();
     const wk = mondayOf(etParts().date);
     const weekPnl = p.days.filter((d) => d.date >= wk).reduce((s, d) => s + d.pnl, 0);
-    out.push({ ok: weekPnl > -L.weekly_loss, text: weekPnl <= -L.weekly_loss
-      ? `Weekly limit hit ($${weekPnl.toFixed(0)} of −$${L.weekly_loss}): stop for the week`
+    out.push({ ok: weekPnl > -L.weekly_loss, guard: true, text: weekPnl <= -L.weekly_loss
+      ? `WEEKLY LIMIT hit ($${weekPnl.toFixed(0)} of −$${L.weekly_loss}${L.pct_mode && L.weekly_pct > 0 ? `, ${L.weekly_pct}%` : ""}): your rule says stop for the week`
       : `This week $${weekPnl.toFixed(0)} (stop at −$${L.weekly_loss})` });
   } catch { out.push({ ok: null, text: "Weekly P&L: couldn't read Robinhood" }); }
   try {
     const today = etParts().date;
     const t = await db("otto_trades?select=opened_at&opened_at=gte." + new Date(Date.now() - 864e5).toISOString());
     const n = t.filter((x: any) => etParts(new Date(x.opened_at)).date === today).length;
-    out.push({ ok: n < L.max_trades_day, text: `Trade ${n + 1} today (limit ${L.max_trades_day})` });
+    out.push({ ok: n < L.max_trades_day, guard: true, text: `Trade ${n + 1} today (your max ${L.max_trades_day})` });
   } catch { /* */ }
   return out;
 }
@@ -4046,6 +4292,12 @@ Deno.serve(async (req) => {
       if (fn === "layout_get") return json({ ok: true, layout: await setting("layout") });
       if (fn === "layout_set") return json({ ok: true, layout: await layoutSet(body, who) });
       if (fn === "limits_get") return json({ ok: true, limits: await getLimits() });
+      if (fn === "house_rules_get") return json({ ok: true, rules: await houseRules() });
+      if (fn === "house_rules_set") {
+        const list = await houseRulesSet(body, who);
+        await logDesk("system", "Otto", `📌 House Rules updated by ${String(body?.author || who.split("@")[0]).slice(0, 40)} (${list.length} rule${list.length === 1 ? "" : "s"}). Jarvis follows them from the next message on.`);
+        return json({ ok: true, rules: list });
+      }
       if (fn === "push_key") return json({ ok: true, key: (await vapid()).pub });
       if (fn === "push_sub") return json({ ok: true, ...(await pushSubscribe(body, who)) });
       if (fn === "push_list") return json({ ok: true, ...(await pushList(String(body?.endpoint || ""))) });
