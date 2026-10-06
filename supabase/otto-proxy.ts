@@ -4,6 +4,7 @@
 //   Discord channel live and posts each new message to ?fn=signal_in (x-otto-signal key);
 //   Jarvis builds the card, both phones ping. Watcher-offline alert on the 2-min cron.
 //   ?fn=signals_feed signal_img signals_cfg signals_cfg_set. No quiet hours on pings. 010_v39.sql.
+//   v3.9.4: protected-trade alerts retried + honest fill push; stalled Otto Signals reads ping raw words; card builds skip TradingView.
 //   v3.9.3: per-trade loss limit can be OFF (0); Otto Signals adds an ALT card when the best contract doesn't fit; feed read = final READ: only.
 //   v3.9.2: Yahoo FIRST for banner + panel prices (TradingView = backup); watchlist from TV at most every 10 min;
 //   TV breaker also trips on 429 / bad handshake. Exit engine — stop placed + saved before TradingView alerts; a TradingView failure no longer loses stop bookkeeping.
@@ -2435,7 +2436,7 @@ async function placeStop(a: any, ex: any, acct: string) {
   }
 }
 
-async function armAlerts(a: any, ex: any) {
+async function armAlerts(a: any, ex: any, only?: ("wrong" | "tp1")[]) {
   const exp = ex.expires && /^\d{4}-\d{2}-\d{2}$/.test(ex.expires) ? ex.expires + "T21:00:00Z" : new Date(Date.now() + 14 * 864e5).toISOString();
   const tk = ex.tv_symbol.split(":").pop();
   const mk = async (kind: "wrong" | "tp1") => {
@@ -2451,7 +2452,8 @@ async function armAlerts(a: any, ex: any) {
       resolution: res, expiration: exp, popup: false, mobile_push: false, email: false };
     try {
       const j = mcpJson(await call("tv", "mcp-tv-create-alert", args));
-      const id = j?.alert_id ?? j?.data?.alert_id ?? null;
+      const id = j?.alert_id ?? j?.data?.alert_id ?? j?.alert?.alert_id ?? j?.tv_alert_id ?? j?.id ?? j?.data?.id ?? null;
+      if (id == null) throw new Error("TradingView created the alert but returned no id: " + JSON.stringify(j).slice(0, 160));
       exitLog(ex, `Alert set: ${kind === "wrong" ? "wrong-if" : "TP1"} ${tk} ${value}`);
       return id;
     } catch (e) {
@@ -2461,7 +2463,11 @@ async function armAlerts(a: any, ex: any) {
       return null;
     }
   };
-  ex.alerts = { wrong: await mk("wrong"), tp1: await mk("tp1") };
+  // v3.9.4: only (re)arm what's missing, keep what's already set.
+  const want = only || ["wrong", "tp1"];
+  const cur = ex.alerts || {};
+  ex.alerts = { wrong: want.includes("wrong") ? await mk("wrong") : (cur.wrong ?? null), tp1: want.includes("tp1") ? await mk("tp1") : (cur.tp1 ?? null) };
+  if (ex.alerts.wrong != null && ex.alerts.tp1 != null) ex.alert_error = null;
 }
 
 async function cleanupExit(ex: any, acct: string) {
@@ -2522,7 +2528,9 @@ async function exitTick(a: any) {
       `Alerts: wrong-if ${ex.wrong_if} ${ex.alerts?.wrong != null ? "✓" : "✗"}, TP1 ${ex.tp1} ${ex.alerts?.tp1 != null ? "✓" : "✗"}.` +
       (ex.alert_error ? ` (${ex.alert_error})` : ""), a.id);
     await notify("fill", `✓ Filled: ${a.title.replace(/^Buy\s+/i, "")} @ $${ex.fill_price.toFixed(2)}`,
-      stopOk ? `Stop on at $${ex.stop_option.toFixed(2)} (about −$${loss.toFixed(0)}). Alerts at ${ex.wrong_if} and ${ex.tp1}.` : `Stop goes on at 9:30 ET. Alerts at ${ex.wrong_if} and ${ex.tp1}.`);
+      (stopOk ? `Stop on at $${ex.stop_option.toFixed(2)} (about −$${loss.toFixed(0)}). ` : `Stop goes on at 9:30 ET. `) +
+      (ex.alerts?.wrong != null && ex.alerts?.tp1 != null ? `Alerts set at ${ex.wrong_if} and ${ex.tp1}.`
+        : `⚠ TradingView alerts NOT set (${ex.alerts?.wrong != null ? "" : "wrong-if " + ex.wrong_if + " "}${ex.alerts?.tp1 != null ? "" : "TP1 " + ex.tp1}) — Otto keeps retrying.${ex.alert_error ? " " + ex.alert_error : ""}`));
     return { id: a.id, state: ex.state };
   }
   if (ex.state !== "armed") return { id: a.id, state: ex.state };
@@ -2549,6 +2557,24 @@ async function exitTick(a: any) {
     if (need && (ex.stop_tries || 0) < 3 && !(await cardBusy(ex.close_card))) {
       ex.stop_tries = (ex.stop_tries || 0) + 1; await placeStop(a, ex, acct);
       await saveExit(a.id, ex);                     // v3.9.2: remember the new stop's id even if TradingView fails next
+    }
+  }
+
+  // v3.9.4: alerts that failed to set (TradingView down / 20-alert limit) are retried every 10 min, up to 6 times a day.
+  const missing = (["wrong", "tp1"] as const).filter((k) => ex.alerts?.[k] == null);
+  if (missing.length && (!ex.alert_retry_at || Date.now() - Date.parse(ex.alert_retry_at) > 10 * 60e3)) {
+    if (ex.alert_try_day !== today) { ex.alert_try_day = today; ex.alert_tries = 0; }
+    if ((ex.alert_tries || 0) < 6) {
+      ex.alert_tries = (ex.alert_tries || 0) + 1; ex.alert_retry_at = new Date().toISOString();
+      try { await armAlerts(a, ex, [...missing]); } catch { /* logged inside */ }
+      const still = (["wrong", "tp1"] as const).filter((k) => ex.alerts?.[k] == null);
+      if (!still.length) exitLog(ex, "Alerts set on retry");
+      else if (!ex.alert_warned_day || ex.alert_warned_day !== today) {
+        ex.alert_warned_day = today;
+        await notify("trade_alert", `⚠ Alerts not set: ${a.title.replace(/^Buy\s+/i, "")}`,
+          `Otto couldn't set the TradingView ${still.join(" + ")} alert${still.length > 1 ? "s" : ""}${ex.alert_error ? " — " + ex.alert_error : ""}. The stop is unaffected. Otto keeps retrying.`);
+      }
+      await saveExit(a.id, ex);
     }
   }
 
@@ -2968,7 +2994,7 @@ async function sigExtract(apiKey: string, mentor: string, text: string, imgs: { 
     media_type: /^image\/(jpeg|png|webp|gif)$/.test(i.mime) ? i.mime : "image/jpeg", data: i.data } }));
   content.push({ type: "text", text: `Discord messages from ${mentor}, ${day} (New York time).${imgs.length ? " The image(s) above are charts attached to the NEW messages." : ""}\n\n${text.slice(0, 20000)}\n\nRecord ${mentor}'s NEW posts.` });
   const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
+    method: "POST", signal: AbortSignal.timeout(75_000),         // v3.9.4: never hang the read
     headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
     body: JSON.stringify({ model: MODEL, max_tokens: 4000, system: sigReadSys(mentor), tools: [SIG_TOOL],
       tool_choice: { type: "tool", name: "record_posts" }, messages: [{ role: "user", content }] }),
@@ -3126,7 +3152,10 @@ async function signalJarvis(bid: number) {
     let res = { said: "", cards: [] as string[] };
     let err = "";
     try {
-      res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: tools.filter((t: any) => t.name !== "close_position"),
+      // v3.9.4: no TradingView tools in a card build — TradingView has been slow/rate-limited and it ate Jarvis's
+      // time. Prices, chains and quotes come from Robinhood; the banner (Yahoo) is in the context line.
+      res = await runDesk({ msgs: [{ role: "user", content: prompt + "\n(Use Robinhood tools for prices, option chains and quotes — TradingView tools are not available in this run.)" }], sys,
+        tools: tools.filter((t: any) => t.name !== "close_position" && !/^tv__/.test(String(t.name || ""))),
         cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 8 });
     } catch (e) { err = String((e as Error).message || e).slice(0, 300); }
     const acts = res.cards.length ? await db("otto_actions?select=id,title,plan&id=in.(" + res.cards.join(",") + ")").catch(() => []) : [];
@@ -3158,9 +3187,17 @@ async function signalJarvis(bid: number) {
 // v3.9.1: a card build that stalls (Supabase cut it off) is marked failed and pinged.
 async function signalStale() {
   const cut = new Date(Date.now() - 4 * 60e3).toISOString();
-  const stuck = await db(`otto_signal_batches?select=id,rows&status=in.(reading,jarvis)&created_at=lt.${cut}&limit=10`).catch(() => []);
+  const stuck = await db(`otto_signal_batches?select=id,rows,status,msg_ids,created_at&status=in.(reading,jarvis)&created_at=lt.${cut}&limit=10`).catch(() => []);
+  const cfg = await sigCfg();
   for (const b of stuck) {
     await sigBatch(b.id, { status: "error", error: "Timed out — the server cut the run off before Jarvis finished." });
+    // v3.9.4: stalled while still READING the post (nothing saved yet) → ping with his raw words so nothing is missed.
+    if (b.status === "reading" && !(b.rows || []).length && Date.now() - Date.parse(b.created_at) < 60 * 60e3) {
+      const msgs = (b.msg_ids || []).length ? await db("otto_signal_msgs?select=text,posted_at&msg_id=in.(" + b.msg_ids.join(",") + ")").catch(() => []) : [];
+      const words = msgs.map((m: any) => m.text).filter(Boolean).join(" / ").slice(0, 160);
+      await notify("signal", `⚡ ${cfg.mentor} posted — Otto couldn't read it`, `${words || "(a chart, no text)"} — open Discord or Otto Signals.`, "./#signals");
+      continue;
+    }
     const rows = (b.rows || []).length ? await db("otto_jason?select=ticker,kind,words,action_id&id=in.(" + b.rows.join(",") + ")").catch(() => []) : [];
     const calls = rows.filter((r: any) => r.kind === "call" && !r.action_id);
     if (calls.length) await notify("signal", `⚠️ No card for ${calls.map((r: any) => r.ticker).filter(Boolean).join(", ") || "a call"}`,
