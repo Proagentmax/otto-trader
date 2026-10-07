@@ -660,6 +660,37 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
   .dk-rail{flex-wrap:wrap}.dk-checks{grid-template-columns:1fr}
 }
 
+/* v3.18 Morning Prep, Score additions, Desk polish */
+.pp-who{display:flex;gap:6px;align-items:center;margin-bottom:12px}
+.pp-pill{border:1px solid var(--rule);border-radius:999px;padding:4px 14px;font-size:12.5px;color:var(--ink-2);background:var(--surface);cursor:pointer}
+.pp-pill.on{color:var(--ink);border-color:#3a414b;background:var(--surface-3)}
+.pp-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:12px}
+.pp-drop{border:1.5px dashed #343b45;border-radius:10px;padding:10px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pp-drop.over{border-color:var(--warn)}
+.pp-shot{position:relative;background:var(--bg);border:1px solid var(--rule);border-radius:8px;overflow:hidden;aspect-ratio:2/1}
+.pp-shot img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}
+.pp-shot button{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);border:0;color:#fff;border-radius:50%;width:22px;height:22px;cursor:pointer}
+.pp-add{display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--ink-3);font-size:12px;text-align:center;cursor:pointer;min-height:110px}
+.pp-notes{width:100%;min-height:118px;background:var(--bg);border:1px solid var(--rule);border-radius:8px;color:var(--ink);font:13px/1.5 var(--body);padding:10px;resize:vertical}
+.pp-msg{display:grid;grid-template-columns:28px 1fr;gap:10px;margin:12px 0}
+.pp-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 12px var(--body);background:rgba(90,169,255,.15);color:var(--blue)}
+.pp-av.u{background:rgba(245,180,0,.14);color:var(--warn)}
+.pp-q{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:8px 12px;margin:6px 0;font-size:13.5px}
+.pp-q b{color:var(--warn);margin-right:6px}
+.pp-grade{display:flex;gap:14px;align-items:center;margin:6px 0 10px}
+.pp-letter{font-size:34px;font-weight:700;line-height:1}
+.pp-fb{margin:4px 0;padding-left:18px;font-size:13.5px}.pp-fb li{margin:3px 0}
+.pp-lvl{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--rule);font-size:13px;gap:8px}
+.dk-sys.st-ok{color:var(--up);border:1px solid rgba(0,200,5,.25)}.dk-sys.st-bad{color:var(--down);border:1px solid rgba(255,80,0,.35)}
+.dk-sys.ck{color:var(--blue);border:1px solid rgba(90,169,255,.3)}
+.dk-sys details summary{cursor:pointer;list-style:none}.dk-sys details pre{white-space:pre-wrap;font:11.5px var(--body);margin:6px 0 0;text-align:left;color:var(--ink-2)}
+.dk-corr{margin-top:8px;border-left:3px solid var(--down);background:rgba(255,80,0,.07);padding:6px 10px;border-radius:0 6px 6px 0;font-size:13.5px}
+.wt-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}
+.wt-chip{display:inline-flex;gap:6px;align-items:center;background:rgba(90,169,255,.1);border:1px solid rgba(90,169,255,.3);color:#bcd6ff;border-radius:999px;padding:2px 9px;font-size:11.5px;max-width:100%}
+.wt-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px}
+.wt-chip button{background:none;border:0;color:inherit;cursor:pointer;padding:0 0 0 2px}
+.pp-lvl .dk-btn,#ppSend,#ppCopy,#ppReplyGo{margin:0}
+@media (max-width:900px){.pp-grid{grid-template-columns:1fr}.pp-drop{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -669,6 +700,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <div class="dk-logo">O</div>
     <div class="dk-tabs" id="dkTabs">
     <button data-go="desk" class="on"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5a8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4z"/></svg>Desk</button>
+    <button data-go="prep" title="Morning Prep: your sentiment read, graded by Jarvis"><svg viewBox="0 0 24 24"><path d="M17 18a5 5 0 0 0-10 0"/><path d="M12 2v7M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1M8 6l4-4 4 4"/></svg>Prep</button>
     <button data-go="market"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>Market</button>
     <button data-go="perf"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Results</button>
     <button data-go="journal"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Journal</button>
@@ -2053,7 +2085,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.15.0";
+const BUILD="3.18.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2841,7 +2873,7 @@ function dkWho(){return ($("#dkWho")&&$("#dkWho").value)||"Ifoma"}
 function dkRenderLeft(){
   const p=DK.panel||{},Q=dkQuotes();
   const cal=(DK.sent&&DK.sent.calendar)||[];
-  let h=dkWatchCard()+cal.length||DK.sent?`<div class="dk-cardx"><div class="dk-h">Today <b>${new Date().toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}</b></div>${cal.length?cal.map(e=>`<div class="dk-row"><span>${esc(dkTime(e.date))} · ${esc(e.title)}</span><span class="dk-tag ${e.importance>=1?(Date.parse(e.date)>Date.now()?"near":""):""}">${e.importance>=1?(Date.parse(e.date)>Date.now()?"binary":"passed"):"med"}</span></div>`).join(""):`<div class="mut">No US releases today.</div>`}</div>`:"";
+  let h=dkWatchCard()+(cal.length||DK.sent?`<div class="dk-cardx"><div class="dk-h">Today <b>${new Date().toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}</b></div>${cal.length?cal.map(e=>`<div class="dk-row"><span>${esc(dkTime(e.date))} · ${esc(e.title)}</span><span class="dk-tag ${e.importance>=1?(Date.parse(e.date)>Date.now()?"near":""):""}">${e.importance>=1?(Date.parse(e.date)>Date.now()?"binary":"passed"):"med"}</span></div>`).join(""):`<div class="mut">No US releases today.</div>`}</div>`:"");   // v3.18 fix: the Watcher card was dropped by operator precedence since v3.14
   h+=`<div class="dk-cardx"><div class="dk-h">Morning read <b>${new Date().toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}</b></div>
     <div class="mut" style="color:var(--ink-2)">Ask the desk for today's read: the three inputs, SPY/QQQ, the Mag 7, the calendar.</div>
     <button class="dk-link" data-q="Morning read: the three macro inputs, SPY/QQQ and the Mag 7, today's calendar and earnings on my watchlist. Bias and the 2–3 setups worth watching. No orders.">Run the morning read →</button></div>`;
@@ -3138,7 +3170,7 @@ async function dkOauthReturn(){
    4 Oct 2026, approved mockup otto-v3.1-mockup.html. The sentiment banner
    (Josh's intermarket sheet on live TradingView data, verdict only, no sizing),
    desktop Market / Journal / Review / Score / Jason pages inside the Desk shell. */
-const DK_VIEWS=["desk","market","perf","journal","review","score","playbook","jason","more","help"];
+const DK_VIEWS=["desk","prep","market","perf","journal","review","score","playbook","jason","more","help"];
 function dkShow(v){
   if(!DK_VIEWS.includes(v))v="desk";
   DK.view=v;LS.set("dkView",v);
@@ -3147,7 +3179,7 @@ function dkShow(v){
   if(v==="desk"){dkRenderMsgs(true);return}
   const pg=$("#dkPage");pg.scrollTop=0;
   if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see this page.</p></div>`;return}
-  ({market:dkMarket,perf:dkPerf,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,more:dkMore,help:dkHelp})[v]();
+  ({prep:dkPrep,market:dkMarket,perf:dkPerf,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,more:dkMore,help:dkHelp})[v]();
 }
 const dkLoading=t=>`<div class="dk-empty" style="margin:60px auto">${esc(t||"Loading…")}</div>`;
 const dkErr=e=>`<div class="dk-empty dk-err" style="margin:60px auto">${esc(String(e&&e.message||e))}</div>`;
@@ -3448,6 +3480,173 @@ async function dkPlaybook(){
 }
 // card citations need the titles even before the Playbook page is opened
 setTimeout(()=>{if(typeof dkApi==="function")dkApi("playbook_get").then(j=>(j.books||[]).forEach(b=>PB_TITLES[b.id]=b.text)).catch(()=>{})},8000);
+/* ================================================================ v3.18
+   7 Oct 2026, approved mockup otto-v3.18-mockup.html ("Yes, approved: build v3.18"; keep Copy for coach).
+   🌅 Morning Prep (charts + notes → Jarvis asks 2–3 questions → grades → levels to the Watcher → graded at
+   4:05 PM), Score additions (Signal speed, the coach's calls, self-test, morning reads) and Desk polish
+   (colour-coded self-test lines, ⏰ check-in chips with ✕, red Correction boxes). */
+var PP={who:LS.get("ppWho","")||null,shots:[],data:null,busy:false,imgs:{}};
+function ppWho(){return PP.who||(($("#dkWho")&&$("#dkWho").value)==="Josh"?"Josh":"Ifoma")}
+async function dkPrep(){
+  const pg=$("#dkPage");
+  if(!PP.data||PP.data.author!==ppWho())pg.innerHTML=dkLoading("Loading Morning Prep…");
+  try{PP.data=await dkApi("prep_get",null,"&author="+encodeURIComponent(ppWho()))}catch(e){pg.innerHTML=dkErr(e);return}
+  if(DK.view!=="prep")return;
+  ppRender();
+}
+function ppQ(qs){return qs.map((q,i)=>`<div class="pp-q"><b>${i+1}</b>${esc(q)}</div>`).join("")}
+function ppGrade(g){
+  const col=/^A/.test(g.letter)?"var(--up)":/^B/.test(g.letter)?"var(--up)":/^C/.test(g.letter)?"var(--warn)":"var(--down)";
+  const li=(a,c)=>(a||[]).map(x=>`<li style="color:${c}">${esc(x)}</li>`).join("");
+  return `<div class="pp-grade"><div class="pp-letter" style="color:${col}">${esc(g.letter)}</div><div><div class="pb-bar" style="width:130px"><i style="width:${Math.round(((g.process||0)+(g.levels||0)+(g.plan||0))/30*100)}%"></i></div>
+    <div class="mut" style="font-size:12px">Process ${g.process}/10 · Levels ${g.levels}/10 · Plan ${g.plan}/10</div></div></div>
+    <ul class="pp-fb">${li(g.strong,"var(--up)")}${li((g.fix||[]).map(x=>"Fix: "+x),"var(--warn)")}${li((g.missing||[]).map(x=>"Missing: "+x),"var(--ink-2)")}</ul>`;
+}
+function ppRender(){
+  const pg=$("#dkPage"),d=PP.data||{},t=d.today,who=ppWho(),st=(d.stats||{})[who]||{};
+  const shots=PP.shots.map((s,i)=>`<div class="pp-shot"><img src="${s.url}" data-ppzoom="${i}" alt="chart ${i+1}"><button data-pprm="${i}" title="Remove">✕</button></div>`).join("");
+  const saved=t&&!PP.shots.length?(t.img_ids||[]).map(id=>`<div class="pp-shot"><img data-ppimg="${id}" alt="chart" ${PP.imgs[id]?`src="${PP.imgs[id]}"`:""}></div>`).join(""):"";
+  const thread=t?(t.thread||[]).map(m=>m.role==="user"
+      ?`<div class="pp-msg"><div class="pp-av u">${esc((m.author||"?")[0])}</div><div><div class="dk-mw"><b>${esc(m.author)}</b> · ${esc(dkTime(m.at))}</div>${esc(m.text)}</div></div>`
+      :`<div class="pp-msg"><div class="pp-av">J</div><div><div class="dk-mw"><b>Jarvis</b> · ${esc(dkTime(m.at))}</div>${m.kind==="questions"?"Before I grade it, a few questions:"+ppQ(m.questions||[]):m.kind==="grade"?ppGrade(m.grade||{}):`<div class="md">${md(m.text||"")}</div>`}</div></div>`).join(""):"";
+  const levels=t&&(t.levels||[]).length?(t.levels||[]).map((x,i)=>`<div class="pp-lvl"><span><b>${esc(x.ticker)} ${esc(+x.level)}</b> ${x.dir==="up"?"▲":x.dir==="down"?"▼":"▲▼"} ${esc(x.note||"")}</span>${x.watched?`<span class="up" style="font-size:12px">✓ on Watcher</span>`:t.day===d.day?`<button class="dk-btn sec" data-ppw="${i}" style="padding:3px 10px;font-size:12px">+ Watcher</button>`:""}</div>`).join(""):`<div class="mut" style="font-size:13px">Jarvis lists the levels from your read here.</div>`;
+  const res=r=>!r?`<span class="mut">graded 4:05 PM</span>`:`<span class="dk-tag ${r.direction==="right"?"ok":r.direction==="wrong"?"bad":""}">${esc(r.direction.toUpperCase())}</span> <span class="mut">${r.chg>=0?"+":""}${r.chg}% · levels touched ${r.touched}/${r.of}</span>`;
+  const hist=(d.history||[]).map(h=>`<tr><td>${esc(h.day)}</td><td>${esc(h.bias||"—")} · ${esc((h.levels||[]).slice(0,3).map(x=>x.ticker+" "+x.level).join(" / ")||h.notes||"")}</td><td>${h.grade?esc(h.grade.letter):"—"}</td><td>${res(h.result)}</td></tr>`).join("");
+  const busy=PP.busy?`<div class="mut" style="margin:8px 0">Jarvis is reading your charts… (about 20–40 seconds)</div>`:"";
+  pg.innerHTML=`<div class="dkp">
+    <div class="dkp-head"><h2>🌅 Morning Prep</h2><span class="mut">Your morning sentiment read, before the open. Jarvis asks first, then grades. Graded again against the tape at 4:05 PM.</span></div>
+    <div class="pp-who"><span class="pp-pill${who==="Ifoma"?" on":""}" data-ppwho="Ifoma">Ifoma</span><span class="pp-pill${who==="Josh"?" on":""}" data-ppwho="Josh">Josh</span>
+      <span class="mut" style="margin-left:auto;font-size:12px">${st.n?`Last ${st.n} reads: direction right ${st.right}/${st.n} · levels touched ${st.touched}/${st.of}`:"Each of you gets your own read, history and grade."}</span></div>
+    <div class="pp-grid"><div>
+      <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">1 · Your charts</div>
+        <div class="pp-drop" id="ppDrop">${shots||saved}<div class="pp-add" id="ppAdd">＋<br>Paste (Ctrl+V), drop,<br>or click to add charts</div></div>
+        <input type="file" id="ppFile" accept="image/*" multiple hidden></div>
+      <div class="dk-cardx"><div class="dk-h">2 · Your notes (the same ones you send the coach)</div>
+        <textarea class="pp-notes" id="ppNotes" placeholder="Your lean, the 10-year / dollar / yen, your levels, what makes you wrong, what you'll do at each level…">${esc(PP.draft!=null?PP.draft:(t&&t.notes)||"")}</textarea>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+          <button class="dk-btn go" id="ppSend"${PP.busy?" disabled":""}>${t?"Send a new read":"Send to Jarvis"}</button>
+          <button class="dk-btn sec" id="ppCopy">📋 Copy for coach</button>
+          <span class="mut" style="font-size:12px">${t?"Sending again starts today's read over.":"Copy for coach = your notes + chart list, ready to paste."}</span></div>${busy}</div>
+    </div><div>
+      <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">3 · Jarvis</div>
+        ${thread||`<div class="mut" style="font-size:13px">Send your read and Jarvis will ask 2–3 questions before he grades it.</div>`}
+        ${t?`<textarea class="pp-notes" id="ppReply" style="min-height:56px;margin-top:6px" placeholder="${t.status==="graded"?"Ask Jarvis a follow-up…":"Answer his questions…"}"></textarea>
+        <div style="margin-top:8px"><button class="dk-btn go" id="ppReplyGo"${PP.busy?" disabled":""}>${t.status==="graded"?"Ask":"Send answers"}</button></div>`:""}</div>
+      <div class="dk-cardx"><div class="dk-h">4 · Levels from your read</div>${levels}</div>
+    </div></div>
+    <div class="dk-cardx" style="margin-top:12px;padding:0;overflow:auto"><div class="dk-h" style="padding:12px 14px 0">${esc(who)}'s morning reads · graded at 4:05 PM</div>
+      ${hist?`<table class="dkt"><tr><th>Day</th><th>Read</th><th>Jarvis grade</th><th>Result</th></tr>${hist}</table>`:`<div class="mut" style="padding:12px 14px">Your first read starts the history.</div>`}</div>
+  </div>`;
+  ppBind();
+  pg.querySelectorAll("[data-ppimg]").forEach(async im=>{const id=im.dataset.ppimg;if(PP.imgs[id])return;try{const j=await dkApi("prep_img",null,"&id="+id);PP.imgs[id]=`data:${j.mime};base64,${j.data}`;im.src=PP.imgs[id]}catch(e){}});
+}
+async function ppAddFiles(files){
+  for(const f of [...files].filter(f=>/^image\//.test(f.type)).slice(0,6-PP.shots.length)){
+    try{const s=await shrinkImage(f);PP.shots.push({mime:"image/jpeg",data:s.data,url:s.url,name:f.name||"chart"})}catch(e){toast("That isn't an image")}}
+  PP.draft=$("#ppNotes")?$("#ppNotes").value:PP.draft;ppRender();
+}
+function ppBind(){
+  const pg=$("#dkPage");
+  pg.querySelectorAll("[data-ppwho]").forEach(b=>b.addEventListener("click",()=>{PP.who=b.dataset.ppwho;LS.set("ppWho",PP.who);PP.shots=[];PP.draft=null;dkPrep()}));
+  pg.querySelectorAll("[data-pprm]").forEach(b=>b.addEventListener("click",()=>{PP.shots.splice(+b.dataset.pprm,1);PP.draft=$("#ppNotes").value;ppRender()}));
+  pg.querySelectorAll("[data-ppzoom],[data-ppimg]").forEach(im=>im.addEventListener("click",()=>{if(im.src)window.open().document.write(`<img src="${im.src}" style="max-width:100%">`)}));
+  const add=$("#ppAdd"),file=$("#ppFile"),drop=$("#ppDrop");
+  add.addEventListener("click",()=>file.click());file.addEventListener("change",()=>ppAddFiles(file.files));
+  drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("over")});drop.addEventListener("dragleave",()=>drop.classList.remove("over"));
+  drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("over");ppAddFiles(e.dataTransfer.files)});
+  $("#ppNotes").addEventListener("input",e=>PP.draft=e.target.value);
+  $("#ppSend").addEventListener("click",async()=>{
+    const notes=$("#ppNotes").value.trim();
+    if(!notes&&!PP.shots.length)return toast("Add your notes or a chart first");
+    if(PP.data&&PP.data.today&&!confirm("Start today's read over? Jarvis's questions and grade for this morning will be replaced."))return;
+    PP.busy=true;ppRender();
+    try{await dkApi("prep_submit",{author:ppWho(),notes,images:PP.shots.map(s=>({mime:s.mime,data:s.data}))});PP.shots=[];PP.draft=null;toast("Jarvis has questions for you")}
+    catch(e){toast(String(e.message).slice(0,100))}
+    PP.busy=false;dkPrep();
+  });
+  $("#ppCopy").addEventListener("click",async()=>{
+    const t=PP.data&&PP.data.today,n=$("#ppNotes").value.trim()||(t&&t.notes)||"";
+    const charts=PP.shots.length?PP.shots.map((s,i)=>`${i+1}. ${s.name}`).join("\n"):t&&t.imgs?`${t.imgs} chart(s) attached`:"";
+    const text=`Morning read — ${ppWho()} — ${new Date().toLocaleDateString()}\n\n${n}${charts?"\n\nCharts:\n"+charts:""}`;
+    try{await navigator.clipboard.writeText(text);toast("Copied — paste it to your coach (attach the charts)")}catch(e){prompt("Copy this to your coach:",text)}
+  });
+  const rg=$("#ppReplyGo");if(rg)rg.addEventListener("click",async()=>{
+    const v=$("#ppReply").value.trim();if(!v)return toast("Type your answer first");
+    PP.busy=true;rg.disabled=true;rg.textContent="Jarvis is thinking…";
+    try{await dkApi("prep_reply",{id:PP.data.today.id,text:v})}catch(e){toast(String(e.message).slice(0,100))}
+    PP.busy=false;dkPrep();
+  });
+  pg.querySelectorAll("[data-ppw]").forEach(b=>b.addEventListener("click",async()=>{b.disabled=true;
+    try{await dkApi("prep_watch",{id:PP.data.today.id,idx:+b.dataset.ppw});toast("On the Watcher");dkWatchLoad();dkPrep()}catch(e){b.disabled=false;toast(String(e.message).slice(0,100))}}));
+}
+// Paste a chart straight onto the Prep page
+document.addEventListener("paste",e=>{
+  if(!DK||DK.view!=="prep"||!document.body.classList.contains("dk-on"))return;
+  const files=[...(e.clipboardData&&e.clipboardData.files||[])].filter(f=>/^image\//.test(f.type));
+  if(files.length){e.preventDefault();ppAddFiles(files)}
+});
+
+/* ---------- Score additions ---------- */
+{const _dkScore=dkScore;dkScore=async function(){
+  await _dkScore();
+  if(DK.view!=="score")return;
+  let j;try{j=await dkApi("score_extra")}catch(e){return}
+  if(DK.view!=="score")return;
+  const box=document.createElement("div");box.className="dkp";box.style.paddingTop="0";
+  const s=j.selftest,secs=v=>v==null?"—":v<90?v+" s":Math.floor(v/60)+" m "+(v%60)+" s";
+  const sp=(j.speed||[]).map(x=>`<tr><td>${esc(dkDate(x.at))}</td><td>${esc((x.ticker||"")+(x.direction?" "+x.direction:""))} <span class="mut">${esc(x.words||"")}</span></td><td class="mono">${secs(x.caught_s)}</td><td class="mono">${x.cards?secs(x.card_s):`<span class="dn">none</span>`}</td>
+    <td>${x.cards?`<span class="dk-tag ok">card</span>`:`<span class="dk-tag bad">NO CARD</span> <span class="mut">${esc(x.timed?(x.why||""):"before v3.16")}</span>`}</td></tr>`).join("");
+  const co=(j.coach||[]).map(c=>`<tr><td><b>${esc(c.ticker)}</b></td><td class="mono">${c.n}</td><td class="mono up">${c.worked}/${c.scored}</td><td class="mono">${c.avg_close==null?"—":(c.avg_close>=0?"+":"")+c.avg_close+"%"}</td><td class="mono">${c.avg_best==null?"—":(c.avg_best>=0?"+":"")+c.avg_best+"%"}</td><td class="mut">${esc((c.results||[]).join(" · ")||"—")}</td></tr>`).join("");
+  const pr=j.prep||{},pl=w=>{const p=pr[w]||{};return p.n?`${Math.round(100*p.right/p.n)}%`:"—"};
+  box.innerHTML=`
+    <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">⚡ Signal speed · post → card</div>
+      <div class="dkp-grid4" style="margin-bottom:10px">
+        <div class="dk-cardx dk-stat"><div class="n">${secs(j.median_card_s)}</div><div class="l">median post → card</div></div>
+        <div class="dk-cardx dk-stat"><div class="n">${j.timed_calls||0}</div><div class="l">signals timed (since v3.16)</div></div>
+        <div class="dk-cardx dk-stat"><div class="n ${j.silent?"dn":"up"}">${j.silent||0}</div><div class="l">silent misses</div></div>
+        <div class="dk-cardx dk-stat"><div class="n ${s&&s.ok===false?"dn":"up"}">${s?(s.ok?"✅":"❌"):"—"}</div><div class="l">${s?`self-test ${esc(dkDate(s.at))} · ${s.secs}s`:"self-test not run yet"}</div></div></div>
+      ${sp?`<table class="dkt"><tr><th>When</th><th>Coach posted</th><th>Caught</th><th>Card</th><th>Result</th></tr>${sp}</table>`:`<div class="mut">Fills in as signals come in.</div>`}</div>
+    <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">🎯 Coach's calls · how they worked <b>scored to the close</b></div>
+      ${co?`<table class="dkt"><tr><th>Ticker</th><th>Calls</th><th>Worked</th><th>Avg move by the close</th><th>Avg best move after the post</th><th>His results posted</th></tr>${co}</table>`:`<div class="mut">Fills in as his calls are scored after each close.</div>`}</div>
+    <div class="dk-cardx"><div class="dk-h">🌅 Morning reads <b>direction right, last 20</b></div>
+      <div class="dk-row"><span>Ifoma</span><span class="mono">${pl("Ifoma")} ${pr.Ifoma&&pr.Ifoma.n?`· ${pr.Ifoma.right}/${pr.Ifoma.n} · levels touched ${pr.Ifoma.touched}/${pr.Ifoma.of}`:""}</span></div>
+      <div class="dk-row"><span>Josh</span><span class="mono">${pl("Josh")} ${pr.Josh&&pr.Josh.n?`· ${pr.Josh.right}/${pr.Josh.n} · levels touched ${pr.Josh.touched}/${pr.Josh.of}`:""}</span></div></div>`;
+  $("#dkPage").appendChild(box);
+}}
+
+/* ---------- Desk polish: self-test lines, ⏰ chips, Correction boxes ---------- */
+{const _render=dkRenderMsgs;dkRenderMsgs=function(stick){
+  _render(stick);
+  const box=$("#dkMsgs");if(!box||DK.locked)return;
+  const sys=box.querySelectorAll(".dk-sys");
+  sys.forEach(el=>{
+    const txt=el.textContent||"";
+    if(/^[✅❌] Signal self-test/.test(txt)){
+      const [first,...rest]=txt.split("\n");
+      el.classList.add(/^✅/.test(txt)?"st-ok":"st-bad");
+      if(rest.length){const d=document.createElement("details");const sm=document.createElement("summary");sm.textContent=first+" ▾";const pre=document.createElement("pre");pre.textContent=rest.join("\n");d.append(sm,pre);el.textContent="";el.appendChild(d)}
+    }else if(/^⏰/.test(txt))el.classList.add("ck");
+  });
+  box.querySelectorAll(".dk-m.ai .md").forEach(md0=>{
+    if(md0.dataset.corr)return;
+    const ps=[...md0.children].filter(c=>/^\s*Correction:/.test(c.textContent||""));
+    ps.forEach(p=>{const w=document.createElement("div");w.className="dk-corr";p.replaceWith(w);w.appendChild(p)});
+    md0.dataset.corr="1";
+  });
+}}
+{const _wc=dkWatchCard;dkWatchCard=function(){
+  let h=_wc();const W=DK.watch;
+  if(!W||!(W.checks||[]).length)return h;
+  const chips=`<div class="wt-chips">${W.checks.map(c=>`<span class="wt-chip" title="${esc(c.what)}"><span>⏰ ${esc(c.label)} · ${esc(c.what)}</span><button data-ckx="${c.id}" title="Cancel this check-in">✕</button></span>`).join("")}</div>`;
+  const i=h.indexOf('<div class="wt-add">');
+  return i>=0?h.slice(0,i)+chips+h.slice(i):h+chips;
+}}
+{const _wb=dkWatchBind;dkWatchBind=function(box){
+  _wb(box);
+  box.querySelectorAll("[data-ckx]").forEach(b=>b.addEventListener("click",async()=>{if(!confirm("Cancel this check-in?"))return;
+    try{await dkApi("check_cancel",{id:+b.dataset.ckx,author:dkWho()});toast("Check-in cancelled");dkWatchLoad()}catch(e){toast(String(e.message).slice(0,80))}}));
+}}
+
 
 /* ---------- Feedback ---------- */
 var FB_ERR=[],FB_KIND="bug";

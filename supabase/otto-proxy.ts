@@ -1,5 +1,8 @@
 // Otto Trader — server side. One Edge Function.
 //
+//   v3.18 (7 Oct 2026): 🌅 Morning Prep — otto_prep / otto_prep_imgs (017); prep_get/submit/reply/watch/img; Jarvis asks 2–3
+//   questions first (prep_questions tool), then grades (prep_grade); levels → Watcher; 4:05 PM grade vs the tape (prepGradeTick).
+//   score_extra: Signal speed, the coach's calls, self-test, morning-read stats.
 //   v3.17 (7 Oct 2026): extension 1.3 support — edited posts / late charts (edited:true) update the message and are read
 //   again (card only if fresh and not already carded); heartbeat carries unknown_authors / auto_scrolls; "scrolled_up" reason.
 //   v3.16 (7 Oct 2026): Signals always end in a card or a reason (server pre-fetches the contracts, a call's last step is
@@ -4520,7 +4523,9 @@ export async function watchScan(by = "scanner 9:20") {
 async function watchGet() {
   const day = watchDay();
   const rows = await db(`otto_watch?select=*&day=eq.${day}&status=neq.removed&order=created_at.asc&limit=200`).catch(() => []);
-  return { ok: true, day, clock: marketClock().status, rows };
+  // v3.18: pending ⏰ check-ins show as chips under the levels
+  const checks = await db(`otto_checks?select=id,due_at,what,by&status=eq.pending&day=eq.${etParts().date}&order=due_at.asc&limit=10`).catch(() => []);
+  return { ok: true, day, clock: marketClock().status, rows, checks: (checks || []).map((c: any) => ({ ...c, label: fmtMin(etParts(new Date(c.due_at)).min) })) };
 }
 async function watchSet(b: any, who: string) {
   const by = String(b?.author || who.split("@")[0]).slice(0, 40);
@@ -5215,6 +5220,259 @@ export async function recapExtras(day: string) {
     `SIGNAL CARD TIMES (today):\n${sig.join("\n") || "(no signal cards built)"}\nPut one line in the recap: promises made/backed/corrected and the signal timings.`;
 }
 
+/* ============================================================ v3.18 (7 Oct 2026)
+   Approved mockup otto-v3.18-mockup.html ("Yes, approved: build v3.18"; keep "Copy for coach").
+   🌅 Morning Prep: Ifoma and Josh each post their morning sentiment read (charts + the notes they send the
+   coach). Jarvis asks 2–3 clarifying questions FIRST, then grades (letter + process / levels / plan, strong /
+   fix / missing, tied to the Otto Rules). Levels he reads come back with one-tap "+ Watcher". At 4:05 PM ET each
+   read is graded against the tape (direction right / wrong / flat, levels touched). Plus the Score additions
+   (signal speed, the coach's calls) — read-only views over data v3.16 already records. */
+
+const PREP_AUTHORS = new Set(["Ifoma", "Josh"]);
+const prepAuthor = (a: any) => PREP_AUTHORS.has(String(a)) ? String(a) : "Ifoma";
+
+// One forced tool call; returns the tool input. Streams through claudeFetch (so tests and retries behave the same).
+async function claudeTool(body: any, toolName: string, budgetMs = 90_000): Promise<any> {
+  const r = await claudeFetch({ ...body, stream: true, tool_choice: { type: "tool", name: toolName } }, Date.now() + budgetMs);
+  const reader = r.body!.getReader(), dec = new TextDecoder();
+  let buf = "", json = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+      const line = chunk.split("\n").find((l) => l.startsWith("data: "));
+      if (!line) continue;
+      try { const ev = JSON.parse(line.slice(6)); if (ev.type === "content_block_delta" && ev.delta?.type === "input_json_delta") json += ev.delta.partial_json; } catch { /* */ }
+    }
+  }
+  try { return JSON.parse(json || "{}"); } catch { throw new Error("Jarvis's answer couldn't be read — try again"); }
+}
+
+const PREP_LEVEL = { type: "object", properties: {
+  ticker: { type: "string" }, level: { type: "number" }, dir: { type: "string", enum: ["up", "down", "both"], description: "up = calls side (break above / hold above), down = puts side (break below / rejection)" },
+  note: { type: "string", description: "a few words: what the level is (gap top, order-block low…)" } }, required: ["ticker", "level", "dir"] };
+const PREP_ASK_TOOL = { name: "prep_questions", description: "Ask the trader 2-3 clarifying questions about their morning read before grading it, and record what you read from it.",
+  input_schema: { type: "object", properties: {
+    questions: { type: "array", minItems: 2, maxItems: 3, items: { type: "string" }, description: "Short, specific questions that make them sharper: what proves them wrong, which level is which, the catalyst, the target, the first-30-minutes plan. Never answer them yourself." },
+    bias: { type: "string", enum: ["long", "short", "neutral"], description: "Their overall lean, as THEY wrote it (not yours)." },
+    main: { type: "string", description: "The main ticker of the read, usually SPY." },
+    levels: { type: "array", maxItems: 8, items: PREP_LEVEL, description: "Every price level they marked in the notes or on the charts (numbers only if written or clearly labelled)." } },
+    required: ["questions", "bias", "main", "levels"] } };
+const PREP_GRADE_TOOL = { name: "prep_grade", description: "Grade the morning read after their answers.",
+  input_schema: { type: "object", properties: {
+    letter: { type: "string", enum: ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D", "F"] },
+    process: { type: "integer", minimum: 0, maximum: 10 }, levels_score: { type: "integer", minimum: 0, maximum: 10 }, plan: { type: "integer", minimum: 0, maximum: 10 },
+    strong: { type: "array", maxItems: 3, items: { type: "string" }, description: "What they did right, citing the Otto Rules (call date) or a Playbook rule id when it applies." },
+    fix: { type: "array", maxItems: 3, items: { type: "string" }, description: "The most important things to fix today." },
+    missing: { type: "array", maxItems: 3, items: { type: "string" }, description: "What the read leaves out (target, invalidation, catalyst, timing)." },
+    levels: { type: "array", maxItems: 8, items: PREP_LEVEL, description: "The final list of their levels (corrected with their answers)." } },
+    required: ["letter", "process", "levels_score", "plan", "strong", "fix", "missing", "levels"] } };
+
+const PREP_SYS = (author: string) => `You are Jarvis, coaching ${author}'s MORNING SENTIMENT READ before the open, inside Otto Trader. Your job is to make them a sharper trader, not to hand them your own read.
+- Judge their read against the Otto Rules (the coaching-call method below) and the live context line (clock, banner, prices). Quote rules in your own words with the call date when you use one.
+- Be direct and specific, plain words, no jargon they haven't used. Short lines. Don't flatter; say what's weak.
+- Never invent prices or levels. Levels come only from their notes or numbers clearly labelled on their charts.
+- Their lean is THEIRS: grade the reasoning (inputs, levels, invalidation, catalyst, plan, timing), not whether you agree.
+- Never write the coach's name.`;
+
+async function prepContext(notes: string) {
+  const calls = await loadBrain();
+  const cs = chunksOf(calls);
+  const hits = search(cs, notes, 8).map(fmt).join("\n\n").slice(0, 9000);
+  const sys = DESK_SYS.replace("{{RULES}}", alwaysOn(calls));
+  const sent = await settle(sentimentNow());
+  const banner = sent.ok ? `Banner: ${sent.v.verdict} (score ${sent.v.score}, ${sent.v.fresh}/${sent.v.total} legs fresh).` : "Banner: unavailable.";
+  const live = marketClock().line + "\n" + banner + "\n\n" + await houseRulesText().catch(() => "") + "\n\n" + await playbookText().catch(() => "");
+  return { sys, live, hits };
+}
+const prepImgs = async (id: number) => (await db(`otto_prep_imgs?select=mime,data&prep_id=eq.${id}&order=id.asc&limit=6`).catch(() => [])) || [];
+const imgBlocks = (imgs: any[]) => imgs.slice(0, 6).map((i: any) => ({ type: "image", source: { type: "base64",
+  media_type: /^image\/(jpeg|png|webp|gif)$/.test(i.mime) ? i.mime : "image/jpeg", data: i.data } }));
+
+export async function prepSubmit(b: any) {
+  const author = prepAuthor(b.author);
+  const notes = String(b.notes || "").trim().slice(0, 6000);
+  const imgs = (Array.isArray(b.images) ? b.images : []).filter((i: any) => typeof i?.data === "string" && i.data.length > 100 && i.data.length < 6_000_000).slice(0, 6);
+  if (!notes && !imgs.length) throw new Error("Add your notes or a chart first.");
+  const day = etParts().date;
+  // One read per person per day: a new submit starts the conversation over.
+  const old = (await db(`otto_prep?select=id&day=eq.${day}&author=eq.${author}`).catch(() => []))?.[0];
+  if (old) {
+    await db(`otto_prep_imgs?prep_id=eq.${old.id}`, { method: "DELETE", headers: { prefer: "return=minimal" } }).catch(() => {});
+    await db(`otto_prep?id=eq.${old.id}`, { method: "DELETE", headers: { prefer: "return=minimal" } }).catch(() => {});
+  }
+  const row = (await db("otto_prep", { method: "POST", body: JSON.stringify({ day, author, notes, imgs: imgs.length, status: "asking", thread: [] }) }))?.[0];
+  if (!row?.id) throw new Error("couldn't save the read");
+  if (imgs.length) await db("otto_prep_imgs", { method: "POST", headers: { prefer: "return=minimal" },
+    body: JSON.stringify(imgs.map((i: any) => ({ prep_id: row.id, mime: String(i.mime || "image/jpeg").slice(0, 30), data: i.data }))) });
+  const { sys, live, hits } = await prepContext(notes);
+  const content: any[] = [...imgBlocks(imgs), { type: "text", text: `${author}'s morning read (${imgs.length} chart${imgs.length === 1 ? "" : "s"} above).\n\nNOTES:\n${notes || "(no notes — read the charts)"}\n\nOTTO RULES THAT MATCH THE NOTES:\n${hits || "(none found)"}\n\nAsk your 2-3 questions now. Don't grade yet.` }];
+  const a = await claudeTool({ model: MODEL, max_tokens: 1500, system: [{ type: "text", text: sys + NAME_RULE }, { type: "text", text: PREP_SYS(author) + "\n\n" + live }],
+    tools: [PREP_ASK_TOOL], messages: [{ role: "user", content }] }, "prep_questions");
+  const qs = (Array.isArray(a.questions) ? a.questions : []).map((q: any) => unname(String(q)).slice(0, 400)).filter(Boolean).slice(0, 3);
+  if (!qs.length) throw new Error("Jarvis didn't ask anything — send it again");
+  const thread = [{ role: "jarvis", at: new Date().toISOString(), kind: "questions", questions: qs }];
+  const upd = { status: "asked", thread, bias: ["long", "short", "neutral"].includes(a.bias) ? a.bias : "neutral",
+    main: String(a.main || "SPY").toUpperCase().replace(/[^A-Z.]/g, "").slice(0, 8) || "SPY", levels: cleanLevels(a.levels) };
+  await db(`otto_prep?id=eq.${row.id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify(upd) });
+  return { ok: true, prep: { ...row, ...upd } };
+}
+function cleanLevels(l: any): any[] {
+  return (Array.isArray(l) ? l : []).map((x: any) => ({ ticker: String(x?.ticker || "").toUpperCase().replace(/[^A-Z.]/g, "").slice(0, 8),
+    level: Number(x?.level), dir: ["up", "down", "both"].includes(x?.dir) ? x.dir : "both", note: String(x?.note || "").slice(0, 80) }))
+    .filter((x: any) => x.ticker && x.level > 0).slice(0, 8);
+}
+
+export async function prepReply(b: any) {
+  const id = Number(b.id), text = String(b.text || "").trim().slice(0, 4000);
+  if (!id || !text) throw new Error("nothing to send");
+  const row = (await db(`otto_prep?select=*&id=eq.${id}`))?.[0];
+  if (!row) throw new Error("that read wasn't found");
+  const author = row.author;
+  const thread: any[] = [...(row.thread || []), { role: "user", author, at: new Date().toISOString(), text }];
+  const { sys, live, hits } = await prepContext(row.notes + "\n" + text);
+  const imgs = await prepImgs(id);
+  const convo = thread.map((t: any) => t.role === "user" ? `${t.author}: ${t.text}` : t.kind === "questions" ? `Jarvis asked:\n${t.questions.map((q: string, i: number) => `${i + 1}. ${q}`).join("\n")}`
+    : t.kind === "grade" ? `Jarvis graded it ${t.grade?.letter}.` : `Jarvis: ${t.text}`).join("\n\n");
+  const head = [...imgBlocks(imgs), { type: "text", text: `${author}'s morning read.\n\nNOTES:\n${row.notes || "(none)"}\n\nOTTO RULES THAT MATCH:\n${hits || "(none)"}\n\nCONVERSATION SO FAR:\n${convo}` }];
+  const system = [{ type: "text", text: sys + NAME_RULE }, { type: "text", text: PREP_SYS(author) + "\n\n" + live }];
+  let upd: any;
+  if (row.status !== "graded") {
+    const g = await claudeTool({ model: MODEL, max_tokens: 2000, system, tools: [PREP_GRADE_TOOL],
+      messages: [{ role: "user", content: [...head, { type: "text", text: "They've answered. Grade the read now." }] }] }, "prep_grade");
+    const L = (v: any) => (Array.isArray(v) ? v : []).map((s: any) => unname(String(s)).slice(0, 400)).filter(Boolean).slice(0, 3);
+    const grade = { letter: String(g.letter || "C"), process: +g.process || 0, levels: +g.levels_score || 0, plan: +g.plan || 0, strong: L(g.strong), fix: L(g.fix), missing: L(g.missing) };
+    const keep = new Map((row.levels || []).map((x: any) => [`${x.ticker}|${x.level}`, x]));
+    const levels = cleanLevels(g.levels).map((x: any) => ({ ...x, ...(keep.get(`${x.ticker}|${x.level}`) as any || {}), dir: x.dir }));
+    thread.push({ role: "jarvis", at: new Date().toISOString(), kind: "grade", grade });
+    upd = { status: "graded", thread, grade, levels: levels.length ? levels : row.levels };
+  } else {
+    const t = await claudeText({ model: MODEL, max_tokens: 900, system, messages: [{ role: "user", content: [...head, { type: "text", text: "Answer their last message in a few short lines. Coach, don't re-grade." }] }] });
+    thread.push({ role: "jarvis", at: new Date().toISOString(), kind: "text", text: unname(t).slice(0, 3000) });
+    upd = { thread };
+  }
+  await db(`otto_prep?id=eq.${id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify(upd) });
+  return { ok: true, prep: { ...row, ...upd } };
+}
+
+export async function prepWatch(b: any, who: string) {
+  const id = Number(b.id), i = Number(b.idx);
+  const row = (await db(`otto_prep?select=*&id=eq.${id}`))?.[0];
+  if (!row) throw new Error("that read wasn't found");
+  const levels = [...(row.levels || [])];
+  const x = levels[i];
+  if (!x) throw new Error("that level wasn't found");
+  if (row.day !== etParts().date) throw new Error("levels can only be watched on the day of the read");
+  const w = await watchAdd({ ticker: x.ticker, level: x.level, dir: x.dir, source: "desk", note: `${row.author}'s morning read${x.note ? ": " + x.note : ""}`, by: `${row.author} · Morning Prep` });
+  levels[i] = { ...x, watched: true, watch_id: w?.id ?? null };
+  await db(`otto_prep?id=eq.${id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ levels }) });
+  if (w) await logDesk("system", "Otto", `👁 Watching ${x.ticker} ${x.level} ${x.dir === "up" ? "▲" : x.dir === "down" ? "▼" : "▲▼"} today (from ${row.author}'s morning read).`);
+  void who;
+  return { ok: true, levels };
+}
+
+// 4:05 PM ET: grade today's reads against the tape (Robinhood 5-minute bars, 9:30–4:00).
+export function gradeRead(bias: string, main: Bar[], levels: any[], barsBy: Record<string, Bar[]>) {
+  if (!main.length) return null;
+  const open = main[0].o, close = main[main.length - 1].c;
+  const chg = (close - open) / open * 100;
+  const flatDay = Math.abs(chg) < 0.15;
+  const direction = bias === "neutral" ? (flatDay ? "right" : "wrong") : flatDay ? "flat" : ((chg > 0) === (bias === "long") ? "right" : "wrong");
+  const lv = (levels || []).map((x: any) => {
+    const bars = barsBy[x.ticker] || [];
+    if (!bars.length) return { ...x, touched: null };
+    const hi = Math.max(...bars.map((b) => b.h)), lo = Math.min(...bars.map((b) => b.l));
+    const touched = x.level <= hi && x.level >= lo;
+    const first = bars[0].o, last = bars[bars.length - 1].c;
+    const broke = touched && ((first > x.level && last < x.level) || (first < x.level && last > x.level));
+    return { ticker: x.ticker, level: x.level, dir: x.dir, touched, broke };
+  });
+  const scored = lv.filter((x: any) => x.touched !== null);
+  return { direction, chg: +chg.toFixed(2), open: +open.toFixed(2), close: +close.toFixed(2), levels: lv,
+    touched: scored.filter((x: any) => x.touched).length, of: scored.length };
+}
+export async function prepGradeTick(force = false) {
+  const c = marketClock();
+  if (!force && (!isTradingDay(c.date) || c.min < 965)) return { ok: true, skipped: "after 4:05 PM on trading days" };
+  const rows = await db(`otto_prep?select=id,author,bias,main,levels,result&day=eq.${c.date}&result=is.null`).catch(() => []);
+  if (!rows?.length) return { ok: true, graded: 0 };
+  const start = nyIso(c.date, "9:30 AM")!, end = nyIso(c.date, "4:00 PM")!;
+  const tickers = [...new Set(rows.flatMap((r: any) => [r.main || "SPY", ...(r.levels || []).map((x: any) => x.ticker)]))] as string[];
+  const bars = await rhBars(tickers, "5minute", start, end);
+  for (const t of Object.keys(bars)) bars[t] = bars[t].filter((b) => b.t >= Date.parse(start) && b.t < Date.parse(end));
+  let n = 0;
+  for (const r of rows) {
+    const res = gradeRead(r.bias || "neutral", bars[(r.main || "SPY").toUpperCase()] || [], r.levels || [], bars);
+    if (!res) continue;
+    await db(`otto_prep?id=eq.${r.id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ result: res }) }).catch(() => {});
+    n++;
+  }
+  return { ok: true, graded: n };
+}
+
+export async function prepGet(author: string) {
+  const day = etParts().date;
+  const a = prepAuthor(author);
+  const today = (await db(`otto_prep?select=id,day,author,created_at,notes,imgs,status,thread,bias,main,levels,grade,result&day=eq.${day}&author=eq.${a}`).catch(() => []))?.[0] || null;
+  const hist = await db(`otto_prep?select=id,day,author,bias,main,levels,grade,result,notes&order=day.desc&limit=60`).catch(() => []);
+  const stats: Record<string, any> = {};
+  for (const who of PREP_AUTHORS) {
+    const mine = (hist || []).filter((r: any) => r.author === who && r.result).slice(0, 20);
+    const right = mine.filter((r: any) => r.result.direction === "right").length;
+    const lt = mine.reduce((s: number, r: any) => s + (r.result.touched || 0), 0), lof = mine.reduce((s: number, r: any) => s + (r.result.of || 0), 0);
+    stats[who] = { n: mine.length, right, touched: lt, of: lof };
+  }
+  const imgs = today ? (await db(`otto_prep_imgs?select=id&prep_id=eq.${today.id}&order=id.asc`).catch(() => [])).map((x: any) => x.id) : [];
+  return { ok: true, day, author: a, today: today ? { ...today, img_ids: imgs } : null,
+    history: (hist || []).filter((r: any) => r.author === a).slice(0, 20).map((r: any) => ({ ...r, notes: String(r.notes || "").slice(0, 160) })), stats };
+}
+export async function prepImg(id: number) {
+  const r = (await db(`otto_prep_imgs?select=mime,data&id=eq.${id}`))?.[0];
+  if (!r) throw new Error("image not found");
+  return { ok: true, mime: r.mime, data: r.data };
+}
+
+// Score page additions: Signal speed (v3.16 timings), the coach's calls (scored to the close), self-test.
+export async function scoreExtra() {
+  const since = new Date(Date.now() - 21 * 864e5).toISOString();
+  const bs = await db(`otto_signal_batches?select=id,created_at,status,cards,timing,error,rows,msg_ids&created_at=gte.${since}&order=id.desc&limit=80`).catch(() => []);
+  const rowIds = [...new Set((bs || []).flatMap((b: any) => b.rows || []))];
+  const jr = rowIds.length ? await db(`otto_jason?select=id,ticker,direction,kind,words&id=in.(${rowIds.join(",")})`).catch(() => []) : [];
+  const jById: Record<string, any> = Object.fromEntries((jr || []).map((r: any) => [r.id, r]));
+  const speed = (bs || []).filter((b: any) => (b.rows || []).some((id: any) => ["call", "level"].includes(jById[id]?.kind) && jById[id]?.ticker)).slice(0, 12).map((b: any) => {
+    const r = (b.rows || []).map((id: any) => jById[id]).find((x: any) => x && ["call", "level"].includes(x.kind)) || {};
+    const t = b.timing || {};
+    const posted = t.posted ? Date.parse(t.posted) : null, caught = Date.parse(b.created_at);
+    return { at: t.posted || b.created_at, ticker: r.ticker, direction: r.direction, words: String(r.words || "").slice(0, 80),
+      caught_s: posted ? Math.max(0, Math.round((caught - posted) / 1000)) : null, card_s: t.total_ms != null ? Math.round(t.total_ms / 1000) : null,
+      cards: (b.cards || []).length, status: b.status, why: b.error || null, timed: !!b.timing };
+  });
+  const timed = speed.filter((s: any) => s.timed);
+  const cardTimes = timed.filter((s: any) => s.cards && s.card_s != null).map((s: any) => s.card_s).sort((a: number, b: number) => a - b);
+  const calls = await db(`otto_jason?select=id,ticker,direction,score,day&kind=eq.call&order=day.desc&limit=200`).catch(() => []);
+  const results = await db(`otto_jason?select=result_for,words&kind=eq.result&order=id.desc&limit=100`).catch(() => []);
+  const resBy: Record<string, string[]> = {};
+  for (const r of results || []) if (r.result_for) (resBy[r.result_for] ||= []).push(String(r.words).slice(0, 60));
+  const byT: Record<string, any> = {};
+  for (const c of calls || []) {
+    if (!c.ticker) continue;
+    const t = (byT[c.ticker] ||= { ticker: c.ticker, n: 0, scored: 0, worked: 0, sum: 0, best: 0, results: [] as string[] });
+    t.n++;
+    if (c.score && c.score.state !== "unscored") { t.scored++; if (c.score.state === "worked") t.worked++; t.sum += +c.score.close_pct || 0; t.best += +c.score.best_pct || 0; }
+    if (resBy[c.id]) t.results.push(...resBy[c.id]);
+  }
+  const coach = Object.values(byT).map((t: any) => ({ ticker: t.ticker, n: t.n, scored: t.scored, worked: t.worked,
+    avg_close: t.scored ? +(t.sum / t.scored).toFixed(2) : null, avg_best: t.scored ? +(t.best / t.scored).toFixed(2) : null, results: t.results.slice(0, 3) }))
+    .sort((a: any, b: any) => b.n - a.n).slice(0, 12);
+  const st = await setting("selftest_last").catch(() => null);
+  const prep = (await prepGet("Ifoma").catch(() => null))?.stats || null;
+  return { ok: true, speed, median_card_s: cardTimes.length ? cardTimes[Math.floor(cardTimes.length / 2)] : null,
+    timed_calls: timed.length, silent: timed.filter((s: any) => !s.cards && !s.why).length, coach, selftest: st, prep };
+}
+
 export const unnameForTest = (t: string) => unname(t);
 export const signalInForTest = (req: Request) => signalIn(req);
 
@@ -5267,6 +5525,7 @@ Deno.serve(async (req) => {
         try { await cardSweep(); } catch (e) { console.error("sweep", e); }
       }
       if (isTradingDay(c.date) && c.min >= 550 && c.min < 560) { try { await signalSelfTest(); } catch (e) { console.error("selftest", e); } }
+      if (isTradingDay(c.date) && c.min >= 965 && c.min <= 980 && c.min % 5 === 0) { try { await prepGradeTick(); } catch (e) { console.error("prep grade", e); } }   // v3.18
     })());
     return json({ ok: true, started: "watch", clock: c.status }, 202);
   }
@@ -5342,7 +5601,8 @@ Deno.serve(async (req) => {
          "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "watch_get", "watch_set", "watch_scan", "performance", "help", "jason_today", "jason_sweep", "jason_score",
          "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set",
          "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear", "selftest_now",
-         "playbook_get", "feedback_add", "feedback_list", "daily_now"].includes(fn)) {
+         "playbook_get", "feedback_add", "feedback_list", "daily_now",
+         "prep_get", "prep_submit", "prep_reply", "prep_watch", "prep_img", "score_extra", "check_cancel"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -5392,6 +5652,11 @@ Deno.serve(async (req) => {
       if (fn === "house_rules_get") return json({ ok: true, rules: await houseRules() });
       if (fn === "watch_get") return json(await watchGet());
       if (fn === "watch_set") return json(await watchSet(body, who));
+      if (fn === "check_cancel") {      // v3.18: ✕ on a ⏰ chip
+        const r = (await db(`otto_checks?id=eq.${Number(body.id) || 0}&status=eq.pending&select=what`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) }).catch(() => []))?.[0];
+        if (r) await logDesk("system", "Otto", `⏰ Check-in cancelled by ${String(body.author || "the Desk").slice(0, 30)}: ${String(r.what).slice(0, 160)}`);
+        return json({ ok: true, cancelled: !!r });
+      }
       if (fn === "watch_scan") { background(watchScan(String(body?.author || who.split("@")[0]) + " (Scan now)")); return json({ ok: true, started: "scan" }); }
       if (fn === "house_rules_set") {
         const list = await houseRulesSet(body, who);
@@ -5399,6 +5664,13 @@ Deno.serve(async (req) => {
         return json({ ok: true, rules: list });
       }
       if (fn === "playbook_get") return json({ ok: true, ...(await playbookGet()) });
+      // v3.18: Morning Prep + Score additions
+      if (fn === "prep_get") return json(await prepGet(new URL(req.url).searchParams.get("author") || "Ifoma"));
+      if (fn === "prep_submit") return json(await prepSubmit(body));
+      if (fn === "prep_reply") return json(await prepReply(body));
+      if (fn === "prep_watch") return json(await prepWatch(body, who));
+      if (fn === "prep_img") return json(await prepImg(Number(new URL(req.url).searchParams.get("id") || 0)));
+      if (fn === "score_extra") return json(await scoreExtra());
       if (fn === "feedback_add") return json({ ok: true, ...(await feedbackAdd(body, who)) });
       if (fn === "feedback_list") return json({ ok: true, items: await feedbackList(Number(new URL(req.url).searchParams.get("days")) || 14) });
       if (fn === "daily_now") { background(dailyRecap(true)); return json({ ok: true, started: true }); }

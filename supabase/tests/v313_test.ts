@@ -152,7 +152,7 @@ const M = await import("../otto-proxy.ts");
 function assert(c: unknown, msg: string) { if (!c) throw new Error("ASSERT: " + msg); }
 function reset() {
   T.otto_actions = []; T.otto_desk = []; T.otto_settings = []; T.otto_trades = []; T.otto_watch = [];
-  T.otto_checks = []; T.otto_jason = []; T.otto_signal_batches = []; T.otto_signal_msgs = []; T.otto_signal_imgs = [];
+  T.otto_checks = []; T.otto_jason = []; T.otto_prep = []; T.otto_prep_imgs = []; T.otto_signal_batches = []; T.otto_signal_msgs = []; T.otto_signal_imgs = [];
   orders = []; calls = []; claudeBodies.length = 0; claudeScript = null; callHook = null; extractHook = null; pings.length = 0;
   quote = { delta: "0.527", volume: 6911, open_interest: 2898 };
 }
@@ -703,4 +703,68 @@ Deno.test("self-test dry run: accepts limit_price and string args like the real 
     : textReply("ok");
   const r: any = await M.runDesk({ msgs: [{ role: "user", content: "x" }], sys: "S", tools: [{ name: "propose_action" }], cs: [], who: "selftest", send: () => {}, allowPropose: true, dryRun: true, maxRounds: 3 });
   assert(/missing plan\.stop_option/.test(r.errors[0]) && r.dry.length === 1, JSON.stringify(r.errors));
+});
+
+/* =============================== v3.18 MORNING PREP + SCORE EXTRA =============================== */
+Deno.test("prep: submit → Jarvis asks 2–3 questions first (no grade yet) and reads the levels", async () => {
+  reset(); setNow("2026-10-07T12:41:00Z");   // 8:41 AM ET
+  let sawImage = false;
+  claudeScript = (body: any) => {
+    sawImage = JSON.stringify(body.messages).includes('"type":"image"');
+    assert(body.tool_choice?.name === "prep_questions", "forced questions tool");
+    return toolReply("prep_questions", { questions: ["What makes 783.40 a rejection?", "778.60: open or order-block low?", "NVDA catalyst?"], bias: "short", main: "SPY",
+      levels: [{ ticker: "SPY", level: 783.4, dir: "down", note: "gap top" }, { ticker: "spy", level: 778.6, dir: "down" }, { ticker: "", level: 5 }] });
+  };
+  const r: any = await M.prepSubmit({ author: "Ifoma", notes: "Leaning short. SPY 783.40 gap top, 778.60 support.", images: [{ mime: "image/jpeg", data: "x".repeat(200) }] });
+  assert(sawImage, "the chart goes to Jarvis");
+  assert(r.prep.status === "asked" && r.prep.thread[0].questions.length === 3 && !r.prep.grade, JSON.stringify(r.prep));
+  assert(r.prep.levels.length === 2 && r.prep.levels[1].ticker === "SPY" && r.prep.bias === "short", JSON.stringify(r.prep.levels));
+  assert(T.otto_prep_imgs.length === 1, "image stored");
+});
+Deno.test("prep: the answer → a grade (letter, scores, strong/fix/missing); a later message is coaching, not a re-grade", async () => {
+  reset(); setNow("2026-10-07T12:46:00Z");
+  T.otto_prep.push({ id: 31, day: "2026-10-07", author: "Ifoma", notes: "Leaning short", status: "asked", thread: [{ role: "jarvis", kind: "questions", questions: ["q1", "q2"] }],
+    bias: "short", main: "SPY", levels: [{ ticker: "SPY", level: 783.4, dir: "down", note: "gap top" }] });
+  claudeScript = (body: any) => body.tool_choice?.name === "prep_grade"
+    ? toolReply("prep_grade", { letter: "B+", process: 8, levels_score: 9, plan: 7, strong: ["Short at resistance — Otto Rules, 1 Oct"], fix: ["NVDA has no catalyst"], missing: ["target"],
+        levels: [{ ticker: "SPY", level: 783.4, dir: "down", note: "gap top" }, { ticker: "SPY", level: 776, dir: "down", note: "next support" }] })
+    : textReply("776 is your cover zone.");
+  const g: any = await M.prepReply({ id: 31, text: "1) close above 783.40 = wrong 2) order-block low" });
+  assert(g.prep.status === "graded" && g.prep.grade.letter === "B+" && g.prep.grade.fix[0] === "NVDA has no catalyst" && g.prep.levels.length === 2, JSON.stringify(g.prep));
+  T.otto_prep[0] = { ...T.otto_prep[0], ...g.prep };
+  const f: any = await M.prepReply({ id: 31, text: "where do I cover?" });
+  assert(f.prep.thread.at(-1).kind === "text" && /776/.test(f.prep.thread.at(-1).text) && T.otto_prep[0].grade.letter === "B+", JSON.stringify(f.prep.thread.at(-1)));
+});
+Deno.test("prep: + Watcher puts the level on today's Watcher (and only on the day of the read)", async () => {
+  reset(); setNow("2026-10-07T12:50:00Z");
+  T.otto_prep.push({ id: 32, day: "2026-10-07", author: "Josh", status: "graded", levels: [{ ticker: "SPY", level: 778.6, dir: "down", note: "ob low" }] });
+  const r: any = await M.prepWatch({ id: 32, idx: 0 }, "x");
+  assert(r.levels[0].watched && T.otto_watch.some((w) => w.ticker === "SPY" && Number(w.level) === 778.6 && w.dir === "down"), JSON.stringify(T.otto_watch));
+  assert(/Josh's morning read/.test(deskText()), deskText());
+  T.otto_prep[0].day = "2026-10-06";
+  let e = ""; try { await M.prepWatch({ id: 32, idx: 0 }, "x"); } catch (x) { e = (x as Error).message; }
+  assert(/day of the read/.test(e), e);
+});
+Deno.test("prep grade at 4:05 (real 6 Oct SPY bars): a long read off 778.60 is RIGHT; 778.60 was touched", async () => {
+  reset(); setNow("2026-10-06T20:05:30Z");
+  T.otto_prep.push({ id: 33, day: "2026-10-06", author: "Ifoma", bias: "long", main: "SPY", levels: [{ ticker: "SPY", level: 778.6, dir: "up" }, { ticker: "SPY", level: 790, dir: "up" }], result: null });
+  const r: any = await M.prepGradeTick(false);
+  const res = T.otto_prep[0].result;
+  assert(r.graded === 1 && res && ["right", "wrong", "flat"].includes(res.direction), JSON.stringify(res));
+  assert(res.levels[0].touched === true && res.levels[1].touched === false && res.of === 2, JSON.stringify(res.levels));
+});
+Deno.test("prep grade: neutral on a flat day is right; a short on an up day is wrong", () => {
+  const bar = (o: number, c: number) => ({ t: 0, o, h: Math.max(o, c), l: Math.min(o, c), c });
+  assert(M.gradeRead("neutral", [bar(100, 100.05)], [], {})!.direction === "right", "flat");
+  assert(M.gradeRead("short", [bar(100, 101)], [], {})!.direction === "wrong", "short on up day");
+  assert(M.gradeRead("long", [bar(100, 100.1)], [], {})!.direction === "flat", "long on a flat day");
+});
+Deno.test("score extra: Signal speed from v3.16 timings + the coach's calls scoreboard", async () => {
+  reset(); setNow("2026-10-07T20:30:00Z");
+  T.otto_jason.push({ id: 1, ticker: "MU", direction: "short", kind: "call", words: "SHORTED", day: "2026-10-06", score: { state: "worked", close_pct: 1.9, best_pct: 2.6 } });
+  T.otto_jason.push({ id: 2, kind: "result", result_for: 1, words: "$1000 FOR 2 PUTS ON MU" });
+  T.otto_signal_batches.push({ id: 9, created_at: "2026-10-07T14:02:05Z", status: "done", cards: ["c"], rows: [1], timing: { posted: "2026-10-07T14:02:01Z", total_ms: 41000 } });
+  const r: any = await M.scoreExtra();
+  assert(r.speed[0].caught_s === 4 && r.speed[0].card_s === 41 && r.median_card_s === 41, JSON.stringify(r.speed));
+  assert(r.coach[0].ticker === "MU" && r.coach[0].worked === 1 && /1000/.test(r.coach[0].results[0]), JSON.stringify(r.coach));
 });
