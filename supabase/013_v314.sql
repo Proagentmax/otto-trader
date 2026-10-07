@@ -24,8 +24,23 @@ alter table public.otto_watch enable row level security;
 revoke all on public.otto_watch from anon, authenticated;
 
 -- Every minute 13:00–21:59 UTC on weekdays; the function itself only works 9:30–4:00 New York.
--- Reuses the existing cron_alerts job's call (same URL, key and cron secret), only the fn changes.
-select cron.unschedule('otto-watch') where exists (select 1 from cron.job where jobname = 'otto-watch');
-select cron.schedule('otto-watch', '* 13-21 * * 1-5',
-  (select replace(command, 'fn=cron_alerts', 'fn=cron_watch') from cron.job where command like '%fn=cron_alerts%' limit 1));
+-- Copies the URL, key and cron-secret header from an existing Otto cron job (only fn= changes),
+-- so the secret never has to live in this public repo. (6 Oct: there is no cron_alerts job in
+-- pg_cron, so this copies from whichever otto-* job calls ?fn=cron_…, e.g. otto-morning-edt.)
+do $$
+declare cmd text;
+begin
+  select regexp_replace(command, 'fn=cron_[a-z_]+', 'fn=cron_watch')
+    into cmd
+    from cron.job
+   where jobname like 'otto-%' and command ~ 'fn=cron_[a-z_]+'
+   order by jobid limit 1;
+  if cmd is null then
+    raise exception 'otto-watch: no existing otto-* cron job with fn=cron_... to copy the URL and secret from';
+  end if;
+  if exists (select 1 from cron.job where jobname = 'otto-watch') then
+    perform cron.unschedule('otto-watch');
+  end if;
+  perform cron.schedule('otto-watch', '* 13-21 * * 1-5', cmd);
+end $$;
 select jobname, schedule, (command like '%fn=cron_watch%') as is_watch from cron.job order by jobid;
