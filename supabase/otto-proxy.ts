@@ -1500,7 +1500,7 @@ async function deskTools() {
 
 type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; allowClose?: boolean; maxRounds?: number; deadline?: number; author?: string; planExtra?: Record<string, unknown>;
   mustCard?: boolean; dryRun?: boolean };   // v3.16: mustCard = a Signal call must end in a card; dryRun = the self-test (cards checked, not stored)
-type DeskResult = { said: string; cards: string[]; timedOut?: boolean; outOfRounds?: boolean; did: string[]; failed: string[]; finalText: string; dry?: any[] };
+type DeskResult = { said: string; cards: string[]; timedOut?: boolean; outOfRounds?: boolean; did: string[]; failed: string[]; finalText: string; dry?: any[]; errors?: string[] };
 
 // The tool loop, shared by the live Desk (streamed) and the 8:45 run (silent).
 // v3.13: one Claude request, retried once on 429 / 5xx / overloaded, never past the run's deadline.
@@ -1528,8 +1528,8 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
   const { msgs, sys, tools, cs, who, send } = o;
   const deadline = o.deadline || Date.now() + RUN_BUDGET_MS;
   let said = "", finalText = "";
-  const cards: string[] = [], did: string[] = [], failed: string[] = [], dry: any[] = [];
-  const done = (x: any = {}): DeskResult => ({ said, cards, did, failed, finalText, dry, ...x });
+  const cards: string[] = [], did: string[] = [], failed: string[] = [], dry: any[] = [], errors: string[] = [];
+  const done = (x: any = {}): DeskResult => ({ said, cards, did, failed, finalText, dry, errors, ...x });
   const maxR = o.maxRounds || 12;
   // v3.13: the clock and the House Rules ride in a second, uncached system block on EVERY run
   // (Desk, alert reads, Signals, position checks, the morning read).
@@ -1605,8 +1605,14 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
           content = hits.length ? hits.map(fmt).join("\n\n") : "NOTHING FOUND for that wording. Try different words.";
         } else if (b.name === "propose_action" && o.dryRun) {
           // v3.16 self-test: check the card the way the server would, store nothing.
-          const leg = input?.calls?.[0]?.args?.legs?.[0];
-          if (!input?.title || !leg?.option_id || !input?.plan?.stop_option || !(Number(input?.calls?.[0]?.args?.price) > 0)) throw new Error("card is missing title / option_id / limit price / plan.stop_option");
+          // v3.17: the same checks proposeAction makes (it takes price OR limit_price; args may arrive as a JSON string).
+          const c0 = input?.calls?.[0] || {};
+          let args: any = c0.args; if (typeof args === "string") { try { args = JSON.parse(args); } catch { args = {}; } }
+          const leg = args?.legs?.[0], pl = input?.plan || {};
+          const miss = [!input?.title && "title", c0.tool !== "place_option_order" && `tool (got ${c0.tool})`, !leg?.option_id && "legs[0].option_id",
+            !(Number(args?.price ?? args?.limit_price) > 0) && "price", !pl.tv_symbol && "plan.tv_symbol", !pl.direction && "plan.direction",
+            !pl.setup && "plan.setup", pl.tp1 == null && "plan.tp1", pl.stop == null && "plan.stop", !(Number(pl.stop_option) > 0) && "plan.stop_option"].filter(Boolean);
+          if (miss.length) throw new Error("card is missing " + miss.join(", "));
           dry.push(input);
           content = "SELF-TEST: card accepted (not stored). Write one line and stop.";
         } else if (b.name === "propose_action") {
@@ -1654,6 +1660,7 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
         }
       } catch (e) {
         isErr = true; content = "ERROR: " + (e as Error).message;
+        errors.push(`${b.name}: ${String((e as Error).message).slice(0, 160)}`);
       }
       (isErr ? failed : did).push(b.name);
       results.push({ type: "tool_result", tool_use_id: b.id, content: content || "(empty)", ...(isErr ? { is_error: true } : {}) });
@@ -5153,8 +5160,8 @@ export async function signalSelfTest(force = false) {
   const t0 = Date.now(), steps: { name: string; ok: boolean; ms: number; note: string }[] = [];
   const step = async (name: string, f: () => Promise<string>) => {
     const t = Date.now();
-    try { steps.push({ name, ok: true, ms: Date.now() - t, note: await f() }); }
-    catch (e) { steps.push({ name, ok: false, ms: Date.now() - t, note: String((e as Error).message || e).slice(0, 160) }); }
+    try { const note = await f(); steps.push({ name, ok: true, ms: Date.now() - t, note }); }
+    catch (e) { steps.push({ name, ok: false, ms: Date.now() - t, note: String((e as Error).message || e).slice(0, 220) }); }
   };
   await step("Discord watcher heartbeat", async () => {
     const b = await setting("signal_beat").catch(() => null);
@@ -5185,7 +5192,7 @@ export async function signalSelfTest(force = false) {
     const prompt = `${ctxLine}\n[SELF-TEST — not a real signal. Make ONE opening card for "SPY LONG" from this list, using ◆ (fits buying power) or ★. It will NOT be stored.]\n${pre}`;
     const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: tools.filter((t: any) => t.name === "propose_action"), cs,
       who: "selftest", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 3, mustCard: true, dryRun: true, deadline: Date.now() + 60_000 });
-    if (!res.dry?.length) throw new Error(res.failed.includes("propose_action") ? "the card was malformed" : "no card was made");
+    if (!res.dry?.length) throw new Error(res.failed.includes("propose_action") ? "the card was malformed — " + (res.errors || []).slice(-1)[0] : "no card was made");
     return String(res.dry[0].title || "card ok").slice(0, 80);
   });
   const ok = steps.every((x) => x.ok), secs = Math.round((Date.now() - t0) / 1000);

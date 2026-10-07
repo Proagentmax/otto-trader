@@ -692,3 +692,15 @@ Deno.test("edits (ext 1.3): an 'edit' for a post we never got is treated as new"
     body: JSON.stringify({ kind: "msgs", msgs: [{ id: "1424790000000000002", at: "2026-10-06T19:12:40.000Z", author: "Jason", author_id: "474721184903200819", text: "NVDA", edited: true }] }) }));
   assert(r.new === 1 && T.otto_signal_msgs.length === 1, JSON.stringify(r));
 });
+Deno.test("self-test dry run: accepts limit_price and string args like the real card path; names what's missing", async () => {
+  reset(); setNow("2026-10-07T13:10:00Z");
+  let n = 0;
+  claudeScript = () => n++ === 0
+    ? toolReply("propose_action", { title: "T", summary: "s", plan: { tv_symbol: "AMEX:SPY", direction: "up", setup: "otto signal", tp1: 1, stop: 1 },
+        calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: "x", side: "buy", position_effect: "open" }], quantity: "1", limit_price: "3" } }] })
+    : n === 2 ? toolReply("propose_action", { title: "T", summary: "s", plan: { tv_symbol: "AMEX:SPY", direction: "up", setup: "otto signal", tp1: 1, stop: 1, stop_option: 1.5 },
+        calls: [{ service: "rh", tool: "place_option_order", args: JSON.stringify({ legs: [{ option_id: "x", side: "buy", position_effect: "open" }], quantity: "1", limit_price: "3" }) }] })
+    : textReply("ok");
+  const r: any = await M.runDesk({ msgs: [{ role: "user", content: "x" }], sys: "S", tools: [{ name: "propose_action" }], cs: [], who: "selftest", send: () => {}, allowPropose: true, dryRun: true, maxRounds: 3 });
+  assert(/missing plan\.stop_option/.test(r.errors[0]) && r.dry.length === 1, JSON.stringify(r.errors));
+});
