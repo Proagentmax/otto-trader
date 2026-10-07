@@ -38,6 +38,8 @@ function matches(row: any, params: URLSearchParams) {
     if (v.startsWith("neq.")) { if (String(val(k)) === v.slice(4)) return false; continue; }
     if (v.startsWith("eq.")) { const want = decodeURIComponent(v.slice(3)); const have = k === "exit->>state" ? row.exit?.state : val(k); if (String(have) !== want) return false; }
     else if (v.startsWith("gte.")) { if (!(String(row[k]) >= v.slice(4))) return false; }
+    else if (v.startsWith("lte.")) { if (!(String(row[k]) <= v.slice(4))) return false; }
+    else if (v.startsWith("lt.")) { if (!(String(row[k]) < v.slice(3))) return false; }
     else if (v.startsWith("in.(")) { const set = v.slice(4, -1).split(","); const have = val(k); if (!set.includes(String(have))) return false; }
   }
   return true;
@@ -85,10 +87,12 @@ const OPT = "opt-spy-781c-1009";
 let orders: any[] = [];
 let calls: { tool: string; args: any }[] = [];
 let quote = { delta: "0.527", volume: 6911, open_interest: 2898 };
+let callHook: ((tool: string, args: any) => any) | null = null;   // v3.16 tests: per-test Robinhood answers
 async function fakeCall(service: string, tool: string, args: any) {
   calls.push({ tool, args });
   await sleep(4);
   const j = (o: any) => ({ content: [{ type: "text", text: JSON.stringify(o) }] });
+  if (callHook) { const h = callHook(tool, args); if (h) return j(h); }
   switch (tool) {
     case "get_accounts": return j({ data: { accounts: [{ account_number: ACCT, agentic_allowed: true }, { account_number: "650006166", agentic_allowed: false }] } });
     case "get_portfolio": return j({ data: { total_value: "1196.91" } });
@@ -132,8 +136,12 @@ const toolReply = (name: string, input: any) => [
   { type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: JSON.stringify(input) } },
   { type: "message_delta", delta: { stop_reason: "tool_use" } }];
 
+const pings: { kind: string; title: string; body: string }[] = [];
+let extractHook: ((text: string) => any[]) | null = null;
 (globalThis as any).__OTTO_TEST__ = {
   db: fakeDb, call: fakeCall,
+  notify: (kind: string, title: string, body: string) => pings.push({ kind, title, body }),
+  extract: (text: string) => (extractHook ? extractHook(text) : []),
   claude: async (body: any) => { claudeBodies.push(body); if (!claudeScript) return sse(textReply("ok")); const ev = claudeScript(body); if (ev instanceof Error) throw ev; return sse(ev); },
 };
 (globalThis as any).fetch = (u: any) => /brain-latest\.json/.test(String(u)) ? Promise.resolve(new Response(JSON.stringify([{ call: { date: "2026-10-01", title: "t" }, rules: [], setups: [], levels: [], _transcript: "x" }]))) : Promise.reject(new Error("network disabled in tests"));
@@ -144,7 +152,8 @@ const M = await import("../otto-proxy.ts");
 function assert(c: unknown, msg: string) { if (!c) throw new Error("ASSERT: " + msg); }
 function reset() {
   T.otto_actions = []; T.otto_desk = []; T.otto_settings = []; T.otto_trades = []; T.otto_watch = [];
-  orders = []; calls = []; claudeBodies.length = 0; claudeScript = null;
+  T.otto_checks = []; T.otto_jason = []; T.otto_signal_batches = []; T.otto_signal_msgs = []; T.otto_signal_imgs = [];
+  orders = []; calls = []; claudeBodies.length = 0; claudeScript = null; callHook = null; extractHook = null; pings.length = 0;
   quote = { delta: "0.527", volume: 6911, open_interest: 2898 };
 }
 const deskText = () => T.otto_desk.map((r) => `[${r.author}] ${r.content}`).join("\n");
@@ -449,4 +458,208 @@ Deno.test("daily recap: posts one Desk note and runs once per trading day", asyn
   assert(notes.length === 1 && /Today in one line/.test(notes[0].content), deskText());
   const again: any = await M.dailyRecap(false);
   assert(again.skipped === "already done" && T.otto_desk.filter((r) => r.author === "Jarvis · daily recap").length === 1, JSON.stringify(again));
+});
+
+/* =============================== v3.16 SIGNALS + HONEST JARVIS (replays of 6 Oct) =============================== */
+// A fake Robinhood for MU at $1,053.77 with $1,140.82 buying power (the 3:12 PM "SHORTED. SEE THE BREAK" moment).
+const MU_SPOT = 1053.77, BP = 1140.82;
+const MU_EXPS = ["2026-10-07", "2026-10-09", "2026-10-12", "2026-10-14", "2026-10-16"];
+function muHook(spot = MU_SPOT, sym = "MU") {
+  const strikes: number[] = []; for (let k = 5; k <= 2000; k += 5) strikes.push(k);
+  const inst = (exp: string, type: string, k: number) => ({ id: `${sym}-${exp}-${type}-${k}`, chain_symbol: sym, expiration_date: exp, strike_price: k.toFixed(4), type, state: "active", tradability: "tradable" });
+  return (tool: string, args: any) => {
+    if (tool === "get_equity_quotes") return { data: { results: [{ quote: { symbol: sym, last_trade_price: String(spot), venue_last_trade_time: new Date().toISOString() } }] } };
+    if (tool === "get_option_chains") return { data: { chains: [{ symbol: sym, can_open_position: true, expiration_dates: MU_EXPS }] } };
+    if (tool === "get_portfolio") return { data: { total_value: String(BP), buying_power: { buying_power: String(BP) } } };
+    if (tool === "get_option_instruments" && args.chain_symbol) {
+      // Like Robinhood: 100 strikes a page from the bottom; the cursor is base64("p=<strike>").
+      const from = args.cursor ? Number(atob(args.cursor).slice(2)) : 0;
+      const list = strikes.filter((k) => k > from).slice(0, 100).map((k) => inst(args.expiration_dates, args.type, k));
+      return { data: { instruments: list } };
+    }
+    if (tool === "get_option_quotes") {
+      return { data: { results: (args.instrument_ids || []).map((id: string) => {
+        const [, exp, type, ks] = id.split("-").length === 4 ? id.split("-") : [null, id.split("-").slice(1, 4).join("-"), id.split("-")[4], id.split("-")[5]];
+        const k = Number(ks), m = (k - spot) * (type === "put" ? 1 : -1), t = 1 + MU_EXPS.indexOf(exp) * 0.25;
+        const delta = Math.max(0.03, Math.min(0.97, 0.5 + m / 90)) * (type === "put" ? -1 : 1);
+        const ask = Math.max(0.3, (20 + m * 0.55) * t);
+        return { quote: { instrument_id: id, ask_price: ask.toFixed(2), bid_price: (ask - 0.3).toFixed(2), mark_price: (ask - 0.15).toFixed(2), delta: delta.toFixed(3), volume: 3000, open_interest: 1500 } };
+      }) } };
+    }
+    return null;
+  };
+}
+const optIdIn = (body: any) => { const t = JSON.stringify(body.messages); const m = /option_id (MU-[0-9-]+-put-\d+)/.exec(t); return m?.[1]; };
+
+Deno.test("shortlist: MU puts start at the money (cursor), not at $5; ★ by the rules, ◆ fits $1,140 buying power", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook();
+  const sl: any = await M.optionShortlist("MU", "put");
+  const inst = calls.filter((c) => c.tool === "get_option_instruments");
+  assert(inst.length === 3 && inst.every((c) => c.args.cursor && Number(atob(c.args.cursor).slice(2)) > 980), JSON.stringify(inst.map((c) => c.args)));
+  assert(sl.exps.join() === "2026-10-07,2026-10-09,2026-10-12", sl.exps.join());
+  assert(sl.rows.every((r: any) => r.strike > 990 && r.strike < 1120), "near the money only");
+  assert(sl.best && Math.abs(sl.best.delta) >= 0.3 && Math.abs(sl.best.delta) <= 0.4, JSON.stringify(sl.best));
+  assert(sl.bestFit && sl.bestFit.cost <= BP, JSON.stringify(sl.bestFit));
+  assert(/★/.test(sl.text) && /◆|fits/.test(sl.text) && /buying power \$1140\.82/.test(sl.text), sl.text.slice(0, 400));
+});
+Deno.test("pickContracts: when nothing in the delta band fits, ◆ is the closest affordable contract below the band", () => {
+  const row = (k: number, d: number, cost: number) => ({ option_id: "o" + k, exp: "2026-10-09", strike: k, type: "put", bid: 1, ask: cost / 100, mark: 1, delta: -d, vol: 10, oi: 5, cost, fits: cost <= 1140, band: d >= .3 && d <= .4, liq: true, label: "MU " + k });
+  const { best, bestFit } = M.pickContracts([row(1040, .44, 2300), row(1030, .36, 1700), row(1020, .29, 1200), row(1010, .24, 900), row(990, .12, 300)] as any);
+  assert(best.strike === 1030 && bestFit.strike === 1010, JSON.stringify({ best, bestFit }));
+});
+
+// Replays batch #8 (6 Oct, 3:12 PM): a live MU short call. Jarvis keeps browsing; the last step is forced to the card.
+function seedMuBatch(words = "SHORTED. SEE THE BREAK / OR MISS IT") {
+  T.otto_jason.push({ id: 801, created_at: "2026-10-06T19:12:54Z", day: "2026-10-06", posted_at: "2026-10-06T19:12:40Z", posted_label: "3:12 PM", kind: "call", ticker: "MU", direction: "short", late: false, words, source: "watcher" });
+  T.otto_signal_batches.push({ id: 8, created_at: "2026-10-06T19:12:54Z", day: "2026-10-06", msg_ids: ["m1"], rows: [801], status: "jarvis" });
+}
+Deno.test("signal replay (MU 3:12 PM): the server pre-fetches the contracts and the call ALWAYS ends in a card + ping", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuBatch();
+  let forced = false;
+  claudeScript = (body: any) => {
+    assert(/PRE-FETCHED BY THE SERVER/.test(JSON.stringify(body.messages[0])), "prefetch in the prompt");
+    if (body.tool_choice?.name === "propose_action") {
+      forced = true;
+      const id = optIdIn(body);
+      return toolReply("propose_action", { title: "Buy 1 MU 1020P 10/7 @ 10.00", summary: "test", plan: { tv_symbol: "NASDAQ:MU", direction: "down", setup: "otto signal", jason_id: 801, tp1: 1040, stop: 1060, stop_option: 6, expires: "2026-10-07" },
+        calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: id, side: "buy", position_effect: "open" }], quantity: "1", type: "limit", price: "10.00", time_in_force: "gfd" } }] });
+    }
+    return toolReply("rh__get_option_instruments", { chain_symbol: "MU", expiration_dates: "2026-10-16", type: "put" });   // the 6 Oct habit
+  };
+  await M.signalJarvis(8);
+  const b = T.otto_signal_batches[0];
+  assert(forced, "last step forced to propose_action");
+  assert(b.status === "done" && b.cards.length === 1, JSON.stringify(b));
+  assert(T.otto_jason[0].action_id === b.cards[0], "card linked to the call");
+  assert(!/enormous|Let me/.test(b.read || ""), "no working notes in the feed: " + b.read);
+  assert(pings.some((p) => /Card ready: MU SHORT/.test(p.title)), JSON.stringify(pings));
+  assert(b.timing && b.timing.cards === 1, JSON.stringify(b.timing));
+  assert(T.otto_actions[0].pinged_at, "card marked pinged");
+});
+Deno.test("signal replay: a call that ends with NO card pings the reason (6 Oct MU was silent)", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuBatch();
+  claudeScript = () => textReply("MU is up $21 past the level, chasing.\nREAD: MU short signal. Not building a card — it already ran.");
+  await M.signalJarvis(8);
+  const b = T.otto_signal_batches[0];
+  assert(b.status === "done" && !b.cards.length && /No card for MU/.test(b.read), JSON.stringify(b));
+  assert(pings.some((p) => /MU SHORT — NO card/.test(p.title) && /decided against/.test(p.body)), JSON.stringify(pings));
+  assert(/no card — Jarvis decided against/.test(deskText()), deskText());
+});
+Deno.test("signal replay: ran out of steps with no READ line → plain server read, never the working notes", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuBatch();
+  claudeScript = (body: any) => body.tool_choice ? textReply("The chain response is enormous.") : toolReply("rh__get_option_quotes", { instrument_ids: [] });
+  await M.signalJarvis(8);
+  const b = T.otto_signal_batches[0];
+  assert(!/enormous/.test(b.read) && /MU short call at 3:12 PM/.test(b.read) && /ran out of steps|decided/.test(b.read), b.read);
+  assert(pings.some((p) => /NO card/.test(p.title)), JSON.stringify(pings));
+});
+Deno.test("signal results: '$1000 for 2 PUTS ON MU' is a result, linked to his MU call, no card, no ping", async () => {
+  reset(); setNow("2026-10-06T19:40:00Z");
+  T.otto_jason.push({ id: 801, day: "2026-10-06", kind: "call", ticker: "MU", direction: "short", words: "SHORTED" });
+  T.otto_jason.push({ id: 802, day: "2026-10-06", kind: "result", ticker: "MU", words: "$1000 FOR 2 PUTS ON MU" });
+  await M.linkResults([T.otto_jason[1]]);
+  assert(T.otto_jason[1].result_for === 801, JSON.stringify(T.otto_jason[1]));
+});
+
+Deno.test("promises: yesterday's exact lines are caught; honest lines are not", () => {
+  const said = "Stop is protected at $2.00 ✅. I'll flag you at 1:30 if it's still stuck. Watch the chart, not the P&L.\nNo flag from me yet. I'm watching. You don't need to do anything.\nI can't watch between messages, so set an alert.";
+  const p = M.findPromises(said);
+  assert(p.length === 2 && p[0].kind === "later" && p[1].kind === "watch", JSON.stringify(p));
+  const ctx = { did: [], failed: [], protectedTrade: true, autoClose: true, watchToday: [] };
+  assert(M.unbacked(p, ctx).length === 2, "both unbacked with nothing scheduled");
+  assert(M.unbacked(p, { ...ctx, did: ["schedule_check"] }).length === 0, "a check-in backs both");
+  const stop = M.findPromises("If SPY closes under 778.60 the wrong-if alert fires and I'll close it via auto-close.");
+  assert(stop.length === 1 && M.unbacked(stop, ctx).length === 0, "protected trade + auto-close backs that one");
+  assert(!M.findPromises("Tell me and I'll close it at market on the first print.").length, "an offer waiting on them is fine");
+  const honest = ["I'll tell you why: the 15-minute candle closed through.", "I'll move on to NVDA next.", "I'll close with the key levels: 242 and 245.",
+    "I'm tracking with you — that's a fair read.", "I've added context below.", "Your stop is set at 1.20 in the plan.", "Robinhood says the order is working.",
+    "Once you approve, I'll post the fill.", "I'll let you know what I find in a sec."];
+  for (const h of honest) assert(!M.findPromises(h).length, "false positive: " + h);
+  const real = ["I'm watching.", "If anything starts looking ugly I'll say something before it becomes a problem.", "I'll ping you when SPY hits 784.50.",
+    "I'll check back in 20 minutes.", "I've set an alert at 778.60."];
+  for (const r of real) assert(M.findPromises(r).length === 1, "missed: " + r);
+  const placed = M.findPromises("I've placed the order for 1 SPY 781C.");
+  assert(M.unbacked(placed, { ...ctx, did: ["propose_action"] }).length === 1, "a card is not a placed order");
+});
+Deno.test("desk (12:02 PM replay): 'I'll flag you at 1:30' → server check → Jarvis schedules a real 1:30 check-in", async () => {
+  reset(); setNow("2026-10-06T16:02:00Z");
+  let n = 0;
+  claudeScript = (body: any) => {
+    n++;
+    const last = JSON.stringify(body.messages.at(-1));
+    if (/OTTO SERVER CHECK/.test(last)) return toolReply("schedule_check", { at: "1:30 PM", what: "SPY 781C: still stuck under 784.50 TP1? Tell Ifoma." });
+    if (/Scheduled #/.test(last)) return textReply("Set — I'll check back at 1:30 PM ET and ping you.");
+    return textReply("Holding. I'll flag you at 1:30 if it's still stuck. I'm watching.");
+  };
+  const req = new Request("https://x/?fn=desk", { method: "POST", body: JSON.stringify({ author: "Ifoma", messages: [{ role: "user", content: "anything I should do on SPY?" }] }) });
+  const res = await M.desk(req, "ottotrader@vinecreativestudio.com", "k");
+  const streamed = await res.text();
+  assert(n === 3, "reply, correction, confirmation: " + n);
+  assert(T.otto_checks.length === 1 && /2026-10-06T17:30:00/.test(T.otto_checks[0].due_at), JSON.stringify(T.otto_checks));
+  assert(/⏰ Check-in set for 1:30 PM ET/.test(deskText()), deskText());
+  assert(/I'll check back at 1:30 PM/.test(streamed), "the fix is streamed under the reply");
+  const pr = T.otto_settings.find((r: any) => r.key === "promise_day")?.value;
+  assert(pr && pr.made === 2 && pr.corrected === 2, JSON.stringify(pr));
+});
+Deno.test("desk: a promise Jarvis won't back gets the plain server correction", async () => {
+  reset(); setNow("2026-10-06T16:17:00Z");
+  claudeScript = () => textReply("No flag from me yet. I'm watching. You don't need to do anything.");
+  const req = new Request("https://x/?fn=desk", { method: "POST", body: JSON.stringify({ author: "Ifoma", messages: [{ role: "user", content: "ok?" }] }) });
+  const res = await M.desk(req, "ottotrader@vinecreativestudio.com", "k");
+  const streamed = await res.text();
+  assert(/Correction: I can't watch the market between messages/.test(streamed), streamed.slice(-400));
+  assert(/Correction: I can't watch/.test(deskText()), deskText());
+});
+Deno.test("check-ins: due at 1:30 → Jarvis runs, posts on the Desk, pings; never twice", async () => {
+  reset(); setNow("2026-10-06T17:30:20Z");
+  T.otto_checks.push({ id: 5, day: "2026-10-06", due_at: "2026-10-06T17:30:00.000Z", what: "SPY 781C still stuck?", by: "Ifoma via Jarvis", status: "pending" });
+  claudeScript = () => textReply("SPY 782.10, still under TP1 784.50. Plan says hold; the stop is working.");
+  await Promise.all([M.checksTick(NOW), M.checksTick(NOW)]);
+  await sleep(50);
+  assert(T.otto_checks[0].status === "done", JSON.stringify(T.otto_checks[0]));
+  assert(T.otto_desk.filter((r) => r.author === "Jarvis · check-in").length === 1, deskText());
+  assert(pings.filter((p) => p.kind === "checkin").length === 1, JSON.stringify(pings));
+});
+Deno.test("check-ins: a time that has passed or is after 4:15 is refused (Jarvis must say so)", async () => {
+  reset(); setNow("2026-10-06T16:02:00Z");
+  let e1 = "", e2 = "";
+  try { await M.checkAdd("11:30 AM", "x", "t"); } catch (e) { e1 = (e as Error).message; }
+  try { await M.checkAdd("5:00 PM", "x", "t"); } catch (e) { e2 = (e as Error).message; }
+  assert(/passed/.test(e1) && /4:15/.test(e2), e1 + " | " + e2);
+});
+Deno.test("missed pings: a Signal card whose run was cut off is pinged after 3 min, once", async () => {
+  reset(); setNow("2026-10-06T19:16:00Z");
+  T.otto_actions.push({ id: "a1", title: "Buy 1 MU 1020P", status: "pending", created_by: "signals", created_at: "2026-10-06T19:12:30Z", pinged_at: null });
+  await M.cardSweep(NOW); await M.cardSweep(NOW);
+  assert(pings.filter((p) => /Card waiting: Buy 1 MU/.test(p.title)).length === 1, JSON.stringify(pings));
+});
+Deno.test("self-test: 9:10 AM — heartbeat, read, shortlist, dry-run card → ✅ on the Desk, no ping, no card stored", async () => {
+  reset(); setNow("2026-10-07T13:10:00Z"); callHook = muHook(781.2, "SPY");
+  T.otto_settings.push({ key: "signal_beat", value: { at: "2026-10-07T13:09:30Z", state: "ok", queue: 0, queue_age: 0 } });
+  extractHook = () => [{ kind: "call", ticker: "SPY", direction: "long", words: "SPY LONG", time: "9:10 AM" }];
+  claudeScript = (body: any) => {
+    const t = JSON.stringify(body.messages);
+    const m = /option_id (SPY-[0-9-]+-call-\d+)/.exec(t);
+    return /SELF-TEST: card accepted/.test(t) ? textReply("ok") : toolReply("propose_action", { title: "TEST Buy 1 SPY", summary: "t", plan: { tv_symbol: "AMEX:SPY", direction: "up", setup: "otto signal", tp1: 784, stop: 779, stop_option: 1.5 },
+      calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: m?.[1], side: "buy", position_effect: "open" }], quantity: "1", type: "limit", price: "3.00", time_in_force: "gfd" } }] });
+  };
+  const r: any = await M.signalSelfTest(false);
+  assert(r.ok, JSON.stringify(r.steps));
+  assert(/✅ Signal self-test 9:10 AM/.test(deskText()), deskText());
+  assert(!T.otto_actions.length && !pings.length, "nothing stored, nobody pinged");
+  const again: any = await M.signalSelfTest(false);
+  assert(again.skipped === "already ran", JSON.stringify(again));
+});
+Deno.test("self-test: a sleeping Engineer PC fails the test and pings", async () => {
+  reset(); setNow("2026-10-07T13:10:00Z"); callHook = muHook(781.2, "SPY");
+  T.otto_settings.push({ key: "signal_beat", value: { at: "2026-10-07T12:40:00Z", state: "ok" } });
+  extractHook = () => [{ kind: "call", ticker: "SPY", direction: "long", words: "SPY LONG", time: "9:10 AM" }];
+  claudeScript = () => textReply("no");
+  const r: any = await M.signalSelfTest(true);
+  assert(!r.ok && /Engineer PC awake/.test(r.steps[0].note), JSON.stringify(r.steps));
+  assert(pings.some((p) => /self-test failed/.test(p.title)), JSON.stringify(pings));
+});
+Deno.test("names: curly apostrophes don't leak the coach's name; streamed text is filtered too", async () => {
+  const out = M.unnameForTest("held Jason’s 778.60 trigger level");
+  assert(!/Jason/.test(out), out);
 });

@@ -1,5 +1,10 @@
 // Otto Trader — server side. One Edge Function.
 //
+//   v3.16 (7 Oct 2026): Signals always end in a card or a reason (server pre-fetches the contracts, a call's last step is
+//   forced to the card, no-card pings say why, the feed never shows working notes, result posts kept as 'result'); Jarvis's
+//   promises are checked after every Desk reply (schedule_check makes "I'll check back at 1:30" real; unbacked promises get
+//   one correction round); RUNNING RIGHT NOW list in every run; missed card pings swept; 9:10 Signal self-test;
+//   TradingView breaker on Jarvis's tools and the alert-log reads; token-refresh race fixed. 016_v316.sql.
 //   v3.9 (6 Oct 2026): Otto Signals. A Chrome extension on Ifoma's PC watches the mentor's
 //   Discord channel live and posts each new message to ?fn=signal_in (x-otto-signal key);
 //   Jarvis builds the card, both phones ping. Watcher-offline alert on the 2-min cron.
@@ -902,14 +907,29 @@ async function accessToken(service: string, force = false): Promise<string> {
   const fresh = !force && (!t.expires_at || Date.now() < t.expires_at - 60_000);
   if (fresh) { TOK[service] = { access: t.access_token, exp: t.expires_at || Date.now() + 30 * 60_000 }; return t.access_token; }
   if (!t.refresh_token) throw new NotConnected(SVC[service].name + " sign-in expired — reconnect in Settings → Connections");
-  try {
-    const j = await tokenPost(service, { grant_type: "refresh_token", refresh_token: t.refresh_token,
-      client_id: row.client_id, resource: SVC[service].resource });
-    return (await saveTokens(service, row.client_id, j, t)).access_token;
-  } catch (e) {
-    throw new NotConnected(SVC[service].name + " sign-in expired — reconnect in Settings → Connections (" + (e as Error).message + ")");
-  }
+  // v3.16 (code review 6 Oct): one refresh at a time per instance, and if another instance refreshed first (the
+  // provider rotates refresh tokens, so ours is now dead), use the tokens it saved instead of calling it expired.
+  if (REFRESHING[service]) return REFRESHING[service]!;
+  REFRESHING[service] = (async () => {
+    try {
+      const j = await tokenPost(service, { grant_type: "refresh_token", refresh_token: t.refresh_token,
+        client_id: row.client_id, resource: SVC[service].resource });
+      return (await saveTokens(service, row.client_id, j, t)).access_token;
+    } catch (e) {
+      const again = (await db("otto_conn?service=eq." + service + "&select=*").catch(() => []))?.[0];
+      if (again?.tokens && again.tokens !== row.tokens) {
+        const t2 = await unseal(again.tokens).catch(() => null);
+        if (t2?.access_token && (!t2.expires_at || Date.now() < t2.expires_at - 60_000)) {
+          TOK[service] = { access: t2.access_token, exp: t2.expires_at || Date.now() + 30 * 60_000 };
+          return t2.access_token;
+        }
+      }
+      throw new NotConnected(SVC[service].name + " sign-in expired — reconnect in Settings → Connections (" + (e as Error).message + ")");
+    } finally { delete REFRESHING[service]; }
+  })();
+  return REFRESHING[service]!;
 }
+const REFRESHING: Record<string, Promise<string> | undefined> = {};
 
 /* ------------------------------------------------------------ MCP client
    Streamable HTTP: POST JSON-RPC, answer arrives as JSON or as an SSE stream. */
@@ -1121,7 +1141,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     plan: plan ? { ...plan, setup: String(plan.setup).toLowerCase().slice(0, 40) } : null, banner, checks,
     ...(exit ? { exit: { ...exit, state: "planned", log: [] } } : {}),
   }) });
-  if (rows?.[0]?.status === "pending" && who !== "signals" && who !== "alert" && who !== "watcher") await notify("card", `🃏 Card waiting: ${String(rows[0].title).slice(0, 80)}`, "Tap to open the Desk and Approve or Reject (cards expire in 20 minutes).");
+  if (rows?.[0]?.status === "pending" && who !== "signals" && who !== "alert" && who !== "watcher") await markPinged([rows[0].id]), await notify("card", `🃏 Card waiting: ${String(rows[0].title).slice(0, 80)}`, "Tap to open the Desk and Approve or Reject (cards expire in 20 minutes).");
   return publicAction(rows[0]);
 }
 
@@ -1346,13 +1366,13 @@ async function panel() {
 const NAME_RULE = `\n\nNAMES — PRODUCT RULE (6 Oct 2026). Never write the names Jason, Jason Murray, or jmoney915 in anything Ifoma or Josh will read: replies, reads, card titles and summaries, TradingView alert names and messages. The method and its rules are "the Otto Rules" (e.g. "Otto Rules: no trades in the first 30 minutes"; cite as (Otto Rules, call date, MM:SS)). His Discord posts are "signals" ("the SPCX signal"). The person on the coaching calls is "the coach". Name a TradingView alert you create "Otto Rules MM/DD – TICKER LEVEL – note". You still know where the rules come from; just don't name him. Speak as yourself with the Otto Rules as your own playbook: never "he would / wouldn't", "he says", "ask him", "send it to him" or "get the coach on the phone" — say what the Otto Rules say and what you'd do.`;
 // v3.13 (Ifoma, 6 Oct): guardrails flag, never block; Jarvis never claims to watch what nothing is watching.
 const GUARD_RULE = `\n\nGUARDRAILS FLAG — THEY NEVER BLOCK (Ifoma, 6 Oct 2026). Ifoma and Josh make the final call on every trade. When a setup is real, ALWAYS build the card, even if it breaks a guardrail (max loss per trade, daily stop, weekly limit, size vs account, delta, expiry, first 30 minutes, banner). Never say "hard stop", "no card" or refuse a card because of a limit or size. The card shows a red banner naming each guardrail it breaks; in your reply say which ones in one line, and if a cheaper contract fits better, offer it as a second (ALT) card. Only skip a card when there is no setup.
-WHAT RUNS ON ITS OWN — SAY ONLY THIS. You do not watch the market between messages. You run only when someone writes on the Desk, when the 👁 Watcher sees a trigger at a level on its list (the server checks every minute on 5- and 10-minute closes), when a TradingView alert Otto set fires (checked every 2 minutes), when Otto Signals catches a post, and on the open-position check (every few minutes while a trade is open). Never say "I'm watching", "watching every bar", "the card drops automatically", "I'll flag you at 1:30" or "I'll ping you" unless one of those mechanisms will actually do it. If they want a level watched, put it on the Watcher with add_watch_level (no card needed) and say so — that is how you'll see it.
+WHAT RUNS ON ITS OWN — SAY ONLY THIS. You do not watch the market between messages. You run only when someone writes on the Desk, when the 👁 Watcher sees a trigger at a level on its list (the server checks every minute on 5- and 10-minute closes), when a TradingView alert Otto set fires (checked every 2 minutes), when Otto Signals catches a post, and on the open-position check (every few minutes while a trade is open). Never say "I'm watching", "watching every bar", "the card drops automatically", "I'll flag you at 1:30" or "I'll ping you" unless one of those mechanisms will actually do it. If they want a level watched, put it on the Watcher with add_watch_level (no card needed) and say so — that is how you'll see it. If you want to look again at a set time ("I'll check at 1:30"), call schedule_check first — then it's true. The server checks every reply for promises and makes you correct any that nothing backs.
 HOUSE RULES. The House Rules block (below the clock) is their standing instructions. Follow them every time. When Ifoma or Josh gives a standing instruction ("from now on", "always", "next time", "in the future"), call save_house_rule with it in one plain sentence, then confirm in one line. Don't save one-off requests.
 THE CLOCK. The CLOCK line is computed by the server and is always right about the date, weekday, time and whether the market is open. Tool timestamps are UTC unless they say ET. If you ever feel the market is closed, re-read the CLOCK line before saying so.
 A PROTECTED TRADE'S STOP. On a trade Otto protects, a pending sell-to-close (pending_sell_quantity 1) is Otto's own stop order. It is not a stuck or "zombie" order — never tell anyone to cancel it unless they're closing the trade.`;
 
 function unname(t: any): string {
-  return String(t ?? "")
+  return String(t ?? "").replace(/(\bJason(?: Murray)?)[’‘`]s\b/g, "$1's")   // v3.16: curly apostrophes too
     .replace(/\bJason(?: Murray)?'s (?:rules|method)\b/g, "the Otto Rules").replace(/\bJason(?: Murray)?'s rule\b/g, "Otto Rule")
     .replace(/\bJason(?: Murray)?'s posts?\b/g, "the signal").replace(/\bJason(?: Murray)?'s calls\b/g, "the coaching calls")
     .replace(/\bJASON'S CALL\b/g, "SIGNAL").replace(/\bJason(?: Murray)?'s\b/g, "Otto Rules").replace(/\bJason(?: Murray)?\b/g, "Otto Rules")
@@ -1476,7 +1496,9 @@ async function deskTools() {
   return { tools, help: help.join("\n") || "(no connector is connected yet)", status };
 }
 
-type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; allowClose?: boolean; maxRounds?: number; deadline?: number; author?: string; planExtra?: Record<string, unknown> };
+type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; allowClose?: boolean; maxRounds?: number; deadline?: number; author?: string; planExtra?: Record<string, unknown>;
+  mustCard?: boolean; dryRun?: boolean };   // v3.16: mustCard = a Signal call must end in a card; dryRun = the self-test (cards checked, not stored)
+type DeskResult = { said: string; cards: string[]; timedOut?: boolean; outOfRounds?: boolean; did: string[]; failed: string[]; finalText: string; dry?: any[] };
 
 // The tool loop, shared by the live Desk (streamed) and the 8:45 run (silent).
 // v3.13: one Claude request, retried once on 429 / 5xx / overloaded, never past the run's deadline.
@@ -1500,26 +1522,32 @@ async function claudeFetch(body: any, deadline: number): Promise<Response> {
 const RUN_BUDGET_MS = 118_000;            // Supabase stops a function at 150 s; leave room to save what was said.
 const OUT_OF_TIME = "\n\n⚠ I ran out of time on that one (a data source was slow), so this answer may be incomplete. Ask again and I'll keep it tighter.";
 
-export async function runDesk(o: DeskRun): Promise<{ said: string; cards: string[]; timedOut?: boolean }> {
+export async function runDesk(o: DeskRun): Promise<DeskResult> {
   const { msgs, sys, tools, cs, who, send } = o;
   const deadline = o.deadline || Date.now() + RUN_BUDGET_MS;
-  let said = "";
-  const cards: string[] = [];
+  let said = "", finalText = "";
+  const cards: string[] = [], did: string[] = [], failed: string[] = [], dry: any[] = [];
+  const done = (x: any = {}): DeskResult => ({ said, cards, did, failed, finalText, dry, ...x });
+  const maxR = o.maxRounds || 12;
   // v3.13: the clock and the House Rules ride in a second, uncached system block on EVERY run
   // (Desk, alert reads, Signals, position checks, the morning read).
   const live = marketClock().line + "\n\n" + await houseRulesText().catch(() => "") + "\n\n" + await playbookText().catch(() => "");
-  for (let round = 0; round < (o.maxRounds || 12); round++) {
-    if (Date.now() > deadline - 15000) { said += OUT_OF_TIME; send({ t: "text", v: OUT_OF_TIME }); return { said, cards, timedOut: true }; }
+  for (let round = 0; round < maxR; round++) {
+    if (Date.now() > deadline - 15000) { said += OUT_OF_TIME; send({ t: "text", v: OUT_OF_TIME }); return done({ timedOut: true }); }
+    // v3.16: a Signal call must end in a card — on the last step (or when time is short) the card is the only move left.
+    const force = o.mustCard && o.allowPropose && !cards.length && !dry.length && (round >= maxR - 2 || Date.now() > deadline - 50000)
+      && tools.some((t: any) => t.name === "propose_action");
+    finalText = "";
     let r: Response;
     try {
       r = await claudeFetch({
-        model: MODEL, max_tokens: 2500, stream: true, tools,
+        model: MODEL, max_tokens: 2500, stream: true, tools, ...(force ? { tool_choice: { type: "tool", name: "propose_action" } } : {}),
         system: [{ type: "text", text: sys + NAME_RULE + GUARD_RULE, cache_control: { type: "ephemeral" } }, { type: "text", text: live }],
         messages: msgs,
       }, deadline);
     } catch (e) {
       if (said || /out of time|timed? ?out|abort/i.test(String((e as Error).message))) {
-        said += OUT_OF_TIME; send({ t: "text", v: OUT_OF_TIME }); return { said, cards, timedOut: true };
+        said += OUT_OF_TIME; send({ t: "text", v: OUT_OF_TIME }); return done({ timedOut: true });
       }
       throw e;
     }
@@ -1544,14 +1572,14 @@ export async function runDesk(o: DeskRun): Promise<{ said: string; cards: string
             : { ...cb };
         } else if (ev.type === "content_block_delta") {
           const b = blocks[ev.index];
-          if (ev.delta.type === "text_delta") { b.text += ev.delta.text; said += ev.delta.text; send({ t: "text", v: ev.delta.text }); }
+          if (ev.delta.type === "text_delta") { b.text += ev.delta.text; said += ev.delta.text; finalText += ev.delta.text; send({ t: "text", v: unname(ev.delta.text) }); }
           else if (ev.delta.type === "input_json_delta") b.input += ev.delta.partial_json;
         } else if (ev.type === "message_delta" && ev.delta?.stop_reason) {
           stop = ev.delta.stop_reason;
         }
       }
     }
-    if (stop !== "tool_use") break;
+    if (stop !== "tool_use") return done();
 
     const assistant: any[] = [];
     const results: any[] = [];
@@ -1573,6 +1601,12 @@ export async function runDesk(o: DeskRun): Promise<{ said: string; cards: string
           send({ t: "tool", v: "Otto Rules: " + q });
           const hits = search(cs, q);
           content = hits.length ? hits.map(fmt).join("\n\n") : "NOTHING FOUND for that wording. Try different words.";
+        } else if (b.name === "propose_action" && o.dryRun) {
+          // v3.16 self-test: check the card the way the server would, store nothing.
+          const leg = input?.calls?.[0]?.args?.legs?.[0];
+          if (!input?.title || !leg?.option_id || !input?.plan?.stop_option || !(Number(input?.calls?.[0]?.args?.price) > 0)) throw new Error("card is missing title / option_id / limit price / plan.stop_option");
+          dry.push(input);
+          content = "SELF-TEST: card accepted (not stored). Write one line and stop.";
         } else if (b.name === "propose_action") {
           if (!o.allowPropose) throw new Error("no cards in this run");
           send({ t: "tool", v: "Preparing card: " + String(input.title || "") });
@@ -1594,6 +1628,10 @@ export async function runDesk(o: DeskRun): Promise<{ said: string; cards: string
           send({ t: "tool", v: "Saving a House Rule" });
           await houseRuleAdd(String(input.text || ""), `${o.author || "Desk"} via Jarvis`);
           content = "Saved. It's in Settings → House Rules and applies from the next message on.";
+        } else if (b.name === "schedule_check") {
+          send({ t: "tool", v: "Check-in at " + String(input.at || "") });
+          const row = await checkAdd(String(input.at || ""), String(input.what || ""), `${o.author || o.who || "Desk"} via Jarvis`);
+          content = `Scheduled #${row?.id ?? "?"}: at ${input.at} ET the server runs you again with that note and pings their phones. You may now say you'll check back then.`;
         } else if (b.name === "close_position") {
           if (!o.allowClose) throw new Error("auto-close isn't available in this run — use propose_action");
           send({ t: "tool", v: "Auto-close: " + String(input.reason || "").slice(0, 80) });
@@ -1607,11 +1645,15 @@ export async function runDesk(o: DeskRun): Promise<{ said: string; cards: string
           if (m[1] === "rh" && RH_FORCE_ACCT.has(m[2])) args.account_number = await agenticAccount();
           send({ t: "tool", v: SVC[m[1]].name + ": " + m[2].replace(/^mcp-(tv|watchlist)-/, "") });
           const left = Math.max(5000, Math.min(45000, deadline - Date.now() - 20000));
-          content = etAnnotate(mcpText(await withTimeout(call(m[1], m[2], args), left, SVC[m[1]].name + " " + m[2])).slice(0, 30000));
+          // v3.16 (code review 6 Oct): TradingView calls from Jarvis go through the shared breaker too.
+          if (m[1] === "tv") await tvSlowLoad();
+          const p = call(m[1], m[2], args);
+          content = etAnnotate(mcpText(await (m[1] === "tv" ? tvBudget(p, left, "TradingView " + m[2]) : withTimeout(p, left, SVC[m[1]].name + " " + m[2]))).slice(0, 30000));
         }
       } catch (e) {
         isErr = true; content = "ERROR: " + (e as Error).message;
       }
+      (isErr ? failed : did).push(b.name);
       results.push({ type: "tool_result", tool_use_id: b.id, content: content || "(empty)", ...(isErr ? { is_error: true } : {}) });
     }
     msgs.push({ role: "assistant", content: assistant });
@@ -1619,7 +1661,7 @@ export async function runDesk(o: DeskRun): Promise<{ said: string; cards: string
     const c = marketClock();
     msgs.push({ role: "user", content: [...results, { type: "text", text: `[clock: ${fmtMin(c.min)} ET ${dayName(c.date)} ${c.date}, market ${c.status === "open" ? "OPEN" : c.status === "pre" ? "PRE-MARKET" : "CLOSED"}]` }] });
   }
-  return { said, cards };
+  return done({ outOfRounds: true });
 }
 
 // v3.9: the Desk's system prompt, tools and context line — shared by the live Desk and Otto Signals.
@@ -1647,7 +1689,9 @@ async function deskSetup() {
   const jctx = await jasonContext().catch(() => "");
   const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their guardrails (Phase ${LIM.phase}; they FLAG, never block): max loss per trade at the stop ${LIM.max_trade_loss > 0 ? `$${LIM.max_trade_loss}${LIM.pct_mode && LIM.max_trade_pct > 0 ? ` (${LIM.max_trade_pct}% of the $${Math.round(LIM.account_value)} Agentic account)` : ""}` : "off"}, weekly loss limit $${LIM.weekly_loss}${LIM.pct_mode && LIM.weekly_pct > 0 ? ` (${LIM.weekly_pct}%)` : ""}, daily stop after ${LIM.daily_losses || "—"} losing trades or 2× the max loss, ${LIM.max_trades_day} trades/day, size flag over ${LIM.warn_pct}% of the account. Size ideas inside these when a contract allows it (set stop_option so the loss at the stop fits); when nothing fits, still make the card — it gets the red flag — and say so in one line.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.${jctx}]`;
 
-  return { cs, sys, tools, ctxLine, autoClose: !!LIMa.auto_close };
+  // v3.16: the exact list of what runs on its own, so Jarvis can only point at real things.
+  const running = await runningNow().catch(() => "");
+  return { cs, sys, tools, ctxLine: running ? ctxLine + "\n" + running : ctxLine, autoClose: !!LIMa.auto_close };
 }
 
 export async function desk(req: Request, who: string, _apiKey: string) {
@@ -1698,7 +1742,7 @@ export async function desk(req: Request, who: string, _apiKey: string) {
   const stream = new ReadableStream({
     async start(ctrl) {
       const send = (o: unknown) => { try { ctrl.enqueue(encS.encode("data: " + JSON.stringify(o) + "\n\n")); } catch { /* client left */ } };
-      let res = { said: "", cards: [] as string[] };
+      let res: any = { said: "", cards: [] as string[] };
       let jrows: any[] = [];
       try {
         if (isJason) {
@@ -1714,7 +1758,23 @@ export async function desk(req: Request, who: string, _apiKey: string) {
           if (typeof lm.content === "string") lm.content = prompt;
           else { const tb = lm.content.filter((b: any) => b.type === "text"); if (tb.length) tb[tb.length - 1].text = prompt; else lm.content.push({ type: "text", text: prompt }); }
         }
-        res = await runDesk({ msgs, sys, tools: [...tools, HOUSE_TOOL, WATCH_TOOL], cs, who, send, allowPropose: true, allowClose: !!LIMa.auto_close, author });
+        const deskTools = [...tools, HOUSE_TOOL, WATCH_TOOL, CHECK_TOOL];
+        const deskStart = Date.now();
+        res = await runDesk({ msgs, sys, tools: deskTools, cs, who, send, allowPropose: true, allowClose: !!LIMa.auto_close, author });
+        // v3.16: promises in the reply must be backed by something real — otherwise one correction round, shown under the reply.
+        if (!res.timedOut && Date.now() - deskStart < RUN_BUDGET_MS - 45_000) {   // never let the check push the reply past the 150 s cut-off
+          const fix = await enforcePromises(res, async (extra) => {
+            const m2 = [...msgs, { role: "assistant", content: res.finalText || res.said || "(no text)" }, { role: "user", content: extra }];
+            send({ t: "text", v: "\n\n" });
+            const r2 = await runDesk({ msgs: m2, sys, tools: deskTools, cs, who, send, allowPropose: false, allowClose: false, author, maxRounds: 3,
+              deadline: Math.min(Date.now() + 40_000, deskStart + RUN_BUDGET_MS + 10_000) });
+            return { said: r2.said, did: r2.did };
+          }).catch(() => ({ added: "", bad: [] as any[], fallback: false }));
+          if (fix.bad.length && fix.added) {
+            if (fix.fallback) send({ t: "text", v: fix.added });       // Jarvis's own fix was already streamed
+            res.said = res.said.trim() + "\n\n" + fix.added;
+          }
+        }
         send({ t: "done" });
       } catch (e) {
         // v3.13: never go silent — the failure is posted on the Desk, not only to the open browser tab.
@@ -2495,7 +2555,8 @@ async function orderTicket(b: any, who: string, author: string) {
    not a setup → his reason, quietly. Late fires, repeats and the exit engine's own alerts never ping. */
 const ALERT_FRESH_MS = 20 * 60e3;
 async function alertWatch(apiKey: string) {
-  const j = mcpJson(await call("tv", "mcp-tv-get-alerts-log", { days: 1, limit: 50 }));
+  await tvSlowLoad();
+  const j = mcpJson(await tvBudget(call("tv", "mcp-tv-get-alerts-log", { days: 1, limit: 50 }), 15000, "TradingView alert log"));   // v3.16: breaker
   const events: any[] = j?.events || j?.data?.events || [];
   if (!events.length) return { ok: true, fired: 0 };
   // TradingView's log has a fire_id per fire; fall back to the old name|time key so nothing already seen repeats.
@@ -2580,6 +2641,7 @@ Work quietly. When done, write a line that is exactly READ: and after it 2–3 s
   }
   await putSetting("alert_day", memo, "cron").catch(() => {});
   // One ping for everything this run made.
+  if (made.length) await markPinged(made.map((m) => m.a.id));
   if (made.length === 1) {
     const { f, a } = made[0];
     await notify("card", `🃏 ${String(f.symbol).split(":").pop()} card ready — level hit`, `${f.name}. ${String(a.title || "").slice(0, 90)}. Tap to Approve or Reject (expires in 20 min).`, "./#alerts");
@@ -2857,7 +2919,7 @@ async function exitTickLocked(a: any) {
   if (ids.length) {
     // v3.9.2: a TradingView outage here must not skip the save at the end of this tick.
     let j: any = null;
-    try { j = mcpJson(await call("tv", "mcp-tv-get-alerts-log", { days: 1, limit: 100 })); ex.tv_check_error = null; }
+    try { j = mcpJson(await withTimeout(call("tv", "mcp-tv-get-alerts-log", { days: 1, limit: 100 }), 15000, "TradingView alert log")); ex.tv_check_error = null; }   // v3.16: own timeout, never skipped by the breaker (open trades)
     catch (e) {
       const m = String((e as Error).message || e).slice(0, 160);
       if (!ex.tv_check_error) exitLog(ex, "TradingView alert check failed (will keep retrying; the stop is unaffected): " + m);
@@ -2938,7 +3000,7 @@ async function exitsTick(force = false) {
      go into the teaching brain (search_jason / alwaysOn don't read them).
    Table otto_jason (009_v37.sql). */
 
-const J_KINDS = new Set(["call", "level", "note"]);
+const J_KINDS = new Set(["call", "level", "note", "result"]);   // v3.16: + result
 
 const JASON_TOOL = {
   name: "record_posts",
@@ -2952,7 +3014,7 @@ const JASON_TOOL = {
           type: "object",
           properties: {
             time: { type: "string", description: "Time shown on the post, e.g. '10:02 AM'. Continuation lines inherit the time Discord shows when hovered; if none is visible use the block's time. Empty string if no time is visible at all." },
-            kind: { type: "string", enum: ["call", "level", "note"], description: "call = a trade idea with a direction or a ticker called out to trade (e.g. 'SPCX LONG', 'APP', 'ZETA ENTRY 33.15', 'PUTS ON TSLA'). level = a price level/zone he is watching or reporting (e.g. 'AMD $630 HELD RESISTANCE', 'ORDER BLOCK SHIFTED UP' on a named ticker). note = commentary, lessons, answers, reactions." },
+            kind: { type: "string", enum: ["call", "level", "note", "result"], description: "call = a trade idea with a direction or a ticker called out to trade (e.g. 'SPCX LONG', 'APP', 'ZETA ENTRY 33.15', 'PUTS ON TSLA', 'SHORTED. SEE THE BREAK'). level = a price level/zone he is watching or reporting (e.g. 'AMD $630 HELD RESISTANCE', 'ORDER BLOCK SHIFTED UP' on a named ticker). result = how an earlier call worked out — a profit, a loss, a win/loss remark or a stat about it (e.g. '$1000 FOR 2 PUTS ON MU', 'NICE SHORT ON MU', 'STOPPED OUT ON TSLA', '90% OF THE TIME SHORTING MU AT THE OPEN'). note = commentary, lessons, answers, reactions." },
             ticker: { type: "string", description: "Stock/ETF ticker in caps, or empty string. Use the chart in the screenshot to find it if the text doesn't say." },
             direction: { type: "string", enum: ["long", "short", ""], description: "long = calls/up/long/buy; short = puts/down/short/sell. Empty if not stated or not a call." },
             late: { type: "boolean", description: "true when Jason says he called it late / should have called it / it already moved ('SHOULD HAVE CALLED IT OUT', 'IN CASE YOU MISSED IT' after the break still counts as NOT late unless he says he missed calling it)." },
@@ -3036,6 +3098,7 @@ async function jasonSave(posts: any[], day: string, source: string, who: string)
   const fps = new Set(rows.map((r) => r.fp));
   const all = (await db(`otto_jason?select=*&day=eq.${day}&limit=200`).catch(() => inserted)).filter((r: any) => fps.has(r.fp));
   try { await watchFromSignals(inserted || []); } catch { /* the Watcher never breaks Signals */ }   // v3.14
+  try { await linkResults(inserted || []); } catch { /* v3.16: results scoreboard link never breaks Signals */ }
   return { inserted, all };
 }
 
@@ -3265,6 +3328,7 @@ const SIG_TOOL = { ...JASON_TOOL, description: "Record the mentor's NEW posts (e
 const sigReadSys = (mentor: string) => `You read ${mentor}'s posts from his trading Discord. Every message you are given was written by ${mentor} (already filtered by his Discord account). He writes in short bursts, often ALL CAPS, across several lines, and usually pings his members when he calls something. A call is often just a ticker and a direction ("SPCX LONG"); levels are often only drawn on his chart screenshot. Group lines that belong to the same thought into one post (e.g. "SPCX LONG" + "BREAK HAPPENED IN CASE YOU MISSED IT" = one call). Record ONLY the messages under NEW; messages under EARLIER are context you may use to understand the new ones (which ticker he means, what the chart is), never record them again. Never invent numbers: entry/level/option only when he wrote them or the chart labels them with a number. A message that is only a ping (@Members, @someone) is not a post. Use the post's time exactly as given in [brackets].`;
 
 async function sigExtract(apiKey: string, mentor: string, text: string, imgs: { mime: string; data: string }[], day: string) {
+  if (TEST?.extract) return TEST.extract(text);
   const content: any[] = imgs.slice(0, 3).map((i) => ({ type: "image", source: { type: "base64",
     media_type: /^image\/(jpeg|png|webp|gif)$/.test(i.mime) ? i.mime : "image/jpeg", data: i.data } }));
   content.push({ type: "text", text: `Discord messages from ${mentor}, ${day} (New York time).${imgs.length ? " The image(s) above are charts attached to the NEW messages." : ""}\n\n${text.slice(0, 20000)}\n\nRecord ${mentor}'s NEW posts.` });
@@ -3355,7 +3419,7 @@ Do this:
 Work quietly — don't narrate your lookups. When you're done, write the read for the Otto Signals feed, starting with a line that is exactly READ: — everything after that line is what Ifoma and Josh see. For each post, 1–3 short plain lines: what he said; for a card, your direction and WHY (and the ALT if there is one); and what would prove it wrong. No headers, no tables.`;
 }
 
-async function signalProcess(bid: number, ins: any[], imgs: { mime: string; data: string }[], cfg: any) {
+export async function signalProcess(bid: number, ins: any[], imgs: { mime: string; data: string }[], cfg: any) {
   const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
   try {
     ins.sort((a: any, b: any) => Date.parse(a.posted_at) - Date.parse(b.posted_at));
@@ -3425,11 +3489,12 @@ async function kickJarvis(bid: number): Promise<boolean> {
   } catch { return false; }
 }
 
-async function signalJarvis(bid: number) {
+export async function signalJarvis(bid: number) {
   const cfg = await sigCfg();
   const b = (await db("otto_signal_batches?select=*&id=eq." + bid))?.[0];
   if (!b || b.status !== "jarvis") return;
   let all: any[] = [];
+  const t0 = Date.now();
   try {
     all = (b.rows || []).length ? await db("otto_jason?select=*&id=in.(" + b.rows.join(",") + ")&order=id.asc") : [];
     // v3.9.2: only posts saved by THIS batch and posted within 20 min of it go to Jarvis.
@@ -3442,16 +3507,22 @@ async function signalJarvis(bid: number) {
     const tick = new Set(tradeable.map((r: any) => r.ticker));
     const carded = today.filter((r: any) => r.action_id && tick.has(r.ticker) && !ids.includes(r.id) &&
       r.posted_at && Date.now() - Date.parse(r.posted_at) < 90 * 60e3);
-    const { cs, sys, tools, ctxLine } = await deskSetup();
-    const prompt = ctxLine + "\n" + signalPrompt(cfg, all, carded);
-    let res = { said: "", cards: [] as string[] };
+    // v3.16: the server fetches price, buying power and the near-the-money contracts first (MU, 6 Oct: Jarvis spent
+    // every step paging the chain from $5 and never made the card).
+    const [setup, pre] = await Promise.all([deskSetup(), signalPrefetch(tradeable.filter((r: any) => !carded.some((c: any) => c.ticker === r.ticker))).catch(() => "")]);
+    const { cs, sys, tools, ctxLine } = setup;
+    const preBlock = pre ? `\nPRE-FETCHED BY THE SERVER (live, use these — the option_id values are exact; don't page the chain again unless nothing here works):\n${pre}\n` +
+      `Build the card from ★ (best by the rules). If ★ is over buying power, ◆ is your ALT (or your only card if there's no ★). Limit price = the ask or a cent under. Make the card in your FIRST or SECOND step — speed is the edge on a signal.\n` : "";
+    const prompt = ctxLine + "\n" + signalPrompt(cfg, all, carded) + preBlock;
+    const mustCard = tradeable.some((r: any) => r.kind === "call" && !carded.some((c: any) => c.ticker === r.ticker));
+    let res: any = { said: "", cards: [] as string[], did: [], failed: [], finalText: "" };
     let err = "";
     try {
       // v3.9.4: no TradingView tools in a card build — TradingView has been slow/rate-limited and it ate Jarvis's
       // time. Prices, chains and quotes come from Robinhood; the banner (Yahoo) is in the context line.
       res = await runDesk({ msgs: [{ role: "user", content: prompt + "\n(Use Robinhood tools for prices, option chains and quotes — TradingView tools are not available in this run.)" }], sys,
         tools: tools.filter((t: any) => t.name !== "close_position" && !/^tv__/.test(String(t.name || ""))),
-        cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 8 });
+        cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 8, mustCard, deadline: t0 + RUN_BUDGET_MS });
     } catch (e) { err = String((e as Error).message || e).slice(0, 300); }
     const acts = res.cards.length ? await db("otto_actions?select=id,title,plan&id=in.(" + res.cards.join(",") + ")").catch(() => []) : [];
     const open = tradeable.filter((r: any) => !r.action_id);
@@ -3459,19 +3530,34 @@ async function signalJarvis(bid: number) {
       const row = all.find((r: any) => r.id === Number(a.plan?.jason_id)) || (open.length === 1 ? open[0] : null);
       if (row) { row.action_id = a.id; await db("otto_jason?id=eq." + row.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ action_id: a.id }) }).catch(() => {}); }
     }
-    // v3.9.3: keep only the final read (after the last "READ:" line), not Jarvis's working-out.
+    // v3.9.3: keep only the final read (after the last "READ:" line). v3.16: never show the working notes — if there
+    // is no READ: line, the server writes a plain one.
     const rawRead = res.said.trim();
     const cut = rawRead.lastIndexOf("READ:");
-    const read = (cut >= 0 ? rawRead.slice(cut + 5) : rawRead).trim();
-    await sigBatch(bid, { status: err ? "error" : "done", read: read || null, cards: res.cards, error: err || null });
+    // Calls that should have a card and don't (not counting tickers already carded earlier today).
+    const cardTicks = new Set([...all.filter((r: any) => r.action_id).map((r: any) => r.ticker),
+      ...acts.flatMap((a: any) => tradeable.filter((r: any) => new RegExp("\\b" + r.ticker + "\\b").test(String(a.title || ""))).map((r: any) => r.ticker))]);
+    const missing = tradeable.filter((r: any) => r.kind === "call" && !r.action_id && !cardTicks.has(r.ticker) && !carded.some((c: any) => c.ticker === r.ticker));
+    const why = err ? "Jarvis hit an error: " + err.slice(0, 120)
+      : res.timedOut ? "Jarvis ran out of time"
+      : res.outOfRounds && !res.cards.length ? "Jarvis ran out of steps before the card"
+      : (res.failed || []).includes("propose_action") ? "the card was rejected (bad contract or order details)"
+      : "Jarvis decided against a card — see the read";
+    let read = cut >= 0 ? rawRead.slice(cut + 5).trim() : readFallback(all, res.cards, missing.length ? why : "none needed");
+    if (missing.length && cut >= 0) read += `\n\n⚠ No card for ${missing.map((r: any) => r.ticker).join(", ")}: ${why}.`;   // the feed tag says "no card" (status stays "done")
+    const timing = { posted: all[0]?.posted_at || null, caught: b.created_at, card_ms: Date.now() - t0, cards: res.cards.length, total_ms: all[0]?.posted_at ? Date.now() - Date.parse(all[0].posted_at) : null };
+    await sigBatch(bid, { status: err ? "error" : "done", read: read || null, cards: res.cards, error: err || (missing.length ? why : null), timing });
+    if (acts.length) await markPinged(acts.map((a: any) => a.id));
     for (const a of acts) {
       const row = all.find((r: any) => r.action_id === a.id);
       await notify("signal", `🃏 Card ready: ${row?.ticker || ""} ${row?.direction ? row.direction.toUpperCase() : ""}`.trim(),
         `${String(a.title || "").slice(0, 100)} — from ${SIG_LABEL}: "${String(row?.words || "").slice(0, 70)}". Tap to Approve or Reject (expires in 20 min).`, "./#signals");
     }
-    if (err) for (const r of tradeable.filter((r: any) => !r.action_id && !carded.some((c: any) => c.ticker === r.ticker))) {
-      await notify("signal", `⚠️ ${SIG_LABEL}: ${r.ticker} — no card`, `"${String(r.words).slice(0, 90)}" — Jarvis hit an error building the card. Open Otto Signals.`, "./#signals");
+    // v3.16: a call with no card is never silent again (6 Oct MU: status "done", nobody told).
+    for (const r of missing) {
+      await notify("signal", `⚠️ ${SIG_LABEL}: ${r.ticker}${r.direction ? " " + r.direction.toUpperCase() : ""} — NO card`, `"${String(r.words).slice(0, 80)}" — ${why}. Open Otto Signals and ask Jarvis for the card.`, "./#signals");
     }
+    if (missing.length) await logDesk("system", "Otto", `⚠ ${SIG_LABEL} ${missing.map((r: any) => r.ticker).join(", ")}: no card — ${why}. Ask in the signal's chat for one.`);
   } catch (e) {
     const m = String((e as Error).message || e).slice(0, 300);
     await sigBatch(bid, { status: "error", error: m });
@@ -3758,6 +3844,7 @@ const PUSH_KINDS: Record<string, { label: string; on: boolean; always?: boolean 
   signal:      { label: "Otto Signals: a call came in (card ready)", on: true, always: true },
   watcher:     { label: "Otto Signals watcher went offline / came back", on: true, always: true },
   daily:       { label: "5:15 PM daily recap is ready", on: true },
+  checkin:     { label: "⏰ A check-in Jarvis scheduled", on: true },
 };
 const PUSH_SUB_URL = "https://proagentmax.github.io/otto-trader/";
 
@@ -3900,6 +3987,7 @@ function quietNow() { const e = etParts(); return ["Sat", "Sun"].includes(e.wd) 
 
 // The one call everything else uses. Never throws: a notification is a convenience.
 async function notify(kind: string, title: string, body: string, url = "./#desk") {
+  if (TEST?.notify) TEST.notify(kind, unname(title), unname(body));
   try {
     const K = PUSH_KINDS[kind]; if (!K) return;
     // v3.9: no quiet hours — Ifoma's call (6 Oct): Otto pings at any time.
@@ -4276,7 +4364,7 @@ async function watchFromSignals(rows: any[]) {
   if (c.status === "after" || c.status === "closed") return 0;      // the 5 PM sweep must not seed tomorrow
   rows = (rows || []).filter((r: any) => !r?.day || r.day === c.date);
   for (const r of rows || []) {
-    if (!r?.ticker || r.late || r.kind === "note") continue;
+    if (!r?.ticker || r.kind === "note" || r.kind === "result") continue;   // v3.16: LATE calls too — the pullback to his level is the second chance
     const fb = r.direction === "long" ? "up" : r.direction === "short" ? "down" : "both";
     const lv = levelsFromWords(String(r.words || ""), fb);
     if (!lv.length && Number(r.level) > 0) lv.push({ level: Number(r.level), dir: fb });
@@ -4372,6 +4460,7 @@ Work quietly. Finish with a line that is exactly READ: and then 2 short plain se
   await logDesk("assistant", "Jarvis · watcher", `For: 👁 ${r.ticker} ${Number(r.level)} ${d === "up" ? "▲" : "▼"} ${TRIG_LABEL[f.trigger]}\n` +
     (err ? `No card — Jarvis hit an error checking it: ${err}` : (read || (acts.length ? "Card's up." : "No setup — no card."))), acts[0]?.id || null);
   if (acts.length) {
+    await markPinged(acts.map((a: any) => a.id));
     await notify("card", `🃏 ${r.ticker} card ready — ${TRIG_LABEL[f.trigger]} at ${Number(r.level)}`,
       `${String(acts[0].title || "").slice(0, 90)}. Tap to Approve or Reject (expires in 20 min).`, "./#desk");
   }
@@ -4697,6 +4786,7 @@ export async function dailyRecap(force = false) {
     `CLOSED TRADES (recent, from the journal):\n${(trades || []).filter((t: any) => t.closed_at && etParts(new Date(t.closed_at)).date === c.date).map((t: any) => JSON.stringify(t).slice(0, 300)).join("\n") || "(none today)"}`,
     `FEEDBACK NOTES (today):\n${(fb || []).map((f: any) => `- [${f.kind}] ${f.author}: ${f.note} (screen ${f.screen || "?"})`).join("\n") || "(none)"}`,
     `CALENDAR next trading day:\n${cal.map((e: any) => `- ${e.date} ${e.title} (importance ${e.importance})`).join("\n") || "(not available)"}`,
+    await recapExtras(c.date).catch(() => ""),
   ].join("\n\n");
   const text = await claudeText({ model: MODEL, max_tokens: 1200, system: RECAP_SYS + NAME_RULE, messages: [{ role: "user", content: data }] });
   if (!text) throw new Error("empty recap");
@@ -4722,6 +4812,379 @@ async function helpAnswer(body: any, apiKey: string) {
   if (j.error) throw new Error(j.error.message || "API error");
   return (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
 }
+
+/* ============================================================ v3.16 (7 Oct 2026)
+   Ifoma, 7 Oct: "make sure the listener … Jarvis is able to read it … capitalize on it" and "if he can't do
+   something he says I can't do it; if he says I'm doing it, he does it."
+   What 6 Oct showed: the coach's MU short (3:02 and 3:12 PM) got NO card and NO warning — Jarvis spent all 8
+   steps paging MU's option chain (100 strikes a page from $5 up) and the batch was marked "done". At 12:02 Jarvis
+   said "I'll flag you at 1:30" and at 12:17 "I'm watching" with nothing behind either.
+   - optionShortlist(): the server fetches price, buying power and the contracts near the money (3 expiries,
+     delta / volume vs OI / cost already checked) so a Signal card is one step, not eight.
+   - Signal card builds MUST end in a card for a call (a forced final step), and any call that still has no card
+     pings with the reason. The feed never shows Jarvis's working notes.
+   - schedule_check: "I'll check back at 1:30" becomes a real, timed run.
+   - promiseCheck(): every Desk reply is scanned for promises ("I'm watching", "I'll flag you", "I've set…");
+     anything with nothing real behind it gets one automatic correction round.
+   - signalSelfTest(): 9:10 ET every trading day — watcher heartbeat, reading a post, the shortlist and a dry-run
+     card build, timed. ✅/❌ on the Desk; phones pinged only on ❌. */
+
+/* ---------------------------------------------------------------- the contract shortlist */
+type SLRow = { option_id: string; exp: string; strike: number; type: "call" | "put"; bid: number; ask: number; mark: number;
+  delta: number; vol: number; oi: number; cost: number; fits: boolean; band: boolean; liq: boolean; label: string };
+const num = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+
+export function pickContracts(rows: SLRow[]) {
+  const score = (r: SLRow) => Math.abs(Math.abs(r.delta) - 0.35);
+  const good = rows.filter((r) => r.band && r.liq && r.ask > 0).sort((a, b) => score(a) - score(b) || b.vol - a.vol);
+  const band = rows.filter((r) => r.band && r.ask > 0).sort((a, b) => score(a) - score(b) || b.vol - a.vol);
+  const best = good[0] || band[0] || null;
+  // The best contract that FITS buying power: in the delta band if one fits, otherwise the fitting contract
+  // closest to the band from below (furthest-in-the-money that still fits), never under delta .15.
+  const fit = rows.filter((r) => r.fits && r.ask > 0 && Math.abs(r.delta) >= 0.15);
+  const fitBand = fit.filter((r) => r.band).sort((a, b) => (Number(b.liq) - Number(a.liq)) || score(a) - score(b));
+  const fitBelow = fit.filter((r) => Math.abs(r.delta) < 0.30).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || b.vol - a.vol);
+  const bestFit = fitBand[0] || fitBelow[0] || fit.sort((a, b) => score(a) - score(b))[0] || null;
+  return { best, bestFit: bestFit && best && bestFit.option_id === best.option_id ? best : bestFit };
+}
+
+export async function optionShortlist(ticker: string, side: "call" | "put") {
+  const sym = String(ticker || "").toUpperCase().replace(/[^A-Z.]/g, "");
+  if (!sym) throw new Error("no ticker");
+  const acct = await agenticAccount();
+  const [q, ch, pf] = await Promise.all([
+    call("rh", "get_equity_quotes", { symbols: [sym] }).then(mcpJson),
+    call("rh", "get_option_chains", { underlying_symbol: sym }).then(mcpJson),
+    call("rh", "get_portfolio", { account_number: acct }).then(mcpJson).catch(() => null),
+  ]);
+  const qq = q?.data?.results?.[0]?.quote || {};
+  const reg = num(qq.last_trade_price), ext = num(qq.last_non_reg_trade_price);
+  const spot = ext && Date.parse(qq.venue_last_non_reg_trade_time || 0) > Date.parse(qq.venue_last_trade_time || 0) ? ext : reg;
+  if (!(spot > 0)) throw new Error(`no price for ${sym}`);
+  const bpRaw = Number(pf?.data?.buying_power?.buying_power ?? pf?.data?.buying_power);
+  const bp = pf && Number.isFinite(bpRaw) ? bpRaw : null;
+  const chain = (ch?.data?.chains || []).find((c: any) => c.symbol === sym && c.can_open_position !== false) || (ch?.data?.chains || [])[0];
+  const today = etParts().date;
+  const exps: string[] = (chain?.expiration_dates || []).filter((d: string) => d > today && d <= addDays(today, 21)).slice(0, 3);
+  if (!exps.length) throw new Error(`no ${sym} expiries in the next 3 weeks`);
+  const lo = spot * 0.94, hi = spot * 1.06;
+  const near = async (exp: string) => {
+    // Robinhood lists strikes 100 a page from the bottom; its cursor is base64("p=<strike>"), so start the page
+    // just under the money instead of paging up from $5 (what ate Jarvis's steps on MU, 6 Oct).
+    const args: any = { chain_symbol: sym, expiration_dates: exp, type: side, cursor: btoa("p=" + (lo - 0.01).toFixed(4)) };
+    let list: any[] = [];
+    try { list = mcpJson(await call("rh", "get_option_instruments", args))?.data?.instruments || []; } catch { /* fall back below */ }
+    if (!list.some((i: any) => num(i.strike_price) >= lo && num(i.strike_price) <= hi)) {
+      delete args.cursor;
+      list = mcpJson(await call("rh", "get_option_instruments", args))?.data?.instruments || [];
+    }
+    const ok = list.filter((i: any) => i.tradability !== "untradable" && i.state !== "expired" && num(i.strike_price) >= lo && num(i.strike_price) <= hi);
+    // 2 strikes in the money + 6 out of the money: delta ~.55 down to ~.15, so both the rules' pick and a cheaper fit are in view.
+    const otm = (i: any) => side === "put" ? num(i.strike_price) <= spot : num(i.strike_price) >= spot;
+    const dist = (a: any, b: any) => Math.abs(num(a.strike_price) - spot) - Math.abs(num(b.strike_price) - spot);
+    return [...ok.filter((i: any) => !otm(i)).sort(dist).slice(0, 2), ...ok.filter(otm).sort(dist).slice(0, 6)];
+  };
+  const ins = (await Promise.all(exps.map((e) => near(e).catch(() => [])))).flat();
+  if (!ins.length) throw new Error(`couldn't list ${sym} ${side}s near $${spot}`);
+  const quotes: Record<string, any> = {};
+  for (let i = 0; i < ins.length; i += 20) {
+    const j = mcpJson(await call("rh", "get_option_quotes", { instrument_ids: ins.slice(i, i + 20).map((x: any) => x.id) }));
+    for (const r of j?.data?.results || []) if (r?.quote?.instrument_id) quotes[r.quote.instrument_id] = r.quote;
+  }
+  const rows: SLRow[] = ins.map((i: any) => {
+    const qo = quotes[i.id] || {};
+    const ask = num(qo.ask_price), bid = num(qo.bid_price), mark = num(qo.mark_price) || (ask + bid) / 2;
+    const delta = num(qo.delta), vol = num(qo.volume), oi = num(qo.open_interest), strike = num(i.strike_price);
+    const cost = Math.round(ask * 100);
+    return { option_id: i.id, exp: i.expiration_date, strike, type: side, bid, ask, mark, delta, vol, oi, cost,
+      fits: bp != null ? cost <= bp : true, band: Math.abs(delta) >= 0.30 && Math.abs(delta) <= 0.40, liq: vol > oi,
+      label: `${sym} ${strike % 1 ? strike : Math.round(strike)}${side === "put" ? "P" : "C"} ${String(i.expiration_date).slice(5).replace("-", "/")}` };
+  }).sort((a: SLRow, b: SLRow) => a.exp.localeCompare(b.exp) || a.strike - b.strike);
+  const { best, bestFit } = pickContracts(rows);
+  const line = (r: SLRow) => `${r === best ? "★" : r === bestFit ? "◆" : " "} ${r.label}  option_id ${r.option_id}  bid ${r.bid.toFixed(2)} / ask ${r.ask.toFixed(2)}  δ ${r.delta.toFixed(2)}  vol ${r.vol} / OI ${r.oi}${r.liq ? "" : " (vol<OI)"}  ≈$${r.cost}${r.fits ? " fits" : " OVER buying power"}`;
+  const text = `${sym} $${spot.toFixed(2)} · Agentic buying power ${bp != null ? "$" + bp.toFixed(2) : "unknown"} · ${side}s, expiries ${exps.join(", ")} (fetched ${fmtMin(etParts().min)} ET)\n` +
+    rows.map(line).join("\n") +
+    `\n★ = best by the Otto Rules (delta .30–.40, volume > OI)${best ? ": " + best.label : ": none in the band"}. ◆ = best that fits buying power${bestFit ? ": " + bestFit.label : ": NOTHING fits"}.`;
+  return { sym, side, spot, bp, exps, rows, best, bestFit, text };
+}
+
+/* ---------------------------------------------------------------- what is really running right now */
+export async function runningNow(): Promise<string> {
+  const day = etParts().date;
+  const [w, ch, prot, L, beat] = await Promise.all([
+    db(`otto_watch?select=ticker,level,dir&day=eq.${day}&status=eq.watching&limit=30`).catch(() => []),
+    db(`otto_checks?select=due_at,what&status=eq.pending&order=due_at.asc&limit=10`).catch(() => []),
+    db("otto_actions?select=title,exit&exit->>state=eq.armed&limit=5").catch(() => []),
+    getLimits().catch(() => LIMIT_DEFAULTS),
+    setting("signal_beat").catch(() => null),
+  ]);
+  const beatOk = beat?.at && Date.now() - Date.parse(beat.at) < 3 * 60e3 && beat.state === "ok";
+  return `RUNNING RIGHT NOW — the ONLY things that act without a message (anything else you'd have to do with a tool, now):
+- 👁 Watcher levels today: ${(w || []).length ? w.map((r: any) => `${r.ticker} ${Number(r.level)} ${r.dir}`).join(", ") : "none"} (checked every minute on 5/10-min closes, 9:30–4:00).
+- ⏰ Scheduled check-ins: ${(ch || []).length ? ch.map((c: any) => `${fmtMin(etParts(new Date(c.due_at)).min)} ET — ${String(c.what).slice(0, 60)}`).join("; ") : "none"}.
+- 🛡 Protected trades: ${(prot || []).length ? prot.map((r: any) => `${r.title} (Robinhood stop at $${r.exit?.stop_option}, TradingView alerts wrong-if ${r.exit?.wrong_if} / TP1 ${r.exit?.tp1})`).join("; ") : "none"}.
+- Auto-close: ${L.auto_close ? `ON — position check every ${Math.max(5, Number(L.review_min) || 15)} min while a trade is open (HOLD or CLOSE only)` : "OFF"}.
+- TradingView alert fires read every 2 min. Otto Signals watcher: ${beatOk ? "on" : "NOT reporting — signals may be missed"}.
+To make a new promise true: schedule_check (a timed look + ping) or add_watch_level (a price level). Otherwise say plainly you can't.`;
+}
+
+/* ---------------------------------------------------------------- schedule_check */
+export const CHECK_TOOL = {
+  name: "schedule_check",
+  description: "Schedule a real check-in: at the given New York time today (market hours, up to 4:15 PM) the server runs you again with this note, you look at live data, post on the Desk and ping their phones. Use it whenever you'd say \"I'll check back / flag you / let you know at …\". Never promise a timed follow-up without calling this.",
+  input_schema: { type: "object", properties: {
+    at: { type: "string", description: "New York time today, e.g. \"1:30 PM\"" },
+    what: { type: "string", description: "What to check and what to tell them, one or two lines (ticker, level, the condition)" } },
+    required: ["at", "what"] },
+};
+export async function checkAdd(at: string, what: string, by: string) {
+  const c = marketClock();
+  const iso = nyIso(c.date, String(at || "").trim());
+  if (!iso) throw new Error(`couldn't read the time "${at}" — use a New York time like 1:30 PM`);
+  const t = Date.parse(iso), m = etParts(new Date(iso)).min;
+  if (t <= Date.now() + 60e3) throw new Error("that time has passed (or is under a minute away)");
+  if (!isTradingDay(c.date) || m > 975 || m < 540) throw new Error("check-ins run on a trading day between 9:00 AM and 4:15 PM ET");
+  const open = await db(`otto_checks?select=id&status=eq.pending&day=eq.${c.date}`).catch(() => []);
+  if ((open || []).length >= 10) throw new Error("10 check-ins are already waiting today");
+  const row = (await db("otto_checks", { method: "POST", body: JSON.stringify({ day: c.date, due_at: iso, what: String(what || "").slice(0, 400), by: String(by).slice(0, 60), status: "pending" }) }))?.[0];
+  await logDesk("system", "Otto", `⏰ Check-in set for ${fmtMin(m)} ET: ${String(what).slice(0, 200)} (Jarvis will look again then and ping you).`);
+  return row;
+}
+export async function checksTick(now = Date.now()) {
+  const due = await db(`otto_checks?select=*&status=eq.pending&due_at=lte.${new Date(now).toISOString()}&order=due_at.asc&limit=3`).catch(() => []);
+  for (const r of due || []) {
+    const claimed = await db(`otto_checks?id=eq.${r.id}&status=eq.pending&select=*`, { method: "PATCH", body: JSON.stringify({ status: "running" }) }).catch(() => []);
+    if (!claimed?.length) continue;                                     // another run took it
+    if (now - Date.parse(r.due_at) > 15 * 60e3) {                       // a missed minute is fine; an hour late is not a check-in
+      await db(`otto_checks?id=eq.${r.id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ status: "missed" }) }).catch(() => {});
+      await logDesk("system", "Otto", `⏰ The ${fmtMin(etParts(new Date(r.due_at)).min)} check-in didn't run on time (server was down). It was: ${String(r.what).slice(0, 200)}`);
+      continue;
+    }
+    if (!(await kick("check_jarvis", { id: r.id }))) await checkJarvis(r.id);
+  }
+}
+export async function checkJarvis(id: number) {
+  const r = (await db(`otto_checks?select=*&id=eq.${id}`))?.[0];
+  if (!r) return;
+  try {
+    const { cs, sys, tools, ctxLine } = await deskSetup();
+    const prompt = `${ctxLine}\n[⏰ CHECK-IN — you scheduled this (asked by ${r.by}). Nobody typed this. Due ${fmtMin(etParts(new Date(r.due_at)).min)} ET.]\n${r.what}\nFetch what you need (live price, bars, the position), then write 1–4 plain lines for the Desk: what you see and what you'd do. A card only if there's a real setup or the plan says act. Don't promise anything you can't back with a tool.`;
+    const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: [...tools.filter((t: any) => t.name !== "close_position"), WATCH_TOOL, CHECK_TOOL], cs,
+      who: "checkin", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 6 });
+    const said = res.said.trim() || "Checked — nothing to add.";
+    await logDesk("assistant", "Jarvis · check-in", said, res.cards[res.cards.length - 1] || null);
+    await db(`otto_checks?id=eq.${id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ status: "done", result: unname(said).slice(0, 2000) }) }).catch(() => {});
+    await notify("checkin", `⏰ Check-in: ${String(r.what).slice(0, 60)}`, unname(said).replace(/\s+/g, " ").slice(0, 200));
+  } catch (e) {
+    const m = String((e as Error).message || e).slice(0, 200);
+    await db(`otto_checks?id=eq.${id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ status: "error", result: m }) }).catch(() => {});
+    await logDesk("system", "Otto", `⏰ The check-in "${String(r.what).slice(0, 120)}" failed: ${m}`);
+    await notify("checkin", "⏰ A check-in failed", `${String(r.what).slice(0, 80)} — ${m.slice(0, 100)}`);
+  }
+}
+
+/* ---------------------------------------------------------------- promise checker */
+// Sentences where Jarvis commits to doing something later, or says he already did something.
+const WHEN_RE = /\b(at \d{1,2}(:\d{2})?\s*(am|pm)?|by \d{1,2}(:\d{2})?|in \d+ ?(min|mins|minutes|hours?)\b|this afternoon|later today|later on|before the close|at the close|at noon|at the open|tomorrow|first thing)\b|\b(if|when|once|as soon as|the moment)\b[^.!?]{0,80}\b(hits?|break(s|ing)?|cross(es)?|fills?|drops?|closes?|touch(es)?|reach(es)?|gets?|goes|triggers?|stuck|starts?|moves?|looks?|turns?|fades?|rolls? over)\b|\bbefore it\b/i;
+const PROMISE_RES: { kind: "watch" | "later" | "done"; re: RegExp; needsWhen?: boolean }[] = [
+  { kind: "watch", re: /\b(I'?m|I am) (watching|monitoring|keeping (an |a close )?eye on)\b(?! (what you|your point|how you))|\bI'?ll (keep )?(watch(ing)?|monitor(ing)?|keep (an |a close )?eye on)\b/i },
+  // Notifying words are promises on their own ("I'll ping you").
+  { kind: "later", re: /\bI'?ll (flag|ping|alert|notify|remind|check (back|in|again)|circle back)\b|\bI will (flag|ping|alert|notify|remind|check back)\b/i },
+  // Other future actions are promises only with a time or a market condition ("I'll say something if it starts looking ugly").
+  { kind: "later", needsWhen: true, re: /\bI'?ll (let you know|update you|message you|text you|tell you|get back to you|speak up|say something|close (it|this|the|your)|move (the|your) stop|cut it|take (it|profit))\b|\bI will (let you know|tell you|close)\b/i },
+  { kind: "done", re: /\bI'?ve (set|placed|armed|scheduled|created) (up )?(a |an |the |your )?(\w+ )?(alert|stop|order|check|check-in|reminder|trigger|watch)\b|\bI'?ve added \w+( \d+(\.\d+)?)? to the (watch|Watcher)|\b(alert|stop order|order|check-in) (is|are) (now )?(set|armed|placed|live|scheduled)\b/i },
+];
+export function findPromises(text: string): { kind: string; sentence: string }[] {
+  const out: { kind: string; sentence: string }[] = [];
+  const sentences = String(text || "").replace(/\*\*/g, "").split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+  for (const s of sentences) {
+    // An offer that waits for their next message is true by design ("tell me and I'll close it").
+    if (/^(if|when) (you|they) (want|ask)|\b(tell me|ask me|say the word|let me know|just say|if you want|want me to|if you'd like|on your word|reply|once you approve|after you approve|when you approve)\b/i.test(s)) continue;
+    if (/\b(can'?t|cannot|won'?t|not able|no way to|don'?t)\b.{0,30}\b(watch|monitor|ping|flag)/i.test(s)) continue;   // an honest "I can't"
+    for (const p of PROMISE_RES) if (p.re.test(s) && (!p.needsWhen || WHEN_RE.test(s))) { out.push({ kind: p.kind, sentence: s.slice(0, 240) }); break; }
+  }
+  return out;
+}
+// Is there something real behind each promise? `did` = tools that SUCCEEDED in this reply; `failed` = tools that errored.
+export function unbacked(promises: { kind: string; sentence: string }[], ctx: { did: string[]; failed: string[]; protectedTrade: boolean; autoClose: boolean; watchToday: string[] }) {
+  const did = new Set(ctx.did);
+  return promises.filter((p) => {
+    const s = p.sentence;
+    if (p.kind === "watch") {
+      if (did.has("add_watch_level") || did.has("schedule_check")) return false;
+      const tick = (s.match(/\b[A-Z]{2,5}\b/g) || []).find((t) => ctx.watchToday.includes(t));
+      return !(tick && /level|break|hold|reject/i.test(s));                    // "I'm watching NVDA 242" with NVDA on the Watcher is true
+    }
+    if (p.kind === "later") {
+      if (did.has("schedule_check") || did.has("add_watch_level") || did.has("propose_action")) return false;
+      // Real today without a tool: a protected trade's stop / wrong-if / TP1 alerts, and auto-close's position check.
+      if (ctx.protectedTrade && /\b(stop|wrong[- ]?if|tp ?1|target|alert)\b/i.test(s)) return false;
+      if (ctx.protectedTrade && ctx.autoClose && /\bclose\b/i.test(s) && /\b(if|when)\b/i.test(s)) return false;
+      return true;
+    }
+    // "done": a matching write must have worked in this reply. A card is NOT a placed order.
+    if (/placed|order (is|are)/i.test(s)) return !(did.has("close_position"));
+    if (/scheduled|check/i.test(s)) return !did.has("schedule_check");
+    if (/alert|stop/i.test(s)) return !(ctx.protectedTrade || did.has("propose_action") || did.has("add_watch_level"));
+    if (/saved/i.test(s)) return !did.has("save_house_rule");
+    if (/closed/i.test(s)) return !did.has("close_position");
+    return !(did.has("add_watch_level") || did.has("schedule_check") || did.has("propose_action") || did.has("save_house_rule") || did.has("close_position"));
+  });
+}
+export async function promiseContext(did: string[], failed: string[]) {
+  const day = etParts().date;
+  const [prot, L, w] = await Promise.all([
+    db("otto_actions?select=id&exit->>state=eq.armed&limit=1").catch(() => []),
+    getLimits().catch(() => LIMIT_DEFAULTS),
+    db(`otto_watch?select=ticker&day=eq.${day}&status=eq.watching&limit=50`).catch(() => []),
+  ]);
+  return { did, failed, protectedTrade: !!(prot || []).length, autoClose: !!L.auto_close, watchToday: [...new Set((w || []).map((r: any) => String(r.ticker)))] as string[] };
+}
+export const correctionPrompt = (bad: { sentence: string }[], ctx: any) =>
+  `[OTTO SERVER CHECK — not from Ifoma or Josh] Your reply made ${bad.length === 1 ? "a promise" : "promises"} that nothing running backs:\n` +
+  bad.map((b) => `- "${b.sentence}"`).join("\n") +
+  `\nThis reply's tools that worked: ${ctx.did.join(", ") || "none"}${ctx.failed.length ? "; FAILED: " + ctx.failed.join(", ") : ""}. You do not watch the market between messages.\n` +
+  `Fix it now, one way or the other: (a) make it real — schedule_check for a timed look, add_watch_level for a price level — then confirm in ONE line; or (b) take it back in ONE or TWO lines starting "Correction:", saying plainly what you can't do and what WILL alert them (the RUNNING RIGHT NOW list). No other text.`;
+async function promiseTally(made: number, bad: number) {
+  try {
+    const day = etParts().date;
+    const cur = (await setting("promise_day").catch(() => null)) || {};
+    const v = cur.day === day ? cur : { day, made: 0, backed: 0, corrected: 0 };
+    v.made += made; v.backed += made - bad; v.corrected += bad;
+    await putSetting("promise_day", v, "jarvis");
+  } catch { /* a tally never breaks the Desk */ }
+}
+// After a Desk run: check the final words; if anything is unbacked, one correction round (streamed after the reply).
+export async function enforcePromises(r: { said: string; finalText: string; did: string[]; failed: string[] }, rerun: (extra: string) => Promise<{ said: string; did: string[] }>) {
+  const promises = findPromises(r.finalText);
+  if (!promises.length) return { added: "", bad: [] as any[], fallback: false };
+  const ctx = await promiseContext(r.did, r.failed);
+  const bad = unbacked(promises, ctx);
+  await promiseTally(promises.length, bad.length);
+  if (!bad.length) return { added: "", bad, fallback: false };
+  const fix = await rerun(correctionPrompt(bad, ctx)).catch(() => null);
+  let added = (fix?.said || "").trim(), fallback = false;
+  // If the correction itself still promises without a tool, say it plainly ourselves.
+  if (!added || unbacked(findPromises(added), { ...ctx, did: [...ctx.did, ...(fix?.did || [])] }).length) {
+    added = "Correction: I can't watch the market between messages. What will actually alert you is in the Watcher, your trade's stop and alerts, and any ⏰ check-in on the Desk — ask me to set one if you want a timed look.";
+    fallback = true;
+  }
+  return { added, bad, fallback };
+}
+
+/* ---------------------------------------------------------------- Signals: the pre-fetch, the read fallback, results */
+export async function signalPrefetch(rows: any[]): Promise<string> {
+  const calls = rows.filter((r: any) => r.ticker && (r.kind === "call" || r.kind === "level")).slice(0, 2);
+  const parts = await Promise.all(calls.map(async (r: any) => {
+    const sides: ("call" | "put")[] = r.direction === "long" ? ["call"] : r.direction === "short" ? ["put"] : ["call", "put"];
+    const out = await Promise.all(sides.map((s) => withTimeout(optionShortlist(r.ticker, s), 25_000, "shortlist " + r.ticker).then((x) => x.text, (e) => `${r.ticker} ${s}s: couldn't pre-fetch (${String((e as Error).message).slice(0, 100)}) — look it up yourself.`)));
+    return out.join("\n\n");
+  }));
+  return parts.filter(Boolean).join("\n\n");
+}
+export function readFallback(all: any[], cards: string[], why: string) {
+  const posts = all.filter((r: any) => r.ticker).map((r: any) => `${r.ticker}${r.direction ? " " + r.direction : ""} ${r.kind} at ${r.posted_label || "?"}: "${String(r.words || "").slice(0, 120)}"`);
+  return `${posts.join("\n") || "Signal post."}\n${cards.length ? "Card ready — open it on the Desk." : "No card: " + why}`;
+}
+
+/* ---------------------------------------------------------------- every card gets its ping (code review 6 Oct) */
+// Signal / alert / Watcher cards ping after Jarvis's run ends. If the server cut the run off after the card was
+// made, nobody was told. Every ping now marks the card; the minute timer pings any card still unmarked after 3 min.
+export async function markPinged(ids: string[]) {
+  const list = (ids || []).filter(Boolean);
+  if (!list.length) return;
+  await db("otto_actions?id=in.(" + list.join(",") + ")", { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ pinged_at: new Date().toISOString() }) }).catch(() => {});
+}
+export async function cardSweep(now = Date.now()) {
+  const rows = await db(`otto_actions?select=id,title,created_by,created_at&status=eq.pending&pinged_at=is.null&created_at=gte.${new Date(now - 20 * 60e3).toISOString()}&created_at=lt.${new Date(now - 3 * 60e3).toISOString()}&limit=10`).catch(() => []);
+  for (const a of rows || []) {
+    const claimed = await db(`otto_actions?id=eq.${a.id}&pinged_at=is.null&select=id`, { method: "PATCH", body: JSON.stringify({ pinged_at: new Date(now).toISOString() }) }).catch(() => []);
+    if (!claimed?.length) continue;
+    await notify("card", `🃏 Card waiting: ${unname(String(a.title)).slice(0, 80)}`, "Its ping was missed (the run was cut off). Tap to Approve or Reject before it expires.");
+  }
+}
+
+/* ---------------------------------------------------------------- Signal results ("$1000 for 2 PUTS ON MU") */
+// v3.16: the coach's result posts are linked to his call of the same ticker that day, so his calls get a real
+// scoreboard later (which calls work, how fast). Never a card, never a ping.
+export async function linkResults(rows: any[]) {
+  for (const r of rows || []) {
+    if (r?.kind !== "result" || !r.ticker || r.result_for) continue;
+    const callRow = (await db(`otto_jason?select=id&day=eq.${r.day}&ticker=eq.${encodeURIComponent(r.ticker)}&kind=eq.call&order=id.desc&limit=1`).catch(() => []))?.[0];
+    if (callRow) await db(`otto_jason?id=eq.${r.id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ result_for: callRow.id }) }).catch(() => {});
+  }
+}
+
+/* ---------------------------------------------------------------- daily Signal self-test (9:10 ET) */
+// Ifoma, 7 Oct: automatic every trading day; ✅/❌ on the Desk; phones pinged only on ❌.
+// Tests each link a real signal uses, with a canned post — nothing is stored as a signal and no real card is made.
+export async function signalSelfTest(force = false) {
+  const c = marketClock();
+  if (!force) {
+    if (!isTradingDay(c.date)) return { ok: true, skipped: "not a trading day" };
+    const s = await setting("selftest_day").catch(() => null);
+    if (s?.day === c.date) return { ok: true, skipped: "already ran" };
+    await putSetting("selftest_day", { day: c.date, at: new Date().toISOString() }, "cron").catch(() => {});
+  }
+  const t0 = Date.now(), steps: { name: string; ok: boolean; ms: number; note: string }[] = [];
+  const step = async (name: string, f: () => Promise<string>) => {
+    const t = Date.now();
+    try { steps.push({ name, ok: true, ms: Date.now() - t, note: await f() }); }
+    catch (e) { steps.push({ name, ok: false, ms: Date.now() - t, note: String((e as Error).message || e).slice(0, 160) }); }
+  };
+  await step("Discord watcher heartbeat", async () => {
+    const b = await setting("signal_beat").catch(() => null);
+    if (!b?.at) throw new Error("never heard from the watcher");
+    const age = Math.round((Date.now() - Date.parse(b.at)) / 1000);
+    if (age > 180) throw new Error(`last heartbeat ${Math.round(age / 60)} min ago — is the Engineer PC awake?`);
+    if (b.state !== "ok") throw new Error(`watcher says "${b.state}"${b.detail ? ": " + b.detail : ""}`);
+    if (b.queue_age > 120) throw new Error(`${b.queue} post(s) stuck in the watcher's queue`);
+    return `ok, ${age}s ago`;
+  });
+  let posts: any[] = [];
+  await step("Reading a post", async () => {
+    posts = await sigExtract(Deno.env.get("ANTHROPIC_KEY") || "", "the coach", `NEW:\n[${fmtMin(c.min)}] SPY LONG\n[${fmtMin(c.min)}] @Platinum Members`, [], c.date);
+    const p = posts.find((x: any) => x.kind === "call" && x.ticker === "SPY");
+    if (!p) throw new Error("the test post wasn't read as a SPY call");
+    return "SPY call read";
+  });
+  let pre = "";
+  await step("Contract shortlist", async () => {
+    const sl = await withTimeout(optionShortlist("SPY", "call"), 30_000, "shortlist");
+    pre = sl.text;
+    if (!sl.rows.length) throw new Error("no SPY contracts listed");
+    return `${sl.rows.length} contracts, best ${sl.best?.label || "none in band"}, fits ${sl.bestFit?.label || "nothing fits"}`;
+  });
+  await step("Jarvis builds the card (dry run)", async () => {
+    if (!pre) throw new Error("skipped — no shortlist");
+    const { cs, sys, tools, ctxLine } = await deskSetup();
+    const prompt = `${ctxLine}\n[SELF-TEST — not a real signal. Make ONE opening card for "SPY LONG" from this list, using ◆ (fits buying power) or ★. It will NOT be stored.]\n${pre}`;
+    const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: tools.filter((t: any) => t.name === "propose_action"), cs,
+      who: "selftest", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 3, mustCard: true, dryRun: true, deadline: Date.now() + 60_000 });
+    if (!res.dry?.length) throw new Error(res.failed.includes("propose_action") ? "the card was malformed" : "no card was made");
+    return String(res.dry[0].title || "card ok").slice(0, 80);
+  });
+  const ok = steps.every((x) => x.ok), secs = Math.round((Date.now() - t0) / 1000);
+  const text = `${ok ? "✅" : "❌"} Signal self-test ${fmtMin(c.min)} ET — ${ok ? `all good, post → card in ${secs}s` : "FAILED"}\n` +
+    steps.map((x) => `${x.ok ? "✓" : "✗"} ${x.name} (${(x.ms / 1000).toFixed(1)}s): ${x.note}`).join("\n");
+  await logDesk("system", "Otto", text);
+  await putSetting("selftest_last", { at: new Date().toISOString(), ok, secs, steps }, "cron").catch(() => {});
+  if (!ok) await notify("watcher", "❌ Signal self-test failed", steps.filter((x) => !x.ok).map((x) => `${x.name}: ${x.note}`).join(" · ").slice(0, 250), "./#desk");
+  return { ok, secs, steps };
+}
+
+// v3.16: the recap reports Jarvis's promises (made / backed / corrected) and every Signal's post → card time.
+export async function recapExtras(day: string) {
+  const pr = await setting("promise_day").catch(() => null);
+  const bs = await db(`otto_signal_batches?select=id,status,cards,timing,error&day=eq.${day}&order=id.asc&limit=40`).catch(() => []);
+  const sig = (bs || []).filter((b: any) => b.timing).map((b: any) => `- batch ${b.id}: ${(b.cards || []).length} card(s), post → card ${b.timing.total_ms != null ? Math.round(b.timing.total_ms / 1000) + "s" : "?"}${b.error ? " — " + b.error : ""}`);
+  const st = await setting("selftest_last").catch(() => null);
+  return `JARVIS PROMISES (today): ${pr?.day === day ? `${pr.made} made, ${pr.backed} backed, ${pr.corrected} corrected by the server check` : "none checked"}\n` +
+    `SIGNAL SELF-TEST: ${st?.at && etParts(new Date(st.at)).date === day ? (st.ok ? `passed (${st.secs}s)` : "FAILED") : "did not run"}\n` +
+    `SIGNAL CARD TIMES (today):\n${sig.join("\n") || "(no signal cards built)"}\nPut one line in the recap: promises made/backed/corrected and the signal timings.`;
+}
+
+export const unnameForTest = (t: string) => unname(t);
 
 /* --------------------------------------------------------------- transport */
 
@@ -4766,8 +5229,20 @@ Deno.serve(async (req) => {
         if (s?.day !== c.date) { await putSetting("watch_scan_day", { day: c.date, by: "starting" }).catch(() => {}); try { await watchScan(); } catch (e) { console.error("scan", e); } }
       }
       if (isTradingDay(c.date) && c.min >= 575 && c.min <= 975 && c.min % 5 === 0) { try { await scoreTick(); } catch (e) { console.error("score", e); } }
+      // v3.16: scheduled check-ins, missed card pings, and the 9:10 Signal self-test.
+      if (isTradingDay(c.date) && c.min >= 540 && c.min <= 980) {
+        try { await checksTick(); } catch (e) { console.error("checks", e); }
+        try { await cardSweep(); } catch (e) { console.error("sweep", e); }
+      }
+      if (isTradingDay(c.date) && c.min >= 550 && c.min < 560) { try { await signalSelfTest(); } catch (e) { console.error("selftest", e); } }
     })());
     return json({ ok: true, started: "watch", clock: c.status }, 202);
+  }
+  if (fn0 === "check_jarvis") {      // v3.16: a scheduled check-in, as its own run
+    if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
+    const bj = await req.json().catch(() => ({}));
+    background(checkJarvis(Number(bj.id)));
+    return json({ ok: true, started: "check_jarvis" }, 202);
   }
   if (fn0 === "watch_jarvis") {
     if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
@@ -4834,7 +5309,7 @@ Deno.serve(async (req) => {
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
          "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "watch_get", "watch_set", "watch_scan", "performance", "help", "jason_today", "jason_sweep", "jason_score",
          "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set",
-         "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear",
+         "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear", "selftest_now",
          "playbook_get", "feedback_add", "feedback_list", "daily_now"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
@@ -4904,6 +5379,7 @@ Deno.serve(async (req) => {
       if (fn === "performance") return json(await performance(Deno.env.get("ANTHROPIC_KEY") || "", new URL(req.url).searchParams.get("read") !== "0", new URL(req.url).searchParams.get("fresh") === "1"));
       if (fn === "help") return json({ ok: true, text: await helpAnswer(body, Deno.env.get("ANTHROPIC_KEY") || "") });
       if (fn === "ticket") return json({ ok: true, action: await orderTicket(body, who, String(body.author || "Ifoma").slice(0, 30)) });
+      if (fn === "selftest_now") return json(await signalSelfTest(true));     // v3.16: run the Signal self-test on demand
       if (fn === "morning_now") {
         const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
         background(morningRead(apiKey));
