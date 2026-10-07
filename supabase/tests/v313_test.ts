@@ -13,7 +13,7 @@ class FakeDate extends RealDate {
 const setNow = (iso: string) => { NOW = RealDate.parse(iso); };
 
 /* ---------------- fake Supabase (PostgREST subset) ---------------- */
-const T: Record<string, any[]> = { otto_actions: [], otto_desk: [], otto_settings: [], otto_trades: [], otto_watch: [] };
+const T: Record<string, any[]> = { otto_actions: [], otto_desk: [], otto_settings: [], otto_trades: [], otto_watch: [], otto_feedback: [] };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function parse(path: string) {
   const [table, q = ""] = path.split("?");
@@ -401,4 +401,52 @@ Deno.test("scoreboard: cards carry their source and Watcher trigger", async () =
   const c2: any = await M.proposeAction(spyCard(), "ottotrader@vinecreativestudio.com");
   assert(c1.plan.source === "signal" && c1.plan.trigger === "pullback-hold" && c1.plan.watch_id === 8, JSON.stringify(c1.plan));
   assert(c2.plan.source === "desk" && !c2.plan.trigger, JSON.stringify(c2.plan));
+});
+
+/* =============================== v3.15 PLAYBOOK + DAILY RECAP + FEEDBACK =============================== */
+const idea = (rules: string[], state: string, r: number, setup = "support bounce", trigger?: string) => ({
+  id: "i" + (++ID), created_at: new Date().toISOString(), status: "done",
+  calls: [{ tool: "place_option_order", args: { legs: [{ position_effect: "open" }] } }],
+  plan: { setup, rules, ...(trigger ? { trigger } : {}) }, outcome: { state, r } });
+Deno.test("playbook: cleanRules keeps only real book ids, max 6", () => {
+  const r = M.cleanRules(["t-1", "T-2", "X-9", "D-1", "M-2", "T-3", "T-4", "T-5", "T-1"]);
+  assert(JSON.stringify(r) === JSON.stringify(["T-1", "T-2", "D-1", "M-2", "T-3", "T-4"]), JSON.stringify(r));
+  assert(M.cleanRules("T-1, D-4").join() === "T-1,D-4" && M.cleanRules(null).length === 0, "string / null");
+});
+Deno.test("playbook: a rule is WEAK only after 20 graded trades with average R below 0", () => {
+  const ideas: any[] = [];
+  for (let i = 0; i < 19; i++) ideas.push(idea(["T-1"], i < 5 ? "win" : "loss", i < 5 ? 1 : -1, "breakout", "break"));
+  let st: any = M.playbookStats(ideas);
+  assert(st.records["T-1"].scored === 19 && !st.records["T-1"].weak && st.records["T-1"].leads === "material", JSON.stringify(st.records["T-1"]));
+  ideas.push(idea(["T-1"], "loss", -1, "breakout", "break"));
+  st = M.playbookStats(ideas);
+  assert(st.records["T-1"].weak && st.records["setup:breakout"].weak && st.records["trigger:break"].weak, JSON.stringify(st.records));
+  assert(st.weak.length === 3 && st.weak.some((w: any) => /T-1/.test(w.label)), JSON.stringify(st.weak));
+  // a winning rule with 20 trades leads on results but is not weak
+  const good = Array.from({ length: 20 }, (_, i) => idea(["M-2"], i % 2 ? "win" : "loss", i % 2 ? 2 : -1));
+  const g: any = M.playbookStats(good).records["M-2"];
+  assert(!g.weak && g.leads === "results" && g.avg_r > 0, JSON.stringify(g));
+});
+Deno.test("playbook: every Jarvis run gets the book rules and the weak list; cards keep their rule ids", async () => {
+  reset(); T.otto_settings = [];
+  for (let i = 0; i < 20; i++) T.otto_actions.push(idea(["D-1"], "loss", -1));
+  await M.playbookRefresh("test");
+  const txt = await M.playbookText();
+  assert(/T-1 \[Tharp\]/.test(txt) && /M-6 \[McMillan\]/.test(txt) && /RESULTS SAY WEAK[\s\S]*D-1/.test(txt), txt.slice(0, 400));
+  T.otto_actions = [];
+  const card: any = await M.proposeAction({ ...spyCard(), plan: { ...spyCard().plan, rules: ["T-1", "nope", "m-2"] } }, "ottotrader@vinecreativestudio.com");
+  assert(JSON.stringify(card.plan.rules) === '["T-1","M-2"]', JSON.stringify(card.plan));
+  const log = T.otto_settings.find((r: any) => r.key === "playbook_log")?.value?.items || [];
+  assert(log.some((x: any) => x.kind === "weak") && log.some((x: any) => x.kind === "books"), JSON.stringify(log));
+});
+Deno.test("daily recap: posts one Desk note and runs once per trading day", async () => {
+  reset(); T.otto_settings = []; T.otto_feedback = []; setNow("2026-10-06T21:15:30Z"); // 5:15 PM ET
+  T.otto_desk.push({ id: 1, created_at: "2026-10-06T14:40:00Z", role: "user", author: "Josh", content: "Should I move the stop up?" });
+  T.otto_feedback.push({ id: 1, created_at: "2026-10-06T19:00:00Z", kind: "bug", note: "NVDA card said Friday expiry", author: "Josh", screen: "Desk" });
+  claudeScript = (body: any) => { assert(/Should I move the stop up/.test(body.messages[0].content) && /NVDA card said Friday/.test(body.messages[0].content), "recap input"); return textReply("### Today in one line\nOne question about the stop."); };
+  await M.dailyRecap(false);
+  const notes = T.otto_desk.filter((r) => r.author === "Jarvis · daily recap");
+  assert(notes.length === 1 && /Today in one line/.test(notes[0].content), deskText());
+  const again: any = await M.dailyRecap(false);
+  assert(again.skipped === "already done" && T.otto_desk.filter((r) => r.author === "Jarvis · daily recap").length === 1, JSON.stringify(again));
 });

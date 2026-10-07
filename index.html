@@ -597,6 +597,33 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .dk-reason{width:100%;min-width:180px;background:var(--bg);border:1px solid var(--rule);border-radius:8px;padding:6px 8px;color:var(--ink)}
 .dk-reason.need{border-color:rgba(245,180,0,.55)}
 .dk-tag.blue{background:rgba(90,169,255,.13);color:var(--blue)}
+/* v3.15 Playbook, feedback, daily recap */
+.pb-cites{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.pb-cite{font-family:var(--mono);font-size:11px;background:var(--surface-2);border:1px solid var(--surface-3);border-radius:6px;padding:1px 7px;color:var(--ink-2)}
+.pb-src{font-size:10.5px;font-weight:600;border-radius:5px;padding:1px 7px;white-space:nowrap}
+.pb-src.call{background:rgba(0,200,5,.12);color:var(--up)}.pb-src.book{background:rgba(180,140,255,.14);color:#B48CFF}
+.pb-rule{display:grid;grid-template-columns:40px 1fr;gap:10px;padding:9px 0;border-top:1px solid var(--rule)}
+.pb-rule .id{font-family:var(--mono);font-size:12px;color:var(--ink-3);padding-top:1px}
+.pb-rule .t{font-size:13.5px;font-weight:600}.pb-rule .w{font-size:12.5px;color:var(--ink-2)}
+.pb-rec{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}
+.pb-bar{width:90px;height:5px;background:var(--surface-3);border-radius:3px;overflow:hidden}.pb-bar i{display:block;height:100%;background:var(--up)}
+.pb-weak{font-size:11px;color:var(--warn);border:1px solid rgba(245,180,0,.4);border-radius:6px;padding:0 6px;font-family:var(--body)}
+.pb-topic{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin:12px 0 2px}
+.pb-call summary{cursor:pointer;padding:8px 0;font-weight:600;font-size:13.5px}
+.pb-call li{font-size:13px;color:var(--ink-2);margin:3px 0}
+.dk-m.dk-recap{border-left:3px solid var(--up);padding-left:10px}
+.fb-fab{position:fixed;right:20px;bottom:20px;z-index:80;background:var(--surface-3);border:1px solid #333944;border-radius:22px;padding:8px 15px;font-weight:600;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+.fb-fab[hidden]{display:none}.fb-fab:hover{border-color:var(--up)}
+.fb-dlg{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.fb-dlg[hidden]{display:none}
+.fb-box{background:var(--surface);border:1px solid var(--rule);border-radius:14px;width:460px;max-width:100%;padding:18px}
+.fb-box h3{margin:0 0 4px;font-size:16px}
+.fb-types{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+.fb-types button{border:1px solid var(--rule);border-radius:20px;padding:3px 11px;font-size:12.5px;color:var(--ink-2)}
+.fb-types button.on{border-color:var(--up);color:var(--ink);background:rgba(0,200,5,.08)}
+#fbNote{width:100%;background:var(--surface-2);border:1px solid var(--surface-3);border-radius:8px;color:var(--ink);padding:10px;font-size:14px}
+.fb-att{margin-top:8px;font-size:11.5px;color:var(--ink-2);background:var(--surface-2);border-radius:8px;padding:7px 10px;font-family:var(--mono)}
+.fb-btns{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:14px}.fb-btns .dk-btn{flex:0 0 auto;height:auto;min-height:0;padding:7px 16px}
 .dk-bar{height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden;margin:2px 0 6px}.dk-bar>i{display:block;height:100%}
 .dk-callout{border-left:3px solid var(--blue);padding:6px 10px;background:rgba(90,169,255,.06);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--ink-2)}
 .dk-sel{background:var(--surface-2);border:1px solid var(--rule);border-radius:9px;padding:6px 8px}
@@ -647,6 +674,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <button data-go="journal"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Journal</button>
     <button data-go="review"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review</button>
     <button data-go="score"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Score</button>
+    <button data-go="playbook"><svg viewBox="0 0 24 24"><path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/></svg>Playbook</button>
     <button data-go="jason"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Calls</button>
     <button data-go="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
     <button data-go="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>Help</button>
@@ -1089,6 +1117,17 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 </div>
 
 <div class="toast" id="toast"></div>
+<button class="fb-fab" id="fbFab" hidden>💬 Feedback</button>
+<div class="fb-dlg" id="fbDlg" hidden role="dialog" aria-label="Send feedback">
+  <div class="fb-box">
+    <h3>Send feedback</h3>
+    <div class="mut" style="font-size:13px">A bug, an idea, something slow, or a wrong answer. The daily recap and the nightly check read every note.</div>
+    <div class="fb-types" id="fbTypes"><button data-k="bug" class="on">🐞 Bug</button><button data-k="idea">💡 Idea</button><button data-k="slow">🐢 Slow</button><button data-k="wrong">❓ Wrong answer</button></div>
+    <textarea id="fbNote" rows="4" placeholder="What happened? e.g. The NVDA card said Friday expiry but it's Thursday."></textarea>
+    <div class="fb-att" id="fbAtt"></div>
+    <div class="fb-btns"><button class="dk-btn sec" id="fbCancel">Cancel</button><button class="dk-btn go" id="fbSend">Send</button></div>
+  </div>
+</div>
 
 <script src="config.js"></script>
 <script>
@@ -2014,7 +2053,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.14.0";
+const BUILD="3.15.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2907,7 +2946,7 @@ function dkRenderMsgs(stick){
     if(alIs(r))continue;                       // v3.12: TradingView alerts live in their own tab
     if(r.role==="system"){h+=`<div class="dk-sys">${esc(r.content)} · ${dkTime(r.created_at)}</div>`;continue}
     if(r.role==="user"){const jz=/^📣/.test(r.content||"");h+=`<div class="dk-m me${jz?" jason":""}"><div class="dk-mw">${esc(r.author||"")} · ${dkTime(r.created_at)}${jz?`<span class="dk-jtag">SIGNAL</span>`:""}</div>${esc(jz?String(r.content).replace(/^📣 Jason's post \(pasted\):?\n?/,""):r.content)}</div>`;continue}
-    h+=`<div class="dk-m ai"><div class="dk-mw">${esc(/^otto$/i.test(r.author||"")?"Jarvis":(r.author||"Jarvis"))} · ${dkTime(r.created_at)}</div>${r.content?`<div class="md">${md(r.content)}</div>`:""}${r.action_id?dkCard(DK.acts[r.action_id]):""}</div>`;
+    h+=`<div class="dk-m ai${/daily recap/i.test(r.author||"")?" dk-recap":""}"><div class="dk-mw">${esc(/^otto$/i.test(r.author||"")?"Jarvis":(r.author||"Jarvis"))} · ${dkTime(r.created_at)}</div>${r.content?`<div class="md">${md(r.content)}</div>`:""}${r.action_id?dkCard(DK.acts[r.action_id]):""}</div>`;
   }
   const s=DK.streaming;
   if(s){
@@ -3099,7 +3138,7 @@ async function dkOauthReturn(){
    4 Oct 2026, approved mockup otto-v3.1-mockup.html. The sentiment banner
    (Josh's intermarket sheet on live TradingView data, verdict only, no sizing),
    desktop Market / Journal / Review / Score / Jason pages inside the Desk shell. */
-const DK_VIEWS=["desk","market","perf","journal","review","score","jason","more","help"];
+const DK_VIEWS=["desk","market","perf","journal","review","score","playbook","jason","more","help"];
 function dkShow(v){
   if(!DK_VIEWS.includes(v))v="desk";
   DK.view=v;LS.set("dkView",v);
@@ -3108,7 +3147,7 @@ function dkShow(v){
   if(v==="desk"){dkRenderMsgs(true);return}
   const pg=$("#dkPage");pg.scrollTop=0;
   if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see this page.</p></div>`;return}
-  ({market:dkMarket,perf:dkPerf,journal:dkJournal,review:dkReview,score:dkScore,jason:dkJason,more:dkMore,help:dkHelp})[v]();
+  ({market:dkMarket,perf:dkPerf,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,more:dkMore,help:dkHelp})[v]();
 }
 const dkLoading=t=>`<div class="dk-empty" style="margin:60px auto">${esc(t||"Loading…")}</div>`;
 const dkErr=e=>`<div class="dk-empty dk-err" style="margin:60px auto">${esc(String(e&&e.message||e))}</div>`;
@@ -3191,7 +3230,8 @@ function dkChecks(a){
   const pass=c.filter(x=>x.ok===true).length,fail=c.filter(x=>x.ok===false).length;
   return `<div class="dk-h" style="margin:10px 0 2px">Rule check <b>${pass} pass${fail?` · ${fail} flag${fail>1?"s":""}`:""}</b></div>
     <div class="dk-checks">${c.map(x=>`<span class="dk-ck"><i class="${x.ok===true?"up":x.ok===false?"warn":"mut"}">${x.ok===true?"✓":x.ok===false?"!":"?"}</i>${esc(x.text)}</span>`).join("")}</div>`+
-    (a.plan?`<div class="mut" style="font-size:11.5px;margin-top:6px">Plan: ${esc(a.plan.setup||"")} · ${esc(a.plan.tv_symbol||"")} ${a.plan.direction==="down"?"▼":"▲"} · TP1 ${esc(a.plan.tp1)} · stop ${esc(a.plan.stop)}${a.banner?` · banner ${esc(a.banner.verdict)}`:""}</div>`:"");
+    (a.plan?`<div class="mut" style="font-size:11.5px;margin-top:6px">Plan: ${esc(a.plan.setup||"")} · ${esc(a.plan.tv_symbol||"")} ${a.plan.direction==="down"?"▼":"▲"} · TP1 ${esc(a.plan.tp1)} · stop ${esc(a.plan.stop)}${a.banner?` · banner ${esc(a.banner.verdict)}`:""}</div>`+
+      ((a.plan.rules||[]).length?`<div class="pb-cites">${a.plan.rules.map(id=>`<span class="pb-cite" title="${esc((PB_TITLES[id]||""))}">${esc(id)}${PB_TITLES[id]?" "+esc(PB_TITLES[id].slice(0,34))+(PB_TITLES[id].length>34?"…":""):""}</span>`).join("")}</div>`:""):"");
 }
 
 /* ---------- Market ---------- */
@@ -3365,6 +3405,75 @@ async function dkScore(){
   </div>`;
 }
 
+
+/* ================================================================ v3.15
+   7 Oct 2026, approved mockup otto-v3.15-mockup-b.html ("ok go"). The Playbook
+   (read-only: book rules + the coaching-call rules Jarvis trades by, each with its
+   record; a rule is marked weak after 20 graded trades with average R below 0),
+   the Feedback button, and the 5:15 PM daily recap (a Desk note, styled). */
+var PB_TITLES={};
+async function dkPlaybook(){
+  const pg=$("#dkPage");pg.innerHTML=dkLoading("Loading the Playbook…");
+  let j;try{j=await dkApi("playbook_get")}catch(e){pg.innerHTML=dkErr(e);return}
+  if(DK.view!=="playbook")return;
+  (j.books||[]).forEach(b=>PB_TITLES[b.id]=b.text);
+  const rec=(j.stats&&j.stats.records)||{},min=j.weak_min||20;
+  const recLine=k=>{const r=rec[k];if(!r||!r.n)return `<span class="mut" style="font-family:var(--body)">not used on a card yet</span>`;
+    const pct=Math.min(100,Math.round(100*r.scored/min));
+    return `<span><span class="up">${r.wins}W</span> <span class="dn">${r.losses}L</span> ${r.scratch}S</span>${r.avg_r!=null?`<span>${r.avg_r>=0?"+":""}${r.avg_r.toFixed(2)}R avg</span>`:""}<span class="pb-bar"><i style="width:${pct}%"></i></span><span class="mut">${r.scored}/${min}${r.leads==="results"?" · results lead":""}</span>${r.weak?`<span class="pb-weak">results say weak · Jarvis leans on it less</span>`:""}`};
+  const topics=[...new Set((j.books||[]).map(b=>b.topic))];
+  const books=topics.map(t=>`<div class="pb-topic">${esc(t)}</div>`+(j.books||[]).filter(b=>b.topic===t).map(b=>`<div class="pb-rule"><span class="id">${esc(b.id)}</span><div><div class="t">${esc(b.text)}</div><div class="w">${esc(b.why)}</div>
+    <div class="pb-rec"><span class="pb-src book">Book · ${esc(b.book)}</span>${recLine(b.id)}</div></div></div>`).join("")).join("");
+  const setups=Object.keys(rec).filter(k=>/^(setup|trigger):/.test(k)).sort((a,b)=>rec[b].n-rec[a].n);
+  const setupRows=setups.map(k=>`<div class="pb-rule"><span class="id">${k.startsWith("trigger:")?"W":"S"}</span><div><div class="t">${esc(k.startsWith("trigger:")?"Watcher trigger: "+k.slice(8):"Setup: "+k.slice(6))}</div><div class="pb-rec"><span class="pb-src call">Coaching call</span>${recLine(k)}</div></div></div>`).join("");
+  const calls=(j.calls||[]).map((c,i)=>`<details class="pb-call"${i===0?" open":""}><summary>${esc(c.date)} · ${esc(c.title)} <span class="mut" style="font-weight:400">· ${c.rules.length} rules, ${c.setups.length} setups</span></summary>
+    <ul>${c.rules.map(r=>`<li>${esc(r)}</li>`).join("")}${c.setups.map(x=>`<li><b>Setup:</b> ${esc(x.name)}${x.trigger?` — ${esc(x.trigger)}`:""}</li>`).join("")}</ul></details>`).join("");
+  const log=(j.log||[]).map(x=>`<div class="dk-row" style="display:block"><div class="mut mono" style="font-size:11px">${esc(dkDate(x.at))}${x.reason?" · "+esc(x.reason):""}</div>${esc(x.text)}</div>`).join("")||`<div class="mut">Nothing yet.</div>`;
+  const weak=((j.stats&&j.stats.weak)||[]);
+  pg.innerHTML=`<div class="dkp">
+    <div class="dkp-head"><h2>Playbook</h2><span class="mut">What Jarvis trades by. It fills itself: nothing to approve. Your House Rules sit above it and always win.</span></div>
+    <div class="dkp-grid3" style="margin-bottom:12px">
+      <div class="dk-cardx"><div class="dk-h">Coaching calls</div><div style="font-size:13px">Send the recording as before; once it's processed it goes straight into the brain.</div></div>
+      <div class="dk-cardx"><div class="dk-h">Books</div><div style="font-size:13px">Tharp (sizing, stops), Douglas (discipline), McMillan (options), in our own words.</div></div>
+      <div class="dk-cardx"><div class="dk-h">Your results</div><div style="font-size:13px">Every rule keeps a record. After ${min} graded trades, a losing rule is marked weak and Jarvis leans on it less.${weak.length?` <b style="color:var(--warn)">${weak.length} weak now.</b>`:""}</div></div></div>
+    <div class="dkp-cols3" style="grid-template-columns:1.4fr 1fr">
+      <div class="dk-cardx"><div class="dk-h">Book rules <b>${(j.books||[]).length}</b></div>${books}</div>
+      <div>
+        <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Setups from the calls · records</div>${setupRows||`<div class="mut">Records start as cards are graded.</div>`}</div>
+        <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Recent changes</div>${log}</div>
+        <div class="dk-cardx"><div class="dk-h">When sources disagree</div><div style="font-size:13px">House Rules first. Then the coaching calls, until a setup has ${min} graded trades. After that, whatever actually made money.</div></div>
+      </div></div>
+    <div class="dk-cardx" style="margin-top:12px"><div class="dk-h">Coaching-call rules Jarvis has <b>${(j.calls||[]).length} calls</b></div>${calls||`<div class="mut">No calls loaded.</div>`}</div>
+  </div>`;
+}
+// card citations need the titles even before the Playbook page is opened
+setTimeout(()=>{if(typeof dkApi==="function")dkApi("playbook_get").then(j=>(j.books||[]).forEach(b=>PB_TITLES[b.id]=b.text)).catch(()=>{})},8000);
+
+/* ---------- Feedback ---------- */
+var FB_ERR=[],FB_KIND="bug";
+window.addEventListener("error",e=>{FB_ERR.push(`${new Date().toLocaleTimeString()} ${String(e.message||e.error||"error").slice(0,200)}`);FB_ERR=FB_ERR.slice(-5)});
+window.addEventListener("unhandledrejection",e=>{FB_ERR.push(`${new Date().toLocaleTimeString()} ${String((e.reason&&e.reason.message)||e.reason||"rejection").slice(0,200)}`);FB_ERR=FB_ERR.slice(-5)});
+{const _dkApi=dkApi;dkApi=async function(fn,body,qs){try{return await _dkApi(fn,body,qs)}catch(e){if(fn!=="feedback_add"){FB_ERR.push(`${new Date().toLocaleTimeString()} ${fn}: ${String(e&&e.message||e).slice(0,160)}`);FB_ERR=FB_ERR.slice(-5)}throw e}}}
+function fbScreen(){return document.body.classList.contains("dk-on")?((DK&&DK.view)||"desk"):"classic"}
+function fbWho(){try{return $("#dkWho").value||"Ifoma"}catch(e){return "Ifoma"}}
+function fbOpen(){
+  $("#fbAtt").textContent=`Attached automatically: screen = ${fbScreen()} · build ${BUILD} · ${fbWho()} · ${FB_ERR.length?`last ${FB_ERR.length} error${FB_ERR.length>1?"s":""}`:"no recent errors"} · ${new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}`;
+  $("#fbDlg").hidden=false;setTimeout(()=>$("#fbNote").focus(),30);
+}
+$("#fbFab").addEventListener("click",fbOpen);
+$("#fbCancel").addEventListener("click",()=>{$("#fbDlg").hidden=true});
+$("#fbDlg").addEventListener("click",e=>{if(e.target.id==="fbDlg")$("#fbDlg").hidden=true});
+$("#fbTypes").addEventListener("click",e=>{const b=e.target.closest("button[data-k]");if(!b)return;FB_KIND=b.dataset.k;$$("#fbTypes button").forEach(x=>x.classList.toggle("on",x===b))});
+$("#fbSend").addEventListener("click",async()=>{
+  const note=$("#fbNote").value.trim();if(note.length<3){toast("Write a short note first");return}
+  $("#fbSend").disabled=true;
+  try{await dkApi("feedback_add",{kind:FB_KIND,note,author:fbWho(),screen:fbScreen(),build:BUILD,errors:FB_ERR,ua:navigator.userAgent});
+    $("#fbNote").value="";$("#fbDlg").hidden=true;toast("Thanks — saved for the daily recap and tonight's check")}
+  catch(e){toast(String(e.message).slice(0,100))}
+  finally{$("#fbSend").disabled=false}
+});
+// show the button whenever the Desk shell is open and signed in
+setInterval(()=>{const on=document.body.classList.contains("dk-on")&&typeof DK!=="undefined"&&!DK.locked;$("#fbFab").hidden=!on},1500);
 
 /* ================================================================ v3.3
    5 Oct 2026, approved mockup otto-v3.3-mockup.html. Results (one team view:

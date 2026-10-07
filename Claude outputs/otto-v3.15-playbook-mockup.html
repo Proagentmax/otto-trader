@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Otto · Playbook mockup (v3.15)</title>
+<style>
+:root{
+  --bg:#0B0C0E;--surface:#15171B;--surface-2:#1D2026;--surface-3:#262A31;
+  --ink:#F2F5F8;--ink-2:#98A1AD;--ink-3:#646C78;--rule:#22262C;
+  --up:#00C805;--down:#FF5000;--warn:#F5B400;--blue:#5AA9FF;--violet:#B48CFF;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--r:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0}
+.mock{background:#2a2310;color:var(--warn);font-size:12px;padding:8px 16px;border-bottom:1px solid #3a3115;text-align:center}
+.app{display:grid;grid-template-columns:76px 1fr;min-height:calc(100vh - 34px)}
+.rail{border-right:1px solid var(--rule);padding:12px 6px;display:flex;flex-direction:column;gap:4px;align-items:center}
+.logo{width:36px;height:36px;border-radius:10px;background:var(--up);color:#000;font-weight:800;display:grid;place-items:center;margin-bottom:10px}
+.tab{width:64px;padding:8px 2px;border-radius:10px;color:var(--ink-3);font-size:11px;text-align:center;position:relative}
+.tab .ic{display:block;font-size:17px;line-height:1.2}
+.tab.on{background:var(--surface-2);color:var(--ink)}
+.tab .bdg{position:absolute;top:3px;right:8px;background:var(--down);color:#fff;font-size:10px;font-weight:700;border-radius:9px;padding:0 5px;min-width:16px}
+.main{padding:20px 28px 60px;max-width:1280px;width:100%}
+h1{font-size:22px;margin:0;letter-spacing:-.02em}
+.sub{color:var(--ink-2);margin:4px 0 18px}
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.step{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:12px}
+.step b{display:block;font-size:13px}
+.step span{color:var(--ink-2);font-size:12px}
+.grid{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r)}
+.ph{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--rule)}
+.ph h2{font-size:15px;margin:0}
+.count{background:var(--surface-3);border-radius:9px;padding:0 8px;font-size:12px;color:var(--ink-2)}
+.filters{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.chip{border:1px solid var(--rule);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--ink-2)}
+.chip.on{border-color:var(--up);color:var(--ink);background:rgba(0,200,5,.08)}
+.item{padding:14px 16px;border-bottom:1px solid var(--rule)}
+.item:last-child{border-bottom:0}
+.meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.src{font-size:11px;font-weight:600;border-radius:6px;padding:1px 7px}
+.src.call{background:rgba(0,200,5,.12);color:var(--up)}
+.src.book{background:rgba(180,140,255,.14);color:var(--violet)}
+.src.trades{background:rgba(90,169,255,.14);color:var(--blue)}
+.kind{font-size:11px;color:var(--ink-3);font-family:var(--mono)}
+.rule{font-size:14.5px;font-weight:600;margin:0 0 4px}
+.why{color:var(--ink-2);font-size:13px;margin:0}
+.ev{margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--ink-2);background:var(--surface-2);border-radius:8px;padding:6px 9px}
+.flag{margin-top:8px;font-size:12px;border-left:3px solid var(--warn);padding:4px 9px;color:var(--warn);background:rgba(245,180,0,.06);border-radius:0 6px 6px 0}
+.acts{display:flex;gap:8px;margin-top:10px}
+.btn{border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600}
+.keep{background:var(--up);color:#000}
+.edit{background:var(--surface-3)}
+.drop{border:1px solid var(--rule);color:var(--ink-2)}
+textarea{width:100%;background:var(--surface-2);border:1px solid var(--surface-3);border-radius:8px;color:var(--ink);font:inherit;padding:8px;margin-top:8px}
+.empty{padding:28px 16px;color:var(--ink-3);text-align:center}
+.topic{padding:10px 16px 4px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.kr{padding:10px 16px;border-top:1px solid var(--rule);display:grid;grid-template-columns:44px 1fr;gap:10px}
+.kr .id{font-family:var(--mono);color:var(--ink-3);font-size:12px;padding-top:2px}
+.kr .t{font-size:13.5px;font-weight:600}
+.rec{display:flex;gap:10px;align-items:center;margin-top:5px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);flex-wrap:wrap}
+.bar{width:90px;height:5px;background:var(--surface-3);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--up)}
+.w{color:var(--up)}.l{color:var(--down)}
+.lead{font-size:11px;color:var(--ink-3)}
+.card{margin-top:18px}
+.cardbody{padding:14px 16px}
+.ctitle{font-weight:700;font-size:15px}
+.cites{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px}
+.cite{font-family:var(--mono);font-size:11.5px;background:var(--surface-2);border:1px solid var(--surface-3);border-radius:6px;padding:2px 8px;color:var(--ink-2)}
+.house{margin-top:10px;font-size:12px;color:var(--ink-2);border-left:3px solid var(--up);padding:4px 9px}
+.note{color:var(--ink-3);font-size:12px;margin-top:6px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface-3);border:1px solid var(--rule);padding:8px 14px;border-radius:10px;font-size:13px;opacity:0;transition:.2s}
+.toast.on{opacity:1}
+@media(max-width:980px){.grid{grid-template-columns:1fr}.flow{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.app{grid-template-columns:1fr}.rail{display:none}.main{padding:16px}.flow{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="mock">MOCKUP v3.15 — sample data only. Buttons work so you can try the flow; nothing is saved or sent.</div>
+<div class="app">
+  <nav class="rail">
+    <div class="logo">O</div>
+    <button class="tab"><span class="ic">▣</span>Desk</button>
+    <button class="tab"><span class="ic">↗</span>Market</button>
+    <button class="tab"><span class="ic">◎</span>Results</button>
+    <button class="tab"><span class="ic">☰</span>Journal</button>
+    <button class="tab on"><span class="ic">📘</span>Playbook<span class="bdg" id="railBadge">0</span></button>
+    <button class="tab"><span class="ic">★</span>Score</button>
+    <button class="tab"><span class="ic">☎</span>Calls</button>
+    <button class="tab"><span class="ic">⚙</span>Settings</button>
+  </nav>
+
+  <main class="main">
+    <h1>Playbook</h1>
+    <p class="sub">Otto's trading method. Nothing reaches Jarvis until you keep it. Your House Rules sit above this and always win.</p>
+
+    <div class="flow">
+      <div class="step"><b>1 · Comes in</b><span>New coaching calls, books, and Friday trade feedback</span></div>
+      <div class="step"><b>2 · You review</b><span>Keep, Edit or Drop. Only you can approve; Josh can view</span></div>
+      <div class="step"><b>3 · Jarvis uses it</b><span>Kept rules load into every run, and each card cites the rules it used</span></div>
+      <div class="step"><b>4 · Scored</b><span>Every rule builds its own record. After 20 trades, results can override the call</span></div>
+    </div>
+
+    <div class="grid">
+      <section class="panel">
+        <div class="ph">
+          <h2>To review</h2><span class="count" id="revCount">0</span>
+          <div class="filters" id="srcFilters">
+            <button class="chip on" data-f="all">All</button>
+            <button class="chip" data-f="call">Calls</button>
+            <button class="chip" data-f="book">Books</button>
+            <button class="chip" data-f="trades">Your trades</button>
+          </div>
+        </div>
+        <div id="review"></div>
+      </section>
+
+      <div>
+        <section class="panel">
+          <div class="ph"><h2>Kept rules</h2><span class="count" id="keptCount">0</span>
+            <div class="filters"><button class="chip" id="showDropped">Dropped (<span id="dropCount">0</span>)</button></div>
+          </div>
+          <div id="kept"></div>
+        </section>
+
+        <section class="panel card">
+          <div class="ph"><h2>How it shows on a Desk card</h2></div>
+          <div class="cardbody">
+            <div class="ctitle">Buy 1 SPY 781C 10/9 @ $3.40 limit</div>
+            <div class="note">Watcher · Signal level 778.60 · pullback-hold on the 10:30 bar</div>
+            <div class="cites">
+              <span class="cite">P-03 Pullback-hold on 5m</span>
+              <span class="cite">P-11 Define 1R before entry</span>
+              <span class="cite">P-14 Size so 1R ≤ 10%</span>
+              <span class="cite">P-21 One trade is one of many</span>
+            </div>
+            <div class="house">House Rules checked: intraday only ✓ · trade the open on Signal levels ✓</div>
+            <div class="note">When this trade closes, its result is added to the record of every rule it cites.</div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const REVIEW=[
+ {id:'n1',src:'call',label:'Coaching call · Oct 8 (sample)',kind:'rule · options',
+  rule:'Skip contracts where volume is below open interest at entry.',
+  why:'Thin volume means wide spreads and bad fills on the way out.',
+  ev:'Said at 14:20 · matches the existing "volume > OI" check on cards'},
+ {id:'n2',src:'call',label:'Coaching call · Oct 8 (sample)',kind:'level · dated',
+  rule:'NVDA 245: a close above on the 15-min opens 250.',
+  why:'Dated mark for this week. It goes to the Watcher, not into the method.',
+  ev:'Levels expire at the close of the day they are for'},
+ {id:'b1',src:'book',label:'Book · Van Tharp',kind:'rule · risk',
+  rule:'Decide where you are wrong before you enter. That distance is 1R, your unit of risk.',
+  why:'Every result can then be measured in R, which makes trades comparable no matter the price.'},
+ {id:'b2',src:'book',label:'Book · Van Tharp',kind:'rule · sizing',
+  rule:'Size each trade so a 1R loss stays inside your max loss per trade.',
+  why:'Position size, not the entry, decides whether a bad streak hurts or wipes you out.',
+  ev:'Fits your guardrail: max loss per trade = 10% of the account'},
+ {id:'b3',src:'book',label:'Book · Van Tharp',kind:'rule · measuring',
+  rule:'Judge a setup by its expectancy (average R per trade), not by its win rate.',
+  why:'A 40% win rate can make money if winners are 2R+ and losers stay at 1R.'},
+ {id:'b4',src:'book',label:'Book · Mark Douglas',kind:'rule · mindset',
+  rule:'Treat every trade as one of the next 20. No single result proves or disproves the setup.',
+  why:'Wins and losses arrive in random order even with a real edge.'},
+ {id:'b5',src:'book',label:'Book · Mark Douglas',kind:'rule · mindset',
+  rule:'Accept the loss at the stop before you click Approve.',
+  why:'If the risk is accepted up front, there is nothing to defend when price moves against you.',
+  flag:'Watch: Oct 6 the real stop was cancelled mid-trade. This rule targets that.'},
+ {id:'b6',src:'book',label:'Book · Mark Douglas',kind:'rule · discipline',
+  rule:'After the daily stop, no new trades that day, even on an A setup.',
+  why:'Trying to win it back is how one bad day turns into a bad week.',
+  flag:'Your guardrails flag, never block. Keeping this adds a red banner only.'},
+ {id:'t1',src:'trades',label:'Your trades · Friday Oct 16 (sample)',kind:'suggestion · change',
+  rule:'Add: No break entries before 10:00 on non-Signal levels.',
+  why:'Breaks before 10:00 are losing; the same setup after 10:00 is working.',
+  ev:'Before 10:00: 1W 5L (−4.2R) · After 10:00: 6W 3L (+5.1R) · 15 trades'},
+ {id:'t2',src:'trades',label:'Your trades · Friday Oct 16 (sample)',kind:'suggestion · confirm',
+  rule:'Keep: Pullback-hold on Signal levels.',
+  why:'Best-performing setup so far.',
+  ev:'7W 2L (+6.3R) · 9 of 20 trades · coaching material still leads until 20'}
+];
+const KEPT=[
+ {id:'P-03',topic:'Entries',t:'Pullback-hold on 5m bars at a marked level',src:'call',w:7,l:2,s:1},
+ {id:'P-07',topic:'Entries',t:'No trades in the first 30 min, except pre-marked Signal levels',src:'call',w:3,l:1,s:0},
+ {id:'P-09',topic:'Contracts',t:'Delta .30–.40, volume above open interest',src:'call',w:9,l:5,s:2},
+ {id:'P-12',topic:'Macro',t:'Check the 10-year, crude and USD/JPY before the open',src:'call',w:0,l:0,s:0},
+ {id:'P-15',topic:'Timing',t:'Never hold through NFP, earnings or the Fed',src:'call',w:0,l:0,s:0}
+];
+let state={review:[...REVIEW],kept:[...KEPT],dropped:[],filter:'all',showDropped:false};
+let nextP=20;
+const $=s=>document.querySelector(s);
+const srcName={call:'Call',book:'Book',trades:'Your trades'};
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1600)}
+function topicFor(it){const k=it.kind||'';if(k.includes('risk')||k.includes('sizing'))return'Sizing & risk';if(k.includes('mindset')||k.includes('discipline'))return'Mindset';if(k.includes('measuring'))return'Measuring';if(k.includes('options'))return'Contracts';return'Entries'}
+function render(){
+  const list=state.review.filter(i=>state.filter==='all'||i.src===state.filter);
+  $('#revCount').textContent=state.review.length;$('#railBadge').textContent=state.review.length;
+  $('#railBadge').style.display=state.review.length?'':'none';
+  $('#review').innerHTML=list.length?list.map(i=>`
+   <div class="item" data-id="${i.id}">
+     <div class="meta"><span class="src ${i.src}">${i.label}</span><span class="kind">${i.kind}</span></div>
+     <p class="rule">${i.rule}</p><p class="why">${i.why}</p>
+     ${i.ev?`<div class="ev">${i.ev}</div>`:''}${i.flag?`<div class="flag">${i.flag}</div>`:''}
+     <div class="acts"><button class="btn keep">Keep</button><button class="btn edit">Edit</button><button class="btn drop">Drop</button></div>
+   </div>`).join(''):`<div class="empty">All caught up. New items arrive after a call is processed, when a book is added, and every Friday.</div>`;
+  $('#keptCount').textContent=state.kept.length;$('#dropCount').textContent=state.dropped.length;
+  if(state.showDropped){
+    $('#kept').innerHTML=state.dropped.length?state.dropped.map(d=>`<div class="kr"><span class="id">—</span><div><div class="t" style="color:var(--ink-3)">${d.rule}</div><div class="rec"><span class="src ${d.src}">${srcName[d.src]}</span><button class="chip" data-restore="${d.id}">Restore to review</button></div></div></div>`).join(''):`<div class="empty">Nothing dropped.</div>`;
+    return;
+  }
+  const topics=[...new Set(state.kept.map(k=>k.topic))];
+  $('#kept').innerHTML=topics.map(tp=>`<div class="topic">${tp}</div>`+state.kept.filter(k=>k.topic===tp).map(k=>{
+    const n=k.w+k.l+k.s,pct=Math.min(100,n/20*100);
+    return `<div class="kr"><span class="id">${k.id}</span><div><div class="t">${k.t}</div>
+     <div class="rec"><span class="src ${k.src}">${srcName[k.src]}</span>
+     ${n?`<span><span class="w">${k.w}W</span> <span class="l">${k.l}L</span> ${k.s}S</span><span class="bar"><i style="width:${pct}%"></i></span><span class="lead">${n}/20${n>=20?' · results lead':''}</span>`:`<span class="lead">not used on a card yet</span>`}</div></div></div>`}).join('')).join('');
+}
+document.addEventListener('click',e=>{
+  const f=e.target.closest('#srcFilters .chip');
+  if(f){state.filter=f.dataset.f;document.querySelectorAll('#srcFilters .chip').forEach(c=>c.classList.toggle('on',c===f));render();return}
+  if(e.target.id==='showDropped'||e.target.closest('#showDropped')){state.showDropped=!state.showDropped;$('#showDropped').classList.toggle('on',state.showDropped);render();return}
+  const r=e.target.dataset.restore;
+  if(r){const i=state.dropped.findIndex(d=>d.id===r);state.review.unshift(state.dropped.splice(i,1)[0]);toast('Back in the review list');render();return}
+  const item=e.target.closest('.item');if(!item)return;
+  const idx=state.review.findIndex(i=>i.id===item.dataset.id),it=state.review[idx];
+  if(e.target.classList.contains('keep')){
+    const ta=item.querySelector('textarea');if(ta)it.rule=ta.value;
+    state.review.splice(idx,1);
+    if(it.kind.includes('level')){toast('Level sent to the Watcher for its day');}
+    else{state.kept.push({id:'P-'+(nextP++),topic:it.src==='trades'?'Entries':topicFor(it),t:it.rule.replace(/^(Add|Keep): /,''),src:it.src,w:0,l:0,s:0});toast('Kept · Jarvis uses it from the next run');}
+    render();
+  }else if(e.target.classList.contains('drop')){
+    state.review.splice(idx,1);state.dropped.push(it);toast('Dropped · you can restore it');render();
+  }else if(e.target.classList.contains('edit')){
+    if(!item.querySelector('textarea')){const ta=document.createElement('textarea');ta.rows=2;ta.value=it.rule;item.querySelector('.acts').before(ta);ta.focus();e.target.textContent='Editing…';}
+  }
+});
+render();
+</script>
+</body>
+</html>

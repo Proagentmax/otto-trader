@@ -1059,6 +1059,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
   // v3.14: the server stamps where the idea came from (signal / desk / scanner / alert / watcher trigger) for the Scoreboard.
   const plan = input.plan && typeof input.plan === "object" ? { ...input.plan, ...(opening ? (opts.planExtra || {}) : {}),
     ...(opening && !opts.planExtra?.source ? { source: who === "signals" ? "signal" : who === "alert" ? "alert" : who === "otto" ? "manual" : "desk" } : {}) } : null;
+  if (plan) plan.rules = cleanRules(plan.rules);
   // v3.4: ...and its exits. No exits, no card (Jarvis and the manual ticket alike).
   if (opening && (!plan || !plan.tv_symbol || !plan.direction || !plan.setup || plan.tp1 == null || plan.stop == null || !(Number(plan.stop_option) > 0))) {
     throw new Error("An opening option order needs its plan and exits: {tv_symbol (EXCHANGE:TICKER), direction ('up'|'down' on the underlying), setup, tp1, stop (underlying prices), stop_option (OPTION price for the protective stop, below the limit), entry_underlying?, expires? (YYYY-MM-DD)}. Add it and propose again.");
@@ -1435,6 +1436,7 @@ const PROPOSE_TOOL = (writeHelp: string) => ({
           stop_option: { type: "number", description: "OPTION price (per share, below the limit) where Otto's protective stop_market sell-to-close triggers. Otto places it after the fill." },
           expires: { type: "string", description: "Option expiration YYYY-MM-DD" },
           signal_level: { type: "boolean", description: "true when the entry level came from a Signal posted before the open (the House Rule lets the open be traded off it)" },
+          rules: { type: "array", items: { type: "string" }, maxItems: 6, description: "v3.15: ids of the PLAYBOOK book rules this card relies on (e.g. T-1, D-1, M-2). Every rule cited builds its own record on the scoreboard." },
         },
         required: ["tv_symbol", "direction", "setup", "tp1", "stop", "stop_option"],
       },
@@ -1505,7 +1507,7 @@ export async function runDesk(o: DeskRun): Promise<{ said: string; cards: string
   const cards: string[] = [];
   // v3.13: the clock and the House Rules ride in a second, uncached system block on EVERY run
   // (Desk, alert reads, Signals, position checks, the morning read).
-  const live = marketClock().line + "\n\n" + await houseRulesText().catch(() => "");
+  const live = marketClock().line + "\n\n" + await houseRulesText().catch(() => "") + "\n\n" + await playbookText().catch(() => "");
   for (let round = 0; round < (o.maxRounds || 12); round++) {
     if (Date.now() > deadline - 15000) { said += OUT_OF_TIME; send({ t: "text", v: OUT_OF_TIME }); return { said, cards, timedOut: true }; }
     let r: Response;
@@ -3755,6 +3757,7 @@ const PUSH_KINDS: Record<string, { label: string; on: boolean; always?: boolean 
     morning:     { label: "8:45 morning read is ready", on: false },
   signal:      { label: "Otto Signals: a call came in (card ready)", on: true, always: true },
   watcher:     { label: "Otto Signals watcher went offline / came back", on: true, always: true },
+  daily:       { label: "5:15 PM daily recap is ready", on: true },
 };
 const PUSH_SUB_URL = "https://proagentmax.github.io/otto-trader/";
 
@@ -4486,6 +4489,223 @@ THE APP (Otto Trader, desktop-first; phones get a stacked layout)
 - Settings: sign in with the Otto email (6-digit code or paste the sign-in link), connect/disconnect TradingView and Robinhood (Robinhood: paste the "This site can't be reached" localhost address back into Otto once), Limits & goals, the older bias thresholds.
 - "the call" = the coaching call with Jason; the day changes week to week. The 👁 Watcher card (Desk, left column) lists today's price levels; the server checks them every minute 9:30–4:00 ET on 5- and 10-minute closes for a break-and-close, a pullback-and-hold or a rejection, and Jarvis builds a card (one ping) when it's a real setup. Signal levels are added automatically; add your own by typing 'NVDA 242 up' in the card or telling Jarvis 'watch NVDA 242'; the 9:20 scanner proposes levels on SPY, QQQ and the Mag-7 that you tap Add on. Levels clear at the close. The Score tab is the 2-week proof run: every card graded win / loss / flat on the same day, by source and trigger. House Rules (Settings) are standing instructions Jarvis follows; guardrails (Settings → Limits) flag with a red banner and never block.`;
 
+/* ===================================================================== v3.15
+   7 Oct 2026 — Ifoma's decisions (mockup otto-v3.15-mockup-b.html, "ok go"):
+   - PLAYBOOK, no approvals: book rules (Tharp: sizing/stops/expectancy; Douglas:
+     discipline; McMillan: options) written in our own words, always loaded into
+     every Jarvis run next to the House Rules (House Rules win any clash). Coaching
+     calls keep flowing in as before. Cards cite the book rules they lean on
+     (plan.rules), so every rule builds its own record.
+   - The coaching material leads until a setup / rule has 20 graded trades; after
+     that a losing one (average R below 0) is marked WEAK and Jarvis leans on it less.
+   - 5:15 PM DAILY RECAP on the Desk + one ping (pg_cron otto-daily-*, 015).
+   - FEEDBACK button: notes with screen / build / recent errors (otto_feedback, 015),
+     read by the daily recap and (optionally) the nightly bug check. */
+
+export const PLAYBOOK_BOOKS: { id: string; book: string; topic: string; text: string; why: string }[] = [
+  { id: "T-1", book: "Tharp", topic: "Sizing & risk", text: "Before entering, decide the price that proves the idea wrong. The distance from entry to that point is 1R, the trade's unit of risk.", why: "Every result can then be measured in R, so setups at different prices can be compared." },
+  { id: "T-2", book: "Tharp", topic: "Sizing & risk", text: "Size the trade so a 1R loss stays inside the max loss per trade. If one contract is too much, pick a cheaper contract or pass.", why: "Position size, not the entry, decides whether a bad streak hurts or wipes you out." },
+  { id: "T-3", book: "Tharp", topic: "Measuring", text: "Judge a setup by its average R per trade (expectancy), not by its win rate.", why: "A 40% win rate pays if winners run 2R+ and losers stay at 1R." },
+  { id: "T-4", book: "Tharp", topic: "Exits", text: "Know the reward in R before entering. A first target under 1R needs a very high win rate to pay.", why: "Small targets with full-size risk quietly lose money even when most trades win." },
+  { id: "T-5", book: "Tharp", topic: "Measuring", text: "Don't change or drop a setup after a few trades. Judge it on 20 or more.", why: "Small samples are mostly noise." },
+  { id: "T-6", book: "Tharp", topic: "Sizing & risk", text: "Never size up to win back a loss. Size follows the account and the rules, not recent results.", why: "Bigger size after losses turns a normal losing streak into a big one." },
+  { id: "D-1", book: "Douglas", topic: "Discipline", text: "Accept the loss at the stop before the trade is approved.", why: "Risk accepted up front leaves nothing to defend when price moves against you." },
+  { id: "D-2", book: "Douglas", topic: "Discipline", text: "Each trade is one of the next 20. One result doesn't prove or disprove the setup.", why: "Wins and losses arrive in random order even with a real edge." },
+  { id: "D-3", book: "Douglas", topic: "Discipline", text: "Anything can happen on any one trade. Once in, follow the plan, not hope or fear.", why: "Mid-trade changes are where most avoidable losses come from." },
+  { id: "D-4", book: "Douglas", topic: "Discipline", text: "After the daily stop is hit, flag any new trade that day, even an A setup.", why: "Trying to win the day back is how one bad day becomes a bad week." },
+  { id: "D-5", book: "Douglas", topic: "Discipline", text: "Never take a trade to make back a loss. Every setup has to stand on its own.", why: "Revenge trades skip the checks that make a setup worth taking." },
+  { id: "M-1", book: "McMillan", topic: "Contracts", text: "Avoid buying options right before a known event (earnings, CPI, the Fed) unless the event is the trade.", why: "Implied volatility usually drops after the event and takes premium with it." },
+  { id: "M-2", book: "McMillan", topic: "Contracts", text: "For intraday buys, prefer at least 2 trading days to expiry.", why: "Time decay is steepest in the last day; a small stall costs a lot." },
+  { id: "M-3", book: "McMillan", topic: "Contracts", text: "Check the bid-ask spread. If it is more than about 10% of the option price, choose a more liquid strike or pass.", why: "A wide spread is a loss paid on entry and again on exit." },
+  { id: "M-4", book: "McMillan", topic: "Contracts", text: "Enter options with limit orders, never market orders.", why: "Option quotes move fast and market orders fill at the worst price on the screen." },
+  { id: "M-5", book: "McMillan", topic: "Contracts", text: "When implied volatility is high for that name, options are expensive: favor closer strikes or skip.", why: "High IV means you pay extra for the same move." },
+  { id: "M-6", book: "McMillan", topic: "Exits", text: "Know the move the underlying needs to reach TP1 and whether the option's delta makes that worth the premium.", why: "A move that is too small for the premium is a loss even when the direction is right." },
+];
+const BOOK_IDS = new Set(PLAYBOOK_BOOKS.map((r) => r.id));
+const BOOK_NAME: Record<string, string> = { Tharp: "Van Tharp", Douglas: "Mark Douglas", McMillan: "Lawrence McMillan" };
+export const WEAK_MIN = 20;
+
+export function cleanRules(x: unknown): string[] {
+  const a = Array.isArray(x) ? x : typeof x === "string" ? x.split(/[,\s]+/) : [];
+  return [...new Set(a.map((v) => String(v || "").trim().toUpperCase()).filter((v) => BOOK_IDS.has(v)))].slice(0, 6);
+}
+
+const isOpening = (a: any) => (a.calls || []).some((c: any) => c.tool === "place_option_order" &&
+  (c.args?.legs || []).some((l: any) => l.position_effect === "open"));
+const GRADED = ["win", "loss", "scratch"];
+
+// Pure: records per book rule, per setup and per Watcher trigger, plus the WEAK list.
+export function playbookStats(ideas: any[]) {
+  const rec: Record<string, { n: number; scored: number; wins: number; losses: number; scratch: number; sumR: number }> = {};
+  const add = (k: string, a: any) => {
+    const r = (rec[k] ||= { n: 0, scored: 0, wins: 0, losses: 0, scratch: 0, sumR: 0 });
+    r.n++;
+    const st = a.outcome?.state;
+    if (GRADED.includes(st)) {
+      r.scored++; r.sumR += Number(a.outcome.r || 0);
+      if (st === "win") r.wins++; else if (st === "loss") r.losses++; else r.scratch++;
+    }
+  };
+  for (const a of ideas) {
+    for (const id of cleanRules(a.plan?.rules)) add(id, a);
+    if (a.plan?.setup) add("setup:" + String(a.plan.setup).toLowerCase(), a);
+    if (a.plan?.trigger) add("trigger:" + String(a.plan.trigger), a);
+  }
+  const out: Record<string, any> = {};
+  const weak: { key: string; label: string; scored: number; avg_r: number }[] = [];
+  for (const [k, r] of Object.entries(rec)) {
+    const avg_r = r.scored ? r.sumR / r.scored : null;
+    const isWeak = r.scored >= WEAK_MIN && avg_r !== null && avg_r < 0;
+    out[k] = { n: r.n, scored: r.scored, wins: r.wins, losses: r.losses, scratch: r.scratch, avg_r, weak: isWeak, leads: r.scored >= WEAK_MIN ? "results" : "material" };
+    if (isWeak) weak.push({ key: k, label: playbookLabel(k), scored: r.scored, avg_r: Math.round((avg_r as number) * 100) / 100 });
+  }
+  return { records: out, weak };
+}
+function playbookLabel(k: string) {
+  if (k.startsWith("setup:")) return "Setup: " + k.slice(6);
+  if (k.startsWith("trigger:")) return "Watcher trigger: " + (TRIG_LABEL[k.slice(8)] || k.slice(8));
+  const b = PLAYBOOK_BOOKS.find((r) => r.id === k);
+  return b ? `${k} ${b.text}` : k;
+}
+
+async function playbookIdeas() {
+  const acts = await db("otto_actions?select=id,created_at,status,calls,plan,outcome&order=created_at.desc&limit=600");
+  return (acts || []).filter(isOpening);
+}
+
+export async function playbookRefresh(reason = "refresh") {
+  const st = playbookStats(await playbookIdeas());
+  const prev = (await setting("playbook_stats")) || {};
+  const before = new Set((prev.weak || []).map((w: any) => w.key));
+  const after = new Set(st.weak.map((w) => w.key));
+  const log: any[] = ((await setting("playbook_log")) || {}).items || [];
+  const at = new Date().toISOString();
+  for (const w of st.weak) if (!before.has(w.key)) log.unshift({ at, kind: "weak", text: `Marked weak after ${w.scored} graded trades (avg ${w.avg_r >= 0 ? "+" : ""}${w.avg_r}R): ${w.label}`, reason });
+  for (const k of before) if (!after.has(k as string)) log.unshift({ at, kind: "unweak", text: `No longer weak: ${playbookLabel(k as string)}`, reason });
+  if (!log.some((x) => x.kind === "books")) log.push({ at, kind: "books", text: `${PLAYBOOK_BOOKS.length} book rules loaded: Tharp ${PLAYBOOK_BOOKS.filter((r) => r.book === "Tharp").length}, Douglas ${PLAYBOOK_BOOKS.filter((r) => r.book === "Douglas").length}, McMillan ${PLAYBOOK_BOOKS.filter((r) => r.book === "McMillan").length}.` });
+  await putSetting("playbook_stats", { ...st, at }, "otto");
+  await putSetting("playbook_log", { items: log.slice(0, 60) }, "otto");
+  delete CACHE.playbook_text;
+  return st;
+}
+
+export async function playbookText(): Promise<string> {
+  return cached("playbook_text", 5 * 60e3, async () => {
+    const st = (await setting("playbook_stats").catch(() => null)) || { weak: [] };
+    const lines = PLAYBOOK_BOOKS.map((r) => `${r.id} [${r.book}] ${r.text}`);
+    const weak = (st.weak || []) as any[];
+    return "OTTO PLAYBOOK — book rules (always in force, below the House Rules and the Otto Rules from the calls; " +
+      "when they clash: House Rules first, then the call material until a setup has 20 graded trades, then whatever the results say). " +
+      "On every opening card, list the ids you relied on in plan.rules (e.g. [\"T-1\",\"T-2\",\"M-2\"]).\n" + lines.join("\n") +
+      (weak.length ? "\n\nRESULTS SAY WEAK (20+ graded trades, average R below 0) — lean on these less, and if a card still uses one, say so in its summary:\n" +
+        weak.map((w) => `- ${w.label} (${w.scored} trades, ${w.avg_r}R avg)`).join("\n") : "");
+  });
+}
+
+async function playbookGet() {
+  let st = await setting("playbook_stats");
+  if (!st || !st.at || Date.now() - Date.parse(st.at) > 60 * 60e3) st = await playbookRefresh("page open");
+  let calls: any[] = [];
+  try {
+    calls = (await loadBrain()).map((c: any) => ({ date: c.call?.date || "", title: c.call?.title || "call",
+      rules: (c.rules || []).map((r: any) => r.rule).filter(Boolean).slice(0, 40),
+      setups: (c.setups || []).map((x: any) => ({ name: x.name, trigger: x.trigger || "" })).slice(0, 20) }));
+  } catch { /* the page still shows the books */ }
+  const log = ((await setting("playbook_log")) || {}).items || [];
+  return { books: PLAYBOOK_BOOKS.map((r) => ({ ...r, author: BOOK_NAME[r.book] })), calls, stats: st, weak_min: WEAK_MIN, log: log.slice(0, 20) };
+}
+
+/* ---- feedback ---- */
+async function feedbackAdd(body: any, who: string) {
+  const kind = ["bug", "idea", "slow", "wrong"].includes(body?.kind) ? body.kind : "bug";
+  const note = String(body?.note || "").trim().slice(0, 4000);
+  if (note.length < 3) throw new Error("write a short note first");
+  const row = { kind, note, author: String(body?.author || who.split("@")[0]).slice(0, 40), screen: String(body?.screen || "").slice(0, 60),
+    build: String(body?.build || "").slice(0, 20), errors: Array.isArray(body?.errors) ? body.errors.slice(-5).map((e: any) => String(e).slice(0, 300)) : [],
+    ua: String(body?.ua || "").slice(0, 200) };
+  const r = await db("otto_feedback", { method: "POST", body: JSON.stringify(row) });
+  return { id: r?.[0]?.id ?? null };
+}
+async function feedbackList(days = 14) {
+  const since = new Date(Date.now() - Math.min(90, Math.max(1, days)) * 86400e3).toISOString();
+  return await db("otto_feedback?select=id,created_at,kind,note,author,screen,build,errors&created_at=gte." + since + "&order=created_at.desc&limit=100");
+}
+async function feedbackDigest() {
+  const items = await feedbackList(2);
+  const errs = await db("otto_desk?select=created_at,author,content&created_at=gte." + new Date(Date.now() - 26 * 3600e3).toISOString() +
+    "&content=like.*%E2%9A%A0*&order=id.desc&limit=30").catch(() => []);
+  return { feedback: items, desk_warnings: (errs || []).map((r: any) => ({ at: r.created_at, author: r.author, text: String(r.content).slice(0, 300) })) };
+}
+
+/* ---- the 5:15 PM daily recap ---- */
+const RECAP_SYS = `You are Jarvis on the Otto trading desk, writing the end-of-day recap for Ifoma and Josh. Plain words, numbers first, no hype, no lecturing, phone-sized. Use ONLY the data given; if something isn't in it, leave it out. Times are New York time.
+
+FORMAT — markdown, exactly these headings, skip a heading only if it would be empty (except the first):
+### Today in one line
+### Trades and cards
+(each trade: ticker/contract, entry → exit, result in $ and R if known, whether the plan was followed; then how many cards were made / approved / expired and why)
+### What was discussed
+(the 2–5 things that mattered in the Desk conversation — decisions, questions, rules saved)
+### Worth fixing
+(moments Otto or Jarvis got something wrong, was slow, repeated itself, or someone had to ask twice; plus the feedback notes left today)
+### For tomorrow
+(scheduled events from the calendar given, open positions, anything they said they'd do tomorrow)`;
+
+async function claudeText(body: any, budgetMs = 90_000): Promise<string> {
+  const r = await claudeFetch({ ...body, stream: true }, Date.now() + budgetMs);
+  const reader = r.body!.getReader(), dec = new TextDecoder();
+  let buf = "", out = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+      const line = chunk.split("\n").find((l) => l.startsWith("data: "));
+      if (!line) continue;
+      try { const ev = JSON.parse(line.slice(6)); if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") out += ev.delta.text; } catch { /* */ }
+    }
+  }
+  return out.trim();
+}
+const etHM = (iso: string) => { try { return new Date(iso).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
+
+export async function dailyRecap(force = false) {
+  const c = marketClock();
+  if (!force && !isTradingDay(c.date)) return { skipped: "not a trading day" };
+  const done = await setting("daily_recap_day");
+  if (!force && done?.day === c.date) return { skipped: "already done" };
+  await putSetting("daily_recap_day", { day: c.date, at: new Date().toISOString() });
+  const since = new Date(Date.now() - 14 * 3600e3).toISOString();
+  const AL = "(" + ["TradingView", "Jarvis · alert read", "Jarvis · daily recap"].map((x) => '"' + x + '"').join(",") + ")";
+  const rows = await db("otto_desk?select=created_at,role,author,content&created_at=gte." + since + "&author=not.in." + encodeURIComponent(AL) + "&order=id.asc&limit=300").catch(() => []);
+  const acts = await db("otto_actions?select=title,status,created_by,created_at,plan,outcome,exit&created_at=gte." + since + "&order=created_at.asc&limit=60").catch(() => []);
+  const trades = await db("otto_trades?select=*&order=closed_at.desc&limit=20").catch(() => []);
+  const fb = await feedbackList(1).catch(() => []);
+  let cal: any[] = [];
+  try { const nx = nextTradingDay(c.date); cal = (await econEvents(nx, nx, 2)).slice(0, 8); } catch { /* optional */ }
+  const convo = (rows || []).map((r: any) => `[${etHM(r.created_at)}] ${r.author}: ${String(r.content || "").replace(/\s+/g, " ").slice(0, 500)}`).join("\n").slice(-30000);
+  if (!convo && !(acts || []).length) {
+    await logDesk("assistant", "Jarvis · daily recap", `### Today in one line\nQuiet day: no Desk conversation and no cards.`);
+    return { ok: true, quiet: true };
+  }
+  const data = [
+    `DATE ${c.date} (${c.line || ""})`,
+    `DESK CONVERSATION (today):\n${convo || "(none)"}`,
+    `CARDS (today):\n${(acts || []).map((a: any) => `- ${etHM(a.created_at)} "${a.title}" status=${a.status} by=${a.created_by} setup=${a.plan?.setup || "-"} source=${a.plan?.source || "-"} rules=${(a.plan?.rules || []).join(",") || "-"} outcome=${a.outcome?.state || "-"}${a.outcome?.r != null ? " " + a.outcome.r + "R" : ""} exit=${a.exit?.state || "-"}`).join("\n") || "(none)"}`,
+    `CLOSED TRADES (recent, from the journal):\n${(trades || []).filter((t: any) => t.closed_at && etParts(new Date(t.closed_at)).date === c.date).map((t: any) => JSON.stringify(t).slice(0, 300)).join("\n") || "(none today)"}`,
+    `FEEDBACK NOTES (today):\n${(fb || []).map((f: any) => `- [${f.kind}] ${f.author}: ${f.note} (screen ${f.screen || "?"})`).join("\n") || "(none)"}`,
+    `CALENDAR next trading day:\n${cal.map((e: any) => `- ${e.date} ${e.title} (importance ${e.importance})`).join("\n") || "(not available)"}`,
+  ].join("\n\n");
+  const text = await claudeText({ model: MODEL, max_tokens: 1200, system: RECAP_SYS + NAME_RULE, messages: [{ role: "user", content: data }] });
+  if (!text) throw new Error("empty recap");
+  await logDesk("assistant", "Jarvis · daily recap", text);
+  const first = text.split("\n").find((l) => l.trim() && !l.startsWith("#")) || "Tap to read it on the Desk.";
+  await notify("daily", "🗒 Daily recap is ready", first.slice(0, 200));
+  return { ok: true };
+}
+
 async function helpAnswer(body: any, apiKey: string) {
   const hist = (Array.isArray(body.messages) ? body.messages : []).slice(-12)
     .map((m: any) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content || "").slice(0, 2000) }))
@@ -4568,6 +4788,21 @@ Deno.serve(async (req) => {
     })());
     return json({ ok: true, started: "alerts" }, 202);
   }
+  // v3.15: the 5:15 PM daily recap (pg_cron otto-daily-edt/est, 015).
+  if (fn0 === "cron_daily") {
+    if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
+    const et = etParts();
+    const force = new URL(req.url).searchParams.get("force") === "1";
+    if (!force && (et.min < 1020 || et.min > 1080)) return json({ ok: true, skipped: et });
+    background(dailyRecap(force));
+    return json({ ok: true, started: "daily" }, 202);
+  }
+  // v3.15: read-only feedback digest for the nightly bug check. Off unless the OTTO_DIGEST_KEY secret is set.
+  if (fn0 === "feedback_digest") {
+    const k = Deno.env.get("OTTO_DIGEST_KEY") || "";
+    if (k.length < 16 || req.headers.get("x-otto-digest") !== k) return json({ ok: false, error: "not found" }, 404);
+    return json({ ok: true, ...(await feedbackDigest()) });
+  }
   if (fn0 === "cron_morning" || fn0 === "cron_weekly") {
     if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
     const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
@@ -4580,7 +4815,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, started: "morning" }, 202);
     }
     if (!force && (et.wd !== "Fri" || Math.abs(et.min - 990) > 20)) return json({ ok: true, skipped: et });
-    background(weeklyReview(apiKey, "Jarvis (Friday auto)"));
+    background((async () => { await weeklyReview(apiKey, "Jarvis (Friday auto)"); await playbookRefresh("Friday review").catch((e) => console.error("playbook", e)); })());
     return json({ ok: true, started: "weekly" }, 202);
   }
 
@@ -4599,7 +4834,8 @@ Deno.serve(async (req) => {
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
          "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "watch_get", "watch_set", "watch_scan", "performance", "help", "jason_today", "jason_sweep", "jason_score",
          "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set",
-         "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear"].includes(fn)) {
+         "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear",
+         "playbook_get", "feedback_add", "feedback_list", "daily_now"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -4655,6 +4891,10 @@ Deno.serve(async (req) => {
         await logDesk("system", "Otto", `📌 House Rules updated by ${String(body?.author || who.split("@")[0]).slice(0, 40)} (${list.length} rule${list.length === 1 ? "" : "s"}). Jarvis follows them from the next message on.`);
         return json({ ok: true, rules: list });
       }
+      if (fn === "playbook_get") return json({ ok: true, ...(await playbookGet()) });
+      if (fn === "feedback_add") return json({ ok: true, ...(await feedbackAdd(body, who)) });
+      if (fn === "feedback_list") return json({ ok: true, items: await feedbackList(Number(new URL(req.url).searchParams.get("days")) || 14) });
+      if (fn === "daily_now") { background(dailyRecap(true)); return json({ ok: true, started: true }); }
       if (fn === "push_key") return json({ ok: true, key: (await vapid()).pub });
       if (fn === "push_sub") return json({ ok: true, ...(await pushSubscribe(body, who)) });
       if (fn === "push_list") return json({ ok: true, ...(await pushList(String(body?.endpoint || ""))) });
