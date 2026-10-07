@@ -1,5 +1,7 @@
 // Otto Trader — server side. One Edge Function.
 //
+//   v3.17 (7 Oct 2026): extension 1.3 support — edited posts / late charts (edited:true) update the message and are read
+//   again (card only if fresh and not already carded); heartbeat carries unknown_authors / auto_scrolls; "scrolled_up" reason.
 //   v3.16 (7 Oct 2026): Signals always end in a card or a reason (server pre-fetches the contracts, a call's last step is
 //   forced to the card, no-card pings say why, the feed never shows working notes, result posts kept as 'result'); Jarvis's
 //   promises are checked after every Desk reply (schedule_check makes "I'll check back at 1:30" real; unbacked promises get
@@ -3363,6 +3365,7 @@ async function signalIn(req: Request) {
     const beat = { at: now, state, detail: String(body.detail || "").slice(0, 200), ver: String(body.ver || "").slice(0, 20),
       seen: Number(body.seen) || 0, bad_since: state === "ok" ? null : (prev.bad_since || now),
       queue: Number(body.queue) || 0, queue_age: Number(body.queue_age) || 0, send_error: String(body.send_error || "").slice(0, 160),
+      unknown_authors: Number(body.unknown_authors) || 0, auto_scrolls: Number(body.auto_scrolls) || 0,   // v3.17 / extension 1.3
       offline_sent: !!prev.offline_sent, last_msg_at: prev.last_msg_at || null };
     if (prev.offline_sent && state === "ok" && !(Number(body.queue_age) > SIG_OFFLINE_MS / 1000)) {
       beat.offline_sent = false;
@@ -3383,9 +3386,29 @@ async function signalIn(req: Request) {
     return { msg_id: String(m.id), day: etParts(new Date(at)).date, posted_at: at, author: String(m.author || cfg.author_name).slice(0, 40),
       text: String(m.text || "").slice(0, 4000), imgs: imgs.length, channel: String(m.channel || cfg.channel).slice(0, 24), _imgs: imgs };
   });
-  const ins = await db("otto_signal_msgs?on_conflict=msg_id&select=msg_id,posted_at,text,imgs", { method: "POST",
+  // v3.17 (extension 1.3): an edited post, or one whose chart loaded late, comes back with edited:true.
+  // If we have it and something changed, update it and read the new version; if we never got it, it's new.
+  const editIds = new Set(list.filter((m: any) => m.edited).map((m: any) => String(m.id)));
+  let edited: any[] = [];
+  if (editIds.size) {
+    const have = await db("otto_signal_msgs?select=msg_id,text,imgs&msg_id=in.(" + [...editIds].join(",") + ")").catch(() => []);
+    for (const h of have || []) {
+      const r = rows.find((x: any) => x.msg_id === h.msg_id);
+      const newText = r.text !== String(h.text || ""), newImgs = r._imgs.length > Number(h.imgs || 0);
+      if (newText || newImgs) {
+        await db("otto_signal_msgs?msg_id=eq." + h.msg_id, { method: "PATCH", headers: { prefer: "return=minimal" },
+          body: JSON.stringify({ text: r.text, imgs: Math.max(r._imgs.length, Number(h.imgs || 0)) }) }).catch(() => {});
+        edited.push({ msg_id: r.msg_id, posted_at: r.posted_at, text: (newText ? "[edited] " : "[chart added] ") + r.text, imgs: r._imgs.length, _imgs: newImgs ? r._imgs : [] });
+      }
+    }
+    const haveIds = new Set((have || []).map((h: any) => h.msg_id));
+    for (let i = rows.length - 1; i >= 0; i--) if (haveIds.has(rows[i].msg_id)) rows.splice(i, 1);   // the rest are new to us
+  }
+  const insNew = rows.length ? await db("otto_signal_msgs?on_conflict=msg_id&select=msg_id,posted_at,text,imgs", { method: "POST",
     headers: { prefer: "resolution=ignore-duplicates,return=representation" },
-    body: JSON.stringify(rows.map(({ _imgs, ...r }: any) => r)) });
+    body: JSON.stringify(rows.map(({ _imgs, ...r }: any) => r)) }) : [];
+  const ins = [...(insNew || []), ...edited.map(({ _imgs, ...r }: any) => r)];
+  if (edited.length) rows.push(...edited);
   if (!ins?.length) return { ok: true, new: 0, accepted, cfg: pub };
   const fresh = new Set(ins.map((r: any) => r.msg_id));
   const imgRows = rows.filter((r: any) => fresh.has(r.msg_id)).flatMap((r: any) => r._imgs.map((i: any) => ({ msg_id: r.msg_id, mime: String(i.mime || "image/jpeg").slice(0, 30), data: i.data })));
@@ -3676,7 +3699,8 @@ async function watcherCheck() {
   if (b.queue_age > SIG_OFFLINE_MS / 1000) why = `${b.queue} signal post(s) are stuck in the watcher (can't send to Otto${b.send_error ? ": " + b.send_error : ""}).`;
   else if (age > SIG_OFFLINE_MS) why = `No check-in for ${Math.round(age / 60e3)} minutes — the PC may be asleep, Chrome closed, or the internet down.`;
   else if (badFor > SIG_OFFLINE_MS) why = ({ logged_out: "Discord is signed out in the watcher window.", wrong_channel: `The watcher window isn't on ${cfg.channel_name}.`,
-    no_tab: "The Discord watcher window is closed.", paused: "The watcher is paused in the extension." } as any)[b.state] || `The watcher reports "${b.state}".`;
+    no_tab: "The Discord watcher window is closed.", paused: "The watcher is paused in the extension.",
+    scrolled_up: "The Discord window is scrolled up, so new posts don't load (the extension keeps scrolling it down — check the window)." } as any)[b.state] || `The watcher reports "${b.state}".`;
   if (!why) return;
   await putSetting("signal_beat", { ...b, offline_sent: true }, "cron");
   await notify("watcher", "⚠️ Otto Signals watcher is OFFLINE", `${why} Signals are NOT being caught. Check Ifoma's PC.`, "./#signals");
@@ -5185,6 +5209,7 @@ export async function recapExtras(day: string) {
 }
 
 export const unnameForTest = (t: string) => unname(t);
+export const signalInForTest = (req: Request) => signalIn(req);
 
 /* --------------------------------------------------------------- transport */
 

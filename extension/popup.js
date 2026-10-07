@@ -1,7 +1,7 @@
 const $ = (s) => document.querySelector(s);
 const ask = (m) => new Promise((r) => chrome.runtime.sendMessage(m, r));
 const ago = (t) => { if (!t) return "never"; const s = (Date.now() - t) / 1000; return s < 90 ? Math.round(s) + "s ago" : Math.round(s / 60) + " min ago"; };
-const WHY = { ok: "Watching", paused: "Paused", no_tab: "No Discord window open", logged_out: "Discord is signed out", wrong_channel: "Discord is on a different channel", unpaired: "Not paired", stale: "Discord tab not reporting" };
+const WHY = { ok: "Watching", paused: "Paused", no_tab: "No Discord window open", logged_out: "Discord is signed out", wrong_channel: "Discord is on a different channel", unpaired: "Not paired", stale: "Discord tab not reporting", scrolled_up: "Discord scrolled up (fixing it)" };
 async function draw() {
   const s = await ask({ type: "state" });
   $("#pairBox").style.display = s.pair ? "none" : "block";

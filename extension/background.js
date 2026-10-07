@@ -2,8 +2,11 @@
    Collects the mentor's new messages from the Discord tab, waits for his burst
    to finish (he posts a call over several quick lines), shrinks any chart
    images, and sends the burst to Otto. Every minute it tells Otto it's alive,
-   so Otto can ping both phones if the watcher goes quiet. */
-const VER = "1.2.0";
+   so Otto can ping both phones if the watcher goes quiet.
+   v1.3: edits / late charts arrive as {edited:true} with a new key (id#e<hash>); the Discord tab also nudges the
+   check-in every minute (Chrome can hold back the alarm on an idle PC); scrolled-up and unknown-author counts
+   travel in the heartbeat. */
+const VER = "1.3.0";
 const QUIET_MS = 12000;     // send once he's been quiet this long…
 const MAX_WAIT_MS = 30000;  // …or this long after the first new line, whichever comes first
 
@@ -48,11 +51,15 @@ async function shrink(url) {
 }
 
 let flushTimer = null;
+// v1.3: an edit is its own item, keyed by the id plus a hash of what changed.
+function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+const keyOf = (m) => m.edited ? `${m.id}#e${hash(String(m.text || "") + "|" + (m.imageUrls || []).map((u) => String(u).split("?")[0]).join(","))}` : m.id;
 async function queueMsgs(msgs) {
   const sent = new Set((await store.get("sent")) || []);
-  const q = (await store.get("queue")) || [];
-  const have = new Set(q.map((m) => m.id));
-  const fresh = msgs.filter((m) => !sent.has(m.id) && !have.has(m.id)).map((m) => ({ ...m, queuedAt: Date.now() }));
+  let q = (await store.get("queue")) || [];
+  const fresh = msgs.map((m) => ({ ...m, key: keyOf(m) })).filter((m) => !sent.has(m.key)).map((m) => ({ ...m, queuedAt: Date.now() }));
+  // A newer version of a message still waiting to go replaces the older one.
+  q = q.filter((x) => !fresh.some((m) => m.id === x.id));
   if (!fresh.length) return;
   const now = Date.now();
   await store.set({ queue: q.concat(fresh), lastAdd: now, firstAdd: q.length ? (await store.get("firstAdd")) || now : now });
@@ -82,14 +89,14 @@ async function flush() {
     for (const m of q) {
       const images = [];
       for (const u of (m.imageUrls || []).slice(0, 3)) { try { images.push(await shrink(u)); } catch (e) { /* send the words anyway */ } }
-      msgs.push({ id: m.id, at: m.at, author: m.author, author_id: m.author_id, channel: m.channel, text: m.text, images });
+      msgs.push({ id: m.id, at: m.at, author: m.author, author_id: m.author_id, channel: m.channel, text: m.text, images, ...(m.edited ? { edited: true } : {}) });
     }
     const j = await otto({ kind: "msgs", msgs });
     // Only what Otto confirms it received is marked sent; anything else stays queued and is retried.
     const ok = new Set(Array.isArray(j.accepted) ? j.accepted.map(String) : q.map((m) => m.id));
-    const done = q.filter((m) => ok.has(m.id)).map((m) => m.id);
+    const done = q.filter((m) => ok.has(m.id)).map((m) => m.key || m.id);
     const sent = ((await store.get("sent")) || []).concat(done).slice(-3000);
-    const left = ((await store.get("queue")) || []).filter((m) => !done.includes(m.id));
+    const left = ((await store.get("queue")) || []).filter((m) => !done.includes(m.key || m.id));
     await store.set({ sent, queue: left, fails: 0, retryAt: 0, firstAdd: left.length ? Date.now() : 0, lastAdd: 0, lastSend: { at: Date.now(), n: done.length, ok: true } });
   } catch (e) {
     const fails = ((await store.get("fails")) || 0) + 1;     // back off: 5s, 10s, 20s … max 2 min
@@ -105,7 +112,7 @@ async function onStatus(tabId, s) {
   const st = (await store.get("tabs")) || {};
   st[tabId] = { ...s, at: Date.now() };
   await store.set({ tabs: st });
-  if (s.state === "ok") chrome.tabs.update(tabId, { autoDiscardable: false }).catch(() => {});  // Chrome must never put the watcher tab to sleep
+  if (s.state === "ok" || s.state === "scrolled_up") chrome.tabs.update(tabId, { autoDiscardable: false }).catch(() => {});  // Chrome must never put the watcher tab to sleep
 }
 async function overall() {
   if (await store.get("paused")) return { state: "paused", detail: "paused in the extension" };
@@ -117,6 +124,7 @@ async function overall() {
   if (!tabs.length) return { state: "no_tab", detail: "no Discord tab open" };
   const other = live.map(([, s]) => s.state);
   if (other.includes("logged_out")) return { state: "logged_out", detail: "Discord is signed out" };
+  if (other.includes("scrolled_up")) return { state: "scrolled_up", detail: "the Discord window is scrolled up (scrolling it back down)" };
   if (other.includes("wrong_channel")) return { state: "wrong_channel", detail: "Discord is open on a different channel" };
   if (other.includes("unpaired")) return { state: "unpaired", detail: "paste the pairing code" };
   return { state: "stale", detail: "the Discord tab isn't reporting (asleep or still loading)" };
@@ -136,7 +144,10 @@ async function openWatcher(minimized) {
   if (w && w.tabs && w.tabs[0]) chrome.tabs.update(w.tabs[0].id, { autoDiscardable: false }).catch(() => {});
   return !!w;
 }
-async function beat() {
+let beatAt = 0;
+async function beat(nudge = false) {
+  if (nudge && Date.now() - beatAt < 45000) return;      // v1.3: the tab's nudge only fills a gap the alarm left
+  beatAt = Date.now();
   let o = await overall();
   // v1.2 (Ifoma OK'd 6 Oct): the watcher window was closed during market hours → reopen it, minimized.
   if (o.state === "no_tab" && marketHours() && (await store.get("pair")) && !(await store.get("paused"))) {
@@ -146,7 +157,10 @@ async function beat() {
   const q = (await store.get("queue")) || [];
   const ls = (await store.get("lastSend")) || {};
   const oldestQ = q.length ? Math.min(...q.map((m) => (m.queuedAt || Date.now()))) : Date.now();
-  const extra = { queue: q.length, queue_age: Math.round((Date.now() - oldestQ) / 1000), send_error: ls.ok === false ? ls.error : "" };
+  const st = (await store.get("tabs")) || {};
+  const tabs = Object.values(st).filter((s) => Date.now() - s.at < 180e3);
+  const extra = { queue: q.length, queue_age: Math.round((Date.now() - oldestQ) / 1000), send_error: ls.ok === false ? ls.error : "",
+    unknown_authors: tabs.reduce((n, s) => n + (Number(s.unknown_authors) || 0), 0), auto_scrolls: tabs.reduce((n, s) => n + (Number(s.auto_scrolls) || 0), 0) };
   try { await otto({ kind: "beat", ver: VER, ...o, ...extra }); await store.set({ lastBeat: { at: Date.now(), ok: true, ...o } }); }
   catch (e) { await store.set({ lastBeat: { at: Date.now(), ok: false, error: String(e.message || e), ...o } }); }
   schedule();
@@ -164,6 +178,7 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
     }
     if (m.type === "pause") { await store.set({ paused: !!m.on }); await pushCfg(); await beat(); return reply({ ok: true }); }
     if (m.type === "beat") { await beat(); return reply({ ok: true }); }
+    if (m.type === "beat_nudge") { await beat(true); flush(); return reply({ ok: true }); }
     if (m.type === "open") {
       if (!(await store.get("cfg"))) return reply({ ok: false, error: "Pair with Otto first." });
       await openWatcher(false);

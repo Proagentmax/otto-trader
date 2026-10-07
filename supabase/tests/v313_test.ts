@@ -663,3 +663,32 @@ Deno.test("names: curly apostrophes don't leak the coach's name; streamed text i
   const out = M.unnameForTest("held Jason’s 778.60 trigger level");
   assert(!/Jason/.test(out), out);
 });
+
+/* =============================== v3.17: extension 1.3 edits =============================== */
+Deno.test("edits (ext 1.3): an edited post updates the message and is read again; an unchanged re-send is ignored", async () => {
+  reset(); setNow("2026-10-06T19:12:50Z"); callHook = muHook();
+  T.otto_settings.push({ key: "signals", value: { key: "k".repeat(20) } });
+  const seenTexts: string[] = [];
+  extractHook = (text: string) => { seenTexts.push(text); return /1020P/.test(text) ? [{ kind: "call", ticker: "MU", direction: "short", words: "MU SHORT 1020P", time: "3:12 PM" }] : [{ kind: "note", ticker: "MU", words: "MU", time: "3:12 PM" }]; };
+  claudeScript = () => textReply("READ: MU short, see the card chat.");
+  const post = (msgs: any[]) => M.signalInForTest(new Request("https://x/?fn=signal_in", { method: "POST", headers: { "x-otto-signal": "k".repeat(20) },
+    body: JSON.stringify({ kind: "msgs", msgs }) }));
+  const id = "1424790000000000001", base = { id, at: "2026-10-06T19:12:40.000Z", author: "Jason", author_id: "474721184903200819", channel: "1139244584757637192" };
+  const a: any = await post([{ ...base, text: "MU" }]);
+  await sleep(120);
+  const b: any = await post([{ ...base, text: "MU SHORT 1020P", edited: true }]);
+  await sleep(200);
+  const c: any = await post([{ ...base, text: "MU SHORT 1020P", edited: true }]);
+  assert(a.new === 1 && b.new === 1 && c.new === 0, JSON.stringify([a, b, c]));
+  assert(T.otto_signal_msgs.find((m) => m.msg_id === id).text === "MU SHORT 1020P", JSON.stringify(T.otto_signal_msgs));
+  assert(seenTexts.some((t) => /\[edited\] MU SHORT 1020P/.test(t)), seenTexts.join(" || "));
+  assert(T.otto_jason.some((r) => r.kind === "call" && r.words === "MU SHORT 1020P"), JSON.stringify(T.otto_jason));
+});
+Deno.test("edits (ext 1.3): an 'edit' for a post we never got is treated as new", async () => {
+  reset(); setNow("2026-10-06T19:12:50Z");
+  T.otto_settings.push({ key: "signals", value: { key: "k".repeat(20) } });
+  extractHook = () => [];
+  const r: any = await M.signalInForTest(new Request("https://x/?fn=signal_in", { method: "POST", headers: { "x-otto-signal": "k".repeat(20) },
+    body: JSON.stringify({ kind: "msgs", msgs: [{ id: "1424790000000000002", at: "2026-10-06T19:12:40.000Z", author: "Jason", author_id: "474721184903200819", text: "NVDA", edited: true }] }) }));
+  assert(r.new === 1 && T.otto_signal_msgs.length === 1, JSON.stringify(r));
+});
