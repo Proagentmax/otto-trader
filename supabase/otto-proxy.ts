@@ -1,5 +1,8 @@
 // Otto Trader — server side. One Edge Function.
 //
+//   v3.19 (7 Oct 2026): Lock today's plan — prep_lock (one ticker+side, entry level/how/timeframe, wrong-if, target; Jarvis
+//   pass/fix check; entry level → Watcher; pinned on the Desk via watch_get.plans; every Jarvis run sees it); 4:05 PM plan vs
+//   tape (trigger, target or wrong-if first) and vs today's Agentic opening trades (on / off plan). 018_v319.sql.
 //   v3.18 (7 Oct 2026): 🌅 Morning Prep — otto_prep / otto_prep_imgs (017); prep_get/submit/reply/watch/img; Jarvis asks 2–3
 //   questions first (prep_questions tool), then grades (prep_grade); levels → Watcher; 4:05 PM grade vs the tape (prepGradeTick).
 //   score_extra: Signal speed, the coach's calls, self-test, morning-read stats.
@@ -1703,7 +1706,9 @@ async function deskSetup() {
 
   // v3.16: the exact list of what runs on its own, so Jarvis can only point at real things.
   const running = await runningNow().catch(() => "");
-  return { cs, sys, tools, ctxLine: running ? ctxLine + "\n" + running : ctxLine, autoClose: !!LIMa.auto_close };
+  const pl = await plansToday().catch(() => []);   // v3.19: today's locked plans — hold them to it
+  const planLineCtx = pl.length ? "\nTODAY'S LOCKED PLANS (the trader's own; flag any card or trade that isn't this plan): " + pl.map((p: any) => `${p.author}: ${p.line}`).join(" | ") : "";
+  return { cs, sys, tools, ctxLine: (running ? ctxLine + "\n" + running : ctxLine) + planLineCtx, autoClose: !!LIMa.auto_close };
 }
 
 export async function desk(req: Request, who: string, _apiKey: string) {
@@ -4520,12 +4525,13 @@ export async function watchScan(by = "scanner 9:20") {
 }
 
 /* ------------------------------------------------------------ panel + edits */
-async function watchGet() {
+export async function watchGet() {
   const day = watchDay();
   const rows = await db(`otto_watch?select=*&day=eq.${day}&status=neq.removed&order=created_at.asc&limit=200`).catch(() => []);
   // v3.18: pending ⏰ check-ins show as chips under the levels
   const checks = await db(`otto_checks?select=id,due_at,what,by&status=eq.pending&day=eq.${etParts().date}&order=due_at.asc&limit=10`).catch(() => []);
-  return { ok: true, day, clock: marketClock().status, rows, checks: (checks || []).map((c: any) => ({ ...c, label: fmtMin(etParts(new Date(c.due_at)).min) })) };
+  const plans = await plansToday().catch(() => []);   // v3.19: pinned on the Desk
+  return { ok: true, day, clock: marketClock().status, rows, plans, checks: (checks || []).map((c: any) => ({ ...c, label: fmtMin(etParts(new Date(c.due_at)).min) })) };
 }
 async function watchSet(b: any, who: string) {
   const by = String(b?.author || who.split("@")[0]).slice(0, 40);
@@ -5397,16 +5403,18 @@ export function gradeRead(bias: string, main: Bar[], levels: any[], barsBy: Reco
 export async function prepGradeTick(force = false) {
   const c = marketClock();
   if (!force && (!isTradingDay(c.date) || c.min < 965)) return { ok: true, skipped: "after 4:05 PM on trading days" };
-  const rows = await db(`otto_prep?select=id,author,bias,main,levels,result&day=eq.${c.date}&result=is.null`).catch(() => []);
+  const rows = await db(`otto_prep?select=id,author,bias,main,levels,result,plan&day=eq.${c.date}&result=is.null`).catch(() => []);
   if (!rows?.length) return { ok: true, graded: 0 };
   const start = nyIso(c.date, "9:30 AM")!, end = nyIso(c.date, "4:00 PM")!;
-  const tickers = [...new Set(rows.flatMap((r: any) => [r.main || "SPY", ...(r.levels || []).map((x: any) => x.ticker)]))] as string[];
+  const tickers = [...new Set(rows.flatMap((r: any) => [r.main || "SPY", ...(r.levels || []).map((x: any) => x.ticker), ...(r.plan ? [r.plan.ticker] : [])]))] as string[];
+  const trades = rows.some((r: any) => r.plan) ? await openingTradesToday().catch(() => null) : null;   // v3.19
   const bars = await rhBars(tickers, "5minute", start, end);
   for (const t of Object.keys(bars)) bars[t] = bars[t].filter((b) => b.t >= Date.parse(start) && b.t < Date.parse(end));
   let n = 0;
   for (const r of rows) {
-    const res = gradeRead(r.bias || "neutral", bars[(r.main || "SPY").toUpperCase()] || [], r.levels || [], bars);
+    const res: any = gradeRead(r.bias || "neutral", bars[(r.main || "SPY").toUpperCase()] || [], r.levels || [], bars);
     if (!res) continue;
+    if (r.plan) res.plan = { ...planVsTape(r.plan, bars[r.plan.ticker] || []), ...(trades ? planAdherence(r.plan, trades) : { adherence: "unknown", traded: [] }) };   // v3.19
     await db(`otto_prep?id=eq.${r.id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ result: res }) }).catch(() => {});
     n++;
   }
@@ -5416,8 +5424,8 @@ export async function prepGradeTick(force = false) {
 export async function prepGet(author: string) {
   const day = etParts().date;
   const a = prepAuthor(author);
-  const today = (await db(`otto_prep?select=id,day,author,created_at,notes,imgs,status,thread,bias,main,levels,grade,result&day=eq.${day}&author=eq.${a}`).catch(() => []))?.[0] || null;
-  const hist = await db(`otto_prep?select=id,day,author,bias,main,levels,grade,result,notes&order=day.desc&limit=60`).catch(() => []);
+  const today = (await db(`otto_prep?select=id,day,author,created_at,notes,imgs,status,thread,bias,main,levels,grade,result,plan&day=eq.${day}&author=eq.${a}`).catch(() => []))?.[0] || null;
+  const hist = await db(`otto_prep?select=id,day,author,bias,main,levels,grade,result,notes,plan&order=day.desc&limit=60`).catch(() => []);
   const stats: Record<string, any> = {};
   for (const who of PREP_AUTHORS) {
     const mine = (hist || []).filter((r: any) => r.author === who && r.result).slice(0, 20);
@@ -5471,6 +5479,106 @@ export async function scoreExtra() {
   const prep = (await prepGet("Ifoma").catch(() => null))?.stats || null;
   return { ok: true, speed, median_card_s: cardTimes.length ? cardTimes[Math.floor(cardTimes.length / 2)] : null,
     timed_calls: timed.length, silent: timed.filter((s: any) => !s.cards && !s.why).length, coach, selftest: st, prep };
+}
+
+/* ============================================================ v3.19 (7 Oct 2026)
+   Ifoma, after Josh's first read (B-: "pick ONE ticker, name the timeframe, no wrong-if"): "build" Lock today's plan.
+   After the grade the trader locks four things — the one ticker + side, the entry trigger (level, how, timeframe),
+   the wrong-if and the target. Jarvis checks just those (pass / fix, not a re-grade); locking pins the plan on the
+   Desk all day and puts the entry level on the Watcher. At 4:05 PM the plan is checked against the tape (trigger hit?
+   target or wrong-if first?) and against the Agentic account's opening trades today (on plan / off plan / none). */
+const PLAN_CHECK_TOOL = { name: "plan_check", description: "Check a locked trading plan.",
+  input_schema: { type: "object", properties: {
+    ok: { type: "boolean", description: "true when the plan is complete and consistent: the wrong-if is on the losing side of the entry, the target on the winning side, the timeframe named, and it fits the Otto Rules." },
+    fixes: { type: "array", maxItems: 3, items: { type: "string" }, description: "Only what must change, one short line each. Empty when ok." },
+    note: { type: "string", description: "One short line for the pinned plan (e.g. risk:reward, or the Otto Rule it follows)." } }, required: ["ok", "fixes", "note"] } };
+
+export function planValidate(p: any) {
+  const ticker = String(p?.ticker || "").toUpperCase().replace(/[^A-Z.]/g, "").slice(0, 8);
+  const side = p?.side === "puts" ? "puts" : p?.side === "calls" ? "calls" : "";
+  const how = ["break", "hold", "reject"].includes(p?.how) ? p.how : "";
+  const tf = ["5m", "10m", "15m"].includes(p?.tf) ? p.tf : "";
+  const entry = Number(p?.entry), wrong = Number(p?.wrong_if), target = Number(p?.target);
+  const miss: string[] = [];
+  if (!ticker) miss.push("the ticker");
+  if (!side) miss.push("calls or puts");
+  if (!(entry > 0)) miss.push("the entry level");
+  if (!how) miss.push("how it triggers (break / hold / reject)");
+  if (!tf) miss.push("the candle timeframe");
+  if (!(wrong > 0)) miss.push("the wrong-if price");
+  if (!(target > 0)) miss.push("the target price");
+  if (miss.length) return { ok: false, error: "Fill in " + miss.join(", ") + "." };
+  // Calls: target above the entry, wrong-if below it. Puts: the mirror.
+  const up = side === "calls";
+  if (up ? !(target > entry && wrong < entry) : !(target < entry && wrong > entry))
+    return { ok: false, error: up ? "For calls the target must be above the entry and the wrong-if below it." : "For puts the target must be below the entry and the wrong-if above it." };
+  const rr = Math.abs(target - entry) / Math.abs(entry - wrong);
+  return { ok: true, plan: { ticker, side, entry, how, tf, wrong_if: wrong, target, rr: +rr.toFixed(2), why: String(p?.why || "").slice(0, 300) } };
+}
+export const planLine = (p: any) => `${p.ticker} ${p.side} · entry ${p.how} ${p.entry} on a ${p.tf} close · wrong if ${p.wrong_if} · target ${p.target} · R:R ${p.rr}`;
+
+export async function prepLock(b: any, who: string) {
+  const id = Number(b.id);
+  const row = (await db(`otto_prep?select=*&id=eq.${id}`))?.[0];
+  if (!row) throw new Error("that read wasn't found");
+  if (row.day !== etParts().date) throw new Error("a plan can only be locked on the day of the read");
+  const v = planValidate(b);
+  if (!v.ok) throw new Error(v.error);
+  const plan: any = v.plan;
+  let check: any = { ok: true, fixes: [], note: "" };
+  try {
+    const { sys, live, hits } = await prepContext(`${plan.ticker} ${plan.side} ${plan.how} ${plan.why}`);
+    const g = row.grade ? `Jarvis's grade this morning: ${row.grade.letter}. Fix: ${(row.grade.fix || []).join(" | ")}` : "Not graded yet.";
+    check = await claudeTool({ model: MODEL, max_tokens: 700, system: [{ type: "text", text: sys + NAME_RULE }, { type: "text", text: PREP_SYS(row.author) + "\n\n" + live }],
+      tools: [PLAN_CHECK_TOOL], messages: [{ role: "user", content: `${row.author} is locking today's plan:\n${planLine(plan)}${plan.why ? "\nWhy: " + plan.why : ""}\n\n${g}\n\nOTTO RULES THAT MATCH:\n${hits || "(none)"}\n\nCheck ONLY this plan (not the whole read). Pass it unless something is missing, inconsistent or against the Otto Rules.` }] }, "plan_check", 45_000);
+  } catch (e) { check = { ok: true, fixes: [], note: "", skipped: String((e as Error).message).slice(0, 120) }; }
+  const fixes = (Array.isArray(check.fixes) ? check.fixes : []).map((x: any) => unname(String(x)).slice(0, 300)).filter(Boolean).slice(0, 3);
+  if (!check.ok && fixes.length && !b.force) return { ok: true, locked: false, fixes, plan };
+  const prev = row.plan || null;
+  // A changed entry: the old plan level comes off the Watcher so it can't fire a card for a plan that no longer exists.
+  const moved = !!prev && (Number(prev.entry) !== plan.entry || prev.ticker !== plan.ticker || prev.side !== plan.side);
+  if (moved && prev.watch_id)   // only the plan's own level (one the plan added), never someone else's
+    await db(`otto_watch?id=eq.${prev.watch_id}&added_by=eq.${encodeURIComponent(`${row.author} · plan`)}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ status: "removed" }) }).catch(() => {});
+  const w = await watchAdd({ ticker: plan.ticker, level: plan.entry, dir: plan.side === "calls" ? "up" : "down", source: "desk",
+    note: `${row.author}'s plan: ${plan.how} ${plan.entry} (${plan.tf}) · wrong if ${plan.wrong_if} · target ${plan.target}`, by: `${row.author} · plan` }).catch(() => null);
+  const locked = { ...plan, note: unname(String(check.note || "")).slice(0, 200), fixes_overridden: !check.ok ? fixes : [], locked_at: new Date().toISOString(),
+    by: String(b.author || row.author).slice(0, 30), watch_id: w?.id ?? (moved ? null : prev?.watch_id ?? null), changes: (prev?.changes || 0) + (prev ? 1 : 0) };
+  await db(`otto_prep?id=eq.${id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ plan: locked }) });
+  await logDesk("system", "Otto", `📌 ${row.author} ${prev ? "changed" : "locked"} today's plan: ${planLine(locked)}${!check.ok ? " (locked over Jarvis's fixes)" : ""}`);
+  void who;
+  return { ok: true, locked: true, plan: locked };
+}
+export async function plansToday() {
+  const rows = await db(`otto_prep?select=author,plan,result&day=eq.${etParts().date}&plan=not.is.null`).catch(() => []);
+  return (rows || []).filter((r: any) => r.plan).map((r: any) => ({ author: r.author, ...r.plan, line: planLine(r.plan), result: r.result?.plan || null }));
+}
+// 4:05 PM: the plan against the tape and against the Agentic account's opening trades today.
+export function planVsTape(plan: any, bars: Bar[]) {
+  const up = plan.side === "calls";
+  const hitEntry = (b: Bar) => plan.how === "break" ? (up ? b.c > plan.entry : b.c < plan.entry) : (b.l <= plan.entry && b.h >= plan.entry);
+  const i = bars.findIndex(hitEntry);
+  if (i < 0) return { trigger: false, outcome: "no trigger" };
+  for (const b of bars.slice(i + 1)) {
+    const tgt = up ? b.h >= plan.target : b.l <= plan.target, bad = up ? b.l <= plan.wrong_if : b.h >= plan.wrong_if;
+    if (tgt && bad) return { trigger: true, trigger_at: bars[i].t, outcome: "both in one bar" };
+    if (tgt) return { trigger: true, trigger_at: bars[i].t, outcome: "target" };
+    if (bad) return { trigger: true, trigger_at: bars[i].t, outcome: "wrong-if" };
+  }
+  return { trigger: true, trigger_at: bars[i].t, outcome: "neither by the close" };
+}
+async function openingTradesToday() {
+  const acct = await agenticAccount();
+  const since = new Date(Date.parse(nyIso(etParts().date, "9:00 AM") || new Date().toISOString())).toISOString();
+  const j = mcpJson(await call("rh", "get_option_orders", { account_number: acct, state: "filled", created_at_gte: since }));
+  const out: { sym: string; type: string }[] = [];
+  for (const o of j?.data?.orders || []) for (const l of o.legs || []) if (l.position_effect === "open") out.push({ sym: String(o.chain_symbol || "").toUpperCase(), type: l.option_type === "put" ? "puts" : "calls" });
+  return out;
+}
+export function planAdherence(plan: any, trades: { sym: string; type: string }[]) {
+  if (!trades.length) return { adherence: "no trade", traded: [] };
+  const on = trades.filter((t) => t.sym === plan.ticker && t.type === plan.side);
+  const traded = [...new Set(trades.map((t) => `${t.sym} ${t.type}`))];
+  return { adherence: on.length === trades.length ? "on plan" : on.length ? "partly off plan" : "off plan", traded };
 }
 
 export const unnameForTest = (t: string) => unname(t);
@@ -5602,7 +5710,7 @@ Deno.serve(async (req) => {
          "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set",
          "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear", "selftest_now",
          "playbook_get", "feedback_add", "feedback_list", "daily_now",
-         "prep_get", "prep_submit", "prep_reply", "prep_watch", "prep_img", "score_extra", "check_cancel"].includes(fn)) {
+         "prep_get", "prep_submit", "prep_reply", "prep_watch", "prep_img", "score_extra", "check_cancel", "prep_lock"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -5669,6 +5777,7 @@ Deno.serve(async (req) => {
       if (fn === "prep_submit") return json(await prepSubmit(body));
       if (fn === "prep_reply") return json(await prepReply(body));
       if (fn === "prep_watch") return json(await prepWatch(body, who));
+      if (fn === "prep_lock") return json(await prepLock(body, who));
       if (fn === "prep_img") return json(await prepImg(Number(new URL(req.url).searchParams.get("id") || 0)));
       if (fn === "score_extra") return json(await scoreExtra());
       if (fn === "feedback_add") return json({ ok: true, ...(await feedbackAdd(body, who)) });

@@ -690,6 +690,20 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .wt-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px}
 .wt-chip button{background:none;border:0;color:inherit;cursor:pointer;padding:0 0 0 2px}
 .pp-lvl .dk-btn,#ppSend,#ppCopy,#ppReplyGo{margin:0}
+/* v3.19 Lock today's plan */
+.pl-form{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-top:4px}
+.pl-form label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--ink-3)}
+.pl-form input,.pl-form select{background:var(--bg);border:1px solid var(--rule);color:var(--ink);border-radius:8px;padding:7px 9px;font:13px var(--mono);min-width:0}
+.pl-form .full{grid-column:1/-1}
+.pl-seg{display:flex;gap:4px}.pl-seg button{flex:1;background:var(--surface-3);border:1px solid var(--rule);color:var(--ink-2);border-radius:8px;padding:6px 0;font:600 12.5px var(--body);cursor:pointer}
+.pl-seg button.on{background:rgba(245,180,0,.16);border-color:var(--warn);color:var(--warn)}
+.pl-fix{border-left:3px solid var(--warn);background:rgba(245,180,0,.07);padding:8px 12px;border-radius:0 8px 8px 0;margin:10px 0;font-size:13.5px}
+.pl-fix ul{margin:4px 0 8px;padding-left:18px}
+.pl-locked{border:1px solid rgba(245,180,0,.45);background:rgba(245,180,0,.06);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.pl-locked .ln{font:600 14px var(--mono);margin:2px 0 6px}
+.pl-pin{border-color:rgba(245,180,0,.45)!important}
+.pl-pin .pl-row{padding:7px 0;border-top:1px solid var(--rule);font-size:12.5px}.pl-pin .pl-row:first-of-type{border-top:0}
+.pl-pin .pl-row b.t{font:600 13px var(--mono)}
 @media (max-width:900px){.pp-grid{grid-template-columns:1fr}.pp-drop{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -2085,7 +2099,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.18.0";
+const BUILD="3.19.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3647,6 +3661,93 @@ document.addEventListener("paste",e=>{
     try{await dkApi("check_cancel",{id:+b.dataset.ckx,author:dkWho()});toast("Check-in cancelled");dkWatchLoad()}catch(e){toast(String(e.message).slice(0,80))}}));
 }}
 
+
+/* ================================================================ v3.19
+   7 Oct 2026, Ifoma: "build" — 📌 Lock today's plan. After Jarvis's grade the trader locks ONE plan: ticker + calls/puts,
+   the entry (level, break/hold/reject, 5/10/15-min close), the wrong-if and the target. Jarvis checks just that (pass /
+   fix — "Lock anyway" is always there: flag, never block). Locked = pinned on the Desk all day + the entry on the
+   Watcher. At 4:05 PM: did it trigger, target or wrong-if first, and did the trades today follow it. */
+var PL={edit:false,draft:null,fixes:null,busy:false};
+const PL_OUT={"target":["✓ hit the target","ok"],"wrong-if":["✗ hit the wrong-if","bad"],"both in one bar":["both in one 5-min bar","near"],"neither by the close":["triggered · neither by the close",""],"no trigger":["never triggered",""]};
+const PL_ADH={"on plan":["on plan","ok"],"partly off plan":["partly off plan","near"],"off plan":["off plan","bad"],"no trade":["no trade",""],"unknown":["trades not checked",""]};
+function plLine(p){return `${esc(p.ticker)} ${esc(p.side)} · ${esc(p.how)} ${esc(+p.entry)} on a ${esc(p.tf)} close · wrong if ${esc(+p.wrong_if)} · target ${esc(+p.target)}`}
+function plResult(r){if(!r)return "";const o=PL_OUT[r.outcome]||[r.outcome,""],a=PL_ADH[r.adherence]||[r.adherence||"",""];
+  return `<span class="dk-tag ${o[1]}">${esc(o[0])}</span> <span class="dk-tag ${a[1]}">${esc(a[0])}</span>${r.traded&&r.traded.length&&r.adherence!=="on plan"?` <span class="mut">traded: ${esc(r.traded.join(", "))}</span>`:""}`}
+function plDraft(t){
+  if(PL.draft&&PL.draft.id===t.id)return PL.draft;
+  const p=t.plan||{},bias=t.bias==="short"?"puts":t.bias==="long"?"calls":"";
+  return PL.draft={id:t.id,ticker:p.ticker||t.main||"",side:p.side||bias,entry:p.entry??"",how:p.how||"",tf:p.tf||"",wrong_if:p.wrong_if??"",target:p.target??"",why:p.why||""};
+}
+function plCard(d){
+  const t=d.today;
+  let h=`<div class="dk-cardx" id="plCard" style="margin-top:12px"><div class="dk-h">5 · 📌 Lock today's plan</div>`;
+  if(!t||t.day!==d.day)return h+`<div class="mut" style="font-size:13px">Send today's read first.</div></div>`;
+  if(t.status!=="graded"&&!t.plan)return h+`<div class="mut" style="font-size:13px">Opens after Jarvis grades your read: one ticker, the entry, the wrong-if, the target.</div></div>`;
+  if(t.plan&&!PL.edit){const p=t.plan;
+    return h+`<div class="pl-locked"><div class="mut" style="font-size:11.5px">LOCKED ${esc(dkTime(p.locked_at))}${p.changes?` · changed ${p.changes}×`:""} · pinned on the Desk · entry on the Watcher</div>
+      <div class="ln">${plLine(p)}</div><div class="mut" style="font-size:12.5px">R:R ${esc(p.rr)}${p.note?" · "+esc(p.note):""}${p.why?"<br>Why: "+esc(p.why):""}</div>
+      ${(p.fixes_overridden||[]).length?`<div class="pl-fix" style="margin:8px 0 0">Locked over Jarvis's fixes:<ul>${p.fixes_overridden.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
+      ${t.result&&t.result.plan?`<div style="margin-top:8px">4:05 PM: ${plResult(t.result.plan)}</div>`:""}</div>
+      <div style="margin-top:8px"><button class="dk-btn sec" id="plEdit">Change plan</button> <span class="mut" style="font-size:12px">Changes are counted and shown at 4:05.</span></div></div>`}
+  const f=plDraft(t),seg=(k,opts)=>`<div class="pl-seg">${opts.map(([v,l])=>`<button type="button" data-plseg="${k}" data-v="${v}" class="${f[k]===v?"on":""}">${l}</button>`).join("")}</div>`;
+  const fx=PL.fixes&&PL.fixes.id===t.id?`<div class="pl-fix"><b>Jarvis: fix before you lock</b><ul>${PL.fixes.list.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>
+      <button class="dk-btn sec" id="plFixIt">Fix it</button> <button class="dk-btn j" id="plAnyway">Lock anyway</button></div>`:"";
+  return h+`<div class="mut" style="font-size:12.5px;margin-bottom:6px">One plan. Jarvis checks just these lines, then it's pinned on the Desk and the entry goes on the Watcher.</div>
+    <div class="pl-form">
+      <label>Ticker<input data-plk="ticker" value="${esc(f.ticker)}" placeholder="SPY" autocomplete="off"></label>
+      <label>Side${seg("side",[["calls","Calls ▲"],["puts","Puts ▼"]])}</label>
+      <label>Entry level<input data-plk="entry" inputmode="decimal" value="${esc(f.entry)}" placeholder="783.40"></label>
+      <label>How it triggers${seg("how",[["break","Break"],["hold","Hold"],["reject","Reject"]])}</label>
+      <label>On a candle close of${seg("tf",[["5m","5 min"],["10m","10 min"],["15m","15 min"]])}</label>
+      <label>Wrong if price reaches<input data-plk="wrong_if" inputmode="decimal" value="${esc(f.wrong_if)}" placeholder="784.50"></label>
+      <label>Target<input data-plk="target" inputmode="decimal" value="${esc(f.target)}" placeholder="778.60"></label>
+      <label class="full">Why (optional)<input data-plk="why" value="${esc(f.why)}" placeholder="Gap top rejection, dollar up" autocomplete="off"></label>
+    </div>${fx}
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="dk-btn go" id="plLock"${PL.busy?" disabled":""}>${PL.busy?"Jarvis is checking…":"📌 Lock plan"}</button>
+      ${t.plan?`<button class="dk-btn sec" id="plCancel">Keep the locked one</button>`:""}</div></div>`;
+}
+async function plSend(force){
+  const t=PP.data&&PP.data.today;if(!t)return;
+  const f=plDraft(t);PL.busy=true;ppRender();
+  try{const r=await dkApi("prep_lock",{...f,id:t.id,author:ppWho(),force:!!force});
+    if(r.locked){PL.fixes=null;PL.edit=false;PL.draft=null;toast("📌 Plan locked — pinned on the Desk, entry on the Watcher");dkWatchLoad()}
+    else{PL.fixes={id:t.id,list:r.fixes||[]};toast("Jarvis wants a fix first")}}
+  catch(e){toast(String(e.message).slice(0,140))}
+  PL.busy=false;dkPrep();
+}
+{const _pr=ppRender;ppRender=function(){
+  _pr();
+  const pg=$("#dkPage"),d=PP.data||{};
+  const lv=[...pg.querySelectorAll(".dk-cardx")].find(c=>/^4 · Levels/.test((c.querySelector(".dk-h")||{}).textContent||""));
+  if(lv)lv.insertAdjacentHTML("afterend",plCard(d));
+  // plan results in the history table
+  const rows=[...pg.querySelectorAll("table.dkt tr")].slice(1);
+  (d.history||[]).forEach((h,i)=>{if(!h.plan||!rows[i])return;const td=rows[i].children[1],rs=rows[i].children[3];
+    td.insertAdjacentHTML("beforeend",`<div class="mut" style="font-size:12px;margin-top:3px">📌 ${plLine(h.plan)}</div>`);
+    if(h.result&&h.result.plan)rs.insertAdjacentHTML("beforeend",`<div style="margin-top:3px">${plResult(h.result.plan)}</div>`)});
+  const box=$("#plCard");if(!box)return;
+  box.querySelectorAll("[data-plk]").forEach(i=>i.addEventListener("input",()=>{PL.draft[i.dataset.plk]=i.value}));
+  box.querySelectorAll("[data-plseg]").forEach(b=>b.addEventListener("click",()=>{PL.draft[b.dataset.plseg]=b.dataset.v;
+    box.querySelectorAll(`[data-plseg="${b.dataset.plseg}"]`).forEach(x=>x.classList.toggle("on",x===b))}));
+  const on=(id,fn)=>{const b=box.querySelector("#"+id);if(b)b.addEventListener("click",fn)};
+  on("plLock",()=>plSend(false));
+  on("plAnyway",()=>plSend(true));
+  on("plFixIt",()=>{PL.fixes=null;ppRender();const i=$("#plCard [data-plk]");if(i)i.focus()});
+  on("plEdit",()=>{PL.edit=true;PL.draft=null;PL.fixes=null;ppRender()});
+  on("plCancel",()=>{PL.edit=false;PL.draft=null;PL.fixes=null;ppRender()});
+}}
+// 📌 Today's plans, pinned at the top of the Desk's left column
+{const _la=layApplyCards;layApplyCards=function(){
+  _la();
+  const L=$("#dkLeft"),pin=L&&L.querySelector('[data-card="today-s-plans"]'),sv=(layCur().cards)||{};
+  if(pin&&!(sv.left||[]).includes("today-s-plans")&&!(sv.right||[]).includes("today-s-plans")&&L.firstElementChild!==pin)L.prepend(pin);   // top, unless they moved it themselves
+}}
+{const _wc=dkWatchCard;dkWatchCard=function(){
+  const h=_wc(),W=DK.watch,pl=(W&&W.plans)||[];
+  if(!pl.length)return h;
+  return `<div class="dk-cardx pl-pin"><div class="dk-h">📌 Today's plans</div>${pl.map(p=>`<div class="pl-row"><div><b>${esc(p.author)}</b> · <b class="t">${esc(p.ticker)} ${esc(p.side)}</b> <span class="mut">R:R ${esc(p.rr)}</span></div>
+    <div class="mut">${esc(p.how)} ${esc(+p.entry)} on a ${esc(p.tf)} close · wrong if ${esc(+p.wrong_if)} · target ${esc(+p.target)}</div>${p.result?`<div style="margin-top:3px">${plResult(p.result)}</div>`:""}</div>`).join("")}</div>`+h;
+}}
 
 /* ---------- Feedback ---------- */
 var FB_ERR=[],FB_KIND="bug";

@@ -35,6 +35,7 @@ function matches(row: any, params: URLSearchParams) {
       const base = row[m[1]] || {}; const obj = m[2] ? (base[m[2]] || {}) : base; return obj[m[3]];
     };
     if (v === "is.null") { if (val(k) != null) return false; continue; }
+    if (v === "not.is.null") { if (val(k) == null) return false; continue; }
     if (v.startsWith("neq.")) { if (String(val(k)) === v.slice(4)) return false; continue; }
     if (v.startsWith("eq.")) { const want = decodeURIComponent(v.slice(3)); const have = k === "exit->>state" ? row.exit?.state : val(k); if (String(have) !== want) return false; }
     else if (v.startsWith("gte.")) { if (!(String(row[k]) >= v.slice(4))) return false; }
@@ -767,4 +768,87 @@ Deno.test("score extra: Signal speed from v3.16 timings + the coach's calls scor
   const r: any = await M.scoreExtra();
   assert(r.speed[0].caught_s === 4 && r.speed[0].card_s === 41 && r.median_card_s === 41, JSON.stringify(r.speed));
   assert(r.coach[0].ticker === "MU" && r.coach[0].worked === 1 && /1000/.test(r.coach[0].results[0]), JSON.stringify(r.coach));
+});
+
+/* =============================== v3.19 LOCK TODAY'S PLAN =============================== */
+const PLAN = { ticker: "spy", side: "puts", entry: 783.4, how: "reject", tf: "5m", wrong_if: 784.5, target: 778.6, why: "gap top rejection" };
+Deno.test("plan: the four lines must be complete and on the right sides (calls up, puts down)", () => {
+  const ok: any = M.planValidate(PLAN);
+  assert(ok.ok && ok.plan.ticker === "SPY" && ok.plan.rr === 4.36, JSON.stringify(ok));
+  assert(/the candle timeframe/.test((M.planValidate({ ...PLAN, tf: "" }) as any).error), "timeframe required");
+  assert(/wrong-if price/.test((M.planValidate({ ...PLAN, wrong_if: "" }) as any).error), "wrong-if required");
+  assert(/For puts/.test((M.planValidate({ ...PLAN, target: 790 }) as any).error), "puts target above entry is refused");
+  assert(/For calls/.test((M.planValidate({ ...PLAN, side: "calls" }) as any).error), "calls with a target below is refused");
+  assert((M.planValidate({ ...PLAN, side: "calls", wrong_if: 782, target: 790 }) as any).ok, "a good calls plan passes");
+});
+Deno.test("plan lock: Jarvis passes it → entry goes on the Watcher, plan saved, Desk line posted", async () => {
+  reset(); setNow("2026-10-07T13:05:00Z");
+  T.otto_prep.push({ id: 41, day: "2026-10-07", author: "Josh", status: "graded", grade: { letter: "B-", fix: ["pick ONE ticker"] }, levels: [] });
+  claudeScript = (body: any) => { assert(body.tool_choice?.name === "plan_check", "forced plan_check"); return toolReply("plan_check", { ok: true, fixes: [], note: "R:R 4.4 — short at resistance" }); };
+  const r: any = await M.prepLock({ id: 41, ...PLAN }, "x");
+  assert(r.locked && T.otto_prep[0].plan.ticker === "SPY" && T.otto_prep[0].plan.note && T.otto_prep[0].plan.changes === 0, JSON.stringify(r));
+  assert(T.otto_watch.some((w) => w.ticker === "SPY" && Number(w.level) === 783.4 && w.dir === "down"), JSON.stringify(T.otto_watch));
+  assert(/📌 Josh locked today's plan: SPY puts/.test(deskText()), deskText());
+  const pl: any[] = await M.plansToday();
+  assert(pl.length === 1 && pl[0].author === "Josh" && /wrong if 784.5/.test(pl[0].line), JSON.stringify(pl));
+});
+Deno.test("plan lock: Jarvis wants fixes → NOT locked; 'Lock anyway' locks it and keeps the fixes on record; a change counts", async () => {
+  reset(); setNow("2026-10-07T13:05:00Z");
+  T.otto_prep.push({ id: 42, day: "2026-10-07", author: "Josh", status: "graded", levels: [] });
+  claudeScript = () => toolReply("plan_check", { ok: false, fixes: ["Wrong-if is only 1.10 away on a 5m chart — that's noise"], note: "" });
+  const a: any = await M.prepLock({ id: 42, ...PLAN }, "x");
+  assert(!a.locked && a.fixes.length === 1 && !T.otto_prep[0].plan && !T.otto_watch.length, JSON.stringify(a));
+  const b: any = await M.prepLock({ id: 42, ...PLAN, force: true }, "x");
+  assert(b.locked && T.otto_prep[0].plan.fixes_overridden.length === 1 && /over Jarvis's fixes/.test(deskText()), JSON.stringify(b));
+  claudeScript = () => toolReply("plan_check", { ok: true, fixes: [], note: "" });
+  await M.prepLock({ id: 42, ...PLAN, wrong_if: 785.2 }, "x");
+  assert(T.otto_prep[0].plan.changes === 1 && /Josh changed today's plan/.test(deskText()), JSON.stringify(T.otto_prep[0].plan));
+  await M.prepLock({ id: 42, ...PLAN, entry: 783.9, wrong_if: 785.2 }, "x");
+  const live = T.otto_watch.filter((w) => w.status === "watching").map((w) => Number(w.level));
+  assert(live.length === 1 && live[0] === 783.9 && T.otto_prep[0].plan.changes === 2, "a moved entry takes the old level off the Watcher: " + JSON.stringify(T.otto_watch));
+});
+Deno.test("plan lock: refused on another day; Jarvis down → still locks (check skipped, never blocks)", async () => {
+  reset(); setNow("2026-10-07T13:05:00Z");
+  T.otto_prep.push({ id: 43, day: "2026-10-06", author: "Ifoma", status: "graded", levels: [] });
+  let e = ""; try { await M.prepLock({ id: 43, ...PLAN }, "x"); } catch (x) { e = (x as Error).message; }
+  assert(/day of the read/.test(e), e);
+  T.otto_prep[0].day = "2026-10-07";
+  claudeScript = () => new Error("overloaded") as any;
+  const r: any = await M.prepLock({ id: 43, ...PLAN }, "x");
+  assert(r.locked && T.otto_prep[0].plan, JSON.stringify(r));
+});
+Deno.test("plan vs tape: trigger then target / wrong-if / both / no trigger", () => {
+  const b = (t: number, o: number, h: number, l: number, c: number) => ({ t, o, h, l, c });
+  const p = { side: "puts", how: "reject", entry: 783.4, wrong_if: 784.5, target: 778.6 };
+  assert(M.planVsTape(p, [b(1, 782, 783, 781, 782)]).outcome === "no trigger", "never reached");
+  assert(M.planVsTape(p, [b(1, 783, 783.6, 782.8, 783), b(2, 783, 783, 778.5, 779)]).outcome === "target", "target");
+  assert(M.planVsTape(p, [b(1, 783, 783.6, 782.8, 783), b(2, 783, 784.6, 782, 784)]).outcome === "wrong-if", "wrong-if");
+  assert(M.planVsTape(p, [b(1, 783, 783.6, 782.8, 783), b(2, 783, 785, 778, 780)]).outcome === "both in one bar", "both");
+  const c = { side: "calls", how: "break", entry: 780, wrong_if: 779, target: 783 };
+  assert(M.planVsTape(c, [b(1, 779, 780.5, 779, 779.8)]).outcome === "no trigger", "a wick isn't a break — needs the close");
+  assert(M.planVsTape(c, [b(1, 779, 780.5, 779, 780.3), b(2, 780, 781, 780, 781)]).outcome === "neither by the close", "neither");
+});
+Deno.test("plan adherence: no trade / on plan / partly off / off plan", () => {
+  const p = { ticker: "SPY", side: "puts" };
+  assert(M.planAdherence(p, []).adherence === "no trade", "none");
+  assert(M.planAdherence(p, [{ sym: "SPY", type: "puts" }]).adherence === "on plan", "on");
+  assert(M.planAdherence(p, [{ sym: "SPY", type: "puts" }, { sym: "NVDA", type: "calls" }]).adherence === "partly off plan", "partly");
+  const off: any = M.planAdherence(p, [{ sym: "SPY", type: "calls" }]);
+  assert(off.adherence === "off plan" && off.traded[0] === "SPY calls", JSON.stringify(off));
+});
+Deno.test("plan at 4:05 (real 6 Oct bars): the plan is graded with the read, against the Agentic account's opening trades", async () => {
+  reset(); setNow("2026-10-06T20:05:30Z");
+  T.otto_prep.push({ id: 44, day: "2026-10-06", author: "Josh", bias: "long", main: "SPY", levels: [], result: null,
+    plan: { ticker: "SPY", side: "calls", entry: 778.6, how: "hold", tf: "5m", wrong_if: 777.5, target: 781, rr: 2.18 } });
+  callHook = (tool, args) => tool === "get_option_orders" && args.state === "filled"
+    ? { data: { orders: [{ chain_symbol: "SPY", legs: [{ position_effect: "open", option_type: "call" }] }, { chain_symbol: "SPY", legs: [{ position_effect: "close", option_type: "call" }] }] } } : null;
+  const r: any = await M.prepGradeTick(false);
+  const res = T.otto_prep[0].result;
+  assert(r.graded === 1 && res.plan && typeof res.plan.trigger === "boolean" && res.plan.adherence === "on plan", JSON.stringify(res.plan));
+});
+Deno.test("plans: the Desk context carries today's locked plans", async () => {
+  reset(); setNow("2026-10-07T14:00:00Z");
+  T.otto_prep.push({ id: 45, day: "2026-10-07", author: "Josh", plan: { ticker: "SPY", side: "puts", entry: 783.4, how: "reject", tf: "5m", wrong_if: 784.5, target: 778.6, rr: 4.36 } });
+  const w: any = await M.watchGet();
+  assert(w.plans?.length === 1 && w.plans[0].author === "Josh", JSON.stringify(w.plans));
 });
