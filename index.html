@@ -1103,7 +1103,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
       <div><label class="f" for="tkPrice">Limit price (per share)</label><input class="f" id="tkPrice" type="number" step="0.01" inputmode="decimal" placeholder="2.10"></div>
       <div><label class="f" for="tkSetup">Setup</label><select class="f" id="tkSetup"><option>rejection at resistance</option><option>support bounce</option><option>gap failure</option><option>breakdown</option><option>breakout</option><option>trend continuation</option><option>other</option></select></div>
       <div class="tk-open"><label class="f" for="tkTp1">TP1 (stock price)</label><input class="f" id="tkTp1" type="number" step="any" inputmode="decimal" placeholder="required"></div>
-      <div class="tk-open"><label class="f" for="tkStop">Wrong if (stock, 15-min close)</label><input class="f" id="tkStop" type="number" step="any" inputmode="decimal" placeholder="required"></div>
+      <div class="tk-open"><label class="f" for="tkStop">Wrong if (stock, 5-min close)</label><input class="f" id="tkStop" type="number" step="any" inputmode="decimal" placeholder="required"></div>
       <div class="tk-open"><label class="f" for="tkStopOpt">Stop on the option ($)</label><input class="f" id="tkStopOpt" type="number" step="0.01" inputmode="decimal" placeholder="required, below the limit"></div>
       <div class="tk-open"><label class="f">If the stop fills there</label><div class="f mono" id="tkLoss" style="padding:9px 2px;color:var(--ink-2)">—</div></div>
     </div>
@@ -2099,7 +2099,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.19.0";
+const BUILD="3.21.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3258,7 +3258,7 @@ function dkExit(a){
   const row=(k,v)=>`<div class="ex-row"><span class="mut">${k}</span><span class="mono">${v}</span></div>`;
   return `<div class="dk-exit"><div class="ex-h"><b>Exits</b><span class="dk-tag ${tag}">${esc(lab)}</span></div>`+
     row("Stop on the option",`$${(+x.stop_option).toFixed(2)} · about −$${loss.toFixed(0)}`+(x.state==="armed"?(x.stop_order_id?" ✓ working":" ✗ not working"):""))+
-    row(`Wrong if (${esc(tk)}, 15-min close)`,esc(x.wrong_if)+(x.state==="armed"?(al.wrong!=null?" ✓":" ✗"):""))+
+    row(`Wrong if (${esc(tk)}, ${Number(x.wrong_tf)===5?5:15}-min close)`,esc(x.wrong_if)+(x.state==="armed"?(al.wrong!=null?" ✓":" ✗"):""))+
     row(`TP1 (${esc(tk)})`,esc(x.tp1)+(x.state==="armed"?(al.tp1!=null?" ✓":" ✗"):""))+
     (x.fill_price?row("Filled",`${x.qty} @ $${(+x.fill_price).toFixed(2)}`):"")+
     (x.stop_error&&x.state==="armed"?`<div class="dk-err" style="margin-top:4px">Stop problem: ${esc(x.stop_error)}</div>`:"")+
@@ -3433,7 +3433,7 @@ async function dkScore(){
     <div class="dkp-head"><h2>Scorecard</h2><span class="mut">Do the Otto Rules plus the Desk have an edge? Every opening option card is tracked, taken or not.</span></div>
     ${j.proof?`<div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Proof run <b>day ${j.proof.day} of ${j.proof.of} · since ${esc(j.proof.start)}</b></div>
       <div class="dk-bar"><i style="width:${Math.round(100*j.proof.day/j.proof.of)}%;background:var(--blue)"></i></div>
-      <div class="mut" style="font-size:12px;margin-top:6px">Size goes up only on these numbers. Win = TP1 touched before a 15-minute close through the wrong-if. Loss = the reverse. Flat = neither by 3:55 PM the same day. $ is an estimate for 1 contract (move × delta); real P&amp;L replaces it for trades you took.${j.est&&j.est.n?` <b style="color:var(${j.est.per>=0?"--up":"--down"})">Estimated ${dkMoney(j.est.per)} per scored card</b> over ${j.est.n}.`:""}</div></div>`:""}
+      <div class="mut" style="font-size:12px;margin-top:6px">Size goes up only on these numbers. Win = TP1 touched before a close through the wrong-if on the card's own bar (5-minute for cards from v3.21, 15-minute before). Loss = the reverse. Flat = neither by 3:55 PM the same day. $ is an estimate for 1 contract (move × delta); real P&amp;L replaces it for trades you took.${j.est&&j.est.n?` <b style="color:var(${j.est.per>=0?"--up":"--down"})">Estimated ${dkMoney(j.est.per)} per scored card</b> over ${j.est.n}.`:""}</div></div>`:""}
     <div class="dkp-grid4">
       <div class="dk-cardx dk-stat"><div class="n">${j.all.n}</div><div class="l">Desk ideas tracked${j.since?` since ${esc(new Date(j.since).toLocaleDateString())}`:""}</div></div>
       <div class="dk-cardx dk-stat"><div class="n">${j.taken.n}</div><div class="l">Taken · ${j.passed.n} passed</div></div>

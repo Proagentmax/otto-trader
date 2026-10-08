@@ -408,6 +408,7 @@ Deno.test("scoreboard: the 10:35 SPY call idea is a WIN (TP1 780.50 touched 10:5
 Deno.test("scoreboard: cards carry their source and Watcher trigger", async () => {
   reset(); setNow("2026-10-06T14:35:40Z");
   const c1: any = await M.proposeAction(spyCard(), "watcher", { planExtra: { source: "signal", trigger: "pullback-hold", watch_id: 8 } });
+  T.otto_actions[0].status = "rejected";        // v3.21: a 2nd SPY calls card is refused while the 1st is pending
   const c2: any = await M.proposeAction(spyCard(), "ottotrader@vinecreativestudio.com");
   assert(c1.plan.source === "signal" && c1.plan.trigger === "pullback-hold" && c1.plan.watch_id === 8, JSON.stringify(c1.plan));
   assert(c2.plan.source === "desk" && !c2.plan.trigger, JSON.stringify(c2.plan));
@@ -1021,4 +1022,110 @@ Deno.test("v3.20: Desk — Jarvis has option_shortlist and every run carries the
   assert(toolNames.includes("option_shortlist"), "tool offered: " + toolNames.join(","));
   assert(/CONTRACTS \(v3\.20\)/.test(sysCtx), "rule in the context line");
   assert(/★ = best by the Otto Rules/.test(toolResult) && /NVDA 2\d\d(\.5)?P/.test(toolResult), "shortlist came back: " + toolResult.slice(0, 300));
+});
+
+/* ======================= v3.21 — exits only by the card's own rules; one card per ticker + direction ======================= */
+// 7 Oct numbers replayed on the test clock (times below are UTC; ET = UTC − 4).
+const barsHook = (sym: string, rows: [string, number, number, number, number][]) => (tool: string, args: any) =>
+  tool === "get_equity_historicals" && (args.symbols || []).includes(sym) ? { data: { results: [toRh(sym, rows)] } } : null;
+const armed = (sym: string, dir: "up" | "down", wrong: number, tp1: number, armedAt: string, tf = 5) => ({
+  id: "ar-" + (++ID), title: `Buy 1 ${sym} test`, status: "done", created_at: armedAt, decided_at: armedAt,
+  exit: { option_id: OPT, qty: 1, entry_limit: 4.55, stop_option: 3.4, tv_symbol: `NASDAQ:${sym}`, direction: dir, wrong_if: wrong, tp1, wrong_tf: tf, state: "armed", armed_at: armedAt, alerts: {}, log: [] } });
+
+Deno.test("v3.21: NVDA (7 Oct) — the 11:35 bar closed 237.32 over the 237 wrong-if: the rule is met at 11:40, not before", async () => {
+  reset();
+  callHook = barsHook("NVDX", [["15:30", 237.14, 237.16, 236.64, 236.76], ["15:35", 236.76, 237.4, 236.7, 237.32], ["15:40", 237.3, 237.45, 237.2, 237.4]]);
+  const a = armed("NVDX", "down", 237, 235, "2026-10-06T15:32:30Z");
+  const early: any = await M.exitRuleCheck(a, RealDate.parse("2026-10-06T15:38:00Z"));
+  assert(!early.met && /last 5-min close 236\.76/.test(early.detail), "11:38 — not met yet: " + JSON.stringify(early));
+  const at: any = await M.exitRuleCheck(a, RealDate.parse("2026-10-06T15:41:00Z"));
+  assert(at.met && /closed a 5-minute bar at 237\.32/.test(at.why), "11:41 — met: " + JSON.stringify(at));
+});
+
+Deno.test("v3.21: QQQ (7 Oct) — Jarvis's 10:34 close 2 minutes after the fill is REFUSED (no card rule met)", async () => {
+  reset(); setNow("2026-10-06T14:34:10Z");
+  callHook = barsHook("QQQ", [["14:25", 754.1, 754.8, 754.0, 754.74], ["14:30", 754.74, 755.09, 753.96, 754.38]]);
+  T.otto_actions.push(armed("QQQ", "down", 755, 752, "2026-10-06T14:32:40Z"));
+  let err = "";
+  try { await (M as any).closeNowForTest({ option_id: OPT, reason: "QQQ bounced off 751.76 and the tape stopped working" }, "auto-review"); } catch (e) { err = (e as Error).message; }
+  assert(/Not closed — none of the card's exits is met/.test(err) && /wrong-if 755 on a 5-minute close not hit/.test(err), "refused: " + err);
+  assert(!orders.some((o) => o.type === "market"), "no sell sent");
+});
+
+Deno.test("v3.21: old cards keep their 15-minute wrong-if — a 5-min close through that recovers by the 15-min close is not an exit", async () => {
+  reset();
+  callHook = barsHook("OLDX", [["15:30", 100.2, 100.3, 99.7, 99.8], ["15:35", 99.8, 100.4, 99.8, 100.3], ["15:40", 100.3, 100.5, 100.2, 100.4], ["15:45", 100.4, 100.4, 99.6, 99.7]]);
+  const a = armed("OLDX", "up", 100, 102, "2026-10-06T15:29:00Z", 15);
+  const mid: any = await M.exitRuleCheck(a, RealDate.parse("2026-10-06T15:46:00Z"));
+  assert(!mid.met && /15-minute close not hit \(last 15-min close 100\.4\)/.test(mid.detail), "15-min bucket closed 100.4: " + JSON.stringify(mid));
+  const five: any = await M.exitRuleCheck({ ...a, exit: { ...a.exit, wrong_tf: 5 } }, RealDate.parse("2026-10-06T15:36:00Z"));
+  assert(five.met && /99\.8/.test(five.why), "same bars on a 5-min card: met at the first close through: " + JSON.stringify(five));
+});
+
+Deno.test("v3.21: TP1 touched and 3:50 PM are rules too", async () => {
+  reset();
+  callHook = barsHook("TPX", [["15:30", 50, 50.2, 49.1, 49.3]]);
+  const tp: any = await M.exitRuleCheck(armed("TPX", "down", 51, 49.2, "2026-10-06T15:29:00Z"), RealDate.parse("2026-10-06T15:36:00Z"));
+  assert(tp.met && /TP1 49\.2 reached/.test(tp.why), JSON.stringify(tp));
+  const late: any = await M.exitRuleCheck(armed("TPX", "down", 51, 40, "2026-10-06T15:29:00Z"), RealDate.parse("2026-10-06T19:51:00Z"));
+  assert(late.met && /3:50 PM/.test(late.why), JSON.stringify(late));
+  const noPlan: any = await M.exitRuleCheck({ exit: {} });
+  assert(!noPlan.met && /no card plan/.test(noPlan.detail), "no plan → never auto-closed");
+});
+
+Deno.test("v3.21: the server sweep closes an armed trade when its rule is met — and leaves it when not", async () => {
+  reset(); setNow("2026-10-06T15:41:00Z");
+  callHook = barsHook("NVDY", [["15:30", 237.14, 237.16, 236.64, 236.76], ["15:35", 236.76, 237.4, 236.7, 237.32]]);
+  T.otto_actions.push(armed("NVDY", "down", 237, 235, "2026-10-06T15:32:30Z"));
+  const r: any[] = await M.ruleSweep();
+  assert(r.length === 1 && r[0].closed && /wrong-if 237/.test(r[0].why), "closed by rule: " + JSON.stringify(r));
+  assert(orders.some((o) => o.type === "market" && o.legs[0].side === "sell"), "market sell sent");
+  assert(/Otto closed \(card rule\)/.test(deskText()), "Desk says the card rule closed it: " + deskText().slice(-300));
+  reset(); setNow("2026-10-06T15:38:00Z");
+  callHook = barsHook("NVDZ", [["15:30", 237.14, 237.16, 236.64, 236.76]]);
+  T.otto_actions.push(armed("NVDZ", "down", 237, 235, "2026-10-06T15:32:30Z"));
+  const r2: any[] = await M.ruleSweep();
+  assert(r2.length === 0 && !orders.some((o) => o.type === "market"), "nothing closed: " + JSON.stringify(r2));
+});
+
+Deno.test("v3.21: the scheduled position check can't close anything itself any more", async () => {
+  const src = await Deno.readTextFile(new URL("../otto-proxy.ts", import.meta.url));
+  const pr = src.slice(src.indexOf("async function positionReview"), src.indexOf("async function positionReview") + 4000);
+  assert(/tools: \[TOOLS\[0\], \.\.\.mcpToolDefs\]/.test(pr) && /allowClose: false/.test(pr), "no close tool in the position check");
+  assert(/await ruleSweep\(\)/.test(pr), "server rule sweep runs first");
+});
+
+Deno.test("v3.21: a 2nd card on the same ticker + direction is refused (7 Oct 10:32, two QQQ puts); other side or after a reject is fine", async () => {
+  reset(); setNow("2026-10-06T14:32:00Z");
+  const c1: any = await M.proposeAction(spyCard(), "watcher");
+  let err = "";
+  try { await M.proposeAction(spyCard(), "ottotrader@vinecreativestudio.com"); } catch (e) { err = (e as Error).message; }
+  assert(/A SPY calls card is already up: "Buy 1 SPY 781C/.test(err) && /pending/.test(err), "refused: " + err);
+  const puts = spyCard(); puts.plan = { ...puts.plan, direction: "down", tp1: 776, stop: 780 };
+  const cp: any = await M.proposeAction(puts, "watcher");
+  assert(cp.status === "pending", "puts on SPY still allowed");
+  T.otto_actions.find((r: any) => r.id === c1.id).status = "rejected";
+  const c3: any = await M.proposeAction(spyCard(), "watcher");
+  assert(c3.status === "pending", "after a reject a new calls card is fine");
+  T.otto_actions.find((r: any) => r.id === c3.id).status = "done"; T.otto_actions.find((r: any) => r.id === c3.id).exit.state = "armed";
+  let err2 = ""; try { await M.proposeAction(spyCard(), "signals"); } catch (e) { err2 = (e as Error).message; }
+  assert(/filled, trade open/.test(err2), "filled trade blocks a 2nd entry: " + err2);
+  setNow("2026-10-06T14:48:00Z");
+  const c4: any = await M.proposeAction(spyCard(), "signals");
+  assert(c4.status === "pending", "after 15 minutes it's allowed again");
+  const m: any = await M.proposeAction(spyCard(), "ottotrader@vinecreativestudio.com", { manual: true });
+  assert(m.status === "pending", "Ifoma's own ticket is never refused");
+});
+
+Deno.test("v3.21: new cards carry a 5-minute wrong-if; scoring follows each card's own bar", async () => {
+  reset(); setNow("2026-10-06T14:35:40Z");
+  const c: any = await M.proposeAction(spyCard(), "watcher");
+  assert(c.plan.wrong_tf === 5 && c.exit.wrong_tf === 5, "5 on the card: " + JSON.stringify([c.plan.wrong_tf, c.exit.wrong_tf]));
+  const at = (hms: string) => RealDate.parse("2026-10-06T" + hms + "Z");
+  const bars = [{ t: at("14:35:00"), o: 100.1, h: 100.2, l: 99.6, c: 99.7 }, { t: at("14:40:00"), o: 99.7, h: 100.6, l: 99.7, c: 100.5 }, { t: at("14:45:00"), o: 100.5, h: 101.2, l: 100.4, c: 101.1 }];
+  const g5: any = M.gradeIdea({ created: at("14:33:00"), direction: "up", tp1: 101, wrong: 100, tf: 5 }, bars, at("15:00:00"));
+  const g15: any = M.gradeIdea({ created: at("14:33:00"), direction: "up", tp1: 101, wrong: 100 }, bars, at("15:00:00"));
+  assert(g5.state === "loss" && g15.state === "win", `5-min card loses at the first close through, 15-min card wins: ${g5.state} / ${g15.state}`);
+  const src = await Deno.readTextFile(new URL("../otto-proxy.ts", import.meta.url));
+  assert(/const res = kind === "wrong" \? String\(ex\.wrong_tf \|\| 15\) : "1";/.test(src), "TradingView alert uses the card's bar");
 });

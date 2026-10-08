@@ -1097,11 +1097,22 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
   const plan = input.plan && typeof input.plan === "object" ? { ...input.plan, ...(opening ? (opts.planExtra || {}) : {}),
     ...(opening && !opts.planExtra?.source ? { source: who === "signals" ? "signal" : who === "alert" ? "alert" : who === "otto" ? "manual" : "desk" } : {}) } : null;
   if (plan) plan.rules = cleanRules(plan.rules);
+  // v3.21 (Ifoma, 7 Oct night): wrong-if is a 5-minute close on every new card; older cards keep 15.
+  if (plan && opening) plan.wrong_tf = 5;
   // v3.4: ...and its exits. No exits, no card (Jarvis and the manual ticket alike).
   if (opening && (!plan || !plan.tv_symbol || !plan.direction || !plan.setup || plan.tp1 == null || plan.stop == null || !(Number(plan.stop_option) > 0))) {
     throw new Error("An opening option order needs its plan and exits: {tv_symbol (EXCHANGE:TICKER), direction ('up'|'down' on the underlying), setup, tp1, stop (underlying prices), stop_option (OPTION price for the protective stop, below the limit), entry_underlying?, expires? (YYYY-MM-DD)}. Add it and propose again.");
   }
   void opts;
+  // v3.21 (Ifoma, 7 Oct night): one card per ticker + direction. 7 Oct 10:32 two QQQ put cards went up at once.
+  if (opening && !opts.manual && plan) {
+    const tk = String(plan.tv_symbol || "").split(":").pop()?.toUpperCase() || "";
+    const recent = await db("otto_actions?select=id,title,status,plan,exit,created_at&order=created_at.desc&limit=40").catch(() => []);
+    const dup = (recent || []).find((r: any) => r.plan && String(r.plan.tv_symbol || "").split(":").pop()?.toUpperCase() === tk &&
+      r.plan.direction === plan.direction && Date.now() - Date.parse(r.created_at) < 15 * 60e3 &&
+      (["pending", "running"].includes(r.status) || (r.status === "done" && ["waiting_fill", "armed"].includes(r.exit?.state))));
+    if (dup) throw new Error(`A ${tk} ${plan.direction === "down" ? "puts" : "calls"} card is already up: "${dup.title}" (${dup.status === "done" ? "filled, trade open" : dup.status}). Don't make a second one — point them to that card.`);
+  }
   const out: any[] = [];
   const review: string[] = [];
   let cost = 0, costKnown = true;
@@ -1427,11 +1438,11 @@ const DESK_SYS = `You are Jarvis, the AI on the trading desk inside Otto Trader.
 You're talking with Ifoma (the trader; it's his money) and sometimes Josh (his son, learning alongside him, same login, same authority). Each message is prefixed with who wrote it when known. Talk like a trading partner at the next desk: direct, numbers first, caveat second. Short paragraphs. No hype, no congratulating; say plainly when a trade is a bad idea.
 
 HOW ACTIONS WORK — THE ONE HARD RULE
-You can READ anything with the tv__ and rh__ tools, as often as you need. You can NEVER change anything yourself — with ONE exception: when the desk context says Auto-close is ON, close_position sells to close a position in the Agentic account immediately, no card. Use it only to get OUT of a position (when they ask you to close, or when in your judgment the trade is broken or its exit has come), say why in one sentence, and never to open, add or flip. To place, cancel, or change an order, or create/edit/delete an alert or watchlist entry, call propose_action with the exact calls. That puts an Approve / Reject card in front of them; nothing happens until a human clicks Approve. After proposing, say in one line what the card does — never say an order "is placed" or "went through" until you see the result (the app will post it).
+You can READ anything with the tv__ and rh__ tools, as often as you need. You can NEVER change anything yourself — with ONE exception: when the desk context says Auto-close is ON, close_position sells to close a position in the Agentic account immediately, no card. Use it only to get OUT of a position when one of the card's own exits is met (wrong-if on the card's bar, TP1, 3:50 PM) — the server checks and refuses otherwise; for any other reason, including when they ask you to close, put up a close card with propose_action. Say why in one sentence, and never open, add or flip with it. To place, cancel, or change an order, or create/edit/delete an alert or watchlist entry, call propose_action with the exact calls. That puts an Approve / Reject card in front of them; nothing happens until a human clicks Approve. After proposing, say in one line what the card does — never say an order "is placed" or "went through" until you see the result (the app will post it).
 - Before proposing an option order: get the chain (rh__get_option_chains → rh__get_option_instruments) for the real option_id, check the quote (rh__get_option_quotes), and use a limit price. The server runs Robinhood's review and computes the risk vs the Agentic account.
 - One idea = one card. Several suggestions at once = several cards, each with its own title.
 - Don't propose new TradingView alerts unless they ask, or they want a level watched (an alert is the only way you get woken at a level).
-- Every OPENING option card must include plan {tv_symbol, direction, setup, tp1, stop, stop_option, entry_underlying, expires}. stop_option is the OPTION price that triggers the protective stop (below your limit price); size it so (limit − stop_option) × 100 × contracts stays inside their max loss per trade. Approving the card approves its exits too: once the buy fills, Otto itself places a stop_market sell-to-close at stop_option (re-placed every morning — Robinhood stop orders are day orders) and two TradingView alerts on the stock (wrong-if = plan.stop on a 15-minute close, TP1 on touch), and puts up a close card when one fires. So never propose a separate stop order or alerts for that trade, and only one single-leg buy per opening card. To close a protected trade early, include rh cancel_option_order for its stop_order_id (listed in the desk context) BEFORE the sell, in the same card. The server runs a rule check (first 30 minutes, delta 30–40, volume > OI, size, loss at the stop vs their max, daily stop, weekly limit, expiry, binary events, earnings, banner) and shows any broken guardrail as a red banner on the card; read its result back and mention the flags in one line. The card's check is the truth: don't call a check passed in your text when the card flags it.
+- Every OPENING option card must include plan {tv_symbol, direction, setup, tp1, stop, stop_option, entry_underlying, expires}. stop_option is the OPTION price that triggers the protective stop (below your limit price); size it so (limit − stop_option) × 100 × contracts stays inside their max loss per trade. Approving the card approves its exits too: once the buy fills, Otto itself places a stop_market sell-to-close at stop_option (re-placed every morning — Robinhood stop orders are day orders) and two TradingView alerts on the stock (wrong-if = plan.stop on a 5-minute close, TP1 on touch), and puts up a close card when one fires. So never propose a separate stop order or alerts for that trade, and only one single-leg buy per opening card. To close a protected trade early, include rh cancel_option_order for its stop_order_id (listed in the desk context) BEFORE the sell, in the same card. The server runs a rule check (first 30 minutes, delta 30–40, volume > OI, size, loss at the stop vs their max, daily stop, weekly limit, expiry, binary events, earnings, banner) and shows any broken guardrail as a red banner on the card; read its result back and mention the flags in one line. The card's check is the truth: don't call a check passed in your text when the card flags it.
 
 THE SENTIMENT BANNER
 The app shows a live banner built from Josh's Intermarket Sentiment Cheat Sheet on TradingView data (10Y, DXY, USD/JPY, crude, ES/NQ/YM). Its current verdict is in the desk context line. It is Josh's sheet, not the Otto Rules: where they disagree (the sheet trades the 9:30 opening range; the Otto Rules say no first 30 minutes unless the open goes off a pre-posted Signal level) say so and don't pick. Never attach Josh's sheet sizing ($15 / 15%) to anything — sizing is only the 20% check.
@@ -1491,7 +1502,7 @@ const PROPOSE_TOOL = (writeHelp: string) => ({
           setup: { type: "string", enum: ["rejection at resistance", "support bounce", "gap failure", "breakdown", "breakout", "trend continuation", "other"] },
           entry_underlying: { type: "number", description: "Underlying price at the entry trigger" },
           tp1: { type: "number", description: "TP1 on the underlying" },
-          stop: { type: "number", description: "Underlying price that proves the idea wrong (your exit level) — Otto alerts on a 15-minute close through it" },
+          stop: { type: "number", description: "Underlying price that proves the idea wrong (your exit level) — Otto watches for a 5-minute close through it" },
           stop_option: { type: "number", description: "OPTION price (per share, below the limit) where Otto's protective stop_market sell-to-close triggers. Otto places it after the fill." },
           expires: { type: "string", description: "Option expiration YYYY-MM-DD" },
           signal_level: { type: "boolean", description: "true when the entry level came from a Signal posted before the open (the House Rule lets the open be traded off it)" },
@@ -2428,7 +2439,7 @@ async function evalIdea(a: any) {
   catch { return { state: "pending" }; }
   const dm = /Delta (\d?\.\d+)/.exec((a.checks || []).map((c: any) => c.text).join(" "));
   const g: any = gradeIdea({ created, direction: p.direction === "down" ? "down" : "up", tp1, wrong, entry: Number(p.entry_underlying) || null,
-    delta: dm ? Number(dm[1]) : null, premium: Number(ex.entry_limit) || (a.risk?.cost ? a.risk.cost / 100 : null) }, bars);
+    delta: dm ? Number(dm[1]) : null, premium: Number(ex.entry_limit) || (a.risk?.cost ? a.risk.cost / 100 : null), tf: Number(p.wrong_tf || ex.wrong_tf) || 15 }, bars);
   return g.state === "open" ? { state: "pending" } : { ...g, at: g.at ? Math.round(g.at / 1000) : undefined };
 }
 // v3.14: grade a few open ideas every 5 minutes from the cron, so the Scoreboard is current without opening it.
@@ -2587,7 +2598,7 @@ async function orderTicket(b: any, who: string, author: string) {
     `Underlying / contract   ${label}`,
     `Side / qty / type       ${side === "buy_open" ? "Buy to open" : "Sell to close"} · ${qty} · limit $${price.toFixed(2)}`,
     side === "buy_open" && plan ? `Plan                    TP1 ${plan.tp1} · wrong if ${plan.stop} · ${plan.setup}` : "",
-    side === "buy_open" && plan ? `Exits (Otto sets them)  stop on the option at $${Number(plan.stop_option).toFixed(2)} · alerts at ${plan.stop} (15-min close) and ${plan.tp1}` : "",
+    side === "buy_open" && plan ? `Exits (Otto sets them)  stop on the option at $${Number(plan.stop_option).toFixed(2)} · alerts at ${plan.stop} (5-min close) and ${plan.tp1}` : "",
     b.note ? `Why                     ${String(b.note).slice(0, 300)}` : "",
     `Source                  Order ticket, entered by ${author}`,
   ].filter(Boolean).join("\n");
@@ -2716,7 +2727,7 @@ Work quietly. When done, write a line that is exactly READ: and after it 2–3 s
      1. places a stop_market sell-to-close at stop_option. Robinhood only allows
         stop_market as a day order, so Otto re-places it every morning at 9:30;
      2. sets two TradingView alerts on the stock: wrong-if (plan.stop) on a
-        15-minute close, and TP1 on touch;
+        5-minute close (15 before v3.21), and TP1 on touch;
      3. when one of those alerts fires, puts up a close card (cancel the stop,
         then sell to close at market). Nothing sells without an Approve;
      4. when the position goes flat (stop filled, close card, or closed by
@@ -2753,7 +2764,7 @@ function exitSpec(out: any[], plan: any) {
   if (!(tp1 > 0) || !(wrong > 0)) throw new Error("plan.tp1 and plan.stop must be prices on the underlying");
   if (dir === "up" ? !(tp1 > wrong) : !(tp1 < wrong)) throw new Error(`For a ${dir === "up" ? "call (up)" : "put (down)"} TP1 must be ${dir === "up" ? "above" : "below"} the wrong-if price.`);
   return { option_id: legs[0].option_id, qty, entry_limit: entry, stop_option: stopR,
-    tv_symbol: String(plan.tv_symbol), direction: dir, wrong_if: wrong, tp1, expires: plan.expires || null };
+    tv_symbol: String(plan.tv_symbol), direction: dir, wrong_if: wrong, tp1, expires: plan.expires || null, wrong_tf: Number(plan.wrong_tf) === 5 ? 5 : 15 };
 }
 
 async function saveExit(id: string, ex: any) {
@@ -2831,10 +2842,10 @@ async function armAlerts(a: any, ex: any, only?: ("wrong" | "tp1")[]) {
     const up = ex.direction === "up";
     const value = kind === "wrong" ? ex.wrong_if : ex.tp1;
     const type = kind === "wrong" ? (up ? "cross_down" : "cross_up") : (up ? "cross_up" : "cross_down");
-    const res = kind === "wrong" ? "15" : "1";
+    const res = kind === "wrong" ? String(ex.wrong_tf || 15) : "1";
     const args = { symbol: ex.tv_symbol,
       name: `Otto · ${tk} ${kind === "wrong" ? "WRONG IF" : "TP1"} ${value} · ${String(a.id).slice(0, 8)}`,
-      message: `${tk} ${kind === "wrong" ? "closed a 15-minute bar through your wrong-if" : "reached TP1"} ${value} (Otto trade: ${a.title})`,
+      message: `${tk} ${kind === "wrong" ? `closed a ${ex.wrong_tf || 15}-minute bar through your wrong-if` : "reached TP1"} ${value} (Otto trade: ${a.title})`,
       conditions: [{ type, frequency: kind === "wrong" ? "on_bar_close" : "on_first_fire", resolution: res,
         cross_interval: true, series: [{ type: "barset" }, { type: "value", value }] }],
       resolution: res, expiration: exp, popup: false, mobile_push: false, email: false };
@@ -3011,18 +3022,24 @@ async function exitTickLocked(a: any) {
       if (LIMx.auto_close && rthNow() && !recent) {
         // v3.5: auto-close is on, so Jarvis decides and closes himself (no card).
         const wrong = fresh.some((e: any) => String(e.tv_alert_id ?? e.alert_id) === String(ex.alerts.wrong));
-        const why = wrong ? `wrong-if ${ex.wrong_if} hit (15-minute close)` : `TP1 ${ex.tp1} reached`;
+        const why = wrong ? `wrong-if ${ex.wrong_if} hit (${ex.wrong_tf || 15}-minute close)` : `TP1 ${ex.tp1} reached`;
         ex.close_at = new Date().toISOString();
         exitLog(ex, `${why} → Jarvis deciding (auto-close on)`);
         await notify("trade_alert", `🔔 ${a.title.replace(/^Buy\s+/i, "")}: ${wrong ? "wrong-if hit" : "TP1 reached"}`, `${why}. Jarvis is deciding now (auto-close is on).`);
         await saveExit(a.id, ex);
-        try { await positionReview(`${a.title}: ${why}. option_id ${ex.option_id}. The plan says ${wrong ? "OUT" : "take profit"}.`); }
-        catch (e) { await logDesk("system", "Otto", `⚠ ${a.title}: ${why}, but Jarvis's auto-close check failed (${(e as Error).message.slice(0, 200)}). The stop is still working. Close by hand if needed.`, a.id); }
-        return { id: a.id, state: ex.state, held, auto: true };
+        // v3.21: the server confirms the card's rule on Robinhood bars and closes; otherwise it falls through to a close card.
+        let closed = false;
+        try {
+          const chk = await exitRuleCheck({ ...a, exit: ex });
+          if (chk.met) { await closeNow({ option_id: ex.option_id, reason: chk.why, rule_why: chk.why }, "rules", true); closed = true; }
+          else exitLog(ex, `TradingView said ${why}, Robinhood bars don't confirm it yet (${chk.detail}) → close card instead`);
+        } catch (e) { await logDesk("system", "Otto", `⚠ ${a.title}: ${why}, but the auto-close failed (${(e as Error).message.slice(0, 200)}). The stop is still working. Close by hand if needed.`, a.id); }
+        if (closed) return { id: a.id, state: ex.state, held, auto: true };
+        ex.close_at = null;
       }
       if (!(await cardBusy(ex.close_card)) && !recent) {
         const wrong = fresh.some((e: any) => String(e.tv_alert_id ?? e.alert_id) === String(ex.alerts.wrong));
-        const why = wrong ? `wrong-if ${ex.wrong_if} hit (15-minute close)` : `TP1 ${ex.tp1} reached`;
+        const why = wrong ? `wrong-if ${ex.wrong_if} hit (${ex.wrong_tf || 15}-minute close)` : `TP1 ${ex.tp1} reached`;
         let stopOpen = false;
         if (ex.stop_order_id) { try { const s = await optOrder(acct, ex.stop_order_id); stopOpen = !!s && EXIT_OPEN_ORDER.has(s.state); } catch { /* */ } }
         const calls: any[] = [];
@@ -3797,8 +3814,8 @@ const CLOSE_TOOL = {
   description: "AUTO-CLOSE, no Approve card: immediately sells to close a position in the Robinhood Agentic account at market. " +
     "Works only while auto-close is ON in their settings and the market is open (9:30–4:00 ET); otherwise it errors and you use propose_action for a close card. " +
     "Closing only: it can never open, add to, flip, or short anything. Any working sell orders on that option (e.g. Otto's protective stop) are cancelled first. " +
-    "Use it when, in your judgment under Jason's method, the trade is broken or its exit has come: wrong-if through, TP1 reached, first red candle on short-dated options, " +
-    "price closing back through the entry candle's open, a binary event ahead, expiry day. Don't use it on a whim or because of a few cents of noise. " +
+    "v3.21: it only works when one of the card's OWN exits is met — wrong-if closed through on the card's bar (5-minute on new cards), TP1 reached, or 3:50 PM ET. The server checks that on Robinhood bars and refuses otherwise. " +
+    "For any other reason (a feeling, a bounce, a binary event, someone asking you to close), put up a close card with propose_action instead — a person approves it. " +
     "Give the reason in one plain sentence; it is posted on the Desk.",
   input_schema: {
     type: "object",
@@ -3812,7 +3829,39 @@ const CLOSE_TOOL = {
   },
 };
 
-async function closeNow(input: any, who: string) {
+/* v3.21 (Ifoma, 7 Oct night): early exits run only on the card's own rules, checked by the server on
+   Robinhood 5-minute bars — wrong-if closed through (on the card's bar), TP1 touched, or 3:50 PM ET
+   (intraday House Rule). Jarvis's own judgment ("the tape stopped working") is not a reason to auto-close:
+   7 Oct, QQQ was closed 2 minutes after the fill over a bounce from before the entry. */
+export async function exitRuleCheck(a: any, now = Date.now()): Promise<{ met: boolean; why: string; detail: string }> {
+  const ex = a?.exit || {};
+  if (!ex.option_id || !(Number(ex.wrong_if) > 0) || !(Number(ex.tp1) > 0)) return { met: false, why: "", detail: "no card plan on file for this position" };
+  const tk = String(ex.tv_symbol || "").split(":").pop() || "";
+  const up = ex.direction !== "down", tf = Number(ex.wrong_tf) === 5 ? 5 : 15;
+  const since = Date.parse(ex.armed_at || a.decided_at || a.created_at || "") || now - 6 * 3600e3;
+  const min = etParts(new Date(now)).min;
+  if (min >= 950) return { met: true, why: "3:50 PM — intraday trades are flat by the close (House Rule)", detail: "" };
+  let bars: Bar[] = [];
+  try { bars = completedBars((await rhBars([tk], "5minute", new Date(since - 10 * 60e3).toISOString()))[tk.toUpperCase()] || [], 5, now); }
+  catch (e) { return { met: false, why: "", detail: `couldn't read ${tk} bars (${String((e as Error).message).slice(0, 80)})` }; }
+  const after = bars.filter((b) => b.t + 5 * 60e3 > since);
+  const tp = after.find((b) => up ? b.h >= ex.tp1 : b.l <= ex.tp1);
+  if (tp) return { met: true, why: `TP1 ${ex.tp1} reached (${tk} ${up ? "high" : "low"} ${up ? tp.h : tp.l} on the ${etLabel(new Date(tp.t).toISOString())} bar)`, detail: "" };
+  let lastClose: number | null = null;
+  for (const b of after) {
+    const ends = tf === 5 || new Date(b.t + 5 * 60e3).getUTCMinutes() % tf === 0;
+    if (!ends) continue;
+    lastClose = b.c;
+    if (up ? b.c < ex.wrong_if : b.c > ex.wrong_if)
+      return { met: true, why: `wrong-if ${ex.wrong_if}: ${tk} closed a ${tf}-minute bar at ${b.c} (${etLabel(new Date(b.t + 5 * 60e3).toISOString())})`, detail: "" };
+  }
+  return { met: false, why: "", detail: `wrong-if ${ex.wrong_if} on a ${tf}-minute close not hit${lastClose != null ? ` (last ${tf}-min close ${lastClose})` : " (no completed bar yet)"}; TP1 ${ex.tp1} not reached; before 3:50 PM` };
+}
+async function armedTradeFor(optId: string) {
+  const rows = await db("otto_actions?select=id,title,exit,decided_at,created_at&exit->>state=eq.armed&limit=20").catch(() => []);
+  return (rows || []).find((r: any) => r.exit?.option_id === optId) || null;
+}
+async function closeNow(input: any, who: string, verified = false) {
   const L = await getLimits();
   if (!L.auto_close) throw new Error("Auto-close is OFF (Settings → Limits & goals). Use propose_action for a close card instead.");
   if (!rthNow()) throw new Error("Market is closed: auto-close only works 9:30 AM–4:00 PM ET. Use a close card.");
@@ -3821,6 +3870,15 @@ async function closeNow(input: any, who: string) {
   const acct = await agenticAccount();
   const calls: any[] = [], results: any[] = [];
   let title = "", orderId: string | null = null;
+  if (input.symbol && !input.option_id) throw new Error("Shares have no card plan, so auto-close can't check a rule. Put up a close card with propose_action.");
+  let ruleWhy = "";
+  if (verified && input.rule_why) ruleWhy = String(input.rule_why);
+  if (input.option_id && !verified) {
+    const tr = await armedTradeFor(String(input.option_id));
+    const chk = tr ? await exitRuleCheck(tr) : { met: false, why: "", detail: "no card plan on file for this position" };
+    if (!chk.met) throw new Error(`Not closed — none of the card's exits is met: ${chk.detail}. Auto-close only runs on the card's own rules (wrong-if, TP1, 3:50 PM). If you still think it should come off, put up a close card with propose_action and say why in one line — a person decides.`);
+    ruleWhy = chk.why;
+  }
   if (input.option_id) {
     const optId = String(input.option_id);
     const pos = (mcpJson(await call("rh", "get_option_positions", { account_number: acct, option_ids: optId }))?.data?.positions || [])
@@ -3873,20 +3931,37 @@ async function closeNow(input: any, who: string) {
   } else throw new Error("Give option_id (for an option) or symbol (for shares).");
 
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
-    title, summary: `Reason   ${reason}\nOrder    sell to close at market (auto-close, no Approve)\nBy       Jarvis, on ${who}`,
+    title, summary: `Reason   ${ruleWhy ? "[card rule] " + ruleWhy + ". " : ""}${reason}\nOrder    sell to close at market (auto-close, no Approve)\nBy       ${who === "rules" ? "Otto (card rule, server-checked)" : "Jarvis, on " + who}`,
     calls, risk: { cost: 0, notes: ["closing order: no new risk"] }, review: "", status: "done", created_by: "Jarvis (auto)",
     decided_by: "auto-close", decided_at: new Date().toISOString(), result: results, ...(orderId ? { order_id: String(orderId) } : {}),
   }) });
   const id = rows?.[0]?.id || null;
-  await logDesk("system", "Otto", `🤖 Jarvis closed: ${title} at market. Why: ${reason} (Auto-close is on; turn it off in Settings → Limits & goals.)`, id);
-  await notify("auto_close", `🤖 Jarvis closed: ${title.replace(/^Auto-close /, "")}`, `Sold at market. Why: ${reason}`);
+  const by = who === "rules" ? "Otto closed (card rule)" : "Jarvis closed";
+  const whyTxt = ruleWhy ? `${ruleWhy}${reason && reason !== ruleWhy ? " — " + reason : ""}` : reason;
+  await logDesk("system", "Otto", `🤖 ${by}: ${title} at market. Why: ${whyTxt} (Auto-close is on; turn it off in Settings → Limits & goals.)`, id);
+  await notify("auto_close", `🤖 ${by}: ${title.replace(/^Auto-close /, "")}`, `Sold at market. Why: ${whyTxt}`);
   return { ok: true, title, order_id: orderId, card: id };
 }
 
 // Scheduled / triggered check of everything open in the Agentic account.
+export async function ruleSweep() {
+  const armed = await db("otto_actions?select=id,title,exit,decided_at,created_at&exit->>state=eq.armed&limit=20").catch(() => []);
+  const out: any[] = [];
+  for (const a of armed || []) {
+    try {
+      const chk = await exitRuleCheck(a);
+      if (!chk.met) continue;
+      const r = await closeNow({ option_id: a.exit.option_id, reason: chk.why, rule_why: chk.why }, "rules", true);
+      out.push({ id: a.id, closed: r.title, why: chk.why });
+    } catch (e) { out.push({ id: a.id, error: (e as Error).message.slice(0, 200) }); }
+  }
+  return out;
+}
 async function positionReview(trigger: string | null = null) {
   const L = await getLimits();
   if (!L.auto_close || !rthNow()) return { ok: true, skipped: "off or market closed" };
+  // v3.21: the card's own rules are checked on every call (cron minute or alert), by the server.
+  const swept = await ruleSweep().catch((e) => [{ error: String((e as Error).message) }]);
   const every = Math.max(5, Number(L.review_min) || 15) * 60e3;
   if (!trigger) {
     const last = await db("otto_settings?key=eq.review_at&select=value").then((r: any) => Number(r?.[0]?.value?.at || 0)).catch(() => 0);
@@ -3910,9 +3985,9 @@ async function positionReview(trigger: string | null = null) {
   const prompt = `[Automatic position check — nobody typed this. ${trigger ? "TRIGGER: " + trigger : `Scheduled check (every ${Math.round(every / 60e3)} min).`}]
 Open in the Agentic account — options: ${JSON.stringify(opts.map((p: any) => ({ option_id: p.option_id, symbol: p.chain_symbol, qty: p.quantity, avg: p.average_price, exp: p.expiration_date })))}; shares: ${JSON.stringify(shares.map((p: any) => ({ symbol: p.symbol, qty: p.quantity })))}.
 Plans on file: ${JSON.stringify((plans || []).map((r: any) => ({ title: r.title, setup: r.plan?.setup, direction: r.exit?.direction, tp1: r.exit?.tp1, wrong_if: r.exit?.wrong_if, stop_option: r.exit?.stop_option, option_id: r.exit?.option_id })))}.
-For each position: fetch the underlying's live price and recent 5-minute bars (and the option quote), compare with its plan, the Otto Rules exits and the House Rules (intraday only: close before 4:00 PM ET), and decide HOLD or CLOSE. If CLOSE, call close_position with a one-sentence reason. Auto-close is ON. If every position is a HOLD, reply with exactly the single word HOLD and nothing else; otherwise one short line per position saying what you did and why.`;
-  const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: [TOOLS[0], ...mcpToolDefs, CLOSE_TOOL], cs: chunksOf(calls),
-    who: "auto-review", send: () => {}, allowPropose: false, allowClose: true, maxRounds: 8 });
+For each position: fetch the underlying's live price and recent 5-minute bars (and the option quote) and compare with its plan, the Otto Rules exits and the House Rules. You can't close anything: the server closes a trade on its card's own rules (wrong-if on the card's bar, TP1, 3:50 PM) by itself. If you'd get out for a reason that isn't one of those, write one short line per position saying so and why — Ifoma or Josh decide. Otherwise reply with exactly the single word HOLD and nothing else.${swept.length ? " Already handled by the server this minute: " + JSON.stringify(swept).slice(0, 400) : ""}`;
+  const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: [TOOLS[0], ...mcpToolDefs], cs: chunksOf(calls),
+    who: "auto-review", send: () => {}, allowPropose: false, allowClose: false, maxRounds: 8 });
   const said = res.said.trim();
   if (said && !/^HOLD\.?$/i.test(said)) await logDesk("assistant", "Jarvis · position check", said);
   return { ok: true, said: said.slice(0, 300) };
@@ -4611,10 +4686,11 @@ async function watchSet(b: any, who: string) {
 
 /* ------------------------------------------------------------ Scoreboard (Phase 2) on Robinhood bars
    Every opening card is graded on the underlying from the moment it was made: TP1 touched (win) before a
-   15-minute close through the wrong-if (loss); neither by 3:55 PM ET the same day = flat ("scratch",
+   close through the wrong-if on the card's own bar (5-min from v3.21, 15-min before) (loss); neither by 3:55 PM ET the same day = flat ("scratch",
    intraday-only House Rule). Dollars are an estimate for 1 contract (move × delta × 100, capped at the
    premium) — real P&L replaces it for cards that were taken. */
-export function gradeIdea(o: { created: number; direction: "up" | "down"; tp1: number; wrong: number; entry?: number | null; delta?: number | null; premium?: number | null }, bars5: Bar[], now = Date.now()) {
+export function gradeIdea(o: { created: number; direction: "up" | "down"; tp1: number; wrong: number; entry?: number | null; delta?: number | null; premium?: number | null; tf?: number }, bars5: Bar[], now = Date.now()) {
+  const tf = o.tf === 5 ? 5 : 15;               // v3.21: each card is graded on its own wrong-if bar (5-min from v3.21, 15 before)
   const day = etParts(new Date(o.created)).date;
   const endAt = Date.parse(nyIso(day, "3:55 PM") || "") || o.created + 6 * 3600e3;
   const after = bars5.filter((b) => b.t + 5 * 60e3 > o.created && b.t < endAt && b.t + 5 * 60e3 <= now);
@@ -4630,7 +4706,7 @@ export function gradeIdea(o: { created: number; direction: "up" | "down"; tp1: n
   for (const b of after) {
     if (up ? b.h >= o.tp1 : b.l <= o.tp1) return { state: "win", at: b.t, r: risk ? +(Math.abs(o.tp1 - entry) / risk).toFixed(2) : null, pnl_est: est(o.tp1), entry };
     q.push(b);
-    const endsBucket = new Date(b.t + 5 * 60e3).getUTCMinutes() % 15 === 0;
+    const endsBucket = new Date(b.t + 5 * 60e3).getUTCMinutes() % tf === 0;
     if (endsBucket) {
       const close15 = q[q.length - 1].c; q.length = 0;
       if (up ? close15 < o.wrong : close15 > o.wrong) return { state: "loss", at: b.t, r: -1, pnl_est: est(close15), entry };
@@ -6061,3 +6137,5 @@ Deno.serve(async (req) => {
 // test hooks (v3.20)
 export const placeStopForTest = placeStop;
 export const deskSetupForTest = deskSetup;
+
+export const closeNowForTest = closeNow;
