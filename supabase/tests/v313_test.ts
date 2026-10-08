@@ -519,18 +519,19 @@ Deno.test("signal replay (MU 3:12 PM): the server pre-fetches the contracts and 
   reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuBatch();
   let forced = false;
   claudeScript = (body: any) => {
-    assert(/PRE-FETCHED BY THE SERVER/.test(JSON.stringify(body.messages[0])), "prefetch in the prompt");
+    assert(/ONE STEP/.test(JSON.stringify(body.messages[0])) && /CONTRACTS:/.test(JSON.stringify(body.messages[0])), "v3.23: one-step prefetch in the prompt");
     if (body.tool_choice?.name === "propose_action") {
       forced = true;
       const id = optIdIn(body);
-      return toolReply("propose_action", { title: "Buy 1 MU 1020P 10/7 @ 10.00", summary: "test", plan: { tv_symbol: "NASDAQ:MU", direction: "down", setup: "otto signal", jason_id: 801, tp1: 1040, stop: 1060, stop_option: 6, expires: "2026-10-07" },
+      return toolReply("propose_action", { title: "Buy 1 MU 1020P 10/7 @ 10.00", summary: "test", read: "MU short: he shorted the break. Puts. Wrong on a 5-min close back over 1060.", plan: { tv_symbol: "NASDAQ:MU", direction: "down", setup: "otto signal", jason_id: 801, tp1: 1040, stop: 1060, stop_option: 6, expires: "2026-10-07" },
         calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: id, side: "buy", position_effect: "open" }], quantity: "1", type: "limit", price: "10.00", time_in_force: "gfd" } }] });
     }
     return toolReply("rh__get_option_instruments", { chain_symbol: "MU", expiration_dates: "2026-10-16", type: "put" });   // the 6 Oct habit
   };
   await M.signalJarvis(8);
   const b = T.otto_signal_batches[0];
-  assert(forced, "last step forced to propose_action");
+  assert(forced, "v3.23: the first (only) step is forced to propose_action");
+  assert(/^MU short: he shorted the break/.test(T.otto_signal_batches[0].read || ""), "the card's read is the feed read: " + T.otto_signal_batches[0].read);
   assert(b.status === "done" && b.cards.length === 1, JSON.stringify(b));
   assert(T.otto_jason[0].action_id === b.cards[0], "card linked to the call");
   assert(!/enormous|Let me/.test(b.read || ""), "no working notes in the feed: " + b.read);
@@ -642,7 +643,7 @@ Deno.test("self-test: 9:10 AM — heartbeat, read, shortlist, dry-run card → �
   claudeScript = (body: any) => {
     const t = JSON.stringify(body.messages);
     const m = /option_id (SPY-[0-9-]+-call-\d+)/.exec(t);
-    return /SELF-TEST: card accepted/.test(t) ? textReply("ok") : toolReply("propose_action", { title: "TEST Buy 1 SPY", summary: "t", plan: { tv_symbol: "AMEX:SPY", direction: "up", setup: "otto signal", tp1: 784, stop: 779, stop_option: 1.5 },
+    return /SELF-TEST: card accepted/.test(t) ? textReply("ok") : toolReply("propose_action", { title: "TEST Buy 1 SPY", summary: "t", read: "SPY long — test.", plan: { tv_symbol: "AMEX:SPY", direction: "up", setup: "otto signal", tp1: 784, stop: 779, stop_option: 1.5 },
       calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: m?.[1], side: "buy", position_effect: "open" }], quantity: "1", type: "limit", price: "3.00", time_in_force: "gfd" } }] });
   };
   const r: any = await M.signalSelfTest(false);
@@ -1304,4 +1305,81 @@ Deno.test("v3.22: the exact 7 Oct lines — '(Oct 3 call, 29:20)' removed, \"I d
   assert(b.notes.length === 1 && /Corrected by Otto: there IS a morning read today/.test(b.text), JSON.stringify(b));
   const c = M.checkNoneClaims("No card: the coach's own morning read was long-biased on NVDA making new highs.", f);
   assert(!c.notes.length, JSON.stringify(c));
+});
+
+/* ======================= v3.23 — Signal cards in one step (target: post → card under 30 s) ======================= */
+const muCard = (body: any, extra: any = {}) => toolReply("propose_action", { title: "Buy 1 MU 1020P 10/7 @ 10.00", summary: "test", read: "MU short: he shorted the break. Wrong on a 5-min close back over 1060.",
+  plan: { tv_symbol: "NASDAQ:MU", direction: "down", setup: "otto signal", jason_id: 801, tp1: 1040, stop: 1060, stop_option: 6, expires: "2026-10-07", ...extra },
+  calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: optIdIn(body), side: "buy", position_effect: "open" }], quantity: "1", type: "limit", price: "10.00", time_in_force: "gfd" } }] });
+
+Deno.test("v3.23: one Signal call → ONE Claude request, forced card, pinged once, read saved from the card", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuBatch();
+  let bad = "";
+  claudeScript = (body: any) => {
+    const chk = (c: unknown, m: string) => { if (!c && !bad) bad = m; };
+    chk(body.tool_choice?.name === "propose_action", "forced from the first step");
+    chk(body.tools.length === 1 && body.tools[0].name === "propose_action" && body.tools[0].input_schema.required.includes("read"), "only the card tool, read required");
+    const p = JSON.stringify(body.messages[0]);
+    chk(/PRICE: MU \$/.test(p), "price"); chk(/5-MIN BARS/.test(p), "bars"); chk(/CONTRACTS:/.test(p), "contracts"); chk(!/ALT —/.test(p), "no ALT"); chk(/ONE card per post/.test(p), "one card rule");
+    return muCard(body);
+  };
+  await M.signalJarvis(8);
+  assert(!bad, bad);
+  const b = T.otto_signal_batches[0];
+  assert(claudeBodies.length === 1, "one Claude request, got " + claudeBodies.length);
+  assert(b.cards.length === 1 && T.otto_actions.length === 1, "one card");
+  assert(pings.filter((p) => /Card ready/.test(p.title)).length === 1, "pinged once: " + JSON.stringify(pings));
+  assert(b.timing?.one_step === true && b.timing.cards === 1, JSON.stringify(b.timing));
+  assert(/^MU short: he shorted the break/.test(b.read), b.read);
+});
+
+Deno.test("v3.23: the server bounces the first card → one retry makes it; never a third try", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuBatch();
+  let n = 0;
+  claudeScript = (body: any) => { n++; return n === 1 ? toolReply("propose_action", { title: "x", summary: "x", read: "x", calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: optIdIn(body), side: "buy", position_effect: "open" }], quantity: "1", type: "limit", price: "10.00" } }] }) : muCard(body); };
+  await M.signalJarvis(8);
+  assert(n === 2 && T.otto_signal_batches[0].cards.length === 1, "retry made the card; requests " + n);
+});
+
+Deno.test("v3.23: bounced twice → no card, the ping says the server's reason", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuBatch();
+  let n = 0;
+  claudeScript = (body: any) => { n++; return toolReply("propose_action", { title: "x", summary: "x", read: "x", calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: optIdIn(body), side: "buy", position_effect: "open" }], quantity: "1", type: "limit", price: "10.00" } }] }); };
+  await M.signalJarvis(8);
+  const b = T.otto_signal_batches[0];
+  assert(n === 2, "two tries only: " + n);
+  assert(!b.cards.length && /No card: the card was rejected: An opening option order needs its plan/.test(b.read), b.read.replace(/\n/g, " | "));
+  assert(pings.some((p) => /MU SHORT — NO card/.test(p.title) && /rejected: An opening option order needs its plan/.test(p.body)), JSON.stringify(pings));
+});
+
+Deno.test("v3.23: a call with no direction → both calls and puts pre-fetched; Jarvis still decides", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook();
+  const pack = await M.signalPack({ ticker: "MU", direction: "" });
+  assert(/calls, expiries/.test(pack) && /puts, expiries/.test(pack), pack.slice(0, 300).replace(/\n/g, " | "));
+});
+
+Deno.test("v3.23: two tickers at once keep the old multi-step loop (not forced on step one)", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuBatch();
+  T.otto_jason.push({ id: 802, created_at: "2026-10-06T19:12:54Z", day: "2026-10-06", posted_at: "2026-10-06T19:12:40Z", posted_label: "3:12 PM", kind: "call", ticker: "AMD", direction: "long", late: false, words: "AMD LONG", source: "watcher" });
+  T.otto_signal_batches[0].rows = [801, 802];
+  let first: any = null;
+  claudeScript = (body: any) => { first ||= body; return textReply("READ: two calls"); };
+  await M.signalJarvis(8);
+  assert(first && !first.tool_choice && first.tools.length > 1, "old loop for two calls");
+});
+
+Deno.test("v3.23: the 9:10 self-test fails (and pings) when post → card is slower than 30 s", async () => {
+  reset(); setNow("2026-10-07T13:10:00Z"); callHook = muHook(781.2, "SPY");
+  T.otto_settings.push({ key: "signal_beat", value: { at: "2026-10-07T13:09:50Z", state: "ok", queue: 0, queue_age: 0 } });
+  extractHook = () => [{ kind: "call", ticker: "SPY", direction: "long", words: "SPY LONG", time: "9:10 AM" }];
+  claudeScript = (body: any) => {
+    NOW += 31_000;                                         // a slow Claude
+    const m = /option_id (SPY-[0-9-]+-call-\d+)/.exec(JSON.stringify(body.messages));
+    return toolReply("propose_action", { title: "TEST Buy 1 SPY", summary: "t", read: "SPY long — test.", plan: { tv_symbol: "AMEX:SPY", direction: "up", setup: "otto signal", tp1: 784, stop: 779, stop_option: 1.5 },
+      calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: m?.[1], side: "buy", position_effect: "open" }], quantity: "1", type: "limit", price: "3.00", time_in_force: "gfd" } }] });
+  };
+  const r: any = await M.signalSelfTest(true);
+  const sp = r.steps.find((s: any) => /^Speed/.test(s.name));
+  assert(!r.ok && sp && !sp.ok && /slower than the 30s target/.test(sp.note), JSON.stringify(r.steps));
+  assert(pings.some((p) => /self-test failed/.test(p.title) && /Speed/.test(p.body)), JSON.stringify(pings));
 });

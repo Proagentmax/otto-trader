@@ -1532,11 +1532,11 @@ function schemaLine(t: any) {
   return `- ${t.name} (${fields.join(", ")})`;
 }
 
-async function deskTools() {
+async function deskTools(services: string[] = ["tv", "rh"]) {
   const tools: any[] = [];
   const help: string[] = [];
   const status: Record<string, string> = {};
-  for (const s of ["tv", "rh"]) {
+  for (const s of services) {
     try {
       const list = await withTimeout(mcpTools(s), 10000, SVC[s].name);
       for (const t of list) {
@@ -1556,8 +1556,9 @@ async function deskTools() {
 }
 
 type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; allowClose?: boolean; maxRounds?: number; deadline?: number; author?: string; planExtra?: Record<string, unknown>;
-  mustCard?: boolean; dryRun?: boolean };   // v3.16: mustCard = a Signal call must end in a card; dryRun = the self-test (cards checked, not stored)
-type DeskResult = { said: string; cards: string[]; timedOut?: boolean; outOfRounds?: boolean; did: string[]; failed: string[]; finalText: string; dry?: any[]; errors?: string[] };
+  mustCard?: boolean; dryRun?: boolean;
+  oneStep?: boolean; onCard?: (id: string) => Promise<void> };   // v3.23: a Signal card in ONE forced step (+ one retry), then stop   // v3.16: mustCard = a Signal call must end in a card; dryRun = the self-test (cards checked, not stored)
+type DeskResult = { said: string; cards: string[]; timedOut?: boolean; outOfRounds?: boolean; did: string[]; failed: string[]; finalText: string; dry?: any[]; errors?: string[]; cardRead?: string };
 
 // The tool loop, shared by the live Desk (streamed) and the 8:45 run (silent).
 // v3.13: one Claude request, retried once on 429 / 5xx / overloaded, never past the run's deadline.
@@ -1586,7 +1587,8 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
   const deadline = o.deadline || Date.now() + RUN_BUDGET_MS;
   let said = "", finalText = "";
   const cards: string[] = [], did: string[] = [], failed: string[] = [], dry: any[] = [], errors: string[] = [];
-  const done = (x: any = {}): DeskResult => ({ said, cards, did, failed, finalText, dry, errors, ...x });
+  let cardRead = "";
+  const done = (x: any = {}): DeskResult => ({ said, cards, did, failed, finalText, dry, errors, cardRead, ...x });
   const maxR = o.maxRounds || 12;
   // v3.13: the clock and the House Rules ride in a second, uncached system block on EVERY run
   // (Desk, alert reads, Signals, position checks, the morning read).
@@ -1594,7 +1596,7 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
   for (let round = 0; round < maxR; round++) {
     if (Date.now() > deadline - 15000) { said += OUT_OF_TIME; send({ t: "text", v: OUT_OF_TIME }); return done({ timedOut: true }); }
     // v3.16: a Signal call must end in a card — on the last step (or when time is short) the card is the only move left.
-    const force = o.mustCard && o.allowPropose && !cards.length && !dry.length && (round >= maxR - 2 || Date.now() > deadline - 50000)
+    const force = (o.oneStep || (o.mustCard && (round >= maxR - 2 || Date.now() > deadline - 50000))) && o.allowPropose && !cards.length && !dry.length
       && tools.some((t: any) => t.name === "propose_action");
     finalText = "";
     let r: Response;
@@ -1671,12 +1673,14 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
             !pl.setup && "plan.setup", pl.tp1 == null && "plan.tp1", pl.stop == null && "plan.stop", !(Number(pl.stop_option) > 0) && "plan.stop_option"].filter(Boolean);
           if (miss.length) throw new Error("card is missing " + miss.join(", "));
           dry.push(input);
+          if (o.oneStep) cardRead = String(input.read || "");
           content = "SELF-TEST: card accepted (not stored). Write one line and stop.";
         } else if (b.name === "propose_action") {
           if (!o.allowPropose) throw new Error("no cards in this run");
           send({ t: "tool", v: "Preparing card: " + String(input.title || "") });
           const card = await proposeAction(input, who, { planExtra: o.planExtra });
           cards.push(card.id);
+          if (o.oneStep) { cardRead = unname(String(input.read || "")); if (o.onCard) await o.onCard(card.id).catch(() => {}); }
           send({ t: "action", v: card });
           content = `Card ${card.id} is on screen, status pending. Nothing has run. ` +
             `Risk: ${JSON.stringify(card.risk)}. Rule check: ${JSON.stringify(card.checks || [])}. Robinhood review: ${(card.review || "n/a").slice(0, 1500)}`;
@@ -1728,6 +1732,7 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
       results.push({ type: "tool_result", tool_use_id: b.id, content: content || "(empty)", ...(isErr ? { is_error: true } : {}) });
     }
     msgs.push({ role: "assistant", content: assistant });
+    if (o.oneStep && (cards.length || dry.length)) return done();     // v3.23: the card is made — no second round
     // v3.13: a one-line clock with every round of tool results, so a long turn never loses the time.
     const c = marketClock();
     msgs.push({ role: "user", content: [...results, { type: "text", text: `[clock: ${fmtMin(c.min)} ET ${dayName(c.date)} ${c.date}, market ${c.status === "open" ? "OPEN" : c.status === "pre" ? "PRE-MARKET" : "CLOSED"}]` }] });
@@ -1736,12 +1741,14 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
 }
 
 // v3.9: the Desk's system prompt, tools and context line — shared by the live Desk and Otto Signals.
-async function deskSetup() {
+async function deskSetup(opt: { fast?: boolean } = {}) {
   const factsP = withTimeout(todayFacts(), 5000, "today's facts").then(factsLine).catch(() => "");   // v3.22, in parallel (never slows a Signal card)
   const calls = await loadBrain();
   const cs = chunksOf(calls);
   const sys = DESK_SYS.replace("{{RULES}}", alwaysOn(calls));
-  const [dt, sent] = await Promise.all([deskTools(), settle(sentimentNow())]);
+  // v3.23 (fast = a Signal card): Robinhood tools only (a slow TradingView can't eat the card's time), banner capped at 4 s.
+  const [dt, sent] = await Promise.all([opt.fast ? deskTools(["rh"]) : deskTools(),
+    settle(opt.fast ? withTimeout(sentimentNow(), 4000, "banner") : sentimentNow())]);
   const { tools: mcpToolDefs, help, status } = dt;
   const tools: any[] = [
     TOOLS[0],                                         // search_jason
@@ -3542,10 +3549,10 @@ Do this:
 1. Every post that names a ticker and implies a trade — a CALL, or a LEVEL that held / broke / rejected — gets ONE opening option card via propose_action, even when ${cfg.mentor} gave no direction. Decide long (calls) or short (puts) yourself from his words, his chart, the banner and the price right now (fetch it). plan.setup = "otto signal", plan.jason_id = the #id above. Fill in everything he did NOT give — the contract (delta .30–.40, volume > open interest, a sensible expiry), limit, quantity inside our limits, TP1, wrong-if and stop_option — as precisely as you can. In the card summary say which parts are ${cfg.mentor}'s and which are yours.
 2. A LATE post (he says he missed calling it / it already moved): still make the card, start the title with "LATE", and say plainly in the summary that chasing breaks his entry rules.
 3. If the banner, one of his rules or our limits argue against it, say so in the card summary — but still make the card. Ifoma and Josh decide.
-3b. ALTERNATIVE (Ifoma, 6 Oct): if your best contract costs more than the Agentic account's buying power right now, ALSO make ONE second card — the best contract that DOES fit the buying power (further out-of-the-money, or a different expiry), title starting "ALT —", and say in its summary why it's second-best (lower delta, less liquid, etc.). Never more than these two cards for one post.
+3b. ONE card per post (Ifoma, 8 Oct): card ★ if it fits buying power, otherwise ◆; if nothing fits, card the cheapest anyway (it gets a red banner).
 4. A WATCH LIST or a conditional level ("AMD ABOVE 646", "SUPPORT $379 TSLA", "WATCH LIST THIS MORNING") is not a call yet: no card. Put the trigger levels in your read. The card comes when he says it triggered / broke / held, or calls it.
 5. Commentary, chatter, or a chart with no tradeable call: no card.
-Work quietly — don't narrate your lookups. When you're done, write the read for the Otto Signals feed, starting with a line that is exactly READ: — everything after that line is what Ifoma and Josh see. For each post, 1–3 short plain lines: what he said; for a card, your direction and WHY (and the ALT if there is one); and what would prove it wrong. No headers, no tables.`;
+Work quietly — don't narrate your lookups. When you're done, write the read for the Otto Signals feed, starting with a line that is exactly READ: — everything after that line is what Ifoma and Josh see. For each post, 1–3 short plain lines: what he said; for a card, your direction and WHY; and what would prove it wrong. No headers, no tables.`;
 }
 
 export async function signalProcess(bid: number, ins: any[], imgs: { mime: string; data: string }[], cfg: any) {
@@ -3640,17 +3647,41 @@ export async function signalJarvis(bid: number) {
       r.posted_at && Date.now() - Date.parse(r.posted_at) < 90 * 60e3);
     // v3.16: the server fetches price, buying power and the near-the-money contracts first (MU, 6 Oct: Jarvis spent
     // every step paging the chain from $5 and never made the card).
-    const [setup, pre] = await Promise.all([deskSetup(), signalPrefetch(tradeable.filter((r: any) => !carded.some((c: any) => c.ticker === r.ticker))).catch(() => "")]);
+    // v3.23 (Ifoma, 8 Oct): ONE call to card → Jarvis makes it in ONE forced step with everything pre-fetched (price, 5-min bars,
+    // contracts, buying power), one retry, then no card + why. Target: post → card under 30 s. Several calls at once → the old loop.
+    const open1 = tradeable.filter((r: any) => !carded.some((c: any) => c.ticker === r.ticker));
+    const callRows = open1.filter((r: any) => r.kind === "call");
+    const oneStep = callRows.length === 1 && new Set(open1.map((r: any) => r.ticker)).size === 1;
+    const [setup, pre] = await Promise.all([oneStep ? deskSetup({ fast: true }) : deskSetup(),
+      (oneStep ? signalPack(callRows[0]) : signalPrefetch(open1)).catch(() => "")]);
     const { cs, sys, tools, ctxLine } = setup;
     const preBlock = pre ? `\nPRE-FETCHED BY THE SERVER (live, use these — the option_id values are exact; don't page the chain again unless nothing here works):\n${pre}\n` +
-      `Build the card from ★ (best by the rules). If ★ is over buying power, ◆ is your ALT (or your only card if there's no ★). Limit price = the ask or a cent under. Make the card in your FIRST or SECOND step — speed is the edge on a signal.\n` : "";
+      `Build the card from ★ if it fits buying power, otherwise ◆ — one card. Limit price = the ask or a cent under. Make the card in your FIRST or SECOND step — speed is the edge on a signal.\n` : "";
     const prompt = ctxLine + "\n" + signalPrompt(cfg, all, carded) + preBlock;
     const mustCard = tradeable.some((r: any) => r.kind === "call" && !carded.some((c: any) => c.ticker === r.ticker));
     let res: any = { said: "", cards: [] as string[], did: [], failed: [], finalText: "" };
     let err = "";
+    const pinged = new Set<string>();
     try {
       // v3.9.4: no TradingView tools in a card build — TradingView has been slow/rate-limited and it ate Jarvis's
       // time. Prices, chains and quotes come from Robinhood; the banner (Yahoo) is in the context line.
+      if (oneStep) {
+        res = await runDesk({ msgs: [{ role: "user", content: ctxLine + "\n" + signalPrompt(cfg, all, carded) + "\n" + ONE_STEP_RULE + "\n" + pre }], sys,
+          tools: [signalProposeTool(tools)], cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 2, mustCard: true, oneStep: true,
+          deadline: t0 + RUN_BUDGET_MS, onCard: async (id: string) => {        // ping the card the moment it exists, before the read is saved
+            pinged.add(id);
+            const row = callRows[0];
+            row.action_id = id;
+            await db("otto_jason?id=eq." + row.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ action_id: id }) }).catch(() => {});
+            await markPinged([id]);
+            const a = (await db("otto_actions?select=title&id=eq." + id).catch(() => []))?.[0];
+            await notify("signal", `🃏 Card ready: ${row.ticker} ${row.direction ? String(row.direction).toUpperCase() : ""}`.trim(),
+              `${String(a?.title || "").slice(0, 100)} — from ${SIG_LABEL}: "${String(row.words || "").slice(0, 70)}". Tap to Approve or Reject (expires in 20 min).`, "./#signals");
+            await sigBatch(bid, { cards: [id], timing: { posted: all[0]?.posted_at || null, caught: b.created_at, card_ms: Date.now() - t0, cards: 1,
+              total_ms: all[0]?.posted_at ? Date.now() - Date.parse(all[0].posted_at) : null, one_step: true } }).catch(() => {});
+          } });
+        if (res.cardRead) res.said = "READ:\n" + res.cardRead;
+      } else
       res = await runDesk({ msgs: [{ role: "user", content: prompt + "\n(Use Robinhood tools for prices, option chains and quotes — TradingView tools are not available in this run.)" }], sys,
         tools: tools.filter((t: any) => t.name !== "close_position" && !/^tv__/.test(String(t.name || ""))),
         cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 8, mustCard, deadline: t0 + RUN_BUDGET_MS });
@@ -3671,16 +3702,17 @@ export async function signalJarvis(bid: number) {
     const missing = tradeable.filter((r: any) => r.kind === "call" && !r.action_id && !cardTicks.has(r.ticker) && !carded.some((c: any) => c.ticker === r.ticker));
     const why = err ? "Jarvis hit an error: " + err.slice(0, 120)
       : res.timedOut ? "Jarvis ran out of time"
+      : (res.failed || []).includes("propose_action") ? "the card was rejected: " + String((res.errors || []).slice(-1)[0] || "bad contract or order details").replace(/^propose_action:\s*/, "").slice(0, 160)
       : res.outOfRounds && !res.cards.length ? "Jarvis ran out of steps before the card"
-      : (res.failed || []).includes("propose_action") ? "the card was rejected (bad contract or order details)"
       : "Jarvis decided against a card — see the read";
     let read = cut >= 0 ? rawRead.slice(cut + 5).trim() : readFallback(all, res.cards, missing.length ? why : "none needed");
     try { const fc = await factCheck(read); if (fc.notes.length) read = fc.text.trim() + "\n\n" + fc.notes.join("\n"); } catch { /* v3.22 */ }
     if (missing.length && cut >= 0) read += `\n\n⚠ No card for ${missing.map((r: any) => r.ticker).join(", ")}: ${why}.`;   // the feed tag says "no card" (status stays "done")
-    const timing = { posted: all[0]?.posted_at || null, caught: b.created_at, card_ms: Date.now() - t0, cards: res.cards.length, total_ms: all[0]?.posted_at ? Date.now() - Date.parse(all[0].posted_at) : null };
+    const prevT = pinged.size ? ((await db("otto_signal_batches?select=timing&id=eq." + bid).catch(() => []))?.[0]?.timing || null) : null;
+    const timing = prevT || { posted: all[0]?.posted_at || null, caught: b.created_at, card_ms: Date.now() - t0, cards: res.cards.length, total_ms: all[0]?.posted_at ? Date.now() - Date.parse(all[0].posted_at) : null, one_step: oneStep };
     await sigBatch(bid, { status: err ? "error" : "done", read: read || null, cards: res.cards, error: err || (missing.length ? why : null), timing });
     if (acts.length) await markPinged(acts.map((a: any) => a.id));
-    for (const a of acts) {
+    for (const a of acts.filter((x: any) => !pinged.has(x.id))) {
       const row = all.find((r: any) => r.action_id === a.id);
       await notify("signal", `🃏 Card ready: ${row?.ticker || ""} ${row?.direction ? row.direction.toUpperCase() : ""}`.trim(),
         `${String(a.title || "").slice(0, 100)} — from ${SIG_LABEL}: "${String(row?.words || "").slice(0, 70)}". Tap to Approve or Reject (expires in 20 min).`, "./#signals");
@@ -5370,16 +5402,21 @@ export async function signalSelfTest(force = false) {
     if (!sl.rows.length) throw new Error("no SPY contracts listed");
     return `${sl.rows.length} contracts, best ${sl.best?.label || "none in band"}, fits ${sl.bestFit?.label || "nothing fits"}`;
   });
-  await step("Jarvis builds the card (dry run)", async () => {
+  await step("Jarvis builds the card (dry run, one step)", async () => {
     if (!pre) throw new Error("skipped — no shortlist");
-    const { cs, sys, tools, ctxLine } = await deskSetup();
-    const prompt = `${ctxLine}\n[SELF-TEST — not a real signal. Make ONE opening card for "SPY LONG" from this list, using ◆ (fits buying power) or ★. It will NOT be stored.]\n${pre}`;
-    const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: tools.filter((t: any) => t.name === "propose_action"), cs,
-      who: "selftest", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 3, mustCard: true, dryRun: true, deadline: Date.now() + 60_000 });
+    // v3.23: the same path a live Signal takes — fast setup, everything pre-fetched, one forced step.
+    const [{ cs, sys, tools, ctxLine }, pack] = await Promise.all([deskSetup({ fast: true }), signalPack({ ticker: "SPY", direction: "long" })]);
+    const prompt = `${ctxLine}\n[SELF-TEST — not a real signal. The coach posted "SPY LONG". It will NOT be stored.]\n${ONE_STEP_RULE}\n${pack || pre}`;
+    const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: [signalProposeTool(tools)], cs,
+      who: "selftest", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 2, mustCard: true, oneStep: true, dryRun: true, deadline: Date.now() + 60_000 });
     if (!res.dry?.length) throw new Error(res.failed.includes("propose_action") ? "the card was malformed — " + (res.errors || []).slice(-1)[0] : "no card was made");
+    if (!res.cardRead) throw new Error("the card came without its read");
     return String(res.dry[0].title || "card ok").slice(0, 80);
   });
-  const ok = steps.every((x) => x.ok), secs = Math.round((Date.now() - t0) / 1000);
+  const total = Math.round((Date.now() - t0) / 1000);
+  // v3.23: over the 30 s target is a failed self-test (Ifoma, 8 Oct).
+  steps.push({ name: `Speed (target ${SIGNAL_TARGET_S}s)`, ok: total <= SIGNAL_TARGET_S, ms: Date.now() - t0, note: total <= SIGNAL_TARGET_S ? `${total}s` : `${total}s — slower than the ${SIGNAL_TARGET_S}s target` });
+  const ok = steps.every((x) => x.ok), secs = total;
   const text = `${ok ? "✅" : "❌"} Signal self-test ${fmtMin(c.min)} ET — ${ok ? `all good, post → card in ${secs}s` : "FAILED"}\n` +
     steps.map((x) => `${x.ok ? "✓" : "✗"} ${x.name} (${(x.ms / 1000).toFixed(1)}s): ${x.note}`).join("\n");
   await logDesk("system", "Otto", text);
@@ -6490,3 +6527,40 @@ export function spliceRecap(jarvis: string, block: string): string {
   return parts.join("").trim();
 }
 export const actOnForTest = actOn;
+
+/* ============================================================ v3.23 (8 Oct 2026) — Signal speed
+   Decisions (Ifoma, 8 Oct; claude/otto-v323-speed.md): Jarvis makes a Signal card in ONE forced step with everything
+   pre-fetched; target post → card under 30 s (the 9:10 self-test fails over 30 s); Jarvis still picks direction when
+   the coach gives none; the read stays on the main model; one card per post (no "ALT —"); one retry, then no card + why. */
+
+export const ONE_STEP_RULE = `ONE STEP (speed is the edge): everything you need is below, fetched live by the server a moment ago — the live price, today's 5-minute bars, the contracts (★ = best by the Otto Rules, ◆ = best that fits buying power) and buying power. Do NOT look anything up. Make the card NOW with propose_action — this is your only step (the server allows one retry if it bounces the card). ONE card: ★ if it fits buying power, otherwise ◆; nothing fits → the cheapest anyway (red banner). Limit = the ask or a cent under. Levels (entry, wrong-if, TP1) must be within 10% of the live price. Keep the summary to 4 short lines. Put the feed read in the card's "read" field: 1–3 short plain lines — what he said, your direction and WHY, what proves it wrong.`;
+
+export function signalProposeTool(tools: any[]) {
+  const base = tools.find((x: any) => x?.name === "propose_action") || PROPOSE_TOOL("");
+  const t = JSON.parse(JSON.stringify(base));
+  t.input_schema.properties.read = { type: "string", description: "The read for the Otto Signals feed: 1–3 short plain lines (what he said, your direction and why, what proves it wrong)." };
+  t.input_schema.required = [...new Set([...(t.input_schema.required || []), "read", "plan"])];
+  return t;
+}
+
+export function barsText(bars: Bar[], n = 24): string {
+  return bars.slice(-n).map((b) => `${fmtMin(etParts(new Date(b.t)).min)} o${b.o} h${b.h} l${b.l} c${b.c}`).join(" · ");
+}
+
+// Everything a Signal card needs, fetched in parallel: price, today's 5-minute bars, the contracts (both sides if no direction).
+export async function signalPack(r: any): Promise<string> {
+  const tk = v322Sym(r.ticker);
+  if (!tk) return "";
+  const sides: ("call" | "put")[] = r.direction === "long" ? ["call"] : r.direction === "short" ? ["put"] : ["call", "put"];
+  const [sls, bars, px] = await Promise.all([
+    Promise.all(sides.map((s) => withTimeout(shortlistCached(tk, s), 25_000, "shortlist " + tk).then((x) => x.text,
+      (e) => `${tk} ${s}s: couldn't pre-fetch (${String((e as Error).message).slice(0, 100)}).`))),
+    withTimeout(rhBars([tk], "5minute", new Date(Date.now() - 3 * 3600e3).toISOString()), 8000, "bars").then((m) => completedBars(m[tk] || [], 5)).catch(() => [] as Bar[]),
+    rhPrices([tk]).catch(() => ({} as Record<string, number>)),
+  ]);
+  return `PRICE: ${tk} ${px[tk] > 0 ? "$" + px[tk].toFixed(2) + " (live)" : "see the contract list"}\n` +
+    `5-MIN BARS (ET, last 2 hours, finished bars only): ${bars.length ? barsText(bars) : "not available"}\n` +
+    `CONTRACTS:\n${sls.join("\n\n")}`;
+}
+
+export const SIGNAL_TARGET_S = 30;
