@@ -852,3 +852,37 @@ Deno.test("plans: the Desk context carries today's locked plans", async () => {
   const w: any = await M.watchGet();
   assert(w.plans?.length === 1 && w.plans[0].author === "Josh", JSON.stringify(w.plans));
 });
+
+/* ======================= v3.19.1 — TradingView timeout must not crash the worker ======================= */
+// 7 Oct: 100+ "event loop error: TradingView timed out" in the Supabase logs. With the breaker open,
+// tvBudget walked away from a TradingView call that was already running; when it later failed nobody
+// was listening, and Supabase shut the worker down — killing Josh's Desk replies and Signal runs with it.
+Deno.test("v3.19.1: breaker open + TradingView fails later → no stray rejection, Desk reply and a Robinhood run both finish", async () => {
+  reset();
+  const saved = (globalThis as any).__OTTO_TEST__.call;
+  (globalThis as any).__OTTO_TEST__.call = async (service: string, tool: string, args: any) => {
+    if (service === "tv") { await sleep(150); throw new Error("TradingView timed out"); }
+    if (tool === "get_equity_quotes") { await sleep(400); return { content: [{ type: "text", text: JSON.stringify({ data: { results: [{ quote: { last_trade_price: "236.76" } }] } }) }] }; }
+    return fakeCall(service, tool, args);
+  };
+  try {
+    T.otto_settings.push({ key: "tv_slow_until", value: Date.now() + 3600_000 });
+    const before = (M as any).strayCount();
+    claudeScript = (body: any) => {
+      const n = body.messages.length;
+      if (n === 1) return JSON.stringify(body.messages[0]).includes("JOSH") ? toolReply("tv__mcp-tv-get-ohlcv", { symbol: "NASDAQ:NVDA", interval: "5", count: 3 }) : toolReply("rh__get_equity_quotes", { symbols: ["NVDA"] });
+      return textReply(JSON.stringify(body.messages[n - 1]).includes("236.76") ? "RH-DONE" : "JOSH-REPLY");
+    };
+    const go = (who: string, t: string) => M.runDesk({ msgs: [{ role: "user", content: t }], sys: "S", tools: [], cs: [], who, send: () => {}, allowPropose: false });
+    const [a, b] = await Promise.all([go("josh", "JOSH: check nvda"), go("signals", "SIGNAL: card")]);
+    await sleep(500);   // the abandoned TradingView call fails in here
+    assert(String(a.said).includes("JOSH-REPLY"), "Josh got no reply: " + a.said);
+    assert(String(b.said).includes("RH-DONE"), "Robinhood run cut off: " + b.said);
+    assert((M as any).strayCount() === before, "a TradingView failure went unhandled");
+  } finally { (globalThis as any).__OTTO_TEST__.call = saved; }
+});
+Deno.test("v3.19.1: the stray-rejection safety net is installed", async () => {
+  const src = await Deno.readTextFile(new URL("../otto-proxy.ts", import.meta.url));
+  assert(/addEventListener\("unhandledrejection"[\s\S]{0,80}preventDefault\(\)/.test(src), "safety net missing");
+  assert(/function tvBudget[\s\S]{0,600}p\.catch\(\(\) => \{\}\);[\s\S]{0,40}if \(tvSlow\(\)\)/.test(src), "tvBudget must handle the call before the breaker check");
+});

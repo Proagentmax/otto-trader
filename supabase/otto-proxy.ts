@@ -1023,6 +1023,15 @@ function mcpJson(res: any): any {
   try { return JSON.parse(mcpText(res)); } catch { return null; }
 }
 // v3.13: test seam — undefined in production (only the Deno test suite sets it).
+// v3.19.1: safety net (Supabase's documented fallback). Any promise that rejects with nobody listening
+// is logged as "stray rejection" instead of shutting the worker down mid-reply.
+let STRAY = 0;
+globalThis.addEventListener("unhandledrejection", (ev: PromiseRejectionEvent) => {
+  ev.preventDefault();
+  STRAY++;
+  console.error("stray rejection (worker kept alive):", String((ev.reason as Error)?.message ?? ev.reason).slice(0, 300));
+});
+export const strayCount = () => STRAY;
 const TEST: any = (globalThis as any).__OTTO_TEST__ || null;
 
 async function call(service: string, tool: string, args: any) {
@@ -1252,6 +1261,10 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
 let TV_SLOW_UNTIL = 0, WC_LAST = "";
 const tvSlow = () => Date.now() < TV_SLOW_UNTIL;
 function tvBudget<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  // v3.19.1 (7 Oct night): the call is already running when we get here. If we walk away from it
+  // (breaker open), its later "TradingView timed out" had no handler — an unhandled rejection —
+  // and Supabase shut the whole worker down ("event loop error"), killing every Desk/Signal run on it.
+  p.catch(() => {});
   if (tvSlow()) return Promise.reject(new Error("TradingView is slow right now — using backups for a couple of minutes"));
   return withTimeout(p, ms, label).catch((e) => {
     if (/slow right now|timed out|HTTP 429|429|rate.?limit|bad handshake|unreachable/i.test(String(e?.message))) { TV_SLOW_UNTIL = Date.now() + 120_000; putSetting("tv_slow_until", TV_SLOW_UNTIL).catch(() => {}); }
