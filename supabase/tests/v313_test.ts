@@ -1129,3 +1129,179 @@ Deno.test("v3.21: new cards carry a 5-minute wrong-if; scoring follows each card
   const src = await Deno.readTextFile(new URL("../otto-proxy.ts", import.meta.url));
   assert(/const res = kind === "wrong" \? String\(ex\.wrong_tf \|\| 15\) : "1";/.test(src), "TradingView alert uses the card's bar");
 });
+
+/* ======================= v3.22 — Jarvis never states made-up facts (replays of the 7 Oct misses) ======================= */
+const pxHook = (px: Record<string, number>, extra?: (tool: string, args: any) => any) => (tool: string, args: any) => {
+  if (extra) { const r = extra(tool, args); if (r) return r; }
+  if (tool === "get_equity_quotes") return { data: { results: (args.symbols || []).map((s: string) => px[s] ? { quote: { symbol: s, last_trade_price: String(px[s]) } } : { quote: { symbol: s } }) } };
+  if (tool === "mcp-watchlist-list-watchlists") return { watchlists: [
+    { name: "💰Treasure Hunt", symbols: ["NASDAQ:NVDA", "NASDAQ:AAPL", "NASDAQ:MU", "AMEX:SPY", "NASDAQ:QQQ"] },
+    { name: "Watchlist", symbols: ["###Indices", "SP:SPX", "NASDAQ:TSLA"] }, { name: "FUTURES", symbols: ["CME_MINI:MES1!"] }] };
+  return null;
+};
+let v322clock = 0;
+const v322reset = (day = "2026-10-07") => { reset(); v322clock += 7; setNow(new RealDate(RealDate.parse(day + "T15:00:00Z") + v322clock * 60e3).toISOString()); };
+
+Deno.test("v3.22: AAPL card with 233/237 levels while AAPL is ~335 → sent back once, then NO card and the Desk says why", async () => {
+  v322reset();
+  callHook = pxHook({ AAPZ: 335.2 }, fakeChain("AAPZ", 335.2, 2.5, 4.1, 1151));
+  let e1 = "", e2 = "";
+  try { await M.proposeAction(optCard("AAPZ", "AAPZ-2026-10-16-put-335", 4.1, "down", 3.2, 233, 237), "watcher"); } catch (e) { e1 = (e as Error).message; }
+  assert(/Levels don't match the live price: AAPZ is \$335\.20/.test(e1) && /TP1 233 is 30% away/.test(e1) && /one more try/.test(e1), "first try bounced: " + e1);
+  try { await M.proposeAction(optCard("AAPZ", "AAPZ-2026-10-16-put-335", 4.1, "down", 3.2, 233, 237), "watcher"); } catch (e) { e2 = (e as Error).message; }
+  assert(/^NO CARD — second try still off/.test(e2), "second try: " + e2);
+  assert(!T.otto_actions.length, "no card stored");
+  assert(/No card for AAPZ puts: the levels didn't match the live price/.test(deskText()), deskText());
+  // the fixed card goes through
+  const c: any = await M.proposeAction(optCard("AAPZ", "AAPZ-2026-10-16-put-335", 4.1, "down", 3.2, 331, 337), "watcher");
+  assert(c.status === "pending", "real levels → card");
+});
+
+Deno.test("v3.22: a level within 10% passes; price unknown (no quote) never blocks a card", async () => {
+  v322reset();
+  callHook = pxHook({}, fakeChain("NVQX", 236.73, 2.5, 4.53, 1151.73));
+  const c: any = await M.proposeAction(optCard("NVQX", "NVQX-2026-10-16-put-237.5", 4.55, "down", 3.38, 225, 245), "watcher");
+  assert(c.status === "pending", "card built with 5% levels");
+});
+
+Deno.test("v3.22: the Watcher refuses AAPL 233 when AAPL is 335, takes 336", async () => {
+  v322reset();
+  callHook = pxHook({ AAPW: 335 });
+  let e = ""; try { await M.watchAdd({ ticker: "AAPW", level: 233, dir: "down", source: "desk" }); } catch (x) { e = (x as Error).message; }
+  assert(/AAPW 233 is 30% from the live price \$335\.00 — not added/.test(e), e);
+  const r: any = await M.watchAdd({ ticker: "AAPW", level: 336, dir: "up", source: "desk" });
+  assert(r && r.level === 336, "336 added");
+});
+
+Deno.test("v3.22: 'HEADING TO 1074' read as ABBV → matched by price to MU (Treasure Hunt), one clear match", async () => {
+  v322reset("2026-10-05");
+  callHook = pxHook({ ABBV: 231.4, MU: 1068.2, NVDA: 236.7, AAPL: 335.1, SPY: 668, QQQ: 600, TSLA: 440 });
+  const { posts, asks } = await M.verifyTickers([{ kind: "call", ticker: "ABBV", direction: "long", entry: 0, level: 1074, words: "HEADING TO 1074", summary: "x" }]);
+  assert(posts[0].ticker === "MU" && posts[0].ticker_was === "ABBV", JSON.stringify(posts[0]));
+  assert(/matched by price: 1074 ≈ MU \$1068\.20; ABBV is \$231\.40/.test(posts[0].summary), posts[0].summary);
+  assert(!asks.length, "no question needed");
+});
+
+Deno.test("v3.22: no ticker and nothing near the price → ticker cleared, no card, the Desk asks which stock", async () => {
+  v322reset("2026-10-04");
+  callHook = pxHook({ MU: 1068.2, NVDA: 236.7, AAPL: 335.1, SPY: 668, QQQ: 600, TSLA: 440 });
+  const r1 = await M.verifyTickers([{ kind: "call", ticker: "", direction: "", entry: 0, level: 1600, words: "1600 NEXT", summary: "" }]);
+  assert(r1.posts[0].ticker === "" && /which stock\? 1600 came with no ticker, and nothing on your watchlists/.test(r1.asks[0]), JSON.stringify(r1));
+  // two stocks near the price → ask, list both
+  const r2 = await M.verifyTickers([{ kind: "level", ticker: "", direction: "", entry: 0, level: 605, words: "605 HOLDS", summary: "" }]);
+  assert(r2.posts[0].ticker === "" && /fits more than one: SPY \$668\.00, QQQ \$600\.00|fits more than one: QQQ \$600\.00, SPY \$668\.00/.test(r2.asks[0]), JSON.stringify(r2.asks));
+  // a ticker that fits is never touched; an unpriceable one (futures) is left alone
+  const r3 = await M.verifyTickers([{ kind: "call", ticker: "NVDA", entry: 237, level: 0, words: "NVDA 237", summary: "" }, { kind: "call", ticker: "MES", entry: 0, level: 6700, words: "MES 6700", summary: "" }]);
+  assert(r3.posts[0].ticker === "NVDA" && r3.posts[1].ticker === "MES" && !r3.asks.length, JSON.stringify(r3));
+});
+
+Deno.test("v3.22: a Signal batch with a mismatched ticker never becomes an ABBV card (live path)", async () => {
+  v322reset("2026-10-03");
+  callHook = pxHook({ ABBV: 231.4, MU: 1068.2, NVDA: 236.7 });
+  extractHook = () => [{ time: "10:05 AM", kind: "call", ticker: "ABBV", direction: "long", late: false, entry: 0, level: 1074, option: "", words: "HEADING TO 1074", pinged: true, chart: "", summary: "ABBV long" }];
+  await M.signalProcess(1, [{ posted_at: new Date().toISOString(), text: "HEADING TO 1074", imgs: 0 }], [], { mentor: "Coach", channel_name: "#x" }).catch(() => {});
+  const j = (T.otto_jason || [])[0];
+  assert(j && j.ticker === "MU", "saved as MU: " + JSON.stringify(j));
+});
+
+Deno.test("v3.22: the made-up 'Oct 3 call' is removed; real call dates and option contracts are left alone", () => {
+  const dates = ["2026-09-24", "2026-10-01"];
+  const a = M.checkCitations("The coach said on the Oct 3 call to wait for the 5-minute close.", dates, "2026-10-07");
+  assert(a.removed.length === 1 && /said on a call \(source not found\) to wait/.test(a.text), JSON.stringify(a));
+  const b = M.checkCitations("Otto Rules: no trades in the first 30 minutes (Otto Rules, Oct 3, 14:22).", dates, "2026-10-07");
+  assert(b.text.endsWith("minutes (source not found).") && b.removed.length === 1, b.text);
+  const c = M.checkCitations("The coach covered this on the Oct 1 call (Otto Rules, Oct 1, 12:10) and the 9/24 call.", dates, "2026-10-07");
+  assert(!c.removed.length && c.text.includes("Oct 1 call") && c.text.includes("9/24 call"), JSON.stringify(c));
+  const d = M.checkCitations("Buy the Oct 9 call at $3.50 — the 10/16 call is too pricey. The Oct 3 call option expired.", dates, "2026-10-07");
+  assert(!d.removed.length, "option talk untouched: " + JSON.stringify(d));
+  const e = M.checkCitations("Otto Rules say it (coaching call, 2026-08-30).", dates, "2026-10-07");
+  assert(e.removed.length === 1 && e.text.includes("(source not found)"), JSON.stringify(e));
+});
+
+Deno.test("v3.22: 'no prep today' when Josh's morning read exists → corrected before it's saved on the Desk", async () => {
+  v322reset("2026-10-02");
+  callHook = pxHook({});
+  T.otto_prep = [{ id: 1, day: "2026-10-02", author: "Josh", created_at: "2026-10-02T12:41:00Z", status: "graded" }];
+  T.otto_jason = [];
+  await (M as any).checkAdd;   // (module loaded)
+  const fc = await M.factCheck("Quick note: there's no prep from anyone this morning, so I'm working off the banner.");
+  assert(/\[Corrected by Otto: there IS a morning read today \(Josh, 8:41 AM\)\.\]/.test(fc.text) && !/no prep from anyone/.test(fc.text), fc.text);
+  assert(/⚠ Correction \(Otto checked\)/.test(fc.notes[0]), JSON.stringify(fc.notes));
+  // a true "none" stays
+  T.otto_prep = [];
+  const ok = M.checkNoneClaims("No signals from the coach yet today.", { prep: [], sig: [], ord: [] });
+  assert(ok.text === "No signals from the coach yet today." && !ok.notes.length, JSON.stringify(ok));
+  // 'no signal card' is not a 'no signals' claim
+  const sc = M.checkNoneClaims("No signal card for TSLA today — it was a watch list.", { prep: [], sig: [{ ticker: "TSLA", kind: "level" }], ord: [] });
+  assert(!sc.notes.length, JSON.stringify(sc));
+  // false 'no fills today'
+  const fl = M.checkNoneClaims("We have no fills today.", { prep: [], sig: [], ord: [{ state: "filled" }] });
+  assert(/there ARE fills today \(1 filled order/.test(fl.text), fl.text);
+});
+
+Deno.test("v3.22: today's facts are in Jarvis's context (look first)", () => {
+  const l = M.factsLine({ prep: [{ author: "Josh", created_at: "2026-10-07T12:41:00Z" }], sig: [{ kind: "call" }, { kind: "note" }], ord: [{ state: "filled" }, { state: "rejected" }] });
+  assert(/morning reads: Josh 8:41 AM; Agentic option orders: 2 \(1 filled, 1 cancelled\/rejected\); coach signal posts: 2 \(1 calls\)/.test(l), l);
+  assert(/unknown/.test(M.factsLine({ prep: null, sig: null, ord: null })), "unknown when it can't check");
+});
+
+Deno.test("v3.22: the 7 Oct recap from Robinhood's records — unfilled 240P is not a win, 237.5P is −$15, ABBV shows Robinhood's reason", () => {
+  const orders = [
+    { id: "o1", state: "cancelled", created_at: "2026-10-07T14:12:00Z", chain_symbol: "NVDA", legs: [{ option_id: "p240", side: "buy", position_effect: "open", strike_price: "240.0000", option_type: "put", expiration_date: "2026-10-09", executions: [] }] },
+    { id: "o2", state: "filled", created_at: "2026-10-07T15:20:00Z", chain_symbol: "NVDA", legs: [{ option_id: "p2375", side: "buy", position_effect: "open", strike_price: "237.5000", option_type: "put", expiration_date: "2026-10-16", executions: [{ price: "4.55", quantity: "1" }] }] },
+    { id: "o3", state: "filled", created_at: "2026-10-07T15:58:00Z", chain_symbol: "NVDA", legs: [{ option_id: "p2375", side: "sell", position_effect: "close", executions: [{ price: "4.40", quantity: "1" }] }] },
+    { id: "o4", state: "rejected", created_at: "2026-10-07T16:30:00Z", chain_symbol: "ABBV", reject_reason: "Invalid field: chain_symbol", legs: [{ option_id: "abbv", side: "buy", position_effect: "open", strike_price: "230", option_type: "call", expiration_date: "2026-10-16" }] },
+  ];
+  const acts = [{ title: "Buy NVDA 240P", status: "expired" }, { title: "Buy NVDA 237.5P", status: "done" }, { title: "Buy ABBV 230C", status: "failed", result: [{ ok: false, text: "Rejected by Robinhood: Invalid field: chain_symbol" }] }, { title: "QQQ", status: "rejected" }];
+  const b = M.recapTradesBlock(orders, acts);
+  assert(/NVDA 240P 10\/09: cancelled — never filled/.test(b), b);
+  assert(/NVDA 237\.5P 10\/16: bought 1 @ \$4\.55 → sold @ \$4\.40 = −\$15/.test(b), b);
+  assert(/ABBV 230C 10\/16: REJECTED by Robinhood — never filled \(Robinhood: Invalid field: chain_symbol\)/.test(b), b);
+  assert(/Realized on closed trades today: −\$15/.test(b) && !/win/i.test(b), b);
+  assert(/Cards: 4 made · 2 approved · 1 passed · 1 expired · 1 failed \(Buy ABBV 230C: Invalid field: chain_symbol\)/.test(b), b);
+  const j = "### Today in one line\nRough day.\n\n### Trades and cards\n- NVDA 240P: WIN +1R\n\n### What was discussed\nstuff";
+  const s = M.spliceRecap(j, b);
+  assert(!/WIN \+1R/.test(s) && s.indexOf("Rough day") < s.indexOf("From Robinhood's own") && s.indexOf("From Robinhood's own") < s.indexOf("What was discussed"), s);
+});
+
+Deno.test("v3.22: a chain_symbol field on the order is removed before the card; Robinhood's rejection shows its exact reason", async () => {
+  v322reset("2026-10-01");
+  (globalThis as any).__OTTO_TEST__.tools = async () => [{ name: "place_option_order", inputSchema: { type: "object", properties: {
+    account_number: {}, legs: { type: "array", items: { type: "object", properties: { option_id: {}, side: {}, position_effect: {}, ratio_quantity: {} } } },
+    type: {}, price: {}, quantity: {}, time_in_force: {}, direction: {}, ref_id: {} } } }];
+  callHook = fakeChain("ABBX", 231, 2.5, 3.1, 1151);
+  const card = optCard("ABBX", "ABBX-2026-10-16-call-230", 3.1, "up", 2.4, 236, 229);
+  (card.calls[0].args as any).chain_symbol = "ABBX"; (card.calls[0].args.legs[0] as any).chain_symbol = "ABBX";
+  const c: any = await M.proposeAction(card, "watcher");
+  const args = T.otto_actions[0].calls[0].args;
+  assert(!("chain_symbol" in args) && !("chain_symbol" in args.legs[0]) && args.ref_id && args.account_number, JSON.stringify(args));
+  assert(c.risk.notes.some((n: string) => /removed fields Robinhood doesn't take: (chain_symbol, legs\.chain_symbol|legs\.chain_symbol, chain_symbol)/.test(n)), JSON.stringify(c.risk.notes));
+  delete (globalThis as any).__OTTO_TEST__.tools;
+  // the approve fails at Robinhood → exact reason on the card and the Desk
+  callHook = (tool: string) => { if (tool === "place_option_order") throw new Error('API error 400: {"detail":"Order price is outside the allowed collar."}'); return null; };
+  const uid = "0b0b0b0b-1111-2222-3333-444455556666";
+  T.otto_actions[0].id = uid; T.otto_actions[0].created_at = new Date().toISOString();
+  const r: any = await (M as any).actOnForTest(uid, "approve", "ifoma@x");
+  assert(r.status === "failed" && /^Rejected by Robinhood: Order price is outside the allowed collar\./.test(T.otto_actions[0].result[0].text), JSON.stringify(T.otto_actions[0].result));
+  assert(/✗ Buy 1 ABBX — Rejected by Robinhood: Order price is outside the allowed collar\. \(approved by ifoma@x\)/.test(deskText()), deskText());
+});
+
+Deno.test("v3.22: an entry Robinhood rejects after Approve → the Desk and the card show Robinhood's reason", async () => {
+  v322reset("2026-09-30");
+  orders.push({ id: "e-rej", state: "rejected", reject_reason: "Insufficient buying power.", legs: [{ option_id: OPT, side: "buy", position_effect: "open", executions: [] }] });
+  T.otto_actions = [{ id: "card-rej", title: "Buy 1 SPY 781C", status: "done", created_at: new Date().toISOString(), decided_at: new Date().toISOString(),
+    exit: { state: "waiting_fill", order_id: "e-rej", option_id: OPT, qty: 1, entry_limit: 3.5, stop_option: 2, tv_symbol: "AMEX:SPY", direction: "up", wrong_if: 778, tp1: 784, log: [] } }];
+  await M.exitTick(T.otto_actions[0]);
+  assert(T.otto_actions[0].exit.state === "dead" && T.otto_actions[0].exit.dead_reason === "rejected: Insufficient buying power.", JSON.stringify(T.otto_actions[0].exit));
+  assert(/the entry was rejected \(Robinhood: Insufficient buying power\.\), so no stop or alerts were set/.test(deskText()), deskText());
+});
+
+Deno.test("v3.22: the exact 7 Oct lines — '(Oct 3 call, 29:20)' removed, \"I don't have a prep section\" corrected, 'No card: the coach's own morning read' left alone", () => {
+  const a = M.checkCitations("- **Never swing into a binary event** (Oct 3 call, 29:20) — hard out at 1:45 covers it.", ["2026-10-01"], "2026-10-07");
+  assert(a.removed[0] === "(Oct 3 call, 29:20)" && a.text.includes("(source not found)"), JSON.stringify(a));
+  const f = { prep: [{ author: "Josh", created_at: "2026-10-07T12:41:00Z" }], sig: [], ord: [] };
+  const b = M.checkNoneClaims("No, I don't have a prep section or a pre-market plan from you for today.", f);
+  assert(b.notes.length === 1 && /Corrected by Otto: there IS a morning read today/.test(b.text), JSON.stringify(b));
+  const c = M.checkNoneClaims("No card: the coach's own morning read was long-biased on NVDA making new highs.", f);
+  assert(!c.notes.length, JSON.stringify(c));
+});

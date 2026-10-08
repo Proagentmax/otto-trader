@@ -2099,7 +2099,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.21.0";
+const BUILD="3.22.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3261,6 +3261,7 @@ function dkExit(a){
     row(`Wrong if (${esc(tk)}, ${Number(x.wrong_tf)===5?5:15}-min close)`,esc(x.wrong_if)+(x.state==="armed"?(al.wrong!=null?" ✓":" ✗"):""))+
     row(`TP1 (${esc(tk)})`,esc(x.tp1)+(x.state==="armed"?(al.tp1!=null?" ✓":" ✗"):""))+
     (x.fill_price?row("Filled",`${x.qty} @ $${(+x.fill_price).toFixed(2)}`):"")+
+    (x.state==="dead"&&x.dead_reason?`<div class="dk-err" style="margin-top:4px">Robinhood: ${esc(x.dead_reason)}</div>`:"")+
     (x.stop_error&&x.state==="armed"?`<div class="dk-err" style="margin-top:4px">Stop problem: ${esc(x.stop_error)}</div>`:"")+
     (x.alert_error&&x.state==="armed"?`<div class="dk-err" style="margin-top:4px">Alert problem: ${esc(x.alert_error)}</div>`:"")+
     ((x.log||[]).length?`<details><summary class="mut">Timeline (${x.log.length})</summary><pre>${x.log.map(l=>dkTime(l.at)+"  "+esc(l.text)).join("\n")}</pre></details>`:"")+

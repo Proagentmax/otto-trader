@@ -1112,6 +1112,8 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
       r.plan.direction === plan.direction && Date.now() - Date.parse(r.created_at) < 15 * 60e3 &&
       (["pending", "running"].includes(r.status) || (r.status === "done" && ["waiting_fill", "armed"].includes(r.exit?.state))));
     if (dup) throw new Error(`A ${tk} ${plan.direction === "down" ? "puts" : "calls"} card is already up: "${dup.title}" (${dup.status === "done" ? "filled, trade open" : dup.status}). Don't make a second one — point them to that card.`);
+    // v3.22: levels more than 10% from the live price go back once, then no card.
+    await levelGate(plan);
   }
   const out: any[] = [];
   const review: string[] = [];
@@ -1125,6 +1127,9 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     const args = { ...(c.args || {}) };
     if (service === "rh" && RH_FORCE_ACCT.has(tool)) args.account_number = await agenticAccount();
     if (service === "rh" && (tool === "place_option_order" || tool === "place_equity_order")) {
+      // v3.22: drop fields Robinhood's order tool doesn't take (7 Oct ABBV: chain_symbol → rejected).
+      const sch = await rhSchema(tool);
+      if (sch) { const rm = pruneArgs(args, sch); if (rm.length) notes.push("removed fields Robinhood doesn't take: " + rm.join(", ")); }
       args.ref_id = crypto.randomUUID();
       const k = costOf(tool, args);
       if (k.cost === null) costKnown = false; else cost += k.cost;
@@ -1237,12 +1242,15 @@ async function actOn(id: string, decision: string, who: string) {
       results.push({ tool: c.tool, ok: true, text: mcpText(r).slice(0, 2000) });
     } catch (e) {
       failed = true;
-      results.push({ tool: c.tool, ok: false, text: (e as Error).message });
+      // v3.22: Robinhood's exact reason, first line of the card's result.
+      const raw = (e as Error).message, why = brokerReason(raw);
+      results.push({ tool: c.tool, ok: false, text: c.service === "rh" ? `Rejected by Robinhood: ${why}` + (why !== raw ? `\n\n${raw}` : "") : raw });
     }
   }
   const fin = await db("otto_actions?id=eq." + id, { method: "PATCH",
     body: JSON.stringify({ status: failed ? "failed" : "done", result: results, ...(orderId ? { order_id: String(orderId) } : {}) }) });
-  await logDesk("system", "Otto", `${failed ? "✗" : "✓"} ${a.title} — ${failed ? "failed" : "done"} (approved by ${who})`, id);
+  const bad = results.find((r) => !r.ok && !/^skipped/.test(r.text));
+  await logDesk("system", "Otto", `${failed ? "✗" : "✓"} ${a.title} — ${failed ? (bad ? String(bad.text).split("\n")[0] : "failed") : "done"} (approved by ${who})`, id);
   // v3.4: the entry is in — hand its exits to the exit engine.
   if (a.exit && a.exit.state === "planned") {
     const ex: any = { ...a.exit, state: failed ? "dead" : "waiting_fill", order_id: orderId ? String(orderId) : null };
@@ -1261,6 +1269,7 @@ async function actOn(id: string, decision: string, who: string) {
 /* ------------------------------------------------------------ shared log */
 
 async function logDesk(role: string, author: string, content: string, action_id: string | null = null) {
+  if (role === "assistant") { try { content = (await factCheck(content)).text; } catch { /* fail open */ } }   // v3.22
   try {
     await db("otto_desk", { method: "POST", headers: { prefer: "return=minimal" },
       body: JSON.stringify({ role, author: author.slice(0, 40), content: (role === "user" ? content : unname(content)).slice(0, 20000), action_id }) });
@@ -1728,6 +1737,7 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
 
 // v3.9: the Desk's system prompt, tools and context line — shared by the live Desk and Otto Signals.
 async function deskSetup() {
+  const factsP = withTimeout(todayFacts(), 5000, "today's facts").then(factsLine).catch(() => "");   // v3.22, in parallel (never slows a Signal card)
   const calls = await loadBrain();
   const cs = chunksOf(calls);
   const sys = DESK_SYS.replace("{{RULES}}", alwaysOn(calls));
@@ -1756,7 +1766,8 @@ async function deskSetup() {
   const running = await runningNow().catch(() => "");
   const pl = await plansToday().catch(() => []);   // v3.19: today's locked plans — hold them to it
   const planLineCtx = pl.length ? "\nTODAY'S LOCKED PLANS (the trader's own; flag any card or trade that isn't this plan): " + pl.map((p: any) => `${p.author}: ${p.line}`).join(" | ") : "";
-  return { cs, sys, tools, ctxLine: (running ? ctxLine + "\n" + running : ctxLine) + planLineCtx + "\n" + CONTRACT_RULE, autoClose: !!LIMa.auto_close };
+  const facts = await factsP;   // v3.22: look before saying "none"
+  return { cs, sys, tools, ctxLine: (running ? ctxLine + "\n" + running : ctxLine) + planLineCtx + "\n" + CONTRACT_RULE + (facts ? "\n" + facts : ""), autoClose: !!LIMa.auto_close };
 }
 
 export async function desk(req: Request, who: string, _apiKey: string) {
@@ -1859,6 +1870,8 @@ export async function desk(req: Request, who: string, _apiKey: string) {
           }
         } catch { /* the card still works; it just isn't linked */ }
       }
+      // v3.22: fake call citations and false "none" claims are fixed before the reply is saved; the note shows live too.
+      try { const fc = await factCheck(res.said); if (fc.notes.length) { send({ t: "text", v: "\n\n" + fc.notes.join("\n") }); res.said = fc.text.trim() + "\n\n" + fc.notes.join("\n"); } } catch { /* */ }
       if (res.said.trim() || res.cards.length) await logDesk("assistant", "Jarvis", res.said.trim(), res.cards[res.cards.length - 1] || null);
       try { ctrl.close(); } catch { /* */ }
     },
@@ -2925,9 +2938,10 @@ async function exitTickLocked(a: any) {
     }
     if (!o) return { id: a.id, state: ex.state, note: "entry order not found yet" };
     if (EXIT_DEAD_ORDER.has(o.state)) {
-      ex.state = "dead"; exitLog(ex, `Entry ${o.state}, nothing to protect`);
+      const why = orderReason(o);                    // v3.22: Robinhood's own reason, never a guess
+      ex.state = "dead"; ex.dead_reason = `${o.state}${why ? ": " + why : " (Robinhood gave no reason)"}`; exitLog(ex, `Entry ${o.state}, nothing to protect${why ? " — " + why : ""}`);
       await saveExit(a.id, ex);
-      await logDesk("system", "Otto", `${a.title}: the entry was ${o.state}, so no stop or alerts were set.`, a.id);
+      await logDesk("system", "Otto", `${a.title}: the entry was ${o.state}${why ? ` (Robinhood: ${why})` : " (Robinhood gave no reason)"}, so no stop or alerts were set.`, a.id);
       return { id: a.id, state: ex.state };
     }
     if (o.state !== "filled") { await saveExit(a.id, ex); return { id: a.id, state: ex.state, order: o.state }; }
@@ -3212,7 +3226,9 @@ async function jasonContext(): Promise<string> {
 // Called inside the Desk stream when Josh pastes a Jason post.
 async function jasonIntake(apiKey: string, img: any, text: string, who: string, author: string) {
   const day = etParts().date;
-  const posts = await jasonExtract(apiKey, { image: img, text, day });
+  let posts = await jasonExtract(apiKey, { image: img, text, day });
+  const vt = await verifyTickers(posts).catch(() => null);      // v3.22
+  if (vt) { posts = vt.posts; for (const q of vt.asks) await logDesk("system", "Otto", q); }
   const { all } = await jasonSave(posts, day, "paste", author || who);
   return all;
 }
@@ -3542,8 +3558,10 @@ export async function signalProcess(bid: number, ins: any[], imgs: { mime: strin
     const earlier = await db(`otto_signal_msgs?select=posted_at,text,imgs&posted_at=gte.${new Date(first - 45 * 60e3).toISOString()}&posted_at=lt.${new Date(first).toISOString()}&order=posted_at.asc&limit=12`).catch(() => []);
     const line = (r: any) => `[${nyTime(r.posted_at)}] ${r.text || "(no text)"}${r.imgs ? " [chart image attached]" : ""}`;
     const text = (earlier.length ? "EARLIER (already recorded — context only):\n" + earlier.map(line).join("\n") + "\n\n" : "") + "NEW:\n" + ins.map(line).join("\n");
-    const posts = await sigExtract(apiKey, cfg.mentor, text, imgs, day);
+    const vt = await verifyTickers(await sigExtract(apiKey, cfg.mentor, text, imgs, day)).catch(() => null);
+    const posts = vt ? vt.posts : await sigExtract(apiKey, cfg.mentor, text, imgs, day);
     const { inserted, all } = await jasonSave(posts, day, "watcher", "Otto Signals");
+    for (const q of vt?.asks || []) { await logDesk("system", "Otto", q); await notify("signal", `⚡ ${SIG_LABEL}: which stock?`, q.slice(0, 180), "./#desk"); }
     const ids = all.map((r: any) => r.id);
     // v3.9.2: judge EACH post — only posts that are new to the log AND posted in the last 20 min
     // can ping or get a card. Old posts in a catch-up batch (reload / PC wake) are logged only.
@@ -3657,6 +3675,7 @@ export async function signalJarvis(bid: number) {
       : (res.failed || []).includes("propose_action") ? "the card was rejected (bad contract or order details)"
       : "Jarvis decided against a card — see the read";
     let read = cut >= 0 ? rawRead.slice(cut + 5).trim() : readFallback(all, res.cards, missing.length ? why : "none needed");
+    try { const fc = await factCheck(read); if (fc.notes.length) read = fc.text.trim() + "\n\n" + fc.notes.join("\n"); } catch { /* v3.22 */ }
     if (missing.length && cut >= 0) read += `\n\n⚠ No card for ${missing.map((r: any) => r.ticker).join(", ")}: ${why}.`;   // the feed tag says "no card" (status stays "done")
     const timing = { posted: all[0]?.posted_at || null, caught: b.created_at, card_ms: Date.now() - t0, cards: res.cards.length, total_ms: all[0]?.posted_at ? Date.now() - Date.parse(all[0].posted_at) : null };
     await sigBatch(bid, { status: err ? "error" : "done", read: read || null, cards: res.cards, error: err || (missing.length ? why : null), timing });
@@ -4507,6 +4526,7 @@ export async function watchAdd(x: { ticker: string; level: number; dir?: string;
   const ticker = String(x.ticker || "").toUpperCase().replace(/[^A-Z.]/g, "").slice(0, 8);
   const level = Math.round(Number(x.level) * 100) / 100;
   if (!ticker || !(level > 0)) throw new Error("need a ticker and a price level");
+  if (x.source !== "scanner") await watchLevelGate(ticker, level);   // v3.22: no level >10% from the live price
   const dir = ["up", "down", "both"].includes(String(x.dir)) ? String(x.dir) : "both";
   const row = { day: watchDay(), ticker, level, dir, source: x.source, status: x.status || (x.source === "scanner" ? "proposed" : "watching"),
     note: String(x.note || "").slice(0, 200) || null, source_ref: x.source_ref || null, added_by: String(x.by || "").slice(0, 60) || null };
@@ -4911,8 +4931,7 @@ const RECAP_SYS = `You are Jarvis on the Otto trading desk, writing the end-of-d
 
 FORMAT — markdown, exactly these headings, skip a heading only if it would be empty (except the first):
 ### Today in one line
-### Trades and cards
-(each trade: ticker/contract, entry → exit, result in $ and R if known, whether the plan was followed; then how many cards were made / approved / expired and why)
+(The "### Trades and cards" section is written by the server from Robinhood's own records and inserted after your first section — do NOT write that heading. Never state a fill, a win/loss, an R or a $ result anywhere; you may quote the server's "Realized" line word for word. A card nobody took is an idea, not a trade.)
 ### What was discussed
 (the 2–5 things that mattered in the Desk conversation — decisions, questions, rules saved)
 ### Worth fixing
@@ -4962,14 +4981,19 @@ export async function dailyRecap(force = false) {
   const data = [
     `DATE ${c.date} (${c.line || ""})`,
     `DESK CONVERSATION (today):\n${convo || "(none)"}`,
-    `CARDS (today):\n${(acts || []).map((a: any) => `- ${etHM(a.created_at)} "${a.title}" status=${a.status} by=${a.created_by} setup=${a.plan?.setup || "-"} source=${a.plan?.source || "-"} rules=${(a.plan?.rules || []).join(",") || "-"} outcome=${a.outcome?.state || "-"}${a.outcome?.r != null ? " " + a.outcome.r + "R" : ""} exit=${a.exit?.state || "-"}`).join("\n") || "(none)"}`,
+    `CARDS (today):\n${(acts || []).map((a: any) => `- ${etHM(a.created_at)} "${a.title}" status=${a.status} by=${a.created_by} setup=${a.plan?.setup || "-"} source=${a.plan?.source || "-"} rules=${(a.plan?.rules || []).join(",") || "-"} idea_grade(paper, not money)=${a.outcome?.state || "-"} exit=${a.exit?.state || "-"}`).join("\n") || "(none)"}`,
     `CLOSED TRADES (recent, from the journal):\n${(trades || []).filter((t: any) => t.closed_at && etParts(new Date(t.closed_at)).date === c.date).map((t: any) => JSON.stringify(t).slice(0, 300)).join("\n") || "(none today)"}`,
     `FEEDBACK NOTES (today):\n${(fb || []).map((f: any) => `- [${f.kind}] ${f.author}: ${f.note} (screen ${f.screen || "?"})`).join("\n") || "(none)"}`,
     `CALENDAR next trading day:\n${cal.map((e: any) => `- ${e.date} ${e.title} (importance ${e.importance})`).join("\n") || "(not available)"}`,
     await recapExtras(c.date).catch(() => ""),
   ].join("\n\n");
-  const text = await claudeText({ model: MODEL, max_tokens: 1200, system: RECAP_SYS + NAME_RULE, messages: [{ role: "user", content: data }] });
-  if (!text) throw new Error("empty recap");
+  // v3.22: the trades section comes from Robinhood, not from Jarvis.
+  const fullActs = await db("otto_actions?select=title,status,result,created_at&created_at=gte." + since + "&order=created_at.asc&limit=60").catch(() => acts || []);
+  const ords = await dayOrders(c.date).catch(() => null);
+  const block = ords ? recapTradesBlock(ords, fullActs || []) : "### Trades and cards\n⚠ Robinhood's order records couldn't be read just now — no trade results in this recap.";
+  const raw = await claudeText({ model: MODEL, max_tokens: 1200, system: RECAP_SYS + NAME_RULE, messages: [{ role: "user", content: data + "\n\nSERVER TRADES SECTION (inserted as-is; don't repeat its numbers except the Realized line):\n" + block }] });
+  if (!raw) throw new Error("empty recap");
+  const text = spliceRecap(raw, block);
   await logDesk("assistant", "Jarvis · daily recap", text);
   const first = text.split("\n").find((l) => l.trim() && !l.startsWith("#")) || "Tap to read it on the Desk.";
   await notify("daily", "🗒 Daily recap is ready", first.slice(0, 200));
@@ -6139,3 +6163,330 @@ export const placeStopForTest = placeStop;
 export const deskSetupForTest = deskSetup;
 
 export const closeNowForTest = closeNow;
+
+/* ============================================================ v3.22 (8 Oct 2026) — Jarvis never states made-up facts
+   Decisions (Ifoma, 8 Oct; claude/otto-v322-facts.md):
+   1. Card levels (entry / wrong-if / TP1) more than 10% from the live price → sent back once, then no card (Desk says why).
+      Watcher levels more than 10% off are refused too (7 Oct: AAPL 233/237 with AAPL ~335).
+   2. A Signal post whose price doesn't fit its ticker (or has no ticker) is matched by price against the TradingView
+      watchlists (Treasure Hunt, Watchlist) + tickers the coach named in the last 5 trading days, within 10%.
+      One match → that ticker. None / several → no card; the Desk asks which stock (7 Oct: "HEADING TO 1074" read as ABBV, was MU).
+   3. A cited coaching call / date that isn't in the brain is removed: "(source not found)" (7 Oct: "Oct 3 call").
+   4. The daily recap's trades come from Robinhood's own orders and fills, written by the server (7 Oct: an unfilled
+      NVDA 240P called a "win", the 237.5P "−1R" was ~−$15, ABBV "failed to fill" was a Robinhood rejection).
+   5. "None" claims (no prep / no fills / no signals today) are checked against the data; false ones are corrected
+      before the reply is saved, and today's facts sit in Jarvis's context so he looks first.
+   6. Robinhood's exact reject / cancel reason on the card and the Desk. Order args Robinhood's tool doesn't take
+      (7 Oct ABBV: chain_symbol) are removed before the card is made. */
+
+const V322_FAR = 0.10;
+const v322Sym = (s: any) => String(s || "").toUpperCase().split(":").pop()!.replace(/[^A-Z.]/g, "").slice(0, 8);
+
+export async function rhPrices(syms: string[]): Promise<Record<string, number>> {
+  const list = [...new Set((syms || []).map(v322Sym).filter(Boolean))].slice(0, 60);
+  if (!list.length) return {};
+  return await cached("px|" + list.slice().sort().join(","), 30e3, async () => {
+    const out: Record<string, number> = {};
+    for (let i = 0; i < list.length; i += 25) {
+      const chunk = list.slice(i, i + 25);
+      try {
+        const j = mcpJson(await withTimeout(call("rh", "get_equity_quotes", { symbols: chunk }), 10_000, "Robinhood quotes"));
+        const res = j?.data?.results || j?.results || [];
+        (Array.isArray(res) ? res : []).forEach((r: any, k: number) => {
+          const q = r?.quote || r || {};
+          const sym = v322Sym(q.symbol || r?.symbol || chunk[k]);
+          const reg = num(q.last_trade_price), ext = num(q.last_non_reg_trade_price);
+          const px = ext && Date.parse(q.venue_last_non_reg_trade_time || 0) > Date.parse(q.venue_last_trade_time || 0) ? ext : reg;
+          if (sym && px > 0) out[sym] = px;
+        });
+      } catch { /* unknown stays unknown — every check below fails open */ }
+    }
+    return out;
+  });
+}
+const pctOff = (v: number, spot: number) => Math.abs(v / spot - 1);
+
+/* ---- 1. levels vs the live price ---- */
+export function farLevels(plan: any, spot: number): string[] {
+  const out: string[] = [];
+  if (!(spot > 0) || !plan) return out;
+  const chk = (name: string, v: any) => { const n = Number(v); if (n > 0 && pctOff(n, spot) > V322_FAR) out.push(`${name} ${n} is ${Math.round(pctOff(n, spot) * 100)}% away`); };
+  chk("entry", plan.entry_underlying); chk("wrong-if", plan.stop); chk("TP1", plan.tp1);
+  return out;
+}
+export async function levelGate(plan: any) {
+  const tk = v322Sym(plan?.tv_symbol);
+  if (!tk) return;
+  const spot = (await rhPrices([tk]).catch(() => ({} as Record<string, number>)))[tk];
+  if (!(spot > 0)) return;
+  const bad = farLevels(plan, spot);
+  const key = `${tk}|${plan.direction}`;
+  const tries: Record<string, number> = (await setting("level_tries").catch(() => null)) || {};
+  if (!bad.length) { if (tries[key]) { delete tries[key]; await putSetting("level_tries", tries).catch(() => {}); } return; }
+  const what = `${tk} is $${spot.toFixed(2)} right now; ${bad.join(", ")}`;
+  if (tries[key] && Date.now() - tries[key] < 10 * 60e3) {
+    delete tries[key]; await putSetting("level_tries", tries).catch(() => {});
+    await logDesk("system", "Otto", `No card for ${tk} ${plan.direction === "down" ? "puts" : "calls"}: the levels didn't match the live price on the second try (${what}).`);
+    throw new Error(`NO CARD — second try still off: ${what}. Do not propose this again. Tell them in one line there's no card because the levels don't match the live price.`);
+  }
+  tries[key] = Date.now(); await putSetting("level_tries", tries).catch(() => {});
+  throw new Error(`Levels don't match the live price: ${what} (more than 10%). Re-check every level against the live price and propose again — one more try, then no card.`);
+}
+export async function watchLevelGate(ticker: string, level: number) {
+  const px = (await rhPrices([ticker]).catch(() => ({} as Record<string, number>)))[v322Sym(ticker)];
+  if (px > 0 && pctOff(level, px) > V322_FAR)
+    throw new Error(`${v322Sym(ticker)} ${level} is ${Math.round(pctOff(level, px) * 100)}% from the live price $${px.toFixed(2)} — not added. Check the level (and the ticker).`);
+}
+
+/* ---- 6. order args Robinhood doesn't take, and its exact reasons ---- */
+export function pruneArgs(args: any, schema: any): string[] {
+  const removed: string[] = [];
+  const walk = (o: any, s: any, path: string) => {
+    if (!o || typeof o !== "object" || !s || typeof s !== "object") return;
+    if (Array.isArray(o)) { if (s.items) o.forEach((x) => walk(x, s.items, path)); return; }
+    const p = s.properties;
+    if (!p || typeof p !== "object" || !Object.keys(p).length) return;
+    for (const k of Object.keys(o)) {
+      if (!(k in p)) { if (path === "" && (k === "account_number" || k === "ref_id")) continue; delete o[k]; removed.push(path + k); continue; }
+      walk(o[k], p[k], path + k + ".");
+    }
+  };
+  walk(args, schema, "");
+  return removed;
+}
+async function rhSchema(tool: string): Promise<any> {
+  try {
+    const list = TEST ? (TEST.tools ? await TEST.tools("rh") : null) : await withTimeout(mcpTools("rh"), 8000, "Robinhood tools");
+    return (list || []).find((t: any) => t.name === tool)?.inputSchema || null;
+  } catch { return null; }
+}
+export function brokerReason(msg: string): string {
+  const s = String(msg || "");
+  const m = s.match(/\{[\s\S]*\}/);
+  if (m) {
+    try {
+      const j = JSON.parse(m[0]);
+      const pick = (o: any): string => !o ? "" : typeof o === "string" ? o : Array.isArray(o) ? o.map(pick).filter(Boolean).join("; ")
+        : pick(o.detail ?? o.message ?? o.reason ?? o.error ?? o.non_field_errors ?? Object.entries(o).map(([k, v]) => `${k}: ${pick(v)}`).join("; "));
+      const r = pick(j); if (r) return r.slice(0, 300);
+    } catch { /* not JSON */ }
+  }
+  return s.replace(/^Error:\s*/, "").slice(0, 300);
+}
+export function orderReason(o: any): string {
+  for (const k of ["reject_reason", "rejection_reason", "cancel_reason", "state_reason", "reason", "message", "detail", "error"]) {
+    const v = o?.[k];
+    if (typeof v === "string" && v.trim()) return v.trim().slice(0, 200);
+    if (v && typeof v === "object") { const d = v.detail || v.message || v.reason; if (typeof d === "string" && d.trim()) return d.trim().slice(0, 200); }
+  }
+  return "";
+}
+
+/* ---- 2. a Signal's ticker must fit its price ---- */
+async function matchPool(): Promise<string[]> {
+  return await cached("matchpool", 30 * 60e3, async () => {
+    const syms = new Set<string>();
+    try {
+      const j = mcpJson(await withTimeout(call("tv", "mcp-watchlist-list-watchlists", {}), 6000, "TradingView watchlists"));
+      for (const w of j?.watchlists || []) if (/treasure|^\s*watch\s*list\s*$/i.test(String(w.name || "")))
+        for (const s of w.symbols || []) if (/^(NASDAQ|NYSE|AMEX|ARCA|BATS|NYSEARCA|CBOE BZX):[A-Z.]+$/.test(String(s))) syms.add(v322Sym(s));
+    } catch { /* TradingView slow: the saved copy below */ }
+    try { const wc = await setting("watch_cache"); for (const s of wc?.syms || []) if (/^(NASDAQ|NYSE|AMEX|ARCA|BATS):/.test(String(s))) syms.add(v322Sym(s)); } catch { /* */ }
+    try {
+      let d = etParts().date; for (let n = 0; n < 5; ) { d = addDays(d, -1); if (isTradingDay(d)) n++; }
+      const rows = await db(`otto_jason?select=ticker&day=gte.${d}&limit=500`);
+      for (const r of rows || []) if (r?.ticker) syms.add(v322Sym(r.ticker));
+    } catch { /* */ }
+    syms.delete("");
+    return [...syms];
+  });
+}
+export function priceMatches(level: number, prices: Record<string, number>): string[] {
+  return Object.entries(prices).filter(([, p]) => p > 0 && pctOff(level, p) <= V322_FAR).map(([s]) => s);
+}
+// Returns the posts with tickers fixed (one clear price match) or cleared (none / several), plus what to ask.
+export async function verifyTickers(posts: any[]): Promise<{ posts: any[]; asks: string[] }> {
+  const asks: string[] = [];
+  const need = (posts || []).filter((p: any) => (p.kind === "call" || p.kind === "level") && (Number(p.entry) > 0 || Number(p.level) > 0));
+  if (!need.length) return { posts, asks };
+  let pool: string[] = [];
+  try { pool = await matchPool(); } catch { /* */ }
+  const prices = await rhPrices([...new Set([...pool, ...need.map((p: any) => v322Sym(p.ticker)).filter(Boolean)])]).catch(() => ({} as Record<string, number>));
+  for (const p of need) {
+    const lv = Number(p.entry) > 0 ? Number(p.entry) : Number(p.level);
+    const tk = v322Sym(p.ticker);
+    if (tk && prices[tk] > 0 && pctOff(lv, prices[tk]) <= V322_FAR) continue;        // fits — keep it
+    if (tk && !(prices[tk] > 0)) continue;                                            // can't price it (futures, index) — leave it
+    const poolPx: Record<string, number> = {};
+    for (const s of pool) if (prices[s] > 0) poolPx[s] = prices[s];
+    const m = priceMatches(lv, poolPx);
+    if (m.length === 1) {
+      p.ticker_was = tk || null; p.ticker = m[0];
+      p.summary = `${p.summary || ""} [ticker matched by price: ${lv} ≈ ${m[0]} $${prices[m[0]].toFixed(2)}${tk ? `; ${tk} is $${prices[tk].toFixed(2)}` : ""}]`.trim();
+      continue;
+    }
+    p.ticker_was = tk || null; p.ticker = "";
+    asks.push(`⚡ Signal "${String(p.words || "").slice(0, 80)}": which stock? ${lv} ${tk ? `doesn't fit ${tk} ($${prices[tk].toFixed(2)})` : "came with no ticker"}` +
+      (m.length ? `, and it fits more than one: ${m.map((s) => `${s} $${prices[s].toFixed(2)}`).join(", ")}` : ", and nothing on your watchlists or recent signals trades near it") +
+      `. No card until you say which — tell Jarvis on the Desk.`);
+  }
+  return { posts, asks };
+}
+
+/* ---- 3 + 5. citations and "none" claims ---- */
+const MON3: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+const DATE_RE = "(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s*20\\d\\d)?|\\d{1,2}\\/\\d{1,2}(?:\\/(?:20)?\\d\\d)?|20\\d\\d-\\d\\d-\\d\\d)";
+export function mdOf(s: string): string | null {
+  let m = /^(20\d\d)-(\d\d)-(\d\d)$/.exec(s.trim());
+  if (m) return `${m[2]}-${m[3]}`;
+  m = /^(\d{1,2})\/(\d{1,2})/.exec(s.trim());
+  if (m) return `${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+  m = /^([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})/.exec(s.trim());
+  if (m && MON3[m[1].toLowerCase()]) return `${String(MON3[m[1].toLowerCase()]).padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+  return null;
+}
+export function checkCitations(text: string, callDates: string[], today = etParts().date): { text: string; removed: string[] } {
+  const ok = new Set(callDates.map((d) => mdOf(String(d))).filter(Boolean) as string[]);
+  const todayMd = mdOf(today)!;
+  const removed: string[] = [];
+  const bad = (d: string) => { const md = mdOf(d); return !!md && md <= todayMd && !ok.has(md); };
+  let t = String(text || "");
+  // (Otto Rules, Oct 3, 12:34) / (coaching call, 10/3)
+  t = t.replace(new RegExp(`\\(([^()]*?\\b(?:Otto Rules|coaching call|call)\\b[^()]*?)\\)`, "gi"), (all, inner) => {
+    if (!/Otto Rules|coaching call/i.test(inner) && !/\bcall\b/i.test(inner)) return all;
+    const d = new RegExp(DATE_RE, "i").exec(inner);
+    if (!d || !bad(d[0])) return all;
+    if (!/Otto Rules|coach/i.test(inner) && !/^\s*,?\s*(?:coaching\s+)?call\b\s*(?:,\s*\d{1,2}:\d{2}(?::\d{2})?)?\s*$/i.test(inner.replace(d[0], ""))) return all;
+    removed.push(all); return "(source not found)";
+  });
+  // "the Oct 3 call" / "on the Oct 3 coaching call" / "the call on Oct 3" — only in a sentence about the coach / rules.
+  t = t.split(/(?<=[.!?\n])/).map((sent) => {
+    if (!/coach|Otto Rules|taught|said|says|recording|session|covered|went over/i.test(sent)) return sent;
+    return sent
+      .replace(new RegExp(`\\b(?:(on|in|from)\\s+)?(?:the\\s+)?(${DATE_RE})(?:'s)?\\s+(?:coaching\\s+)?call\\b`, "gi"), (all, pre, d) => {
+        if (!bad(d)) return all; removed.push(all.trim()); return (pre ? pre + " " : "") + "a call (source not found)"; })
+      .replace(new RegExp(`\\b(?:coaching\\s+)?call\\s+(?:on|from)\\s+(${DATE_RE})`, "gi"), (all, d) => {
+        if (!bad(d)) return all; removed.push(all.trim()); return "call (source not found)"; });
+  }).join("");
+  return { text: t, removed };
+}
+
+async function dayOrders(day: string): Promise<any[]> {
+  return await cached("ord|" + day, 60e3, async () => {
+    const acct = await agenticAccount();
+    const j = mcpJson(await withTimeout(call("rh", "get_option_orders", { account_number: acct, created_at_gte: `${day}T04:00:00Z` }), 10_000, "Robinhood orders"));
+    return (j?.data?.orders || []).filter((o: any) => !o.created_at || etParts(new Date(o.created_at)).date === day);
+  });
+}
+export async function todayFacts(day = etParts().date): Promise<{ prep: any[] | null; sig: any[] | null; ord: any[] | null }> {
+  return await cached("facts|" + day, 60e3, async () => {
+    const [prep, sig, ord] = await Promise.all([
+      db(`otto_prep?select=author,created_at,status&day=eq.${day}`).catch(() => null),
+      db(`otto_jason?select=id,ticker,kind,posted_label&day=eq.${day}&limit=200`).catch(() => null),
+      dayOrders(day).catch(() => null),
+    ]);
+    return { prep, sig, ord };
+  });
+}
+export function factsLine(f: { prep: any[] | null; sig: any[] | null; ord: any[] | null }): string {
+  const pr = f.prep == null ? "unknown" : f.prep.length ? f.prep.map((p: any) => `${p.author} ${etHM(p.created_at)}`).join(", ") : "none";
+  const fl = f.ord == null ? "unknown" : f.ord.length ? `${f.ord.length} (${f.ord.filter((o: any) => o.state === "filled").length} filled, ${f.ord.filter((o: any) => EXIT_DEAD_ORDER.has(o.state)).length} cancelled/rejected)` : "none";
+  const sg = f.sig == null ? "unknown" : f.sig.length ? `${f.sig.length} (${f.sig.filter((r: any) => r.kind === "call").length} calls)` : "none";
+  return `TODAY SO FAR (checked by the server — never say "none" of these without checking; the server corrects a false "none"): morning reads: ${pr}; Agentic option orders: ${fl}; coach signal posts: ${sg}. ` +
+    `Cite a coaching call only by a date you got from search_jason — a call date that isn't in the brain is removed as "(source not found)".`;
+}
+const NONE_CLAIMS = [
+  { kind: "prep", re: /[^.!?\n]*\b(?:no|don't have|do not have|haven't (?:seen|got|gotten|received)|didn't (?:see|get)|don't see|nobody (?:has )?posted|hasn't posted|no one posted)\s+(?:[\w']+\s+){0,3}?(?:prep|morning reads?|morning sentiment|plan of attack|pre-market plan)\b[^.!?\n]*[.!?]?/gi },
+  { kind: "fills", re: /[^.!?\n]*\b(?:no|zero|nothing)\s+(?:\w+\s+){0,2}(?:fills?|filled|trades? (?:taken|placed|made|filled))\b[^.!?\n]*\b(?:today|so far)\b[^.!?\n]*[.!?]?/gi },
+  { kind: "signals", re: /[^.!?\n]*\b(?:no|zero)\s+(?:new\s+)?(?:signals?|(?:coach|mentor)(?:'s)? posts?|posts? from the coach)\b(?!\s+cards?)[^.!?\n]*\b(?:today|yet|so far)\b[^.!?\n]*[.!?]?/gi },
+];
+export function checkNoneClaims(text: string, f: { prep: any[] | null; sig: any[] | null; ord: any[] | null }): { text: string; notes: string[] } {
+  const notes: string[] = [];
+  let t = String(text || "");
+  for (const c of NONE_CLAIMS) {
+    const data = c.kind === "prep" ? f.prep : c.kind === "signals" ? f.sig : (f.ord || null)?.filter((o: any) => o.state === "filled") ?? null;
+    if (!data || !data.length) continue;
+    const fix = c.kind === "prep" ? `there IS a morning read today (${data.map((p: any) => `${p.author}, ${etHM(p.created_at)}`).join("; ")})`
+      : c.kind === "signals" ? `the coach HAS posted today (${data.length} post${data.length > 1 ? "s" : ""}${data.some((r: any) => r.ticker) ? ": " + [...new Set(data.map((r: any) => r.ticker).filter(Boolean))].slice(0, 6).join(", ") : ""})`
+      : `there ARE fills today (${data.length} filled order${data.length > 1 ? "s" : ""} in the Agentic account)`;
+    t = t.replace(c.re, (s) => { if (!s.trim()) return s; notes.push(`⚠ Correction (Otto checked): ${fix}.`); return ` [Corrected by Otto: ${fix}.]`; });
+  }
+  return { text: t, notes: [...new Set(notes)] };
+}
+export async function factCheck(text: string): Promise<{ text: string; notes: string[] }> {
+  let t = String(text || "");
+  const notes: string[] = [];
+  if (!t.trim()) return { text: t, notes };
+  try {
+    if (new RegExp(DATE_RE, "i").test(t) && /call|Otto Rules/i.test(t)) {
+      const dates = (await withTimeout(loadBrain(), 6000, "brain")).map((c: any) => c?.call?.date).filter(Boolean);
+      if (dates.length) {
+        const c = checkCitations(t, dates);
+        if (c.removed.length) { t = c.text; notes.push(`⚠ Source check: ${c.removed.map((r) => `"${r}"`).join(", ")} isn't in the coaching calls — removed (source not found).`); }
+      }
+    }
+  } catch { /* fail open */ }
+  try {
+    if (NONE_CLAIMS.some((c) => { c.re.lastIndex = 0; const hit = c.re.test(t); c.re.lastIndex = 0; return hit; })) {
+      const f = await withTimeout(todayFacts(), 8000, "today's facts");
+      const n = checkNoneClaims(t, f);
+      t = n.text; notes.push(...n.notes);
+    }
+  } catch { /* fail open */ }
+  return { text: t, notes };
+}
+
+/* ---- 4. the recap's trades, from Robinhood ---- */
+const legLabel = (o: any, l: any) => {
+  const sym = String(o.chain_symbol || l.chain_symbol || "").toUpperCase();
+  const k = Number(l.strike_price), ty = l.option_type === "put" ? "P" : l.option_type === "call" ? "C" : "";
+  const ex = l.expiration_date ? " " + String(l.expiration_date).slice(5).replace("-", "/") : "";
+  return k > 0 ? `${sym} ${k % 1 ? k : Math.round(k)}${ty}${ex}` : `${sym} option ${String(l.option_id || "").slice(0, 8)}`;
+};
+const avgFill = (o: any, l: any) => {
+  const ex = l?.executions || [];
+  const q = ex.reduce((s: number, x: any) => s + Number(x.quantity), 0);
+  return q ? { q, px: ex.reduce((s: number, x: any) => s + Number(x.price) * Number(x.quantity), 0) / q }
+    : o.state === "filled" ? { q: Number(o.processed_quantity || o.quantity || 0), px: Number(o.average_price || o.price || 0) } : { q: 0, px: 0 };
+};
+export function recapTradesBlock(orders: any[], acts: any[]): string {
+  const lines: string[] = [];
+  let realized = 0, closedAny = false;
+  const opens = (orders || []).filter((o: any) => (o.legs || []).some((l: any) => l.position_effect === "open")).sort((a: any, b: any) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+  const closes = (orders || []).filter((o: any) => (o.legs || []).some((l: any) => l.position_effect === "close") && o.state === "filled");
+  for (const o of opens) {
+    const l = (o.legs || []).find((x: any) => x.position_effect === "open");
+    const lab = legLabel(o, l), t = o.created_at ? etHM(o.created_at) + " " : "";
+    if (o.state === "filled") {
+      const b = avgFill(o, l);
+      const sells = closes.filter((c: any) => (c.legs || []).some((x: any) => x.option_id === l.option_id));
+      const sq = sells.reduce((s: number, c: any) => s + avgFill(c, c.legs.find((x: any) => x.option_id === l.option_id)).q, 0);
+      const sv = sells.reduce((s: number, c: any) => { const f = avgFill(c, c.legs.find((x: any) => x.option_id === l.option_id)); return s + f.q * f.px; }, 0);
+      if (sq > 0) {
+        const pnl = (sv / sq - b.px) * 100 * Math.min(sq, b.q);
+        realized += pnl; closedAny = true;
+        lines.push(`- ${t}${lab}: bought ${b.q} @ $${b.px.toFixed(2)} → sold @ $${(sv / sq).toFixed(2)} = ${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl).toFixed(0)}${sq < b.q ? ` (${b.q - sq} still open)` : ""}`);
+      } else lines.push(`- ${t}${lab}: bought ${b.q} @ $${b.px.toFixed(2)} — still open`);
+    } else if (EXIT_DEAD_ORDER.has(o.state)) {
+      const why = orderReason(o);
+      lines.push(`- ${t}${lab}: ${o.state === "rejected" || o.state === "failed" ? "REJECTED by Robinhood" : o.state} — never filled${why ? ` (Robinhood: ${why})` : ""}`);
+    } else lines.push(`- ${t}${lab}: order ${o.state} — not filled yet`);
+  }
+  const A = acts || [];
+  const n = (f: (a: any) => boolean) => A.filter(f).length;
+  const failed = A.filter((a: any) => a.status === "failed");
+  const cardLine = A.length ? `Cards: ${A.length} made · ${n((a) => ["done", "failed", "running"].includes(a.status))} approved · ${n((a) => a.status === "rejected")} passed · ${n((a) => a.status === "expired")} expired` +
+    (failed.length ? ` · ${failed.length} failed (${failed.map((a: any) => `${a.title}: ${brokerReason(((a.result || []).find((r: any) => !r.ok) || {}).text || "no reason given").replace(/^Rejected by Robinhood:\s*/, "").split("\n")[0]}`).join("; ").slice(0, 400)})` : "") +
+    `. Cards nobody took are graded as ideas only — not trades, no money won or lost.` : "Cards: none.";
+  return `### Trades and cards\n_From Robinhood's own order records (Otto, not Jarvis)._\n` +
+    (lines.length ? lines.join("\n") : "- No option orders in the Agentic account today.") +
+    `\n${closedAny ? `Realized on closed trades today: ${realized >= 0 ? "+" : "−"}$${Math.abs(realized).toFixed(0)}` : "Realized today: $0 (nothing closed)"}\n${cardLine}`;
+}
+export function spliceRecap(jarvis: string, block: string): string {
+  // Drop any trades section Jarvis wrote; put the server's right after "Today in one line".
+  const parts = String(jarvis || "").split(/(?=^###\s)/m).filter((p) => !/^###\s*Trades and cards/i.test(p));
+  const i = parts.findIndex((p) => /^###\s*Today in one line/i.test(p));
+  parts.splice(i >= 0 ? i + 1 : 0, 0, block.trim() + "\n\n");
+  return parts.join("").trim();
+}
+export const actOnForTest = actOn;
