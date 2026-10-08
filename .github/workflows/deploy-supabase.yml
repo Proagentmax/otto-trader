@@ -75,7 +75,7 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         if: steps.changed.outputs.proxy == 'true'
-       with: { version: 2.120.0 }
+        with: { version: 2.120.0 }
       - name: Deploy the otto-proxy Edge Function
         if: steps.changed.outputs.proxy == 'true'
         run: |
