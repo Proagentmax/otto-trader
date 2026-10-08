@@ -1131,17 +1131,34 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     out.push({ service, tool, args });
   }
   const exit = opening ? exitSpec(out, plan) : null;
-  let account_value: number | null = null;
+  let account_value: number | null = null, buying_power: number | null = null;
   if (out.some((c) => c.service === "rh" && c.tool.startsWith("place_"))) {
     try {
       const pj = mcpJson(await call("rh", "get_portfolio", { account_number: await agenticAccount() }));
       account_value = Number(pj?.data?.total_value ?? pj?.total_value) || null;
+      const bpr = Number(pj?.data?.buying_power?.buying_power ?? pj?.data?.buying_power);
+      buying_power = Number.isFinite(bpr) && bpr >= 0 ? bpr : null;
     } catch { /* shown as unknown */ }
+  }
+  // v3.20 (Ifoma, 7 Oct night: "fits" = fits buying power; nothing fits → red-banner card anyway).
+  // A card over buying power while a contract that fits exists goes back to Jarvis with that contract named.
+  const bpChecks: any[] = [];
+  if (exit && costKnown && buying_power != null && cost > buying_power) {
+    let fitLine = "";
+    if (!opts.manual) {
+      const sym = String(plan?.tv_symbol || "").split(":").pop() || "";
+      const sl = await withTimeout(shortlistCached(sym, exit.direction === "down" ? "put" : "call"), 25_000, "shortlist").catch(() => null);
+      const f = sl?.bestFit;
+      if (f && f.cost <= buying_power && f.option_id !== exit.option_id)
+        throw new Error(`Over buying power: this contract costs $${Math.round(cost)} and the Agentic account has $${buying_power.toFixed(2)}. ◆ ${f.label} fits (option_id ${f.option_id}, ask $${f.ask.toFixed(2)}, ≈$${f.cost}, δ ${f.delta.toFixed(2)}). Propose again with that contract (re-size stop_option for it).`);
+      fitLine = !sl ? "" : sl.rows.some((r: SLRow) => r.fits && r.ask > 0) ? " Only far out-of-the-money contracts (delta under .15) fit — Otto doesn't offer those." : " No contract on the list fits.";
+    }
+    bpChecks.push({ ok: false, text: `Over buying power: costs $${Math.round(cost)}, the Agentic account has $${buying_power.toFixed(2)} — Robinhood will reject this order unless cash is added.${fitLine}` });
   }
   const pct = account_value && costKnown ? cost / account_value : null;
   const LIM = await getLimits().catch(() => LIMIT_DEFAULTS);
   const risk = {
-    cost: costKnown ? cost : null, account_value, pct, warn_pct: LIM.warn_pct,
+    cost: costKnown ? cost : null, account_value, buying_power, pct, warn_pct: LIM.warn_pct,
     flag: pct !== null && pct > LIM.warn_pct / 100, notes, account: out.some((c) => c.service === "rh") ? mask(await agenticAccount().catch(() => "????")) : null,
   };
   let banner: any = null, checks: any[] = [];
@@ -1150,6 +1167,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     try { checks = await ruleChecks(out, plan, risk, banner); } catch (e) { checks = [{ ok: null, text: "Rule check failed: " + (e as Error).message }]; }
     const atStop = exit ? (exit.entry_limit - exit.stop_option) * 100 * exit.qty : null;
     try { checks = checks.concat(await limitChecks(risk.cost, atStop)); } catch { /* */ }
+    checks = bpChecks.concat(checks);
   }
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
     title: unname(input.title || "Action").slice(0, 140),
@@ -1642,6 +1660,11 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
           send({ t: "action", v: card });
           content = `Card ${card.id} is on screen, status pending. Nothing has run. ` +
             `Risk: ${JSON.stringify(card.risk)}. Rule check: ${JSON.stringify(card.checks || [])}. Robinhood review: ${(card.review || "n/a").slice(0, 1500)}`;
+        } else if (b.name === "option_shortlist") {
+          const side = input.side === "put" ? "put" : "call";
+          send({ t: "tool", v: `Contracts: ${String(input.ticker || "").toUpperCase()} ${side}s` });
+          const sl = await withTimeout(shortlistCached(String(input.ticker || ""), side), 30_000, "shortlist");
+          content = sl.text + "\n" + CONTRACT_RULE;
         } else if (b.name === "add_watch_level") {
           send({ t: "tool", v: `Watcher: ${String(input.ticker || "").toUpperCase()} ${input.level}` });
           const scan = who === "scanner";
@@ -1704,6 +1727,7 @@ async function deskSetup() {
     { type: "web_search_20250305", name: "web_search", max_uses: 4 },
     ...mcpToolDefs,
     PROPOSE_TOOL(help),
+    SHORTLIST_TOOL,
   ];
   const LIMa = await getLimits().catch(() => LIMIT_DEFAULTS);
   if (LIMa.auto_close) tools.push(CLOSE_TOOL);
@@ -1721,7 +1745,7 @@ async function deskSetup() {
   const running = await runningNow().catch(() => "");
   const pl = await plansToday().catch(() => []);   // v3.19: today's locked plans — hold them to it
   const planLineCtx = pl.length ? "\nTODAY'S LOCKED PLANS (the trader's own; flag any card or trade that isn't this plan): " + pl.map((p: any) => `${p.author}: ${p.line}`).join(" | ") : "";
-  return { cs, sys, tools, ctxLine: (running ? ctxLine + "\n" + running : ctxLine) + planLineCtx, autoClose: !!LIMa.auto_close };
+  return { cs, sys, tools, ctxLine: (running ? ctxLine + "\n" + running : ctxLine) + planLineCtx + "\n" + CONTRACT_RULE, autoClose: !!LIMa.auto_close };
 }
 
 export async function desk(req: Request, who: string, _apiKey: string) {
@@ -2648,7 +2672,7 @@ async function alertJarvis(fires: any[]) {
     const prompt = `${ctxLine}
 [A TradingView alert just fired — no one typed this. Ifoma and Josh are not watching; you decide.] ${JSON.stringify(f).slice(0, 600)}
 Is this a real setup under the Otto Rules RIGHT NOW? Search the rules for this level (give the call date), fetch the live price, option chain and quote with Robinhood, and check: did a 15-minute candle close through the level (not just a wick), the sentiment banner, the time of day (no first 30 minutes), earnings or a binary event, buying power, and whether we already hold it.
-- Real setup → call propose_action ONCE with one opening option card (plan.setup "tradingview alert", the usual plan fields incl. stop_option; if the best contract is over buying power, make the cheaper ALT as usual).
+- Real setup → call propose_action ONCE with one opening option card (plan.setup "tradingview alert", the usual plan fields incl. stop_option; pick the contract with option_shortlist — ★ if it fits buying power, else ◆).
 - Not a setup yet → no card.
 Work quietly. When done, write a line that is exactly READ: and after it 2–3 short plain sentences: what the level is, where price is now, and why you made the card — or why not and what would make it one.
 (Use Robinhood tools for prices, chains and quotes — TradingView tools are not available in this run.)`;
@@ -2703,6 +2727,16 @@ Work quietly. When done, write a line that is exactly READ: and after it 2–3 s
 const EXIT_OPEN_ORDER = new Set(["queued", "confirmed", "unconfirmed", "partially_filled", "new", "pending_cancelled"]);
 const EXIT_DEAD_ORDER = new Set(["cancelled", "rejected", "failed", "voided", "expired"]);
 
+// v3.20 (8 Oct): Robinhood option price steps. $3.38 was rejected on 7 Oct ("Stop price does not satisfy
+// the min tick value") and NVDA ran with no stop. Penny-program names: $0.01 under $3, $0.05 from $3 up;
+// others: $0.05 / $0.10. Stops round UP (toward the entry), so the loss at the stop never grows.
+export function optTick(price: number, coarse = false) { return price >= 3 ? (coarse ? 0.10 : 0.05) : (coarse ? 0.05 : 0.01); }
+export function roundStopUp(price: number, coarse = false) {
+  const t = optTick(price, coarse);
+  let r = Math.round(Math.ceil(price / t - 1e-9) * t * 100) / 100;
+  if (r >= 3 && price < 3) r = Math.round(Math.ceil(price / optTick(3, coarse) - 1e-9) * optTick(3, coarse) * 100) / 100;
+  return r;
+}
 function exitSpec(out: any[], plan: any) {
   const opens = out.filter((c) => c.tool === "place_option_order" && (c.args.legs || []).some((l: any) => l.position_effect === "open"));
   if (opens.length !== 1) throw new Error("Exits work on one opening option order per card. Split it into separate cards.");
@@ -2712,11 +2746,13 @@ function exitSpec(out: any[], plan: any) {
   if (!(qty >= 1)) throw new Error("quantity must be a whole number of contracts");
   if (!(entry > 0)) throw new Error("Use a limit price on the entry so the stop can be checked against it.");
   if (!(stopOpt > 0 && stopOpt < entry)) throw new Error(`plan.stop_option ($${stopOpt}) must be above 0 and below the entry limit ($${entry}).`);
+  const stopR = roundStopUp(stopOpt);
+  if (!(stopR < entry)) throw new Error(`plan.stop_option ($${stopOpt}) rounds to $${stopR.toFixed(2)} (Robinhood's price step), which is not below the entry limit ($${entry}). Set the stop lower.`);
   const dir = plan.direction === "down" ? "down" : "up";
   const tp1 = Number(plan.tp1), wrong = Number(plan.stop);
   if (!(tp1 > 0) || !(wrong > 0)) throw new Error("plan.tp1 and plan.stop must be prices on the underlying");
   if (dir === "up" ? !(tp1 > wrong) : !(tp1 < wrong)) throw new Error(`For a ${dir === "up" ? "call (up)" : "put (down)"} TP1 must be ${dir === "up" ? "above" : "below"} the wrong-if price.`);
-  return { option_id: legs[0].option_id, qty, entry_limit: entry, stop_option: Math.round(stopOpt * 100) / 100,
+  return { option_id: legs[0].option_id, qty, entry_limit: entry, stop_option: stopR,
     tv_symbol: String(plan.tv_symbol), direction: dir, wrong_if: wrong, tp1, expires: plan.expires || null };
 }
 
@@ -2764,6 +2800,15 @@ async function placeStop(a: any, ex: any, acct: string) {
     return true;
   } catch (e) {
     const msg = (e as Error).message;
+    // v3.20: a price-step rejection → one retry on the coarser step (non-penny names), rounded toward the entry.
+    if (/min(imum)?\s*tick|tick value|increment/i.test(msg) && !ex.stop_coarse) {
+      const c = roundStopUp(ex.stop_option, true);
+      if (c < ex.entry_limit) {
+        ex.stop_coarse = true; exitLog(ex, `Robinhood refused $${ex.stop_option.toFixed(2)} (price step) — moving the stop to $${c.toFixed(2)}`);
+        ex.stop_option = c;
+        return placeStop(a, ex, acct);
+      }
+    }
     // "not enough contracts to close" = a sell already holds the contract. Find it and keep it; no alarm.
     if (/enough contracts|pending|already/i.test(msg)) {
       try {
@@ -4490,11 +4535,15 @@ export async function watchJarvis(id: number, d: "up" | "down") {
   const { cs, sys, tools, ctxLine } = await deskSetup();
   const runTools = tools.filter((t: any) => t.name !== "close_position" && !/^tv__/.test(String(t.name || "")));
   const b = f.bar;
+  // v3.20: the server fetches the contracts first, so Jarvis doesn't spend his steps paging the chain.
+  const pre = await withTimeout(shortlistCached(r.ticker, d === "up" ? "call" : "put"), 25_000, "shortlist")
+    .then((x) => x.text, (e) => `(${r.ticker} contracts couldn't be pre-fetched: ${String((e as Error).message).slice(0, 100)} — call option_shortlist.)`);
   const prompt = `${ctxLine}
+${pre}
 [👁 WATCHER TRIGGER — no one typed this; Ifoma and Josh are away from the screen.]
 ${r.ticker} level ${Number(r.level)} (${r.source === "signal" ? "a Signal level" : r.source === "scanner" ? "a level the scanner found" : "a level added on the Desk"}${r.note ? ": " + r.note : ""}).
 Trigger: ${TRIG_LABEL[f.trigger]} on the ${d === "up" ? "calls" : "puts"} side, on the ${f.tf}-minute bar that closed at ${etLabel(f.close_at)} ET — O ${b.o} H ${b.h} L ${b.l} C ${b.c}.${f.crossings >= 4 ? ` The 5-minute closes have crossed this level ${f.crossings} times today: treat it as chop unless the read is clear.` : ""}
-Is this a real ${d === "up" ? "call" : "put"} setup RIGHT NOW under the Otto Rules and the House Rules? Get the live quote and the option chain from Robinhood, check the banner and any binary event.
+Is this a real ${d === "up" ? "call" : "put"} setup RIGHT NOW under the Otto Rules and the House Rules? The contract list above is live (server-fetched); check the banner and any binary event.
 - Real → call propose_action ONCE: one opening option card. Title starts with "SCALP · " when it's a quick trade. plan.setup "${SETUP_FOR[f.trigger + "|" + d] || "other"}", plan.direction "${d}", plan.signal_level ${r.source === "signal"}, TP1 at the next level, plan.stop (wrong-if) just beyond ${Number(r.level)}, stop_option sized for their max loss. If the best contract is over buying power or the max, make the cheaper ALT too, as usual. Guardrails flag, never block.
 - Not real → no card.
 Work quietly. Finish with a line that is exactly READ: and then 2 short plain sentences: what happened at the level and why you made the card — or why not.
@@ -4903,6 +4952,17 @@ export function pickContracts(rows: SLRow[]) {
   return { best, bestFit: bestFit && best && bestFit.option_id === best.option_id ? best : bestFit };
 }
 
+// v3.20: one shortlist per ticker/side for 90 s — the card check, the tool and the Watcher prefetch share it.
+export function shortlistCached(ticker: string, side: "call" | "put") {
+  const sym = String(ticker || "").toUpperCase().replace(/[^A-Z.]/g, "");
+  return cached(`sl|${sym}|${side}`, 90e3, () => optionShortlist(sym, side));
+}
+export const SHORTLIST_TOOL = {
+  name: "option_shortlist",
+  description: "The server's contract list for an opening card: live price, Agentic buying power, and the calls or puts near the money for the next 3 expiries with bid/ask, delta, volume/OI and cost. ★ = best by the Otto Rules; ◆ = best that fits buying power. Use this INSTEAD of paging option chains yourself, before every opening card.",
+  input_schema: { type: "object", properties: { ticker: { type: "string" }, side: { type: "string", enum: ["call", "put"] } }, required: ["ticker", "side"] },
+};
+export const CONTRACT_RULE = "CONTRACTS (v3.20): before any opening card call option_shortlist(ticker, side) — don't page option chains yourself. Card the ★ contract if it fits buying power, otherwise the ◆ one. If NOTHING fits, card the cheapest ★/◆ anyway (it gets a red banner) and say so in one line. The server refuses an opening card that's over buying power while a ◆ contract fits.";
 export async function optionShortlist(ticker: string, side: "call" | "put") {
   const sym = String(ticker || "").toUpperCase().replace(/[^A-Z.]/g, "");
   if (!sym) throw new Error("no ticker");
@@ -5997,3 +6057,7 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: String((e as Error).message ?? e).slice(0, 300) }, 502);
   }
 });
+
+// test hooks (v3.20)
+export const placeStopForTest = placeStop;
+export const deskSetupForTest = deskSetup;

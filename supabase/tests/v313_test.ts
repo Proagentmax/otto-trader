@@ -886,3 +886,139 @@ Deno.test("v3.19.1: the stray-rejection safety net is installed", async () => {
   assert(/addEventListener\("unhandledrejection"[\s\S]{0,80}preventDefault\(\)/.test(src), "safety net missing");
   assert(/function tvBudget[\s\S]{0,600}p\.catch\(\(\) => \{\}\);[\s\S]{0,40}if \(tvSlow\(\)\)/.test(src), "tvBudget must handle the call before the breaker check");
 });
+
+/* ======================= v3.20 — contracts the account can take; stops on Robinhood's price steps ======================= */
+// Synthetic chains built from 7 Oct's real numbers (MU ~1,080, QQQ ~756, NVDA ~237; Agentic buying power ~$1,121).
+function fakeChain(sym: string, spot: number, step: number, premAtm: number, bp: number) {
+  const exps = ["2026-10-09", "2026-10-16", "2026-10-23"];
+  const strikes: number[] = []; for (let k = Math.round(spot / step) * step - 6 * step; k <= spot + 6 * step; k += step) strikes.push(+k.toFixed(2));
+  const ins: any[] = [];
+  for (const e of exps) for (const ty of ["call", "put"]) for (const k of strikes) ins.push({ id: `${sym}-${e}-${ty}-${k}`, strike_price: String(k), expiration_date: e, type: ty, tradability: "tradable", state: "active" });
+  const q = (id: string) => {
+    const [, e, ty, ks] = id.split("-").length > 4 ? [id.split("-")[0], id.split("-").slice(1, 4).join("-"), id.split("-")[4], id.split("-")[5]] : ["", "", "", ""];
+    const k = Number(ks), m = ty === "call" ? (spot - k) / spot : (k - spot) / spot;          // moneyness
+    const dlt = Math.max(0.05, Math.min(0.95, 0.5 + m * 12)), ask = Math.max(0.05, premAtm * Math.exp(m * 18) * (e === "2026-10-09" ? 0.7 : e === "2026-10-23" ? 1.3 : 1));
+    return { instrument_id: id, ask_price: ask.toFixed(2), bid_price: (ask * 0.98).toFixed(2), mark_price: (ask * 0.99).toFixed(2), delta: (ty === "put" ? -dlt : dlt).toFixed(3), volume: 900, open_interest: 600 };
+  };
+  return (tool: string, args: any) => {
+    if (tool === "get_equity_quotes") return { data: { results: [{ quote: { last_trade_price: String(spot) } }] } };
+    if (tool === "get_option_chains") return { data: { chains: [{ symbol: sym, can_open_position: true, expiration_dates: exps }] } };
+    if (tool === "get_portfolio") return { data: { total_value: "1121.64", buying_power: { buying_power: String(bp) } } };
+    if (tool === "get_option_instruments") return { data: { instruments: ins.filter((i) => i.expiration_date === args.expiration_dates && i.type === args.type) } };
+    if (tool === "get_option_quotes") return { data: { results: (args.instrument_ids || [args.instrument_id]).filter(Boolean).map((id: string) => ({ quote: q(id) })) } };
+    return null;
+  };
+}
+const optCard = (sym: string, id: string, price: number, dir: "up" | "down", stopOpt: number, tp1: number, stop: number) => ({
+  title: `Buy 1 ${sym}`, summary: "t",
+  calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: id, side: "buy", position_effect: "open" }], type: "limit", price, quantity: "1", time_in_force: "gfd" } }],
+  plan: { tv_symbol: `NASDAQ:${sym}`, direction: dir, setup: "breakdown", tp1, stop, stop_option: stopOpt, entry_underlying: stop },
+});
+let v320clock = 0;
+const v320reset = () => { reset(); v320clock += 10; setNow(new RealDate(RealDate.parse("2026-10-06T16:00:00Z") + v320clock * 60e3).toISOString()); };
+
+Deno.test("v3.20: stop prices round UP to Robinhood's step — the 7 Oct $3.38 becomes $3.40 and the loss at the stop shrinks", () => {
+  assert(M.roundStopUp(3.38) === 3.4, "3.38 → " + M.roundStopUp(3.38));
+  assert(M.roundStopUp(2.61) === 2.61 && M.roundStopUp(2.605) === 2.61, "pennies under $3");
+  assert(M.roundStopUp(4.7) === 4.7 && M.roundStopUp(16.83) === 16.85, "nickels from $3");
+  assert(M.roundStopUp(3.43, true) === 3.5 && M.roundStopUp(1.83, true) === 1.85, "coarse steps for non-penny names");
+  for (let i = 0; i < 20000; i++) {                 // property check: on the step, never below the input, less than one step above it
+    const p = Math.round((0.05 + Math.random() * 60) * 1000) / 1000, coarse = Math.random() < 0.5;
+    const r = M.roundStopUp(p, coarse), t = M.optTick(r, coarse);
+    assert(r >= p - 1e-9, `${p} → ${r} went DOWN (bigger loss)`);
+    assert(Math.abs(Math.round(r / t) * t - r) < 1e-6, `${p} → ${r} not on the $${t} step`);
+    assert(r - p < M.optTick(p, coarse) + M.optTick(r, coarse) + 1e-9, `${p} → ${r} moved more than a step`);
+  }
+});
+
+Deno.test("v3.20: the NVDA 237.5P card from 7 Oct gets a $3.40 stop on the card itself (not $3.38)", async () => {
+  v320reset();
+  callHook = fakeChain("NVDA", 236.73, 2.5, 4.53, 1151.73);
+  const c: any = await M.proposeAction(optCard("NVDA", "NVDA-2026-10-16-put-237.5", 4.55, "down", 3.38, 235, 237), "watcher");
+  assert(c.exit.stop_option === 3.4, "stop on the card: " + c.exit.stop_option);
+  assert(!c.checks.some((x: any) => /buying power/i.test(x.text)), "fits buying power — no BP flag");
+});
+
+Deno.test("v3.20: Robinhood refuses a nickel stop (non-penny name) → Otto retries once on the dime step, toward the entry", async () => {
+  v320reset();
+  const tries: string[] = [];
+  callHook = (tool: string, args: any) => {
+    if (tool === "place_option_order" && args.type === "stop_market") {
+      tries.push(args.stop_price);
+      if (Number(args.stop_price) * 100 % 10 !== 0) throw new Error('API error 400: {"detail":"Stop price does not satisfy the min tick value."}');
+    }
+    return null;
+  };
+  const a = { id: "a1", title: "Buy 1 X", decided_at: new Date().toISOString() };
+  const ex: any = { option_id: OPT, qty: 1, entry_limit: 4.55, stop_option: 3.45, log: [] };
+  const ok = await (M as any).placeStopForTest(a, ex, ACCT);
+  assert(ok === true, "stop placed after retry; log: " + JSON.stringify(ex.log));
+  assert(tries.join(",") === "3.45,3.50", "tries " + tries.join(","));
+  assert(ex.stop_option === 3.5 && ex.stop_option < ex.entry_limit, "stop moved up to 3.50");
+});
+
+Deno.test("v3.20: a card over buying power goes back to Jarvis when a contract that fits exists (QQQ 756C, 7 Oct)", async () => {
+  v320reset();
+  callHook = fakeChain("QQQ", 756.11, 1, 8.29, 706.69);
+  let err = "";
+  try { await M.proposeAction(optCard("QQQ", "QQQ-2026-10-16-call-756", 8.29, "up", 7.9, 759, 755.5), "watcher"); } catch (e) { err = (e as Error).message; }
+  assert(/Over buying power: this contract costs \$829/.test(err) && /◆ QQQ \d+C/.test(err) && /option_id QQQ-/.test(err), "bounced with the fitting contract named: " + err);
+  assert(!T.otto_actions.length, "no card stored");
+});
+
+Deno.test("v3.20: nothing fits → the card is still built, with a red 'over buying power' banner (Ifoma's rule)", async () => {
+  v320reset();
+  callHook = fakeChain("MU", 1080.7, 5, 17.9, 120);     // even the cheapest MU contract is over $120
+  const c: any = await M.proposeAction(optCard("MU", "MU-2026-10-09-call-1080", 17.9, "up", 16.8, 1090, 1079.5), "signals");
+  assert(c.status === "pending", "card built");
+  assert(c.checks[0].ok === false && /Over buying power: costs \$1790/.test(c.checks[0].text) && /No contract on the list fits/.test(c.checks[0].text), JSON.stringify(c.checks[0]));
+});
+
+Deno.test("v3.20: Ifoma's own ticket over buying power is never bounced — only flagged", async () => {
+  v320reset();
+  callHook = fakeChain("MU", 1076.8, 5, 30.2, 1121.64);
+  const c: any = await M.proposeAction(optCard("MU", "MU-2026-10-16-put-1075", 30.2, "down", 26, 1074, 1082), "ottotrader@vinecreativestudio.com", { manual: true });
+  assert(c.status === "pending" && /Over buying power/.test(c.checks[0].text), "flagged, not bounced");
+});
+
+Deno.test("v3.20: Watcher trigger → contracts pre-fetched into the prompt; Jarvis's oversized card bounces and the ◆ card is built", async () => {
+  v320reset();
+  const fit = fakeChain("MU", 1076.84, 5, 15, 1121.64);
+  const seen: string[] = [];
+  callHook = (tool: string, args: any) => { seen.push(tool); return fit(tool, args); };
+  T.otto_watch.push({ id: 77, day: "2026-10-06", ticker: "MU", level: 1080, dir: "down", source: "signal", status: "watching",
+    fired: { down: { trigger: "break-close", tf: 5, close_at: new Date().toISOString(), bar: { o: 1081.08, h: 1081.2, l: 1076.61, c: 1076.84 } } } });
+  let firstPrompt = "", round = 0, picked = "";
+  claudeScript = (body: any) => {
+    round++;
+    if (round === 1) { firstPrompt = JSON.stringify(body.messages[0]);
+      const m = /◆ = best that fits buying power: MU (\d+(?:\.\d+)?)P (\d\d)\/(\d\d)/.exec(firstPrompt); picked = m ? `MU-2026-${m[2]}-${m[3]}-put-${m[1]}` : "";
+      return toolReply("propose_action", optCard("MU", "MU-2026-10-16-put-1075", 30.2, "down", 26, 1074, 1082)); }   // the 7 Oct oversized pick
+    const last = JSON.stringify(body.messages[body.messages.length - 1]);
+    if (round === 2) { const m = /option_id (MU-[^ ,]+), ask \$([\d.]+)/.exec(last); assert(m, "bounce names a contract: " + last.slice(0, 400));
+      const ask = Number(m![2]); return toolReply("propose_action", optCard("MU", m![1], ask, "down", +(ask * 0.85).toFixed(2), 1074, 1082)); }
+    return textReply("READ: MU rejected 1080. Card is the ◆ contract that fits.");
+  };
+  await M.watchJarvis(77, "down");
+  assert(/◆ = best that fits buying power: MU/.test(firstPrompt), "shortlist pre-fetched into the Watcher prompt: " + firstPrompt.slice(-700) + " ROUND " + round + " DESK " + deskText().slice(-400));
+  assert(T.otto_actions.length === 1, "one card: " + T.otto_actions.length);
+  const leg = T.otto_actions[0].calls[0].args.legs[0].option_id;
+  assert(leg === picked, `card uses the ◆ contract ${picked}, got ${leg}`);
+  assert(T.otto_actions[0].risk.cost <= 1121.64, "card fits buying power: " + T.otto_actions[0].risk.cost);
+});
+
+Deno.test("v3.20: Desk — Jarvis has option_shortlist and every run carries the contract rule", async () => {
+  v320reset();
+  callHook = fakeChain("NVDA", 236.73, 2.5, 4.53, 1151.73);
+  let toolNames: string[] = [], sysCtx = "", round = 0, toolResult = "";
+  claudeScript = (body: any) => {
+    round++;
+    if (round === 1) { toolNames = (body.tools || []).map((t: any) => t.name); sysCtx = JSON.stringify(body.messages[0]); return toolReply("option_shortlist", { ticker: "NVDA", side: "put" }); }
+    toolResult = JSON.stringify(body.messages[body.messages.length - 1]); return textReply("ok");
+  };
+  const { ctxLine, tools, cs, sys } = await (M as any).deskSetupForTest();
+  await M.runDesk({ msgs: [{ role: "user", content: ctxLine + "\nJOSH: nvda puts?" }], sys, tools, cs, who: "josh", send: () => {}, allowPropose: true });
+  assert(toolNames.includes("option_shortlist"), "tool offered: " + toolNames.join(","));
+  assert(/CONTRACTS \(v3\.20\)/.test(sysCtx), "rule in the context line");
+  assert(/★ = best by the Otto Rules/.test(toolResult) && /NVDA 2\d\d(\.5)?P/.test(toolResult), "shortlist came back: " + toolResult.slice(0, 300));
+});
