@@ -152,8 +152,11 @@ let extractHook: ((text: string) => any[]) | null = null;
 const M = await import("../otto-proxy.ts");
 
 function assert(c: unknown, msg: string) { if (!c) throw new Error("ASSERT: " + msg); }
+// v3.26: the size cap and the kill switch are ON in production; the older tests below test other things, so they start
+// with both off (the v3.26 tests at the end turn them on).
+const PRE326 = () => [{ key: "limits", value: { size_cap_on: false, kill_on: false } }];
 function reset() {
-  T.otto_actions = []; T.otto_desk = []; T.otto_settings = []; T.otto_trades = []; T.otto_watch = [];
+  T.otto_actions = []; T.otto_desk = []; T.otto_settings = PRE326(); T.otto_trades = []; T.otto_watch = []; T.otto_activity = [];
   T.otto_checks = []; T.otto_jason = []; T.otto_prep = []; T.otto_prep_imgs = []; T.otto_signal_batches = []; T.otto_signal_msgs = []; T.otto_signal_imgs = [];
   orders = []; calls = []; claudeBodies.length = 0; claudeScript = null; callHook = null; extractHook = null; pings.length = 0;
   quote = { delta: "0.527", volume: 6911, open_interest: 2898 };
@@ -939,6 +942,7 @@ Deno.test("v3.20: stop prices round UP to Robinhood's step — the 7 Oct $3.38 b
 
 Deno.test("v3.20: the NVDA 237.5P card from 7 Oct gets a $3.40 stop on the card itself (not $3.38)", async () => {
   v320reset();
+  T.otto_settings[0].value.max_loss_on = false;     // v3.26 sizes the stop to the max loss — this test is only the price-step rounding
   callHook = fakeChain("NVDA", 236.73, 2.5, 4.53, 1151.73);
   const c: any = await M.proposeAction(optCard("NVDA", "NVDA-2026-10-16-put-237.5", 4.55, "down", 3.38, 235, 237), "watcher");
   assert(c.exit.stop_option === 3.4, "stop on the card: " + c.exit.stop_option);
@@ -1812,4 +1816,263 @@ Deno.test("v3.25: chart chat — Jarvis answers, can move a box (checked like Jo
   claudeScript = () => toolReply("chart_reply", { text: "Moved.", move: { box_id: buy.id, low: 229, high: 232 } });
   await M.chartChat({ ticker: "NVDA", day: "2026-10-09", text: "put it on the price", author: "Josh" }, "j@x");
   assert(/Couldn't move the box: .*inside that range/.test(T.otto_charts[0].chat.at(-1).t), T.otto_charts[0].chat.at(-1).t);
+});
+
+/* =============================== v3.26 — 9 Oct 2026 replays =============================== */
+// The day: MSFT 522.5P bought 9:41 @5.25 (stop $0.93!) out 10:10 @3.75 (−$150); MSFT 527.5P bought 10:36 @4.00 out 10:46 @3.20
+// (−$80). Account $1,166 → $936. Both puts were on "MSFT 532.40 RESISTANCE" — a level the coach gave no direction for.
+const o26 = (id: string, created: string, strike: number, eff: "open" | "close", px: number, state = "filled", extra: any = {}) => ({
+  id, created_at: created, updated_at: created, state, chain_symbol: "MSFT", placed_agent: "agentic", ...extra,
+  legs: [{ option_id: `msft-${strike}p`, side: eff === "open" ? "buy" : "sell", position_effect: eff, strike_price: String(strike), option_type: "put",
+    expiration_date: "2026-10-16", executions: state === "filled" ? [{ price: String(px), quantity: "1", timestamp: created }] : [] }] });
+const MSFT_DAY = () => [
+  o26("e1", "2026-10-09T13:41:34Z", 522.5, "open", 5.25), o26("x1", "2026-10-09T14:10:06Z", 522.5, "close", 3.75),
+  o26("e2", "2026-10-09T14:36:24Z", 527.5, "open", 4.00), o26("x2", "2026-10-09T14:46:44Z", 527.5, "close", 3.20)];
+function r26(iso = "2026-10-09T15:00:00Z", limits: any = {}) {
+  reset(); setNow(iso); (M as any).clearCacheForTest();
+  T.otto_settings = [{ key: "limits", value: { ...limits } }];       // v3.26 defaults: size cap 30% ON, kill switch ON
+  T.otto_activity = []; T.otto_jason = [];
+}
+const port = (v: number, bp = v) => (tool: string) => tool === "get_portfolio" ? { data: { total_value: String(v), buying_power: { buying_power: String(bp) } } } : null;
+
+Deno.test("v3.26 limits: tightening works now; loosening waits for the next trading day 9:30 AM (3 ways)", async () => {
+  r26("2026-10-09T15:00:00Z"); callHook = port(936.18);
+  // 1. tighten: size cap 30 → 25 now
+  let L: any = await (M as any).setLimitsForTest({ size_cap_pct: 25, author: "Ifoma" }, "ottotrader@x");
+  assert(L.size_cap_pct === 25 && !L.pending?.changes?.size_cap_pct, "tightened now: " + JSON.stringify(L.pending));
+  // 2. loosen: cap 25 → 40 and kill switch off → both wait for Mon Oct 12 9:30 AM
+  L = await (M as any).setLimitsForTest({ size_cap_pct: 40, kill_on: false, author: "Josh" }, "ottotrader@x");
+  assert(L.size_cap_pct === 25 && L.kill_on === true, "still the old values today: " + L.size_cap_pct + " " + L.kill_on);
+  assert(L.pending.changes.size_cap_pct === 40 && L.pending.changes.kill_on === false, "waiting: " + JSON.stringify(L.pending));
+  assert(L.pending.effective_at === "2026-10-12T13:30:00.000Z" || /2026-10-12T13:30/.test(L.pending.effective_at), "Monday 9:30 AM ET: " + L.pending.effective_at);
+  assert(T.otto_activity.some((a: any) => a.kind === "change" && /loosening, starts/.test(a.text) && a.who === "Josh"), "activity: " + JSON.stringify(T.otto_activity));
+  // saving another field keeps the waiting change
+  L = await (M as any).setLimitsForTest({ max_trades_day: 1, author: "Ifoma" }, "ottotrader@x");
+  assert(L.max_trades_day === 1 && L.pending.changes.size_cap_pct === 40, "other save keeps the waiting change: " + JSON.stringify(L.pending));
+  // 3. Monday 9:31 AM: it took effect, and the log says so
+  setNow("2026-10-12T13:31:00Z"); (M as any).clearCacheForTest();
+  L = await M.getLimits();
+  assert(L.size_cap_pct === 40 && L.kill_on === false && !L.pending, "took effect Monday: " + JSON.stringify({ c: L.size_cap_pct, k: L.kill_on, p: L.pending }));
+  assert(T.otto_activity.some((a: any) => /^Took effect: /.test(a.text)), "logged");
+  // before the open on a trading day, a loosening starts at 9:30 the same morning
+  assert(/2026-10-13T13:30/.test(M.looseningStarts(new RealDate("2026-10-13T11:00:00Z") as any)), "7 AM Tue → 9:30 Tue");
+  assert(M.isLooser("size_cap_pct", 30, 0) && M.isLooser("kill_daily", true, false) && !M.isLooser("weekly_pct", 20, 15) && !M.isLooser("auto_close", true, false), "isLooser");
+});
+
+Deno.test("v3.26 limits: Cancel change drops the waiting loosening; turning a limit back on is immediate", async () => {
+  r26("2026-10-09T15:00:00Z"); callHook = port(936.18);
+  await (M as any).setLimitsForTest({ weekly_on: false, author: "Josh" }, "x@y");
+  let L: any = await (M as any).setLimitsForTest({ cancel_pending: true, author: "Ifoma" }, "x@y");
+  assert(L.weekly_on === true && !(L.pending?.changes?.weekly_on === false), "cancelled: " + JSON.stringify(L.pending));
+  assert(T.otto_activity.some((a: any) => /Cancelled the waiting change/.test(a.text) && a.who === "Ifoma"), "logged");
+  T.otto_settings[0].value.daily_on = false; (M as any).clearCacheForTest();
+  L = await (M as any).setLimitsForTest({ daily_on: true, author: "Ifoma" }, "x@y");
+  assert(L.daily_on === true, "turning ON is a tightening — now");
+});
+
+Deno.test("v3.26 kill switch: 9 Oct after the 2nd MSFT loss — the next card is a PAPER card (3 ways: daily, weekly, max trades)", async () => {
+  r26("2026-10-09T14:51:00Z");
+  orders = MSFT_DAY();
+  const fit = fakeChain("MSFT", 533.03, 2.5, 1.84, 936.18);
+  callHook = (tool: string, args: any) => tool === "get_portfolio" ? { data: { total_value: "936.18", buying_power: { buying_power: "936.18" } } } : fit(tool, args);
+  // 1. daily stop (2 losers) — the 10:51 MSFT 537.5C card
+  const c: any = await M.proposeAction(optCard("MSFT", "MSFT-2026-10-16-call-537.5", 1.84, "up", 1.2, 536, 532.4), "watcher");
+  assert(c.status === "paper", "paper card: " + c.status);
+  assert(c.checks[0].paper && /Kill switch on/.test(c.checks[0].text) && /daily stop hit \(2 losing trades/.test(c.checks[0].text), c.checks[0].text);
+  assert(!pings.some((p) => p.kind === "card"), "no 'card waiting' ping for a paper card");
+  assert(T.otto_activity.filter((a: any) => a.kind === "lock").length >= 1 && pings.filter((p) => p.kind === "lock").length >= 1, "lock logged + pinged");
+  const uid = "33333333-3333-3333-3333-333333333333"; T.otto_actions.find((x: any) => x.id === c.id).id = uid;
+  const r: any = await M.actOnForTest(uid, "approve", "ottotrader@x");
+  assert(r.status === "paper" && !calls.some((x) => x.tool === "place_option_order"), "Approve does nothing on a paper card");
+  // the lock is logged once a day, not every card
+  (M as any).clearCacheForTest();
+  await M.proposeAction(optCard("MSFT", "MSFT-2026-10-16-call-537.5", 1.84, "up", 1.2, 536, 532.4), "desk");
+  assert(T.otto_activity.filter((a: any) => a.kind === "lock" && /daily/.test(a.ref)).length === 1, "daily lock logged once");
+  // 2. weekly limit alone (daily stop off): −$238 this week
+  r26("2026-10-09T14:51:00Z", { daily_on: false, trades_on: false });
+  orders = MSFT_DAY();
+  callHook = (tool: string, args: any) => tool === "get_realized_pnl" ? { data: { data_points: [{ start_time: "2026-10-09T04:00:00Z", realized_gain: "-238", number_of_trades: 4 }] } }
+    : tool === "get_portfolio" ? { data: { total_value: "936.18", buying_power: { buying_power: "936.18" } } } : fit(tool, args);
+  const ls: any = await M.lockState(true);
+  assert(ls.locked && ls.reasons.length === 1 && ls.reasons[0].kind === "weekly" && /2026-10-12T13:30/.test(ls.until), "weekly lock until Monday: " + JSON.stringify(ls));
+  // 3. max trades alone: 2 trades opened, max 2
+  r26("2026-10-09T14:51:00Z", { daily_on: false, weekly_on: false });
+  orders = MSFT_DAY(); callHook = port(936.18);
+  const ls3: any = await M.lockState(true);
+  assert(ls3.locked && ls3.reasons[0].kind === "trades", "max trades lock: " + JSON.stringify(ls3));
+  // kill switch OFF → the card is pending with red flags (the old behavior)
+  r26("2026-10-09T14:51:00Z", { kill_on: false, size_cap_on: false });
+  orders = MSFT_DAY(); callHook = (tool: string, args: any) => tool === "get_portfolio" ? { data: { total_value: "936.18", buying_power: { buying_power: "936.18" } } } : fit(tool, args);
+  const c4: any = await M.proposeAction(optCard("MSFT", "MSFT-2026-10-16-call-537.5", 1.84, "up", 1.2, 536, 532.4), "watcher");
+  assert(c4.status === "pending" && c4.checks.some((x: any) => /DAILY STOP/.test(x.text) && x.ok === false), "flag only when off");
+});
+
+Deno.test("v3.26 size cap: the 9:41 MSFT 522.5P ($525 = 45% of $1,166) — cheaper contract named, else paper; a ticket is papered; cap off = flag only", async () => {
+  // 1. a contract under the cap exists → Jarvis gets it back by name
+  r26("2026-10-09T13:41:00Z");
+  let fit = fakeChain("MSFT", 527.37, 2.5, 5.25, 1166.28);
+  callHook = (tool: string, args: any) => tool === "get_portfolio" ? { data: { total_value: "1166.28", buying_power: { buying_power: "1166.28" } } } : fit(tool, args);
+  let err = "";
+  try { await M.proposeAction(optCard("MSFT", "MSFT-2026-10-16-put-522.5", 5.25, "down", 4.2, 520, 532.4), "desk"); } catch (e) { err = (e as Error).message; }
+  assert(/Over the size cap: this contract costs \$525 = 45% of the account; the cap is 30% \(\$349\)/.test(err) && /◆ MSFT \d+(\.\d+)?P/.test(err), "bounced with a fitting contract: " + err);
+  assert(!T.otto_actions.length, "no card stored");
+  // 2. nothing fits (every contract over $349) → paper card, shown + scored, no ping
+  r26("2026-10-09T13:41:00Z");
+  fit = fakeChain("MSFT", 527.37, 2.5, 30, 1166.28);
+  callHook = (tool: string, args: any) => tool === "get_portfolio" ? { data: { total_value: "1166.28", buying_power: { buying_power: "5000" } } } : fit(tool, args);
+  const c: any = await M.proposeAction(optCard("MSFT", "MSFT-2026-10-16-put-522.5", 5.25, "down", 4.2, 520, 532.4), "desk");
+  assert(c.status === "paper" && /AUTO-REJECTED · Costs \$525 = 45% of the account\. Your size cap is 30% \(\$349\)/.test(c.checks[0].text), JSON.stringify(c.checks[0]));
+  assert(/📄 Paper card/.test(deskText()) && T.otto_activity.some((a: any) => a.kind === "card" && /Paper card/.test(a.text)), "Desk + Activity");
+  // 3. Ifoma's own ticket over the cap → paper, never bounced
+  r26("2026-10-09T13:41:00Z");
+  callHook = (tool: string, args: any) => tool === "get_portfolio" ? { data: { total_value: "1166.28", buying_power: { buying_power: "1166.28" } } } : fakeChain("MSFT", 527.37, 2.5, 5.25, 1166.28)(tool, args);
+  const t: any = await M.proposeAction(optCard("MSFT", "MSFT-2026-10-16-put-522.5", 5.25, "down", 4.2, 520, 532.4), "ottotrader@x", { manual: true });
+  assert(t.status === "paper" && !/looked for a cheaper/.test(t.checks[0].text), "ticket papered: " + t.checks[0].text);
+  // cap off → pending, the old 20% flag only
+  r26("2026-10-09T13:41:00Z", { size_cap_on: false });
+  callHook = (tool: string, args: any) => tool === "get_portfolio" ? { data: { total_value: "1166.28", buying_power: { buying_power: "1166.28" } } } : fakeChain("MSFT", 527.37, 2.5, 5.25, 1166.28)(tool, args);
+  const p: any = await M.proposeAction(optCard("MSFT", "MSFT-2026-10-16-put-522.5", 5.25, "down", 4.2, 520, 532.4), "desk");
+  assert(p.status === "pending" && p.checks.some((x: any) => /45% of the account \(flag above 20%\)/.test(x.text)), "flag only");
+});
+
+Deno.test("v3.26 stop sized to the max loss: the 9:41 card's $0.93 stop (−$432) becomes $4.09 (−$116) — 3 ways", () => {
+  assert(M.stopForMax(5.25, 0.93, 1, 116) === 4.1, "5.25 / 0.93 / max 116 → " + M.stopForMax(5.25, 0.93, 1, 116));   // nickel step above $3: 4.09 → 4.10
+  assert(M.stopForMax(4.0, 2.98, 1, 102) === null, "trade 2's $2.98 stop already fits (−$102)");
+  assert(M.stopForMax(2.0, 1.0, 2, 100) === 1.5, "2 contracts: 2.00 − 100/200 = 1.50");
+  assert(M.stopForMax(1.0, 0.5, 1, 0) === null, "max off → unchanged");
+});
+
+Deno.test("v3.26 Watcher: a 'rejection' needs a TOUCH — the 10:25 and 10:35 MSFT bars (H 532.02 / 532.32 under 532.07 / 532.40) don't fire", () => {
+  const t0 = RealDate.parse("2026-10-09T13:30:00Z");
+  const mk = (rows: number[][]) => rows.map((r, i) => ({ t: t0 + i * 5 * 60e3, o: r[0], h: r[1], l: r[2], c: r[3] }));
+  // a run up away from 532.40, then the 10:35 bar: O 531.70 H 532.32 L 531.24 C 531.57
+  const base = [[527, 528, 526.9, 527.4], [527.4, 528, 527, 527.8], [528, 529, 527.8, 528.9], [529, 530, 528.6, 529.4], [529.4, 530.3, 529.2, 529.6], [529.6, 531.6, 529.5, 530.0]];
+  const near = mk([...base, [531.7, 532.32, 531.24, 531.57]]);
+  const now = t0 + near.length * 5 * 60e3 + 30e3;
+  assert(M.evalLevel(532.4, "down", near, 5, { now, earliestMin: 570 }) === null, "no touch → no rejection");
+  const touch = mk([...base, [531.7, 532.45, 531.24, 531.57]]);
+  const h = M.evalLevel(532.4, "down", touch, 5, { now, earliestMin: 570 });
+  assert(h && h.trigger === "rejection", "touched 532.45 and closed red below → rejection: " + JSON.stringify(h));
+  // pullback-hold must touch too
+  const up = mk([[530, 531, 529.9, 530.8], [530.8, 532, 530.7, 531.9], [531.9, 533, 531.8, 532.9], [532.9, 533.2, 532.5, 533.1], [533.1, 533.3, 532.42, 533.2]]);
+  const now2 = t0 + up.length * 5 * 60e3 + 30e3;
+  assert(M.evalLevel(532.4, "up", up, 5, { now: now2, earliestMin: 570 }) === null, "low 532.42 doesn't touch 532.40 → no hold");
+});
+
+Deno.test("v3.26 fix 1: the coach's level with no direction → NO card from Signals, Watcher both ways; his call → 'Coach's call' (3 ways)", async () => {
+  r26("2026-10-09T13:24:00Z", { size_cap_on: false });
+  T.otto_jason.push({ id: 87, day: "2026-10-09", posted_at: "2026-10-09T13:23:00Z", kind: "level", ticker: "MSFT", direction: null, level: 532.4, words: "MSFT 532.40 RESISTANCE" });
+  T.otto_jason.push({ id: 83, day: "2026-10-09", posted_at: "2026-10-09T13:21:00Z", kind: "call", ticker: "PLTR", direction: "long", level: 201.5, words: "PLTR ABOVE 201.50 TO CHALLENGE HIGHS FROM YESTERDAY." });
+  const fit = fakeChain("MSFT", 528.05, 2.5, 2.63, 1166.28);
+  callHook = (tool: string, args: any) => tool === "get_portfolio" ? { data: { total_value: "1166.28", buying_power: { buying_power: "1166.28" } } } : fit(tool, args);
+  // 1. Signals card on the level → refused, the read is told why
+  const card = { ...optCard("MSFT", "MSFT-2026-10-12-put-517.5", 2.63, "down", 1.46, 520, 532.4) }; (card.plan as any).jason_id = 87;
+  let err = ""; try { await M.proposeAction(card, "signals"); } catch (e) { err = (e as Error).message; }
+  assert(/^NO CARD — the coach posted a level with no direction/.test(err) && /Watcher both ways/.test(err), err);
+  // 2. the Watcher list: both ways, coach_dir null
+  await (M as any).watchFromSignalsForTest([T.otto_jason[0]]);
+  const w = T.otto_watch.find((x: any) => x.ticker === "MSFT");
+  assert(w && w.dir === "both" && w.coach_dir === null, "watched both ways: " + JSON.stringify(w));
+  // 3. a Watcher card on that level → "Coach's level + Jarvis's direction"; PLTR's own call → "Coach's call"
+  setNow("2026-10-09T14:36:00Z"); (M as any).clearCacheForTest();
+  const wc = { ...optCard("MSFT", "MSFT-2026-10-14-put-527.5", 4.0, "down", 2.98, 527.5, 532.4) };
+  const c: any = await M.proposeAction(wc, "watcher", { planExtra: { source: "signal", trigger: "rejection", watch_id: w.id } });
+  assert(c.plan.origin === "coach_level" && c.checks.some((x: any) => /Direction picked by Jarvis — the coach gave a level/.test(x.text)), JSON.stringify(c.checks.slice(0, 3)));
+  const fp = fakeChain("PLTR", 202.06, 2.5, 1.0, 1166.28);
+  callHook = (tool: string, args: any) => tool === "get_portfolio" ? { data: { total_value: "1166.28", buying_power: { buying_power: "1166.28" } } } : fp(tool, args);
+  const pc = { ...optCard("PLTR", "PLTR-2026-10-23-call-210", 1.0, "up", 0.6, 205, 201.5) }; (pc.plan as any).jason_id = 83;
+  const p: any = await M.proposeAction(pc, "signals");
+  assert(p.plan.origin === "coach_call" && p.checks.some((x: any) => x.ok === true && /coach's own call/.test(x.text)), "coach's call");
+});
+
+Deno.test("v3.26 unclear ticker: 'WATCH LITE TO HOLD PHM' → a PHM card gets a red line; one-ticker posts don't", () => {
+  assert(/Ticker unclear — the post names LITE and PHM/.test(String(M.unclearTicker("PHM", "WATCH LITE TO HOLD PHM. IF IT DOES. COULD BE NICE BOUNCE. WATCH WIDE SPREAD ALERT"))), "PHM flagged");
+  assert(M.unclearTicker("LITE", "WATCH LITE TO HOLD PHM") === null, "first-named ticker is fine");
+  assert(M.unclearTicker("PLTR", "PLTR ABOVE 201.50 TO CHALLENGE HIGHS FROM YESTERDAY. BELOW 198.50 WAIT FOR RESET") === null, "one ticker → fine");
+  assert(M.unclearTicker("ABBV", "ABBV ABOVE $275.10 = LETS GO. TOOK OFF HALF HERE") === null, "ABBV fine");
+});
+
+Deno.test("v3.26 wrong-if alert card moves the SERVER rule (9 Oct 10:40 MSFT 532.40 → 532.07) and warns it's inside the level", async () => {
+  r26("2026-10-09T14:40:00Z");
+  T.otto_actions.push({ id: "11111111-1111-1111-1111-111111111111", title: "SCALP · MSFT 527.5P 10/14 @ $4.00", status: "done", created_at: "2026-10-09T14:35:43Z",
+    plan: { stop: 532.4, direction: "down", tv_symbol: "NASDAQ:MSFT" },
+    exit: { state: "armed", option_id: "msft-527.5p", tv_symbol: "NASDAQ:MSFT", direction: "down", wrong_if: 532.4, wrong_tf: 5, tp1: 527.5, log: [] } });
+  const id = "22222222-2222-2222-2222-222222222222";
+  T.otto_actions.push({ id, title: "Update MSFT wrong-if: 532.40 → 532.07", status: "pending", created_at: "2026-10-09T14:40:31Z",
+    calls: [{ service: "tv", tool: "mcp-tv-update-alert", args: { name: "Otto Rules 10/09 – MSFT 532.07 – wrong-if", message: "MSFT 5-min close above 532.07" } }] });
+  await M.actOnForTest(id, "approve", "ottotrader@x");
+  const ex = T.otto_actions[0].exit;
+  assert(ex.wrong_if === 532.07 && ex.wrong_set_at, "server rule moved: " + JSON.stringify(ex));
+  assert(/inside the card's own level \(532\.4\)/.test(deskText()), deskText());
+  assert(T.otto_activity.some((a: any) => a.kind === "change" && /MSFT wrong-if 532\.4 → 532\.07 \(server rule moved\)/.test(a.text)), JSON.stringify(T.otto_activity));
+  assert(M.wrongIfFromAlertArgs({ name: "Otto Rules 10/09 – NVDA 233.92 – TP1" }) === null, "a TP1 alert is not a wrong-if");
+});
+
+Deno.test("v3.26 Jarvis's numbers: '$7.43 below', 'in the money', 'shed $3 overnight', 'already closed' corrected; true lines kept", () => {
+  const f: any = M.dayFacts([o26("e2", "2026-10-09T14:36:24Z", 527.5, "open", 4.00)]);    // MSFT 527.5P open
+  const px = { MSFT: 530.93 };
+  const a = M.checkClaims326("Price: MSFT $530.93 — still $7.43 below the 532.40 resistance.", f, px);
+  assert(/\$1\.47 below 532\.4, not \$7\.43/.test(a.text), a.text);
+  const b = M.checkClaims326("The MSFT 527.5P put is in the money direction.", f, px);
+  assert(/OUT of the money — MSFT is 530\.93, above the 527\.5 strike/.test(b.text), b.text);
+  const c = M.checkClaims326("The MSFT put has shed $5.00 from yesterday's close ($8.85 → $3.85).", f, px);
+  assert(/bought today .* for \$4\.00 — there is no overnight move/.test(c.text), c.text);
+  const d = M.checkClaims326("Robinhood shows no open position on the MSFT 527.5P — it's already closed.", f, px);
+  assert(/still OPEN/.test(d.text), d.text);
+  const ok = M.checkClaims326("MSFT is $1.47 below 532.40. The 527.5P is out of the money.", f, px);
+  assert(ok.text === "MSFT is $1.47 below 532.40. The 527.5P is out of the money." && !ok.notes.length, "true lines untouched: " + ok.text);
+});
+
+Deno.test("v3.26 Activity: 'outside Otto' catches the 10:27 PLTR cancel in the app; Otto's own cancels and the 4 PM expiry don't count", async () => {
+  r26("2026-10-09T15:00:00Z");
+  orders = [
+    { ...o26("p1", "2026-10-09T14:26:31Z", 210, "open", 3.55, "cancelled"), chain_symbol: "PLTR", updated_at: "2026-10-09T14:27:09Z" },
+    { ...o26("s1", "2026-10-09T14:36:28Z", 527.5, "close", 0, "cancelled"), updated_at: "2026-10-09T14:45:52Z" },
+    { ...o26("s2", "2026-10-09T14:46:03Z", 527.5, "close", 0, "cancelled"), updated_at: "2026-10-09T20:00:05Z" },     // expired at the close
+    { ...o26("u1", "2026-10-09T14:50:00Z", 530, "open", 2.0, "filled"), placed_agent: "user" }];
+  await (M as any).noteOttoCancel("s1");             // Otto's close card cancelled its stop
+  const r: any = await M.outsideSweep("2026-10-09");
+  const out = T.otto_activity.filter((a: any) => a.kind === "outside").map((a: any) => a.text);
+  assert(out.length === 2 && out.some((t: string) => /PLTR 210P? .*cancelled outside Otto .*10:27 AM/.test(t)) && out.some((t: string) => /placed outside Otto \(user\)/.test(t)), JSON.stringify(out));
+  await M.outsideSweep("2026-10-09");
+  assert(T.otto_activity.filter((a: any) => a.kind === "outside").length === 2, "logged once each");
+  assert(M.deskKind("⚠ SCALP: the protective stop at $2.98 could not be placed") === "break" && M.deskKind("✓ Close MSFT 527.5P — done (approved by x)") === "trade" && M.deskKind("Guardrails updated by Ifoma") === null, "deskKind");
+  void r;
+});
+
+Deno.test("v3.26 Coaches Corner: MSFT 532.40 scored both ways; ABBV exits at his 'took off half' post; real option P&L when we had the contract", async () => {
+  const t0 = RealDate.parse("2026-10-09T13:30:00Z");
+  const bars = (rows: number[][]) => rows.map((r, i) => ({ t: t0 + i * 5 * 60e3, o: r[0], h: r[1], l: r[2], c: r[3] }));
+  // MSFT: never rejected at 532.40 (no touch-and-close-below), broke above at bar 15 (10:45–10:50) and held
+  const ms: number[][] = []; let p = 527;
+  for (let i = 0; i < 14; i++) { ms.push([p, p + 0.6, p - 0.3, p + 0.35]); p += 0.35; }
+  ms.push([531.9, 532.3, 531.6, 532.2], [532.3, 533.3, 532.25, 533.02], [533, 533.5, 532.9, 533.4]);
+  for (let i = 0; i < 70; i++) ms.push([533.4, 533.8, 533.0, 533.4]);
+  const end = t0 + 390 * 60e3;
+  const held = M.ccSide({ side: "down", postAt: RealDate.parse("2026-10-09T13:23:00Z"), level: 532.4, bars: bars(ms), endAt: end });
+  const broke = M.ccSide({ side: "up", postAt: RealDate.parse("2026-10-09T13:23:00Z"), level: 532.4, bars: bars(ms), endAt: end });
+  assert(held.state === "no_entry", "puts side never triggered: " + JSON.stringify(held));
+  assert(broke.state === "win" && broke.entry_px === 533.02, "calls side: broke 532.40 at 10:50 and held: " + JSON.stringify(broke));
+  // ABBV long above 275.10 → exit at his 9:58 post
+  const ab = bars([[270.4, 274.7, 270.4, 273.8], [274, 274.6, 273.5, 274.4], [274.7, 275.4, 274.2, 275.3], [275.2, 275.9, 275.07, 275.75], [275.9, 276.6, 275.1, 275.13], [275.13, 275.9, 275.0, 275.8]]);
+  const s = M.ccSide({ side: "up", postAt: RealDate.parse("2026-10-09T13:35:00Z"), level: 275.1, bars: ab, exitAt: RealDate.parse("2026-10-09T13:58:00Z"), endAt: end });
+  assert(s.exit_why === "coach's exit post" && s.state === "win", "his exit post: " + JSON.stringify(s));
+  assert(M.isExitPost({ words: "ABBV ABOVE $275.10 = LETS GO. TOOK OFF HALF HERE" }) && !M.isExitPost({ words: "MSFT 532.40 RESISTANCE" }), "exit post detection");
+  // real option prices: with the card's contract, P&L = (exit − entry) × 100 from Robinhood's option bars
+  r26("2026-10-09T21:00:00Z");
+  T.otto_jason.push({ id: 87, day: "2026-10-09", posted_at: "2026-10-09T13:23:00Z", posted_label: "9:23 AM", kind: "level", ticker: "MSFT", direction: null, level: 532.4, words: "MSFT 532.40 RESISTANCE" });
+  T.otto_actions.push({ id: "c-up", title: "SCALP · Buy 1 MSFT 537.5C 10/12 @ $1.84", status: "rejected", created_at: "2026-10-09T14:51:00Z",
+    plan: { direction: "up", tp1: 536, watch_id: 9, jason_id: 87 }, exit: { option_id: "msft-537.5c" } });
+  T.otto_watch.push({ id: 9, day: "2026-10-09", ticker: "MSFT", level: 532.4, source: "signal", source_ref: "87" });
+  callHook = (tool: string, args: any) => {
+    if (tool === "get_equity_historicals") return { data: { results: [{ symbol: "MSFT", bars: ms.map((r, i) => ({ begins_at: new RealDate(t0 + i * 5 * 60e3).toISOString(), open_price: r[0], high_price: r[1], low_price: r[2], close_price: r[3] })) }] } };
+    if (tool === "get_option_historicals") return { data: { results: [{ bars: ms.map((r, i) => ({ begins_at: new RealDate(t0 + i * 5 * 60e3).toISOString(), open_price: 1, high_price: 1, low_price: 1, close_price: i < 16 ? 1.84 : 2.40 })) }] } };
+    return null;
+  };
+  const cc: any = await M.coachCorner("today");
+  const row = cc.posts.find((x: any) => x.ticker === "MSFT");
+  const up = row.cc.sides.find((x: any) => x.side === "up");
+  assert(up.opt && up.est === false && up.pnl === 56, "real option P&L 1.84 → 2.40 = +$56: " + JSON.stringify(up));
+  assert(row.cards[0].we === "passed" && row.type === "level", JSON.stringify(row.cards));
+  assert(T.otto_jason[0].cc?.state === "scored", "saved once the day is done");
 });

@@ -432,6 +432,34 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .dk-act{border:1px solid rgba(0,200,5,.35);background:rgba(0,200,5,.05);border-radius:12px;padding:11px 12px;margin-top:8px}
 .dk-act.st-rejected,.dk-act.st-expired{border-color:var(--rule);background:var(--surface);opacity:.75}
 .dk-act.st-failed{border-color:rgba(255,80,0,.45);background:rgba(255,80,0,.05)}
+/* v3.26: paper cards, where the idea came from, the kill-switch banner, Activity, Coaches Corner, the new Limits */
+.dk-act.st-paper{border:1.5px dashed #3a3f47;background:#111215;opacity:.9}.dk-act.st-paper .dk-act-h b{color:#b8bfc9;text-decoration:line-through;text-decoration-color:#646c78}
+.dk-paper{margin:6px 0 2px;font-size:13.5px;font-weight:600;color:#ffb08f}
+.og{display:inline-block;font:700 10.5px var(--body);letter-spacing:.05em;padding:3px 8px;border-radius:999px;margin:0 0 6px;text-transform:uppercase}
+.og-coach_call{background:#16305c;color:#9cc3ff}.og-coach_level,.og-coach_post{background:#3a2a12;color:#ffc27a}.og-coach_against{background:#3a1608;color:#ff8a5c}.og-jarvis{background:var(--surface-3);color:#c7cdd6}
+.dk-lockbar{display:flex;gap:10px;align-items:flex-start;background:#2a1208;border:1px solid #6b2a0e;border-radius:12px;padding:12px 14px;margin:0 0 10px;font-size:13px;line-height:1.5;color:#e8c3b3}
+.dk-lockbar b{color:#ffb08f;display:block;font-size:14px}
+.dk-rail button[data-go="settings"]{position:relative}.dk-rail button.dot::after{content:"";position:absolute;top:6px;right:14px;width:8px;height:8px;border-radius:50%;background:#ff5a52}
+.ac-f{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 12px}.ac-f button{background:transparent;color:var(--ink-2);border:1px solid var(--rule);border-radius:999px;padding:7px 14px;font:600 12px var(--body);cursor:pointer;min-height:34px}
+.ac-f button.on{background:var(--surface-3);color:var(--ink);border-color:var(--surface-3)}
+.ac-ev{display:grid;grid-template-columns:64px 88px minmax(0,1fr) 120px;gap:12px;padding:11px 14px;border-bottom:1px solid var(--rule);font-size:13px;line-height:1.5;align-items:start}
+.ac-ev.brk{background:#1a1410}.ac-k{display:inline-block;font:700 10px var(--body);letter-spacing:.05em;padding:3px 8px;border-radius:999px;text-align:center;text-transform:uppercase}
+.ac-change{background:#16305c;color:#9cc3ff}.ac-break{background:#4a1a0a;color:#ffb08f}.ac-trade{background:#0e3a1a;color:#5be07a}.ac-lock{background:#3a1608;color:#ff8a5c}.ac-outside{background:#2a2410;color:#e8d27a}.ac-card{background:var(--surface-3);color:#c7cdd6}
+.ac-who{text-align:right;color:var(--ink-2);font-size:12px}
+.ac-day{padding:9px 14px;border-bottom:1px solid var(--rule);font:600 12px var(--body);color:var(--ink-2);letter-spacing:.05em}
+@media (max-width:700px){.ac-ev{grid-template-columns:52px minmax(0,1fr)}.ac-ev .ac-k,.ac-ev .ac-who{grid-column:2}}
+.rtabs{display:flex;gap:6px;border-bottom:1px solid var(--rule);padding-bottom:10px;margin-bottom:16px}.rtabs button{background:transparent;border:0;color:var(--ink-2);padding:8px 14px;border-radius:8px;font:500 14px var(--body);cursor:pointer}.rtabs button.on{background:var(--surface-2);color:var(--ink);font-weight:600}
+.cc-g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:16px}@media (max-width:760px){.cc-g2{grid-template-columns:1fr}}
+.cc-t{width:100%;border-collapse:collapse;font-size:13px}.cc-t th{text-align:left;font-weight:600;color:var(--ink-2);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:9px 10px;border-bottom:1px solid var(--rule)}
+.cc-t td{padding:10px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.45}.cc-t tr.bad{background:#1a1410}
+.cc-chip{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;white-space:nowrap;background:var(--surface-3);color:#c7cdd6}
+.cc-chip.win{background:#0e3a1a;color:#5be07a}.cc-chip.loss{background:#3a1608;color:#ff8a5c}.cc-chip.coach{background:#16305c;color:#9cc3ff}.cc-chip.warn{background:#3a2a12;color:#ffc27a}
+.cc-split{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}@media (max-width:900px){.cc-split{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.lm-card{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.lm-hd{display:flex;justify-content:space-between;align-items:center;gap:10px}.lm-hd b{font-size:14.5px}.lm-sw{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;min-height:40px;cursor:pointer}.lm-sw input{width:38px;height:20px;accent-color:#00c805}
+.lm-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13.5px;margin-top:6px}.lm-row input.f{width:84px;margin:0;text-align:right}
+.lm-wait{background:#1a1d23;border:1px dashed #3a4250;border-radius:10px;padding:10px 12px;margin:8px 0;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px}
+.lm-new{font:700 10px var(--body);padding:2px 7px;border-radius:999px;background:#16305c;color:#9cc3ff;margin-left:6px;vertical-align:middle}
 .dk-act-h{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px}
 .dk-act-h b{font-size:13.5px}
 .dk-sum{font-family:var(--mono);font-size:12.3px;white-space:pre-wrap;margin:0;color:var(--ink)}
@@ -775,6 +803,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
     <button data-go="prep" title="Morning Prep: your sentiment read, graded by Jarvis"><svg viewBox="0 0 24 24"><path d="M17 18a5 5 0 0 0-10 0"/><path d="M12 2v7M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1M8 6l4-4 4 4"/></svg>Prep</button>
     <button data-go="market"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>Market</button>
     <button data-go="perf"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Results</button>
+    <button data-go="coach" title="Coaches Corner: every coach post, scored as if we played it"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Coach</button>
     <button data-go="journal"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Journal</button>
     <button data-go="review"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review</button>
     <button data-go="score"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Score</button>
@@ -1035,8 +1064,13 @@ svg.nc-svg{width:100%;height:auto;display:block}
     </div>
     <div style="margin-bottom:20px">
       <label class="f">Limits &amp; goals</label>
-      <p class="hint" style="margin-top:0" id="sLimSum">Guardrails (they flag, never block): max loss per trade, daily stop, weekly limit, trades per day, monthly goal.</p>
+      <p class="hint" style="margin-top:0" id="sLimSum">Every guardrail on/off + your number: size cap, max loss per trade, daily stop, weekly limit, trades per day, kill switch.</p>
       <button class="btn wide" id="sLimits">Change limits &amp; goals</button>
+    </div>
+    <div style="margin-bottom:20px">
+      <label class="f">Activity log</label>
+      <p class="hint" style="margin-top:0" id="sActSum">Every change, break, trade and lock — who did it and when. Kept 90 days.</p>
+      <button class="btn wide" id="sActivity">Open the Activity log</button>
     </div>
     <div style="margin-bottom:20px">
       <label class="f">House Rules</label>
@@ -1116,23 +1150,48 @@ svg.nc-svg{width:100%;height:auto;display:block}
 <dialog id="dlgLimits">
   <div class="grip"></div><div class="hd"><h3>Limits &amp; goals</h3></div>
   <div class="bd">
-    <p class="hint" style="margin-top:0">Your guardrails. They <b>flag, never block</b>: a card that breaks one gets a red banner and you decide. Percentages follow the Agentic account's live value. The change is posted on the Desk.</p><div style="height:8px"></div>
-    <div class="grid g2">
+    <p class="hint" style="margin-top:0">Every limit can be turned on or off and set to your number. <b>Tightening works right away.</b> <b>Loosening</b> (turning a limit off or raising it) <b>starts the next trading day at 9:30 AM.</b> Every change goes to the <a href="#" id="lmAct">Activity log</a> with who made it.</p>
+    <div id="lmWait"></div>
+    <div class="lm-card"><div class="lm-hd"><b>Size cap<span class="lm-new">NEW</span></b><label class="lm-sw"><input type="checkbox" id="lmCapOn"> On</label></div>
+      <div class="lm-row"><label for="lmCapPct">Max cost per trade</label><input class="f" id="lmCapPct" type="number" min="0" max="100" step="1" inputmode="decimal"><span class="mut" id="lmCapUsd">% of the account</span></div>
+      <p class="hint" style="margin:4px 0 0">Over it: Otto tries a cheaper contract for the same idea; if none fits, the card is auto-rejected as a paper card (still scored).</p></div>
+    <div class="lm-card"><div class="lm-hd"><b>Max loss per trade</b><label class="lm-sw"><input type="checkbox" id="lmLossOn"> On</label></div>
+      <div class="lm-row"><label for="lmTradePct">Loss at the stop, max</label><input class="f" id="lmTradePct" type="number" min="0" max="100" step="0.5" inputmode="decimal"><span class="mut">% of the account</span> <span class="mut" id="lmTradeUsd"></span></div>
+      <p class="hint" style="margin:4px 0 0">When on, the stop on every new card is set so a stop-out loses no more than this.</p></div>
+    <div class="lm-card"><div class="lm-hd"><b>Daily stop</b><label class="lm-sw"><input type="checkbox" id="lmDailyOn"> On</label></div>
+      <div class="lm-row"><label for="lmLosers">Stop after</label><input class="f" id="lmLosers" type="number" min="0" max="20" step="1" inputmode="numeric"><span class="mut">losing trades, or</span><input class="f" id="lmDailyX" type="number" min="0" max="20" step="0.5" inputmode="decimal" aria-label="Times the max loss"><span class="mut">× max loss in a day</span></div></div>
+    <div class="lm-card"><div class="lm-hd"><b>Weekly limit</b><label class="lm-sw"><input type="checkbox" id="lmWeekOn"> On</label></div>
+      <div class="lm-row"><label for="lmWeekPct">Stop the week after losing</label><input class="f" id="lmWeekPct" type="number" min="0" max="100" step="0.5" inputmode="decimal"><span class="mut">% of the account</span> <span class="mut" id="lmWeekUsd"></span></div></div>
+    <div class="lm-card"><div class="lm-hd"><b>Max trades per day</b><label class="lm-sw"><input type="checkbox" id="lmTradesOn"> On</label></div>
+      <div class="lm-row"><label for="lmDay">Trades a day, max</label><input class="f" id="lmDay" type="number" min="1" step="1" inputmode="numeric"></div></div>
+    <div class="lm-card" style="border-color:#6b2a0e"><div class="lm-hd"><b>Kill switch<span class="lm-new">NEW</span></b><label class="lm-sw"><input type="checkbox" id="lmKillOn"> On</label></div>
+      <p class="hint" style="margin:4px 0 6px">When a limit below is hit: no new cards until it resets. Signals keep listening; ideas become paper cards and are scored. When off, those limits only add a red flag to cards.</p>
+      <label class="lm-sw" style="font-weight:500"><input type="checkbox" id="lmKillDaily" style="width:18px;height:18px"> Lock on the daily stop · until the next trading day</label>
+      <label class="lm-sw" style="font-weight:500"><input type="checkbox" id="lmKillWeekly" style="width:18px;height:18px"> Lock on the weekly limit · until Monday</label>
+      <label class="lm-sw" style="font-weight:500"><input type="checkbox" id="lmKillTrades" style="width:18px;height:18px"> Lock on max trades per day · until the next trading day</label>
+      <div id="lmKillState" class="mut" style="font-size:12.5px;margin-top:4px"></div></div>
+    <div class="lm-card"><div class="lm-hd"><b>Auto-close exits</b><label class="lm-sw"><input type="checkbox" id="lmAuto"> On</label></div>
+      <p class="hint" style="margin:4px 0 0">The server closes a trade at its own wrong-if, TP1 or 3:50 PM. Agentic account only, closing only.</p>
+      <div class="lm-row"><label for="lmReview">Jarvis checks open positions every</label><input class="f" id="lmReview" type="number" min="5" max="120" step="1" inputmode="numeric"><span class="mut">minutes</span></div></div>
+    <div class="grid g2" style="margin-top:6px">
       <div style="grid-column:1/-1"><label class="f" for="lmPhase">Phase</label><select class="f" id="lmPhase"><option value="1">Phase 1 · Stop the big losses</option><option value="2">Phase 2 · Prove the edge</option><option value="3">Phase 3 · Scale</option></select></div>
-      <div><label class="f" for="lmTradePct">Max loss on one trade, at the stop (% of account)</label><input class="f" id="lmTradePct" type="number" min="0" max="100" step="0.5" inputmode="decimal" placeholder="0 = off"><p class="hint" id="lmTradeUsd" style="margin:3px 0 0"></p></div>
-      <div><label class="f" for="lmWeekPct">Weekly loss limit (% of account)</label><input class="f" id="lmWeekPct" type="number" min="0" max="100" step="0.5" inputmode="decimal"><p class="hint" id="lmWeekUsd" style="margin:3px 0 0"></p></div>
-      <div><label class="f" for="lmLosers">Daily stop: losing trades in a day</label><input class="f" id="lmLosers" type="number" min="0" max="20" step="1" inputmode="numeric" placeholder="0 = off"><p class="hint" style="margin:3px 0 0">…or losses of 2× the max loss, whichever comes first.</p></div>
-      <div><label class="f" for="lmDay">Max trades per day</label><input class="f" id="lmDay" type="number" min="1" step="1" inputmode="numeric"></div>
       <div><label class="f" for="lmGoal">Monthly profit goal (%)</label><input class="f" id="lmGoal" type="number" min="0" step="0.5" inputmode="decimal"></div>
-      <div><label class="f" for="lmWarn">Warn when one trade is over (% of account)</label><input class="f" id="lmWarn" type="number" min="1" step="1" inputmode="numeric"></div>
+      <div><label class="f" for="lmWarn">Flag a trade over (% of account)</label><input class="f" id="lmWarn" type="number" min="1" step="1" inputmode="numeric"></div>
       <div><label class="f" for="lmBig">A big-loss day is ($ or worse)</label><input class="f" id="lmBig" type="number" min="1" step="1" inputmode="numeric"></div>
-      <div style="grid-column:1/-1;border-top:1px solid var(--line,#2a2f2c);padding-top:10px;margin-top:4px"><label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" id="lmAuto"> Jarvis can close positions on his own (auto-close)</label>
-        <p class="hint" style="margin:4px 0 0">Agentic account only, market hours only, closing only (never opens or adds). Every auto-close is posted on the Desk with the reason. Turn it off any time.</p></div>
-      <div><label class="f" for="lmReview">Jarvis checks open positions every (minutes)</label><input class="f" id="lmReview" type="number" min="5" max="120" step="1" inputmode="numeric"></div>
     </div>
-    <p class="hint" id="lmMsg">When a card breaks a guardrail you'll see a red banner, e.g. "Loss if the stop fills: about −$144 — OVER your 10% max". You can still approve.</p>
+    <p class="hint" id="lmMsg"></p>
   </div>
   <div class="ft"><button class="btn" id="lmCancel">Cancel</button><button class="btn solid" id="lmSave">Save</button></div>
+</dialog>
+
+<dialog id="dlgActivity" style="max-width:920px;width:min(920px,96vw)">
+  <div class="grip"></div><div class="hd"><h3>Activity log</h3></div>
+  <div class="bd">
+    <p class="hint" style="margin-top:0">Every change, break, trade and lock — who did it and when. “Outside Otto” = something changed in Robinhood that no Otto card did. Breaks also ping both phones.</p>
+    <div class="ac-f" role="group" aria-label="Filter" id="acF"><button data-k="" class="on">All</button><button data-k="change">Changes</button><button data-k="break">Breaks</button><button data-k="trade">Trades</button><button data-k="lock">Locks</button><button data-k="outside">Outside Otto</button><button data-k="card">Cards</button></div>
+    <div id="acList" style="border:1px solid var(--rule);border-radius:12px;overflow:hidden"></div>
+  </div>
+  <div class="ft"><button class="btn" id="acDays">Show 30 days</button><button class="btn solid" id="acClose">Close</button></div>
 </dialog>
 
 <dialog id="dlgHouse">
@@ -2160,7 +2219,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.25.0";
+const BUILD="3.26.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2798,7 +2857,7 @@ async function dkStart(){
   }catch(e){DK.locked=true}
   dkRenderMsgs();
   if(DK.locked)return;
-  await Promise.all([dkLoadLog(),dkPanel(true),dkSentiment()]);
+  await Promise.all([dkLoadLog(),dkPanel(true),dkSentiment(),dkLockLoad()]);
   dkSentTimer();
   if(DK.view&&DK.view!=="desk")dkShow(DK.view);
   clearInterval(DK.pollT);
@@ -2806,7 +2865,16 @@ async function dkStart(){
     if(!DK.open||document.visibilityState!=="visible")return;
     if(!DK.streaming)dkPoll();
     if(Date.now()-DK.panelAt>60e3)dkPanel();
+    if(Date.now()-(DK.lockAt||0)>60e3)dkLockLoad();
   },10e3);
+}
+/* v3.26: the kill switch's state (banner on the Desk) and today's breaks (red dot on Settings) */
+async function dkLockLoad(){
+  DK.lockAt=Date.now();
+  try{const j=await dkApi("lock_state");const was=DK.lock&&DK.lock.locked;DK.lock=j;if(!!was!==!!j.locked&&DK.view==="desk")dkRenderMsgs()}catch(e){}
+  try{const a=await dkApi("activity_get",null,"&days=1&kind=break");const seen=LS.get("acSeen","");
+    const dot=(a.breaks_today||0)>0&&a.latest_break&&a.latest_break>seen;
+    $$('.dk-rail button[data-go="settings"]').forEach(b=>b.classList.toggle("dot",!!dot));DK.brk=a}catch(e){}
 }
 
 /* ---------- the shared log ---------- */
@@ -2844,7 +2912,7 @@ async function dkJasonLoad(){
   try{DK.jason=await dkApi("jason_today")}catch(e){DK.jason={error:e.message}}
   dkRenderLeft();dkRenderRight();
 }
-const JF_CARD={pending:"card waiting for Approve",running:"placing…",done:"taken",rejected:"passed",expired:"card expired",failed:"card failed"};
+const JF_CARD={pending:"card waiting for Approve",running:"placing…",done:"taken",rejected:"passed",expired:"card expired",failed:"card failed",paper:"auto-rejected (paper)"};
 function dkJasonFeed(){
   const J=DK.jason;if(!J)return "";
   const rows=J.rows||[];
@@ -3012,6 +3080,7 @@ function dkRenderRight(){
 function dkTime(t){if(!t)return "";const d=new Date(t);return isNaN(d)?"":d.toLocaleTimeString("en-US", {hour:"numeric",minute:"2-digit",timeZone:"America/New_York"})}
 /* v3.24 (C3): Desk dates are New York dates, whatever clock the device is set to. */
 function nyChip(){return new Date().toLocaleDateString("en-US",{weekday:"short",month:"numeric",day:"numeric",timeZone:"America/New_York"}).replace(",","")+" · New York time"}
+const OG_LABEL={coach_call:"Coach's call",coach_level:"Coach's level + Jarvis's direction",coach_post:"Coach's post + Jarvis's direction",coach_against:"Against the coach's direction",jarvis:"Jarvis's own"};
 function dkCard(a){
   if(!a)return "";
   const r=a.risk||{},st=a.status||"pending";
@@ -3025,11 +3094,14 @@ function dkCard(a){
   }
   if(r.flag)risk+=`<div class="dk-warnbox">⚠ This risks ${(r.pct*100).toFixed(0)}% of the account — over your 20% flag. The Otto Rules call ~40% in one trade "crazy" (Oct 1). You can still approve.</div>`;
   const res=(a.result||[]).map(x=>`<div class="${x.ok?"up":"dn"}" style="font-size:12px;margin-top:6px">${x.ok?"✓":"✗"} ${esc(x.tool)}</div><pre style="white-space:pre-wrap;font-size:11.5px;margin:2px 0 0;color:var(--ink-2)">${esc(String(x.text||"").slice(0,700))}</pre>`).join("");
-  const tag={pending:"near",running:"near",done:"ok",failed:"bad"}[st]||"";
-  const label={pending:"needs your approval",running:"running…",done:"done",failed:"failed",rejected:"rejected",expired:"expired — ask again for fresh prices"}[st]||st;
+  const tag={pending:"near",running:"near",done:"ok",failed:"bad",paper:"bad"}[st]||"";
+  const label={pending:"needs your approval",running:"running…",done:"done",failed:"failed",rejected:"rejected",expired:"expired — ask again for fresh prices",paper:"auto-rejected · paper card"}[st]||st;
+  const og=a.plan&&a.plan.origin?`<div class="og og-${esc(a.plan.origin)}">${esc(OG_LABEL[a.plan.origin]||a.plan.origin)}</div>`:"";
+  const pc=st==="paper"?(a.checks||[]).find(x=>x.paper):null;
   const who=a.decided_by?` <span class="mut" style="font-size:11px">· ${esc(a.decided_by.split("@")[0])} ${dkTime(a.decided_at)}</span>`:"";
   return `<div class="dk-act st-${esc(st)}" data-act="${esc(a.id)}">
-    <div class="dk-act-h"><b>${esc(a.title)}</b><span><span class="dk-tag ${tag}">${esc(label)}</span>${who}</span></div>
+    ${og}<div class="dk-act-h"><b>${esc(a.title)}</b><span><span class="dk-tag ${tag}">${esc(label)}</span>${who}</span></div>
+    ${pc?`<div class="dk-paper">${esc(String(pc.text).replace(/^AUTO-REJECTED · /,""))}</div><div class="mut" style="font-size:12px">Shown and scored in Score and Coaches Corner. It can't be approved${/size cap/i.test(pc.text)?' — <a href="#" data-openlim="1">change the cap in Settings</a>':""}.</div>`:""}
     ${dkGuard(a)}
     ${a.summary?`<pre class="dk-sum">${esc(a.summary)}</pre>`:""}
     ${risk}
@@ -3052,6 +3124,7 @@ function dkRenderMsgs(stick){
   let h="";
   if(!DK.rows.length&&!DK.streaming)h=`<div class="dk-empty"><b style="color:var(--ink)">The Desk</b><br>Ask anything — a read on the market, a chart (paste it with Ctrl+V), a trade idea, your positions. It reads TradingView and Robinhood live and leans on the Otto Rules. Anything that would change something comes back as a card; nothing happens until someone clicks Approve.</div>`;
   alBadge();if(AL.on)alRender();
+  if(DK.lock&&DK.lock.locked)h+=`<div class="dk-lockbar" role="status"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff8a5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;margin-top:2px"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><div><b>Locked — ${esc((DK.lock.reasons||[]).map(r=>r.text).join(" · "))}</b>No new cards until ${esc(dkDate(DK.lock.until))} ET. Signals are still listening; new ideas are saved as paper cards and scored in Coaches Corner.</div></div>`;
   for(const r of DK.rows){
     if(alIs(r))continue;                       // v3.12: TradingView alerts live in their own tab
     if(r.role==="system"){h+=`<div class="dk-sys">${esc(r.content)} · ${dkTime(r.created_at)}</div>`;continue}
@@ -3069,6 +3142,7 @@ function dkRenderMsgs(stick){
   if(stick||near)box.scrollTop=box.scrollHeight;
 }
 async function dkCardClick(e){
+  if(e.target.closest("[data-openlim]")){e.preventDefault();openLimits();return}
   const card=e.target.closest("[data-act]");if(!card)return;
   const a=DK.acts[card.dataset.act];if(!a)return;
   if(e.target.closest("[data-jason]")){
@@ -3248,7 +3322,7 @@ async function dkOauthReturn(){
    4 Oct 2026, approved mockup otto-v3.1-mockup.html. The sentiment banner
    (Josh's intermarket sheet on live TradingView data, verdict only, no sizing),
    desktop Market / Journal / Review / Score / Jason pages inside the Desk shell. */
-const DK_VIEWS=["desk","charts","prep","market","perf","journal","review","score","playbook","jason","more","help"];
+const DK_VIEWS=["desk","charts","prep","market","perf","coach","journal","review","score","playbook","jason","more","help"];
 function dkShow(v){
   if(!DK_VIEWS.includes(v))v="desk";
   DK.view=v;LS.set("dkView",v);
@@ -3257,7 +3331,7 @@ function dkShow(v){
   if(v==="desk"){dkRenderMsgs(true);return}
   const pg=$("#dkPage");pg.scrollTop=0;
   if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see this page.</p></div>`;return}
-  ({charts:dkCharts,prep:dkPrep,market:dkMarket,perf:dkPerf,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,more:dkMore,help:dkHelp})[v]();
+  ({charts:dkCharts,prep:dkPrep,market:dkMarket,perf:dkPerf,coach:dkCoach,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,more:dkMore,help:dkHelp})[v]();
 }
 const dkLoading=t=>`<div class="dk-empty" style="margin:60px auto">${esc(t||"Loading…")}</div>`;
 const dkErr=e=>`<div class="dk-empty dk-err" style="margin:60px auto">${esc(String(e&&e.message||e))}</div>`;
@@ -3333,8 +3407,8 @@ function dkExit(a){
 }
 // v3.13 (Ifoma, 6 Oct): guardrails flag, never block — anything outside them is a red banner at the top of the card.
 function dkGuard(a){
-  const f=(a.checks||[]).filter(x=>x.ok===false);if(!f.length)return"";
-  return `<div class="dk-guard"><b>OUTSIDE YOUR GUARDRAILS — ${f.length} flag${f.length>1?"s":""}. You decide.</b>${f.map(x=>`<div>${esc(x.text)}</div>`).join("")}</div>`;
+  const f=(a.checks||[]).filter(x=>x.ok===false&&!x.paper);if(!f.length)return"";
+  return `<div class="dk-guard"><b>${a.status==="paper"?`ALSO FLAGGED — ${f.length}`:`OUTSIDE YOUR GUARDRAILS — ${f.length} flag${f.length>1?"s":""}. You decide.`}</b>${f.map(x=>`<div>${esc(x.text)}</div>`).join("")}</div>`;
 }
 function dkChecks(a){
   const c=a.checks||[];if(!c.length)return"";
@@ -3430,6 +3504,23 @@ function dkRenderJournal(){
 }
 
 /* ---------- Review ---------- */
+/* v3.26: the Coach report card (Friday review) */
+function dkCoachReport(c){
+  const t=`Coach report card — week\n${(c.ask||[]).map(a=>`${a.day} · ${a.ticker}: ${a.text}`).join("\n")}`;
+  DK.ccCopy=t;
+  return `<div class="dk-cardx" style="margin-top:14px"><div class="dk-h">Coach report card <b>Coach vs Jarvis + Us</b><button class="dk-btn sec" id="dkCcCopy" style="margin-left:auto">Copy for the 1:1</button></div>
+    <div class="dkp-grid4">
+      <div class="dk-cardx dk-stat"><div class="n">${c.coach.posts||0}</div><div class="l">Coach posts</div></div>
+      <div class="dk-cardx dk-stat"><div class="n">${dkMoney(c.coach.pnl)}</div><div class="l">Had we played all (est., 1 contract)</div></div>
+      <div class="dk-cardx dk-stat"><div class="n">${dkMoney(c.us.pnl)}</div><div class="l">Jarvis + Us, real</div></div>
+      <div class="dk-cardx dk-stat"><div class="n">${dkMoney(c.gap)}</div><div class="l">Gap (his − ours)</div></div></div>
+    <div class="cc-g2" style="margin-top:10px"><div class="dk-cardx"><div class="dk-h" style="color:var(--up)">Follow these</div><div class="mut">${c.follow?`${esc(c.follow.key)} — ${c.follow.win_pct}% wins, ${dk$(c.follow.pnl)} over ${c.follow.n}`:"Not enough scored posts yet (3 per type)."}</div></div>
+      <div class="dk-cardx"><div class="dk-h" style="color:var(--down)">Wait on these</div><div class="mut">${c.wait?`${esc(c.wait.key)} — ${c.wait.win_pct}% wins, ${dk$(c.wait.pnl)} over ${c.wait.n}`:"Not enough scored posts yet."}</div></div></div>
+    <div class="dk-h" style="margin-top:10px">Bring to the 1:1</div>
+    ${(c.ask||[]).map(a=>`<div class="dk-row"><span class="mono mut" style="flex:none;width:60px">${esc(dkMD(a.day))}</span><span><b>${esc(a.ticker)}</b> ${esc(a.text)}</span></div>`).join("")||`<div class="mut">Nothing we misread this week.</div>`}
+  </div>`;
+}
+document.addEventListener("click",async e=>{if(!e.target.closest("#dkCcCopy"))return;try{await navigator.clipboard.writeText(DK.ccCopy||"");toast("Copied")}catch(err){prompt("Copy this:",DK.ccCopy||"")}});
 async function dkReview(){
   const pg=$("#dkPage");pg.innerHTML=dkLoading();
   let j;try{j=await dkApi("review_get")}catch(e){pg.innerHTML=dkErr(e);return}
@@ -3457,6 +3548,7 @@ function dkRenderReview(){
         <div class="dk-cardx"><div class="dk-h">Rules followed / broken</div>${(p.rules||[]).map(x=>`<div class="dk-row"><span>${esc(x.rule)}</span><span><span class="dk-tag ok">${+x.followed||0} ✓</span> ${+x.broken?`<span class="dk-tag bad">${+x.broken} ✗</span>`:""}</span></div>`).join("")||`<div class="mut">—</div>`}</div></div>
       <div class="dk-cardx"><div class="dk-h">The pattern</div><div class="ink2">${esc(p.pattern||"")}</div>${p.one_thing?`<p style="margin:10px 0 0"><b>One thing for next week:</b> ${esc(p.one_thing)}</p>`:""}</div>`
     :`<div class="dk-empty" style="margin:40px auto">No review yet. It builds itself every Friday after the close, or press "Build this week now".</div>`}
+    ${p&&p.coach?dkCoachReport(p.coach):""}
     <div class="dk-callout">"For my coach" drafts your trades, his open questions and the spots you were unsure, ready to copy to him. "Log a call" takes the call's transcript (.vtt from Zoom), adds it to the brain, and asks the Desk to propose alerts as a card.</div>
   </div>`;
   const w=$("#dkRWeek");if(w)w.onchange=()=>{DK.rIdx=+w.value;dkRenderReview()};
@@ -3850,6 +3942,54 @@ const dk$=n=>n==null||!isFinite(n)?"—":`${n<0?"−":""}$${Math.abs(n).toLocale
 const dk$0=n=>n==null||!isFinite(n)?"—":`${n<0?"−":n>0?"+":""}$${Math.abs(Math.round(n)).toLocaleString()}`;
 const dkMD=d=>{try{return new Date(d+"T12:00:00Z").toLocaleDateString([], {month:"short",day:"numeric"})}catch(e){return d}};
 
+/* v3.26: Results › Overview | Coaches Corner */
+const dkRTabs=v=>`<nav class="rtabs" aria-label="Results sections"><button data-rt="perf" class="${v==="perf"?"on":""}">Overview</button><button data-rt="coach" class="${v==="coach"?"on":""}">Coaches Corner</button></nav>`;
+document.addEventListener("click",e=>{const b=e.target.closest("[data-rt]");if(b&&DK.open)dkShow(b.dataset.rt)});
+const CC={range:"today",j:null};
+const ccState=s=>s==="win"?`<span class="cc-chip win">WIN</span>`:s==="loss"?`<span class="cc-chip loss">LOSS</span>`:s==="flat"?`<span class="cc-chip">FLAT</span>`:s==="no_entry"?`<span class="cc-chip">never triggered</span>`:s==="open"?`<span class="cc-chip">open</span>`:`<span class="cc-chip">pending</span>`;
+function ccSideHtml(sd){
+  const $p=sd.pnl!=null&&["win","loss","flat"].includes(sd.state)?` <span class="mono ${sd.pnl>=0?"up":"dn"}">${sd.pnl>=0?"+":"−"}$${Math.abs(sd.pnl)}${sd.est?" est.":""}</span>`:"";
+  const how=sd.exit_why&&["win","loss","flat"].includes(sd.state)?`<div class="mut" style="font-size:11.5px">${esc(sd.entry_px)} → ${esc(sd.exit_px)} · ${esc(sd.exit_why)}${sd.opt?` · ${esc(sd.opt.label||"option")} ${sd.opt.entry}→${sd.opt.exit}`:""}</div>`:sd.why?`<div class="mut" style="font-size:11.5px">${esc(sd.why)}</div>`:"";
+  return `<div>${ccState(sd.state)}${$p}${how}</div>`;
+}
+async function dkCoach(){
+  const pg=$("#dkPage");
+  pg.innerHTML=`<div class="dkp">${dkRTabs("coach")}${dkLoading("Scoring every coach post…")}</div>`;
+  let j;try{j=await dkApi("coach_corner",null,"&range="+CC.range);CC.j=j}catch(e){if(DK.view==="coach")pg.innerHTML=`<div class="dkp">${dkRTabs("coach")}${dkErr(e)}</div>`;return}
+  if(DK.view!=="coach")return;
+  const c=j.coach,u=j.us,RL=[["today","Today"],["week","This week"],["30","30 days"],["all","All"]],rl=Object.fromEntries(RL);
+  const rows=(j.posts||[]).map(x=>{
+    const sides=x.cc&&x.cc.sides?x.cc.sides:[];
+    const coachCell=!x.cc?`<span class="cc-chip">pending</span>`:x.cc.state==="unscored"?`<span class="cc-chip">not scored — ${esc(x.cc.why||"")}</span>`:
+      sides.length>1?sides.map(sd=>`<div style="margin-bottom:4px">If it ${sd.side==="up"?(/RES/i.test(x.words)?"broke":"held"):(/RES/i.test(x.words)?"held":"broke")}: ${ccSideHtml(sd)}</div>`).join(""):sides.map(ccSideHtml).join("");
+    const did=x.cards.length?x.cards.map(a=>`<div>${esc(a.title)}${a.wrong_side?` · <b style="color:#ff8a5c">wrong side</b>`:""}${a.origin==="coach_level"||a.origin==="coach_post"?` · <b style="color:#ffc27a">direction picked by Jarvis</b>`:""}</div>`).join(""):`<span class="mut">no card</span>`;
+    const we=x.cards.length?x.cards.map(a=>esc(a.we)).join("<br>"):`<span class="mut">—</span>`;
+    const usP=x.us_pnl!=null?`<span class="mono ${x.us_pnl>=0?"up":"dn"}" style="font-weight:600">${x.us_pnl>=0?"+":"−"}$${Math.abs(x.us_pnl).toFixed(0)}</span>`:`<span class="mut">—</span>`;
+    const bad=x.cards.some(a=>a.wrong_side||(a.pnl||0)<0);
+    const typ=x.unclear?`<span class="cc-chip warn">UNCLEAR</span>`:x.type==="call"?`<span class="cc-chip win">CALL ${x.direction==="short"?"▼":"▲"}</span>`:x.type==="bounce"?`<span class="cc-chip">BOUNCE</span>`:`<span class="cc-chip">LEVEL</span>`;
+    return `<tr class="${bad?"bad":""}"><td class="mono">${esc(x.label||dkTime(x.at))}${CC.range!=="today"?`<div class="mut" style="font-size:11px">${esc(dkMD(x.day))}</div>`:""}</td><td><b>${esc(x.ticker)}</b> “${esc(String(x.words||"").slice(0,140))}”</td><td>${typ}</td><td>${did}</td><td>${we}</td><td>${coachCell}</td><td>${usP}</td></tr>`;
+  }).join("");
+  const sp=(j.splits||[]).map(x=>`<div class="dk-cardx"><div style="font-size:13px;font-weight:600">${esc(x.key)}</div>${x.n>=5?`<div class="mono" style="font-size:20px;margin-top:4px">${x.win_pct==null?"—":x.win_pct+"%"}</div><div class="mut mono" style="font-size:12px">${x.n} scored · ${dk$(x.pnl)}</div><div style="height:6px;background:var(--surface-3);border-radius:3px;margin-top:6px"><i style="display:block;height:6px;border-radius:3px;width:${x.win_pct||0}%;background:${(x.win_pct||0)>=50?"var(--up)":"var(--down)"}"></i></div>`:`<div class="mut" style="font-size:12px;margin-top:6px">${x.n} scored — shows at 5</div>`}</div>`).join("");
+  pg.innerHTML=`<div class="dkp">${dkRTabs("coach")}
+    <div class="dkp-head"><h2>Coaches Corner</h2><span class="mut">Every post from the Coach, scored as if we had played it: 1 contract, real option prices when we had the contract (else an estimate). Coach on one side, Jarvis + Us on the other.</span>
+      <span role="group" aria-label="Time range" style="margin-left:auto;display:flex;gap:4px">${RL.map(([k,v])=>`<button class="dk-btn ${CC.range===k?"go":"sec"}" data-ccr="${k}">${v}</button>`).join("")}</span></div>
+    <div class="cc-g2">
+      <div class="dk-cardx"><div class="dk-h"><span class="cc-chip coach">COACH</span> had we played every post</div>
+        <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:baseline"><div><div class="n" style="font-size:30px;font-weight:700">${c.posts?dkMoney(c.pnl):"—"}</div><div class="mut" style="font-size:12px">est. P&amp;L, 1 contract each</div></div>
+        <div><div class="mono" style="font-size:20px">${c.wins}–${c.losses}</div><div class="mut" style="font-size:12px">wins – losses</div></div><div><div class="mono" style="font-size:20px">${c.posts}</div><div class="mut" style="font-size:12px">posts</div></div></div>
+        ${c.pending?`<div class="mut" style="font-size:12px;margin-top:6px">${c.pending} still open — final scores at the close.</div>`:""}</div>
+      <div class="dk-cardx"><div class="dk-h"><span class="cc-chip warn">JARVIS + US</span> what we actually did · real fills</div>
+        <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:baseline"><div><div class="n" style="font-size:30px;font-weight:700">${dkMoney(u.pnl)}</div><div class="mut" style="font-size:12px">realized</div></div>
+        <div><div class="mono" style="font-size:20px">${u.wins}–${u.losses}</div><div class="mut" style="font-size:12px">wins – losses</div></div><div><div class="mono" style="font-size:20px">${u.passed}</div><div class="mut" style="font-size:12px">posts we didn't trade</div></div>
+        <div><div class="mono" style="font-size:20px;${u.wrong_side?"color:#ff8a5c":""}">${u.wrong_side}</div><div class="mut" style="font-size:12px">cards on the wrong side</div></div></div></div></div>
+    <div class="dk-cardx" style="padding:0;overflow:hidden"><div style="display:flex;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--rule);flex-wrap:wrap;gap:6px"><b>Every coach post · ${esc(rl[CC.range])}</b><span class="mut" style="font-size:12px">Exit: his own follow-up post when he gives one, otherwise TP1 / 5-min wrong-if / 3:50 PM. Levels with no direction are scored both ways.</span></div>
+      <div style="overflow-x:auto"><table class="cc-t"><thead><tr><th>Time</th><th style="min-width:220px">Coach said</th><th>Type</th><th style="min-width:170px">Otto did</th><th>We did</th><th style="min-width:200px">Coach · had we played it</th><th>Jarvis + Us</th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="7" class="mut" style="padding:24px">No coach posts with a ticker in this range.</td></tr>`}</tbody></table></div></div>
+    <div class="dk-h" style="margin-top:16px">Which coach posts work · splits <span class="mut" style="font-weight:400">— each shows once it has 5 scored posts</span></div>
+    <div class="cc-split">${sp}</div>
+  </div>`;
+  pg.querySelectorAll("[data-ccr]").forEach(b=>b.onclick=()=>{CC.range=b.dataset.ccr;dkCoach()});
+}
 async function dkPerf(force){
   const pg=$("#dkPage");
   if(!DK.perf||force)pg.innerHTML=dkLoading("Reading both Robinhood accounts…");
@@ -3884,7 +4024,7 @@ async function dkPerf(force){
   const cpTxt=c=>c&&c.n?`${c.n} · ${dk$0(c.pnl)}`:"—";
   const ruTxt=c=>c&&c.n?`${c.n} · ${dk$0(c.pnl)}`:`<span class="mut">starts now</span>`;
   const accts=(j.accounts||[]).map(a=>`${esc(a.label)} ${dk$(a.value)}`).join(" · ");
-  pg.innerHTML=`<div class="dkp">
+  pg.innerHTML=`<div class="dkp">${dkRTabs("perf")}
     <div class="dkp-head"><h2>Results</h2><span class="mut">You and Josh, one team · options (stocks and futures slot in later)</span>
       <span class="dk-tag near">${esc(PHASES[L.phase]||"Phase "+L.phase)}</span>
       <span class="pf-range"><button class="dk-btn sec" id="pfLim">Limits &amp; goals</button><button class="dk-btn j" id="pfRef">Refresh</button></span></div>
@@ -3965,6 +4105,7 @@ $("#puOn").addEventListener("click",puSave);
 $("#puTest").addEventListener("click",async()=>{try{const s=await puSub();if(!s)throw new Error("Turn this phone on first");await dkApi("push_test",{endpoint:s.endpoint});puMsg("Sent. It should appear in a few seconds (lock the phone to see it like a real alert).")}catch(e){puMsg(String(e.message||e),true)}});
 $("#puOff").addEventListener("click",async()=>{try{const s=await puSub();if(s){await dkApi("push_remove",{endpoint:s.endpoint});await s.unsubscribe()}toast("Notifications off for this phone");await openPush()}catch(e){puMsg(String(e.message||e),true)}});
 window.addEventListener("load",()=>{if(location.hash==="#desk")setTimeout(()=>{try{dkShow("desk")}catch(e){}},1500)});
+window.addEventListener("load",()=>{if(location.hash==="#settings-activity")setTimeout(()=>{try{if(!DK.open&&typeof openDesk==="function")openDesk();openActivity()}catch(e){}},1800)});   // v3.26: a "break" ping
 /* ---------- v3.9: Otto Signals (the Discord watcher) ----------
    Second tab in the Desk center, next to the Jarvis chat. Read-only: the
    Chrome extension on Ifoma's PC fills it. Each burst of the mentor's posts
@@ -4011,7 +4152,7 @@ function sgBadge(){
   const el=$("#sgBadge");if(!el)return;el.hidden=!n;el.textContent=n+" call"+(n===1?"":"s");
 }
 const SG_ST={reading:"Reading the post…",jarvis:"Jarvis is building the card…",chatter:"",nothing:"",caught_up:"Caught up after a gap — saved to the log, too old for a card",error:"Error"};
-const SG_CARD={pending:"waiting for Approve",running:"placing…",done:"taken",rejected:"passed",expired:"expired",failed:"failed"};
+const SG_CARD={pending:"waiting for Approve",running:"placing…",done:"taken",rejected:"passed",expired:"expired",failed:"failed",paper:"auto-rejected (paper)"};
 function sgRender(stick){
   const box=$("#sgFeed");if(!box)return;
   if(DK.locked){box.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see Otto Signals.</p></div>`;return}
@@ -4564,18 +4705,62 @@ async function laySync(){
 layApplyRail();
 
 /* ---------- Limits & goals ---------- */
+const LM_FIELDS=[["size_cap_on","#lmCapOn","b"],["size_cap_pct","#lmCapPct","n"],["max_loss_on","#lmLossOn","b"],["max_trade_pct","#lmTradePct","n"],
+  ["daily_on","#lmDailyOn","b"],["daily_losses","#lmLosers","n"],["daily_x","#lmDailyX","n"],["weekly_on","#lmWeekOn","b"],["weekly_pct","#lmWeekPct","n"],
+  ["trades_on","#lmTradesOn","b"],["max_trades_day","#lmDay","n"],["kill_on","#lmKillOn","b"],["kill_daily","#lmKillDaily","b"],["kill_weekly","#lmKillWeekly","b"],["kill_trades","#lmKillTrades","b"],
+  ["auto_close","#lmAuto","b"],["review_min","#lmReview","n"],["phase","#lmPhase","n"],["monthly_goal_pct","#lmGoal","n"],["warn_pct","#lmWarn","n"],["big_day","#lmBig","n"]];
+const LM_NAME={size_cap_on:"Size cap",size_cap_pct:"Size cap %",max_loss_on:"Max loss per trade",max_trade_pct:"Max loss %",daily_on:"Daily stop",daily_losses:"Daily stop (losers)",daily_x:"Daily stop (× max loss)",
+  weekly_on:"Weekly limit",weekly_pct:"Weekly limit %",trades_on:"Max trades per day",max_trades_day:"Max trades per day",kill_on:"Kill switch",kill_daily:"Kill switch · daily",kill_weekly:"Kill switch · weekly",kill_trades:"Kill switch · max trades"};
+let LM=null;
+function lmWait(L){
+  const p=L&&L.pending,ch=p&&p.changes?Object.entries(p.changes):[];
+  $("#lmWait").innerHTML=ch.length?`<div class="lm-wait" role="status"><span><b style="color:#ffc27a">Waiting:</b> ${ch.map(([k,v])=>esc(LM_NAME[k]||k)+" → "+esc(typeof v==="boolean"?(v?"on":"off"):String(v))).join(", ")} · starts ${esc(dkDate(p.effective_at))} · by ${esc(p.by||"?")}</span><button class="btn" id="lmCancelWait" style="flex:none">Cancel change</button></div>`:"";
+  const c=$("#lmCancelWait");if(c)c.addEventListener("click",async()=>{
+    try{const j=await dkApi("limits_set",{cancel_pending:true,author:($("#dkWho")&&$("#dkWho").value)||"Ifoma"});LM=j.limits;lmWait(LM);toast("Waiting change cancelled")}catch(e){toast(String(e.message).slice(0,90))}});
+}
 async function openLimits(){
   if(DK.locked)return toast("Sign in with the Otto login first");
   const m=$("#lmMsg");m.className="hint";m.textContent="Loading…";
   $("#dlgLimits").showModal();
-  try{const j=await dkApi("limits_get");const L=j.limits;
-    $("#lmPhase").value=String(L.phase);$("#lmTradePct").value=L.max_trade_pct??10;$("#lmWeekPct").value=L.weekly_pct??20;$("#lmLosers").value=L.daily_losses??2;$("#lmDay").value=L.max_trades_day;
-    const av=L.account_value;$("#lmTradeUsd").textContent=av?`= $${L.max_trade_loss} today (account $${Math.round(av)})`:"";$("#lmWeekUsd").textContent=av?`= $${L.weekly_loss} today`:"";
-    $("#lmGoal").value=L.monthly_goal_pct;$("#lmWarn").value=L.warn_pct;$("#lmBig").value=L.big_day;$("#lmAuto").checked=L.auto_close!==false;$("#lmReview").value=L.review_min||15;
-    m.textContent="When a card breaks a guardrail you'll see a red banner. You can still approve.";
+  try{const [j,ls]=await Promise.all([dkApi("limits_get"),dkApi("lock_state").catch(()=>null)]);const L=LM=j.limits;
+    for(const [k,sel,t] of LM_FIELDS){const el=$(sel);if(!el)continue;if(t==="b")el.checked=L[k]!==false;else el.value=L[k]??""}
+    const av=L.account_value;
+    $("#lmCapUsd").textContent=av?`% of the account · now $${L.size_cap_usd||Math.round(av*(L.size_cap_pct||0)/100)} of $${Math.round(av)}`:"% of the account";
+    $("#lmTradeUsd").textContent=av?`= $${L.max_trade_loss} today`:"";$("#lmWeekUsd").textContent=av?`= $${L.weekly_loss} today`:"";
+    $("#lmKillState").innerHTML=ls&&ls.locked?`<span class="ac-k ac-lock">Locked now</span> ${esc((ls.reasons||[]).map(r=>r.text).join(" · "))} · until ${esc(dkDate(ls.until))} ET`:"Not locked now.";
+    lmWait(L);m.textContent="";
   }catch(e){m.className="hint dk-err";m.textContent=String(e.message).slice(0,200)}
 }
+$("#lmAct").addEventListener("click",e=>{e.preventDefault();$("#dlgLimits").close();openActivity()});
 $("#sLimits").addEventListener("click",()=>{$("#dlgSet").close();openLimits()});
+
+/* ---------- v3.26 Activity log ---------- */
+const AC={k:"",days:7,rows:[]};
+const AC_LABEL={change:"Change",break:"Break",trade:"Trade",lock:"Lock",outside:"Outside",card:"Card"};
+function acRender(){
+  const box=$("#acList");if(!box)return;
+  const rows=AC.k?AC.rows.filter(r=>r.kind===AC.k):AC.rows;
+  if(!rows.length){box.innerHTML=`<div class="dk-empty" style="margin:30px auto">Nothing logged ${AC.k?"of this kind ":""}in the last ${AC.days} days.</div>`;return}
+  let h="",day="";
+  for(const r of rows){
+    if(r.day!==day){day=r.day;h+=`<div class="ac-day">${esc(new Date(day+"T12:00:00Z").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}).toUpperCase())}</div>`}
+    const t=new Date(r.at).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"});
+    h+=`<div class="ac-ev${r.kind==="break"?" brk":""}"><span class="mono mut">${esc(t)}</span><span class="ac-k ac-${esc(r.kind)}">${esc(AC_LABEL[r.kind]||r.kind)}</span><span>${esc(r.text)}</span><span class="ac-who">${esc(r.who||"")}</span></div>`;
+  }
+  box.innerHTML=h;
+}
+async function openActivity(){
+  if(DK.locked)return toast("Sign in with the Otto login first");
+  $("#acList").innerHTML=dkLoading("Loading the Activity log…");
+  $("#dlgActivity").showModal();
+  try{const j=await dkApi("activity_get",null,"&days="+AC.days);AC.rows=j.rows||[];acRender();
+    if(j.latest_break){LS.set("acSeen",j.latest_break);$$('.dk-rail button[data-go="settings"]').forEach(b=>b.classList.remove("dot"))}
+  }catch(e){$("#acList").innerHTML=dkErr(e)}
+}
+$("#sActivity").addEventListener("click",()=>{$("#dlgSet").close();openActivity()});
+$("#acClose").addEventListener("click",()=>$("#dlgActivity").close());
+$("#acDays").addEventListener("click",()=>{AC.days=AC.days===7?30:AC.days===30?90:7;$("#acDays").textContent=AC.days===7?"Show 30 days":AC.days===30?"Show 90 days":"Show 7 days";openActivity()});
+$("#acF").addEventListener("click",e=>{const b=e.target.closest("[data-k]");if(!b)return;AC.k=b.dataset.k;$$("#acF button").forEach(x=>x.classList.toggle("on",x===b));acRender()});
 
 /* ---------- House Rules (v3.13) ---------- */
 let HR=[];
@@ -4605,10 +4790,14 @@ $("#hrSave").addEventListener("click",async()=>{
 $("#lmCancel").addEventListener("click",()=>$("#dlgLimits").close());
 $("#lmSave").addEventListener("click",async()=>{
   const b=$("#lmSave"),m=$("#lmMsg");
-  const body={phase:+$("#lmPhase").value,max_trade_pct:+$("#lmTradePct").value,weekly_pct:+$("#lmWeekPct").value,daily_losses:+$("#lmLosers").value,max_trades_day:+$("#lmDay").value,
-    monthly_goal_pct:+$("#lmGoal").value,warn_pct:+$("#lmWarn").value,big_day:+$("#lmBig").value,auto_close:$("#lmAuto").checked,review_min:+$("#lmReview").value||15,author:($("#dkWho")&&$("#dkWho").value)||"Ifoma"};
+  // v3.26: send only what changed, so a waiting (loosening) change isn't touched by an unrelated save
+  const body={author:($("#dkWho")&&$("#dkWho").value)||"Ifoma"};let n=0;
+  for(const [k,sel,t] of LM_FIELDS){const el=$(sel);if(!el)continue;const v=t==="b"?el.checked:+el.value;const was=LM?(t==="b"?LM[k]!==false:+LM[k]):null;if(v!==was){body[k]=v;n++}}
+  if(!n){$("#dlgLimits").close();return}
   b.disabled=true;b.textContent="Saving…";
-  try{await dkApi("limits_set",body);$("#dlgLimits").close();toast("Limits saved");DK.perf=null;
+  try{const j=await dkApi("limits_set",body);LM=j.limits;
+    const w=LM.pending&&LM.pending.changes&&Object.keys(LM.pending.changes).length;
+    $("#dlgLimits").close();toast(w?"Saved — loosening waits for the next trading day 9:30 AM":"Limits saved");DK.perf=null;dkLockLoad();
     if(DK.open&&DK.view==="perf")dkPerf(true);else if(DK.open&&DK.view==="desk")dkLoadLog().catch(()=>{});
   }catch(e){m.className="hint dk-err";m.textContent=String(e.message).slice(0,200)}
   b.disabled=false;b.textContent="Save";

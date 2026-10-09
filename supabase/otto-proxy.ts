@@ -1019,9 +1019,14 @@ export const strayCount = () => STRAY;
 const TEST: any = (globalThis as any).__OTTO_TEST__ || null;
 
 async function call(service: string, tool: string, args: any) {
-  if (TEST?.call) return TEST.call(service, tool, args);
-  const res = await mcp(service, "tools/call", { name: tool, arguments: args || {} });
-  if (res?.isError) throw new Error(mcpText(res).slice(0, 400) || "tool error");
+  let res: any;
+  if (TEST?.call) res = await TEST.call(service, tool, args);
+  else {
+    res = await mcp(service, "tools/call", { name: tool, arguments: args || {} });
+    if (res?.isError) throw new Error(mcpText(res).slice(0, 400) || "tool error");
+  }
+  // v3.26: every cancel Otto sends is logged, so a cancel that isn't in the log shows up as "Outside Otto".
+  if (/^cancel_(?:option|equity)_order$/.test(tool) && args?.order_id) await noteOttoCancel(String(args.order_id)).catch(() => {});
   return res;
 }
 
@@ -1088,6 +1093,16 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     throw new Error("An opening option order needs its plan and exits: {tv_symbol (EXCHANGE:TICKER), direction ('up'|'down' on the underlying), setup, tp1, stop (underlying prices), stop_option (OPTION price for the protective stop, below the limit), entry_underlying?, expires? (YYYY-MM-DD)}. Add it and propose again.");
   }
   void opts;
+  // v3.26: where the idea came from (on every opening card), and fix 1 — a coach level with no direction gets no
+  // card from Signals: the Watcher watches it both ways and the card comes after a touch + a 5-minute close.
+  let originRow: any = null;
+  if (opening && plan) {
+    try { const o = await originOf(plan); plan.origin = o.origin; originRow = o.row; } catch { plan.origin = "jarvis"; }
+    if (who === "signals" && !opts.manual && plan.origin === "coach_level" && originRow && !originRow.direction) {
+      const lv = Number(originRow.level) > 0 ? Number(originRow.level) : levelsFromWords(originRow.words || "")[0]?.level;
+      throw new Error(`NO CARD — the coach posted a level with no direction ("${String(originRow.words || "").slice(0, 80)}"). Don't pick a side: it's on the Watcher both ways, and the card comes when price touches ${lv ?? "the level"} and a 5-minute candle closes. Say that in your read.`);
+    }
+  }
   // v3.21 (Ifoma, 7 Oct night): one card per ticker + direction. 7 Oct 10:32 two QQQ put cards went up at once.
   if (opening && !opts.manual && plan) {
     const tk = String(plan.tv_symbol || "").split(":").pop()?.toUpperCase() || "";
@@ -1134,6 +1149,16 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     out.push({ service, tool, args });
   }
   const exit = opening ? exitSpec(out, plan) : null;
+  // v3.26 (9 Oct trade 1: a $0.93 stop on a $5.25 entry = −$432): with max loss per trade on, the stop is sized to it.
+  const LIM0 = await getLimits().catch(() => LIMIT_DEFAULTS);
+  const sizeChecks: any[] = [];
+  if (exit && LIM0.max_loss_on !== false && Number(LIM0.max_trade_loss) > 0) {
+    const ns = stopForMax(exit.entry_limit, exit.stop_option, exit.qty, Number(LIM0.max_trade_loss));
+    if (ns) {
+      sizeChecks.push({ ok: true, guard: true, text: `Stop moved up from $${exit.stop_option.toFixed(2)} to $${ns.toFixed(2)} so a stop-out loses about $${Math.round((exit.entry_limit - ns) * 100 * exit.qty)} — inside your max loss per trade ($${LIM0.max_trade_loss})` });
+      exit.stop_option = ns; if (plan) plan.stop_option = ns;
+    }
+  }
   let account_value: number | null = null, buying_power: number | null = null;
   if (out.some((c) => c.service === "rh" && c.tool.startsWith("place_"))) {
     try {
@@ -1164,24 +1189,57 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     cost: costKnown ? cost : null, account_value, buying_power, pct, warn_pct: LIM.warn_pct,
     flag: pct !== null && pct > LIM.warn_pct / 100, notes, account: out.some((c) => c.service === "rh") ? mask(await agenticAccount().catch(() => "????")) : null,
   };
+  // v3.26: the kill switch and the size cap turn the card into a PAPER card (shown, scored, never approvable).
+  let paper: string | null = null;
+  if (opening) {
+    const ls = await lockState().catch(() => null);
+    if (ls?.locked) paper = `Kill switch on — ${ls.text}. Signals keep listening; this idea is scored as a paper card.`;
+    const capPct = Number(LIM.size_cap_pct) || 0;
+    if (!paper && LIM.size_cap_on !== false && capPct > 0 && pct != null && account_value && pct > capPct / 100 + 1e-9) {
+      const capUsd = Math.floor(account_value * capPct / 100);
+      if (!opts.manual && exit) {
+        const sym = String(plan?.tv_symbol || "").split(":").pop() || "";
+        const sl = await withTimeout(shortlistCached(sym, exit.direction === "down" ? "put" : "call"), 25_000, "shortlist").catch(() => null);
+        const f = sl ? capFit(sl.rows, capUsd, buying_power) : null;
+        if (f && f.option_id !== exit.option_id)
+          throw new Error(`Over the size cap: this contract costs $${Math.round(cost)} = ${Math.round(pct * 100)}% of the account; the cap is ${capPct}% ($${capUsd}). ◆ ${f.label} fits under it (option_id ${f.option_id}, ask $${f.ask.toFixed(2)}, ≈$${f.cost}, δ ${Math.abs(f.delta).toFixed(2)}). Propose again with that contract (re-size stop_option for it).`);
+      }
+      paper = `Costs $${Math.round(cost)} = ${Math.round(pct * 100)}% of the account. Your size cap is ${capPct}% ($${capUsd}).` +
+        (opts.manual ? "" : " Otto looked for a cheaper contract for the same idea (delta .15 or higher) — none fit under the cap.");
+    }
+  }
   let banner: any = null, checks: any[] = [];
   if (opening) {
     try { const b = await sentimentNow(); banner = { verdict: b.verdict, score: b.score, fresh: b.fresh, at: b.at }; } catch { /* */ }
     try { checks = await ruleChecks(out, plan, risk, banner); } catch (e) { checks = [{ ok: null, text: "Rule check failed: " + (e as Error).message }]; }
     const atStop = exit ? (exit.entry_limit - exit.stop_option) * 100 * exit.qty : null;
     try { checks = checks.concat(await limitChecks(risk.cost, atStop)); } catch { /* */ }
-    checks = bpChecks.concat(checks);
+    checks = bpChecks.concat(sizeChecks, checks);
+    // v3.26: where the idea came from; an unclear ticker; against the day's move.
+    const tk26 = String(plan?.tv_symbol || "").split(":").pop() || "";
+    const og = plan?.origin;
+    if (og === "coach_call") checks.unshift({ ok: true, text: "The coach's own call and direction" });
+    else if (og === "coach_level" || og === "coach_post") checks.unshift({ ok: null, text: `Direction picked by Jarvis — the coach gave a ${og === "coach_level" ? "level" : "ticker"}, not a direction` });
+    else if (og === "coach_against") checks.unshift({ ok: false, guard: true, text: `Against the coach's direction (he said ${originRow?.direction || "the other way"})` });
+    if (originRow?.words) { const u = unclearTicker(tk26, originRow.words); if (u) checks.unshift({ ok: false, guard: true, text: u }); }
+    try { const dm = await withTimeout(dayMoveCheck(tk26, plan?.direction), 5000, "day move"); if (dm) checks.push(dm); } catch { /* */ }
+    if (paper) checks.unshift({ ok: false, guard: true, paper: true, text: "AUTO-REJECTED · " + paper });
     // v3.24 (A8): already through its wrong-if → red line on the card (it's still built; Approve still places it).
     if (exit) { const st = await staleEntry({ exit, plan }).catch(() => null); if (st) checks.unshift({ ok: false, guard: true, stale: true, text: st }); }
   }
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
     title: unname(input.title || "Action").slice(0, 140),
     summary: unname(input.summary || "").slice(0, 4000),
-    calls: out, risk, review: review.join("\n\n---\n\n"), status: "pending", created_by: who,
+    calls: out, risk, review: review.join("\n\n---\n\n"), status: paper ? "paper" : "pending", created_by: who,
     plan: plan ? { ...plan, setup: String(plan.setup).toLowerCase().slice(0, 40) } : null, banner, checks,
     ...(exit ? { exit: { ...exit, state: "planned", log: [] } } : {}),
   }) });
   if (rows?.[0]?.status === "pending" && who !== "signals" && who !== "alert" && who !== "watcher") await markPinged([rows[0].id]), await notify("card", `🃏 Card waiting: ${String(rows[0].title).slice(0, 80)}`, "Tap to open the Desk and Approve or Reject (cards expire in 20 minutes).");
+  if (rows?.[0]?.status === "paper") {
+    await markPinged([rows[0].id]);
+    await logDesk("system", "Otto", `📄 Paper card: ${rows[0].title} — ${paper} It's shown and scored; it can't be approved.`, rows[0].id);
+    await activity("card", `Paper card (auto-rejected): ${rows[0].title} — ${paper}`, who === "otto" ? "ticket" : who);
+  }
   return publicAction(rows[0]);
 }
 
@@ -1207,6 +1265,7 @@ async function actOn(id: string, decision: string, who: string) {
   if (decision !== "approve") {
     const r = await db("otto_actions?id=eq." + id + "&status=eq.pending", { method: "PATCH",
       body: JSON.stringify({ status: "rejected", decided_by: who, decided_at: now }) });
+    if (r?.[0]) await activity("card", `Rejected: ${a.title}`, who.split("@")[0]);
     return publicAction(r[0] || a);
   }
   if (Date.now() - Date.parse(a.created_at) > ACTION_TTL_MS) {
@@ -1257,6 +1316,8 @@ async function actOn(id: string, decision: string, who: string) {
     body: JSON.stringify({ status: failed ? "failed" : "done", result: results, ...(orderId ? { order_id: String(orderId) } : {}) }) });
   const bad = results.find((r) => !r.ok && !/^skipped/.test(r.text));
   await logDesk("system", "Otto", `${failed ? "✗" : "✓"} ${a.title} — ${failed ? (bad ? String(bad.text).split("\n")[0] : "failed") : "done"} (approved by ${who})`, id);
+  // v3.26: a wrong-if moved by an alert card moves the server rule too (9 Oct 10:40 MSFT).
+  if (!failed) await wrongIfFromCard(a.calls || [], who.split("@")[0]).catch(() => []);
   // v3.4: the entry is in — hand its exits to the exit engine.
   if (a.exit && a.exit.state === "planned") {
     const ex: any = { ...a.exit, state: failed ? "dead" : "waiting_fill", order_id: orderId ? String(orderId) : null };
@@ -1280,6 +1341,11 @@ async function logDesk(role: string, author: string, content: string, action_id:
     await db("otto_desk", { method: "POST", headers: { prefer: "return=minimal" },
       body: JSON.stringify({ role, author: author.slice(0, 40), content: (role === "user" ? content : unname(content)).slice(0, 20000), action_id }) });
   } catch { /* the log is a convenience; never break the chat over it */ }
+  // v3.26: Otto's own system lines that are a break or a trade also land in the Activity log.
+  if (role === "system" && /^(?:Otto|Jarvis \(auto\))$/.test(author)) {
+    const k = deskKind(content);
+    if (k) await activity(k, String(content).split("\n")[0].slice(0, 400), "Otto");
+  }
 }
 
 /* ------------------------------------------------------------ panel */
@@ -1437,6 +1503,12 @@ THE CLOCK. The CLOCK line is computed by the server and is always right about th
 A PROTECTED TRADE'S STOP. On a trade Otto protects, a pending sell-to-close (pending_sell_quantity 1) is Otto's own stop order. It is not a stuck or "zombie" order — never tell anyone to cancel it unless they're closing the trade.
 
 FILLS, POSITIONS AND P&L — ROBINHOOD ONLY (v3.24, Ifoma 8 Oct). Say a trade filled, is open, hit TP1, was stopped, or made/lost $X ONLY from the "TRADES TODAY FROM ROBINHOOD" part of the context line or a Robinhood call you made in this turn (get_option_orders / get_option_positions). An order that isn't there as bought did NOT fill — say "not filled". The entry is the fill price, never the card's limit. The daily stop counts losing round trips from that line. The server checks every reply against Robinhood and corrects anything that doesn't match.
+v3.26 RULES (Ifoma, 9 Oct, after the −$230 MSFT day):
+- KILL SWITCH: when the context line says LOCKED, every opening card you propose becomes a paper card (scored, can't be approved). Say so plainly; never suggest a way around it.
+- SIZE CAP: an opening card over the size cap in the context line comes back to you with a cheaper contract that fits — use it; if none fits it becomes a paper card. Don't argue the cap.
+- THE COACH'S DIRECTION: follow the direction the coach gives. When he gives a level with no direction, don't pick a side from the word "resistance" or "support" — wait for the Watcher's touch + close. Before calling any entry "good", check: did price TOUCH the level, did the trigger candle close the way the plan said, is it with the day's move and the banner. If any is no, say so.
+- CHANGING A WRONG-IF: add the new level with add_watch_level on the losing side of the open trade — that moves the server rule. Never move a wrong-if inside the trade's own level without saying a test of the level will stop it out.
+- NUMBERS: distances, "in/out of the money" and option P&L come from the live price and the fill — never from yesterday's close for an option bought today. Before saying a position is closed, check get_option_positions.
 NO WORKING NOTES. Tool work is silent: never write "let me grab the instrument ID…", ids or tool names in your reply — only what they need to read.
 A WATCHER LEVEL ON AN OPEN TRADE. A level added on the losing side of an open trade (below it for calls, above for puts) replaces that trade's wrong-if — one wrong-if per trade; the server closes it on a 5-minute close through it (auto-close on). Say that, nothing more.`;
 
@@ -1690,9 +1762,11 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
           send({ t: "tool", v: "Preparing card: " + String(input.title || "") });
           const card = await proposeAction(input, who, { planExtra: o.planExtra });
           cards.push(card.id);
-          if (o.oneStep) { cardRead = unname(String(input.read || "")); if (o.onCard) await o.onCard(card.id).catch(() => {}); }
+          if (o.oneStep) { cardRead = unname(String(input.read || "")); if (o.onCard && card.status !== "paper") await o.onCard(card.id).catch(() => {}); }
           send({ t: "action", v: card });
-          content = `Card ${card.id} is on screen, status pending. Nothing has run. ` +
+          content = card.status === "paper"
+            ? `PAPER CARD ${card.id} — auto-rejected, it can't be approved: ${String((card.checks || []).find((c: any) => c.paper)?.text || "").slice(0, 300)}. It is still scored. Tell them in one line; don't propose it again or a different contract for it.`
+            : `Card ${card.id} is on screen, status pending. Nothing has run. ` +
             `Risk: ${JSON.stringify(card.risk)}. Rule check: ${JSON.stringify(card.checks || [])}. Robinhood review: ${(card.review || "n/a").slice(0, 1500)}`;
         } else if (b.name === "option_shortlist") {
           const side = input.side === "put" ? "put" : "call";
@@ -1778,7 +1852,9 @@ async function deskSetup(opt: { fast?: boolean } = {}) {
   const protLine = prot.ok && prot.v.length ? " Protected trades (Otto runs their stop and alerts; to close one early, cancel_option_order its stop_order_id first, then sell, in one card): " +
     prot.v.map((r: any) => `${r.title} [${r.exit.state}${r.exit.stop_order_id ? `, stop_order_id ${r.exit.stop_order_id} at $${r.exit.stop_option}` : ""}, wrong-if ${r.exit.wrong_if}, TP1 ${r.exit.tp1}]`).join("; ") + "." : "";
   const jctx = await jasonContext().catch(() => "");
-  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} Their guardrails (Phase ${LIM.phase}; they FLAG, never block): max loss per trade at the stop ${LIM.max_trade_loss > 0 ? `$${LIM.max_trade_loss}${LIM.pct_mode && LIM.max_trade_pct > 0 ? ` (${LIM.max_trade_pct}% of the $${Math.round(LIM.account_value)} Agentic account)` : ""}` : "off"}, weekly loss limit $${LIM.weekly_loss}${LIM.pct_mode && LIM.weekly_pct > 0 ? ` (${LIM.weekly_pct}%)` : ""}, daily stop after ${LIM.daily_losses || "—"} losing trades or 2× the max loss, ${LIM.max_trades_day} trades/day, size flag over ${LIM.warn_pct}% of the account. Size ideas inside these when a contract allows it (set stop_option so the loss at the stop fits); when nothing fits, still make the card — it gets the red flag — and say so in one line.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.${jctx}]`;
+  const ls26 = await withTimeout(lockState(), 6000, "lock state").catch(() => null);
+  const lock26 = ls26?.locked ? `🔒 LOCKED by the kill switch: ${ls26.text}. Any opening card you propose becomes a paper card. ` : "";
+  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} ${lock26}Their guardrails (Phase ${LIM.phase}; they flag — the size cap and the kill switch turn a card into a paper card): ${LIM.size_cap_on !== false && Number(LIM.size_cap_pct) > 0 ? `SIZE CAP ${LIM.size_cap_pct}% of the account${LIM.size_cap_usd ? ` ($${LIM.size_cap_usd})` : ""} per trade, ` : "size cap off, "}max loss per trade at the stop ${LIM.max_trade_loss > 0 ? `$${LIM.max_trade_loss}${LIM.pct_mode && LIM.max_trade_pct > 0 ? ` (${LIM.max_trade_pct}% of the $${Math.round(LIM.account_value)} Agentic account)` : ""}` : "off"}, weekly loss limit $${LIM.weekly_loss}${LIM.pct_mode && LIM.weekly_pct > 0 ? ` (${LIM.weekly_pct}%)` : ""}, daily stop after ${LIM.daily_losses || "—"} losing trades or 2× the max loss, ${LIM.max_trades_day} trades/day, size flag over ${LIM.warn_pct}% of the account. Size ideas inside these when a contract allows it (set stop_option so the loss at the stop fits); when nothing fits, still make the card — it gets the red flag — and say so in one line.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.${jctx}]`;
 
   // v3.16: the exact list of what runs on its own, so Jarvis can only point at real things.
   const running = await runningNow().catch(() => "");
@@ -2441,8 +2517,9 @@ async function weeklyReview(apiKey: string, who = "Jarvis") {
   } else {
     pattern = "No closed trades this week.";
   }
+  const coach = await withTimeout(coachReport(), 60_000, "coach report").catch(() => null);   // v3.26: the Coach report card
   const payload = { week_start: ws, week_end: we, total: +total.toFixed(2), n: items.length, wins, losses, pattern, one_thing, rules,
-    missing_reasons: items.filter((t) => !t.reason).length };
+    missing_reasons: items.filter((t) => !t.reason).length, coach };
   await db("otto_reviews?on_conflict=week_start", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify({ week_start: ws, payload, built_by: who, created_at: new Date().toISOString() }) });
   await logDesk("system", "Otto", `Weekly review for the week of ${ws} is ready (Review tab): ${items.length} closed trade${items.length === 1 ? "" : "s"}, ${total >= 0 ? "+" : "−"}$${Math.abs(total).toFixed(2)}.${one_thing ? " Next week: " + one_thing : ""}`);
@@ -2518,7 +2595,7 @@ async function scorecard() {
     return Object.entries(g).map(([k, l]) => ({ key: k, ...agg(l) })).sort((a, b) => b.n - a.n);
   };
   const taken = ideas.filter((a: any) => a.status === "done");
-  const passed = ideas.filter((a: any) => ["rejected", "expired"].includes(a.status));
+  const passed = ideas.filter((a: any) => ["rejected", "expired", "paper"].includes(a.status));
   return {
     ok: true,
     since: ideas.length ? ideas[ideas.length - 1].created_at : null,
@@ -3085,7 +3162,12 @@ async function exitTickLocked(a: any) {
           const chk = await exitRuleCheck({ ...a, exit: ex });
           if (chk.met) { await closeNow({ option_id: ex.option_id, reason: chk.why, rule_why: chk.why }, "rules", true); closed = true; }
           else exitLog(ex, `TradingView said ${why}, Robinhood bars don't confirm it yet (${chk.detail}) → close card instead`);
-        } catch (e) { await logDesk("system", "Otto", `⚠ ${a.title}: ${why}, but the auto-close failed (${(e as Error).message.slice(0, 200)}). The stop is still working. Close by hand if needed.`, a.id); }
+        } catch (e) {
+          // v3.26 (9 Oct 10:10): the minute sweep closed it at the same moment — "not enough contracts" then means it's already flat.
+          const left = await heldQty(await agenticAccount(), ex.option_id).catch(() => null);
+          if (left === 0) { exitLog(ex, `${why} → already closed by the other exit run`); closed = true; }
+          else await logDesk("system", "Otto", `⚠ ${a.title}: ${why}, but the auto-close failed (${(e as Error).message.slice(0, 200)}). The stop is still working. Close by hand if needed.`, a.id);
+        }
         if (closed) return { id: a.id, state: ex.state, held, auto: true };
         ex.close_at = null;
       }
@@ -3577,7 +3659,8 @@ function signalPrompt(cfg: any, rows: any[], carded: any[]) {
 ${rows.map(jLine).join("\n")}
 ${carded.length ? "Already carded today (do NOT make a second card for these unless he gives a new direction or a new entry): " + carded.map((r: any) => `${r.ticker} ${r.direction || ""} at ${r.posted_label || "?"}`).join("; ") + "\n" : ""}
 Do this:
-1. Every post that names a ticker and implies a trade — a CALL, or a LEVEL that held / broke / rejected — gets ONE opening option card via propose_action, even when ${cfg.mentor} gave no direction. Decide long (calls) or short (puts) yourself from his words, his chart, the banner and the price right now (fetch it). plan.setup = "otto signal", plan.jason_id = the #id above. Fill in everything he did NOT give — the contract (delta .30–.40, volume > open interest, a sensible expiry), limit, quantity inside our limits, TP1, wrong-if and stop_option — as precisely as you can. In the card summary say which parts are ${cfg.mentor}'s and which are yours.
+1. A CALL (he gives the direction — long/short, calls/puts, above/below a level to trade it) gets ONE opening option card via propose_action, in HIS direction. A post that names a ticker with NO direction and no level gets a card only if you can read a clear direction from his words, his chart, the banner and the price right now (fetch it) — say plainly the direction is yours.
+1a. v3.26 (Ifoma, 9 Oct): a LEVEL with no direction from him ("MSFT 532.40 RESISTANCE", "ABBV AT RESISTANCE", "752 POSSIBLE BOUNCE ZONE") gets NO card — don't pick a side. The server puts it on the Watcher both ways; the card comes when price touches it and a 5-minute candle closes. Put the level in your read. plan.setup = "otto signal", plan.jason_id = the #id above. Fill in everything he did NOT give — the contract (delta .30–.40, volume > open interest, a sensible expiry), limit, quantity inside our limits, TP1, wrong-if and stop_option — as precisely as you can. In the card summary say which parts are ${cfg.mentor}'s and which are yours.
 2. A LATE post (he says he missed calling it / it already moved): still make the card, start the title with "LATE", and say plainly in the summary that chasing breaks his entry rules.
 3. If the banner, one of his rules or our limits argue against it, say so in the card summary — but still make the card. Ifoma and Josh decide.
 3b. ONE card per post (Ifoma, 8 Oct): card ★ if it fits buying power, otherwise ◆; if nothing fits, card the cheapest anyway (it gets a red banner).
@@ -3717,7 +3800,7 @@ export async function signalJarvis(bid: number) {
         tools: tools.filter((t: any) => t.name !== "close_position" && !/^tv__/.test(String(t.name || ""))),
         cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 8, mustCard, deadline: t0 + RUN_BUDGET_MS });
     } catch (e) { err = String((e as Error).message || e).slice(0, 300); }
-    const acts = res.cards.length ? await db("otto_actions?select=id,title,plan&id=in.(" + res.cards.join(",") + ")").catch(() => []) : [];
+    const acts = res.cards.length ? await db("otto_actions?select=id,title,plan,status&id=in.(" + res.cards.join(",") + ")").catch(() => []) : [];
     const open = tradeable.filter((r: any) => !r.action_id);
     for (const a of acts) {
       const row = all.find((r: any) => r.id === Number(a.plan?.jason_id)) || (open.length === 1 ? open[0] : null);
@@ -3743,7 +3826,7 @@ export async function signalJarvis(bid: number) {
     const timing = prevT || { posted: all[0]?.posted_at || null, caught: b.created_at, card_ms: Date.now() - t0, cards: res.cards.length, total_ms: all[0]?.posted_at ? Date.now() - Date.parse(all[0].posted_at) : null, one_step: oneStep };
     await sigBatch(bid, { status: err ? "error" : "done", read: read || null, cards: res.cards, error: err || (missing.length ? why : null), timing });
     if (acts.length) await markPinged(acts.map((a: any) => a.id));
-    for (const a of acts.filter((x: any) => !pinged.has(x.id))) {
+    for (const a of acts.filter((x: any) => !pinged.has(x.id) && x.status !== "paper")) {
       const row = all.find((r: any) => r.action_id === a.id);
       await notify("signal", `🃏 Card ready: ${row?.ticker || ""} ${row?.direction ? row.direction.toUpperCase() : ""}`.trim(),
         `${String(a.title || "").slice(0, 100)} — from ${SIG_LABEL}: "${String(row?.words || "").slice(0, 70)}". Tap to Approve or Reject (expires in 20 min).`, "./#signals");
@@ -4100,6 +4183,8 @@ const PUSH_KINDS: Record<string, { label: string; on: boolean; always?: boolean 
   watcher:     { label: "Otto Signals watcher went offline / came back", on: true, always: true },
   daily:       { label: "5:15 PM daily recap is ready", on: true },
   checkin:     { label: "⏰ A check-in Jarvis scheduled", on: true },
+  brk:         { label: "Something broke (Activity log)", on: true, always: true },   // v3.26
+  lock:        { label: "Kill switch locked new cards", on: true },                     // v3.26
 };
 const PUSH_SUB_URL = "https://proagentmax.github.io/otto-trader/";
 
@@ -4141,8 +4226,14 @@ async function houseRulesSet(body: any, who: string) {
     id: String(x.id || crypto.randomUUID().slice(0, 8)), text: String(x.text || "").trim().slice(0, 400),
     by: String(x.by || body?.author || who.split("@")[0]).slice(0, 40), at: String(x.at || new Date().toISOString()) })).filter((x: any) => x.text);
   if (list.length > 40) throw new Error("40 rules max — remove some first");
+  const before = (await houseRules().catch(() => [] as any[])).map((x: any) => x.text);
   await putSetting("house_rules", { rules: list }, String(body?.author || who).slice(0, 60));
   delete CACHE.house_rules;
+  // v3.26: the Activity log shows removed rules (added ones are logged by houseRuleAdd / the Settings save below).
+  const gone = before.filter((t: string) => !list.some((x: any) => x.text === t));
+  const added = list.filter((x: any) => !before.includes(x.text)).map((x: any) => x.text);
+  if (gone.length) await activity("change", `House rule removed: ${gone.join(" · ")}`, String(body?.author || who.split("@")[0]).slice(0, 40));
+  if (added.length && !body?._viaAdd) await activity("change", `House rule added: ${added.join(" · ")}`, String(body?.author || who.split("@")[0]).slice(0, 40));
   return list;
 }
 export async function houseRuleAdd(text: string, by: string) {
@@ -4150,8 +4241,9 @@ export async function houseRuleAdd(text: string, by: string) {
   if (t.length < 8) throw new Error("rule text too short");
   const cur = await houseRules();
   if (cur.some((x) => x.text.toLowerCase() === t.toLowerCase())) return cur;
-  const list = await houseRulesSet({ rules: [...cur, { text: t, by }], author: by }, by);
+  const list = await houseRulesSet({ rules: [...cur, { text: t, by }], author: by, _viaAdd: true }, by);
   await logDesk("system", "Otto", `📌 House rule saved (${by}): ${t}  — see or edit it in Settings → House Rules.`);
+  await activity("change", `House rule added: ${t}`, by);     // v3.26
   return list;
 }
 const HOUSE_TOOL = {
@@ -4300,7 +4392,10 @@ async function pushTest(b: any) {
 // v3.13 (Ifoma, 6 Oct): limits are % of the Agentic account — 10% max loss per trade (at the stop),
 // 20% weekly, a daily stop after 2 losing trades or 2× the max loss. All of them FLAG; none blocks.
 const LIMIT_DEFAULTS: any = { phase: 1, max_trade_loss: 100, weekly_loss: 150, max_trades_day: 2, monthly_goal_pct: 5, warn_pct: 20, big_day: 500,
-  auto_close: true, review_min: 15, max_trade_pct: 10, weekly_pct: 20, daily_losses: 2 };
+  auto_close: true, review_min: 15, max_trade_pct: 10, weekly_pct: 20, daily_losses: 2,
+  // v3.26 (Ifoma, 9 Oct): every guardrail is on/off + a number in Settings. Size cap and kill switch are new.
+  size_cap_on: true, size_cap_pct: 30, max_loss_on: true, daily_on: true, daily_x: 2, weekly_on: true, trades_on: true,
+  kill_on: true, kill_daily: true, kill_weekly: true, kill_trades: true };
 async function agenticValue(): Promise<number | null> {
   return cached("agentic_value", 5 * 60e3, async () => {
     try {
@@ -4316,32 +4411,104 @@ export async function getLimits(): Promise<any> {
       const r = await db("otto_settings?key=eq.limits&select=value,updated_by,updated_at");
       L = { ...LIMIT_DEFAULTS, ...(r?.[0]?.value || {}), _by: r?.[0]?.updated_by || null, _at: r?.[0]?.updated_at || null };
     } catch { L = { ...LIMIT_DEFAULTS }; }
+    // v3.26: a loosening that was waiting for the next trading day takes effect at its time.
+    try { L = await applyPendingLimits(L); } catch { /* the waiting change stays waiting */ }
     // % limits become today's dollars from the live account value; the stored $ stay as the fallback.
-    const v = (Number(L.max_trade_pct) > 0 || Number(L.weekly_pct) > 0) ? await agenticValue() : null;
+    const v = (Number(L.max_trade_pct) > 0 || Number(L.weekly_pct) > 0 || L.size_cap_on) ? await agenticValue() : null;
     L.account_value = v;
     if (v && Number(L.max_trade_pct) > 0) L.max_trade_loss = Math.round(v * L.max_trade_pct / 100);
     if (v && Number(L.weekly_pct) > 0) L.weekly_loss = Math.round(v * L.weekly_pct / 100);
+    L.size_cap_usd = v && Number(L.size_cap_pct) > 0 ? Math.round(v * L.size_cap_pct / 100) : null;
     L.pct_mode = !!v;
     return L;
   });
 }
-async function setLimits(body: any, who: string) {
-  const cur: any = await getLimits();
-  const v: any = { ...cur, ...Object.fromEntries(Object.entries(body || {}).filter(([, x]) => x !== "" && x != null)) };
-  const by = String(body?.author || "").trim().slice(0, 40) || who.split("@")[0];
-  const num = (k: string, lo: number, hi: number) => {
-    const n = Number(v[k]); if (!isFinite(n) || n < lo || n > hi) throw new Error(`${k.replace(/_/g, " ")} must be between ${lo} and ${hi}`); return n;
-  };
-  const value = { phase: num("phase", 1, 3), max_trade_loss: num("max_trade_loss", 0, 1e6), weekly_loss: num("weekly_loss", 1, 1e6),
-    max_trades_day: num("max_trades_day", 1, 100), monthly_goal_pct: num("monthly_goal_pct", 0, 100), warn_pct: num("warn_pct", 1, 100),
-    big_day: num("big_day", 1, 1e7), auto_close: v.auto_close === true || v.auto_close === "true", review_min: num("review_min", 5, 120),
-    max_trade_pct: num("max_trade_pct", 0, 100), weekly_pct: num("weekly_pct", 0, 100), daily_losses: num("daily_losses", 0, 20) };
+const num0 = (v: any) => { const n = Number(v); return isFinite(n) ? n : 0; };
+const bool = (v: any) => v === true || v === "true" || v === 1 || v === "1" || v === "on";
+// v3.26: which edits loosen a guardrail (off, or a higher number). Those wait for the next trading day 9:30 AM ET.
+const LIM_TOGGLES = ["size_cap_on", "max_loss_on", "daily_on", "weekly_on", "trades_on", "kill_on", "kill_daily", "kill_weekly", "kill_trades"];
+const LIM_HIGHER_LOOSER = ["size_cap_pct", "max_trade_pct", "max_trade_loss", "weekly_pct", "weekly_loss", "max_trades_day", "daily_losses", "daily_x"];
+const ZERO_IS_OFF = new Set(["size_cap_pct", "max_trade_pct", "max_trade_loss", "daily_losses", "daily_x"]);
+export function isLooser(k: string, oldV: any, newV: any): boolean {
+  if (LIM_TOGGLES.includes(k)) return bool(oldV) && !bool(newV);
+  if (LIM_HIGHER_LOOSER.includes(k)) {
+    const f = (x: any) => { const n = num0(x); return ZERO_IS_OFF.has(k) && n === 0 ? Infinity : n; };
+    return f(newV) > f(oldV);
+  }
+  return false;
+}
+/** When a loosening starts: 9:30 AM ET today if it's a trading day before the open, else the next trading day. */
+export function looseningStarts(now = new Date()): string {
+  const e = etParts(now);
+  const day = isTradingDay(e.date) && e.min < 570 ? e.date : nextTradingDay(e.date);
+  return nyIso(day, "9:30 AM") || new Date(now.getTime() + 864e5).toISOString();
+}
+const LIM_LABEL: Record<string, string> = { size_cap_on: "Size cap", size_cap_pct: "Size cap %", max_loss_on: "Max loss per trade", max_trade_pct: "Max loss per trade %",
+  max_trade_loss: "Max loss per trade $", daily_on: "Daily stop", daily_losses: "Daily stop (losing trades)", daily_x: "Daily stop (× max loss)",
+  weekly_on: "Weekly limit", weekly_pct: "Weekly limit %", weekly_loss: "Weekly limit $", trades_on: "Max trades per day", max_trades_day: "Max trades per day",
+  kill_on: "Kill switch", kill_daily: "Kill switch · daily stop", kill_weekly: "Kill switch · weekly limit", kill_trades: "Kill switch · max trades",
+  auto_close: "Auto-close exits", warn_pct: "Warn over % of account", monthly_goal_pct: "Monthly goal %", phase: "Phase", big_day: "Big-loss day $", review_min: "Review every (min)" };
+const limShow = (k: string, v: any) => typeof v === "boolean" || LIM_TOGGLES.includes(k) || k === "auto_close" ? (bool(v) ? "on" : "off") : String(v);
+async function applyPendingLimits(L: any): Promise<any> {
+  const p = await setting("limits_pending").catch(() => null);
+  if (!p || !p.changes || !Object.keys(p.changes).length) return L;
+  if (Date.now() < Date.parse(p.effective_at)) { L.pending = p; return L; }
+  const raw = await db("otto_settings?key=eq.limits&select=value").then((r: any) => r?.[0]?.value || {}).catch(() => ({}));
+  const value = { ...LIMIT_DEFAULTS, ...raw, ...p.changes };
+  for (const k of Object.keys(value)) if (k.startsWith("_") || ["account_value", "pct_mode", "pending", "size_cap_usd"].includes(k)) delete (value as any)[k];
   await db("otto_settings?on_conflict=key", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify({ key: "limits", value, updated_by: by + " (" + who + ")", updated_at: new Date().toISOString() }) });
-  delete CACHE.limits;
-  delete CACHE.agentic_value;
-  await logDesk("system", "Otto", `Guardrails updated by ${by} (they flag, never block): max loss/trade ${value.max_trade_pct > 0 ? value.max_trade_pct + "% of the account" : value.max_trade_loss > 0 ? "$" + value.max_trade_loss : "off"}, weekly ${value.weekly_pct > 0 ? value.weekly_pct + "%" : "$" + value.weekly_loss}, daily stop after ${value.daily_losses || "—"} losing trades or 2× the max loss, ${value.max_trades_day} trades/day, goal ${value.monthly_goal_pct}%/month, warn over ${value.warn_pct}% of the account. Auto-close ${value.auto_close ? `ON (Jarvis can sell to close on his own; checks every ${value.review_min} min)` : "OFF (closes need an Approve)"}.`);
-  return { ...value, _by: who, _at: new Date().toISOString() };
+    body: JSON.stringify({ key: "limits", value, updated_by: String(p.by || "?") + " (waited for the next trading day)", updated_at: new Date().toISOString() }) });
+  await putSetting("limits_pending", { changes: {}, cleared: "applied", at: new Date().toISOString() }, "otto");
+  await activity("change", `Took effect: ${Object.entries(p.changes).map(([k, v]) => `${LIM_LABEL[k] || k} → ${limShow(k, v)}`).join(", ")} (set by ${p.by} ${etLabel(p.at)})`, String(p.by || "Otto"),
+    `limits-applied|${p.at}`);
+  delete CACHE.lockstate;
+  return { ...L, ...p.changes, pending: null };
+}
+async function setLimits(body: any, who: string) {
+  const by = String(body?.author || "").trim().slice(0, 40) || who.split("@")[0];
+  const rawRow = await db("otto_settings?key=eq.limits&select=value").then((r: any) => r?.[0]?.value || {}).catch(() => ({}));
+  const raw: any = { ...LIMIT_DEFAULTS, ...rawRow };
+  const pend = await setting("limits_pending").catch(() => null);
+  // "Cancel change" on the waiting banner: drop the waiting loosening (cancelling is never a loosening).
+  if (body?.cancel_pending) {
+    if (pend?.changes && Object.keys(pend.changes).length) {
+      await putSetting("limits_pending", { changes: {}, cleared: "cancelled", by, at: new Date().toISOString() }, who);
+      await activity("change", `Cancelled the waiting change: ${Object.entries(pend.changes).map(([k, v]) => `${LIM_LABEL[k] || k} → ${limShow(k, v)}`).join(", ")}`, by);
+    }
+    delete CACHE.limits;
+    return await getLimits();
+  }
+  const v: any = { ...raw, ...(pend?.changes || {}), ...Object.fromEntries(Object.entries(body || {}).filter(([k, x]) => x !== "" && x != null && k !== "author")) };
+  const num = (k: string, lo: number, hi: number) => {
+    const n = Number(v[k]); if (!isFinite(n) || n < lo || n > hi) throw new Error(`${(LIM_LABEL[k] || k.replace(/_/g, " "))} must be between ${lo} and ${hi}`); return n;
+  };
+  const next: any = { phase: num("phase", 1, 3), max_trade_loss: num("max_trade_loss", 0, 1e6), weekly_loss: num("weekly_loss", 1, 1e6),
+    max_trades_day: num("max_trades_day", 1, 100), monthly_goal_pct: num("monthly_goal_pct", 0, 100), warn_pct: num("warn_pct", 1, 100),
+    big_day: num("big_day", 1, 1e7), auto_close: bool(v.auto_close), review_min: num("review_min", 5, 120),
+    max_trade_pct: num("max_trade_pct", 0, 100), weekly_pct: num("weekly_pct", 0, 100), daily_losses: num("daily_losses", 0, 20),
+    size_cap_pct: num("size_cap_pct", 0, 100), daily_x: num("daily_x", 0, 20) };
+  for (const k of LIM_TOGGLES) next[k] = bool(v[k]);
+  // Tightening works now; loosening waits for the next trading day 9:30 AM ET.
+  const now: any = {}, wait: any = {}, changes: string[] = [];
+  for (const k of Object.keys(next)) {
+    const old = raw[k];
+    if (limShow(k, old) === limShow(k, next[k]) && !(k in (pend?.changes || {}))) { now[k] = next[k]; continue; }
+    if (isLooser(k, old, next[k])) { wait[k] = next[k]; now[k] = old; }
+    else { now[k] = next[k]; if (limShow(k, old) !== limShow(k, next[k])) changes.push(`${LIM_LABEL[k] || k} ${limShow(k, old)} → ${limShow(k, next[k])}`); }
+  }
+  await db("otto_settings?on_conflict=key", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ key: "limits", value: now, updated_by: by + " (" + who + ")", updated_at: new Date().toISOString() }) });
+  // The waiting list: keep earlier waiting edits unless this save set that limit back.
+  const waiting = { ...wait };
+  const newWait = Object.keys(wait).filter((k) => limShow(k, pend?.changes?.[k]) !== limShow(k, wait[k]));
+  const at = new Date().toISOString(), eff = newWait.length || !pend?.effective_at ? looseningStarts() : pend.effective_at;
+  await putSetting("limits_pending", Object.keys(waiting).length ? { changes: waiting, effective_at: eff, by, at } : { changes: {}, cleared: "save", at }, who);
+  delete CACHE.limits; delete CACHE.agentic_value; delete CACHE.lockstate;
+  if (changes.length) await activity("change", `Limits: ${changes.join(", ")} (now)`, by);
+  if (newWait.length) await activity("change", `Limits: ${newWait.map((k) => `${LIM_LABEL[k] || k} ${limShow(k, raw[k])} → ${limShow(k, wait[k])}`).join(", ")} — loosening, starts ${etLabel(eff)}`, by);
+  if (changes.length || newWait.length)
+    await logDesk("system", "Otto", `Guardrails updated by ${by}: ${[...changes.map((c) => c + " (now)"), ...newWait.map((k) => `${LIM_LABEL[k] || k} → ${limShow(k, wait[k])} (starts ${etLabel(eff)} — loosening waits for the next trading day)`)].join("; ")}.`);
+  return await getLimits();
 }
 
 // Daily realized P&L, both accounts combined (Robinhood's own P&L numbers).
@@ -4459,36 +4626,47 @@ async function performance(apiKey: string, wantRead: boolean, fresh = false) {
 export async function limitChecks(cost: number | null, atStop: number | null = null): Promise<any[]> {
   const L = await getLimits();
   const out: any[] = [];
-  const cap = L.max_trade_loss > 0 ? `${L.pct_mode && L.max_trade_pct > 0 ? `your ${L.max_trade_pct}% max, $${L.max_trade_loss}` : `your max $${L.max_trade_loss}`}` : "";
+  // v3.26: a guardrail switched off in Settings is not checked at all.
+  const maxLoss = L.max_loss_on === false ? 0 : Number(L.max_trade_loss) || 0;
+  const cap = maxLoss > 0 ? `${L.pct_mode && L.max_trade_pct > 0 ? `your ${L.max_trade_pct}% max, $${maxLoss}` : `your max $${maxLoss}`}` : "";
   if (atStop != null) {
-    out.push({ ok: L.max_trade_loss > 0 ? atStop <= L.max_trade_loss : null, guard: true,
-      text: `Loss if the stop fills: about −$${atStop.toFixed(0)}${cap ? (atStop <= L.max_trade_loss ? ` (inside ${cap})` : ` — OVER ${cap}`) : " (no per-trade max set)"}. Option stops can fill lower on a fast move.` });
+    out.push({ ok: maxLoss > 0 ? atStop <= maxLoss : null, guard: true,
+      text: `Loss if the stop fills: about −$${atStop.toFixed(0)}${cap ? (atStop <= maxLoss ? ` (inside ${cap})` : ` — OVER ${cap}`) : L.max_loss_on === false ? " (max loss per trade is off)" : " (no per-trade max set)"}. Option stops can fill lower on a fast move.` });
     if (cost != null) out.push({ ok: null, text: `Whole premium $${cost.toFixed(0)} (lost only if the option goes to zero)` });
-  } else if (cost != null) out.push({ ok: L.max_trade_loss > 0 ? cost <= L.max_trade_loss : null, guard: true, text: `Most this trade can lose: $${cost.toFixed(0)}${cap ? (cost <= L.max_trade_loss ? ` (inside ${cap})` : ` — OVER ${cap}`) : " (no per-trade max set)"}` });
-  // Daily stop: N losing trades today, or losses of 2× the max loss (Agentic account).
-  try {
-    // v3.24 (A7): counted from Robinhood's own order records (round trips), the journal only if Robinhood can't be read.
-    const cnt = await todayCounts();
-    const losers = cnt.losers, dayPnl = cnt.realized;
-    const nMax = Number(L.daily_losses) || 0, dMax = L.max_trade_loss > 0 ? 2 * L.max_trade_loss : 0;
-    const hit = (nMax > 0 && losers >= nMax) || (dMax > 0 && dayPnl <= -dMax);
-    out.push({ ok: !hit, guard: true, text: hit
-      ? `DAILY STOP: ${losers} losing trade${losers === 1 ? "" : "s"} today, $${dayPnl.toFixed(0)} — your rule says done for the day`
-      : `Today: ${losers} losing trade${losers === 1 ? "" : "s"}, $${dayPnl.toFixed(0)} (daily stop at ${nMax || "—"} losers${dMax ? ` or −$${dMax}` : ""})` });
-  } catch { out.push({ ok: null, text: "Daily stop: couldn't read today's trades" }); }
-  try {
-    const p = await dailyPnl();
-    const wk = mondayOf(etParts().date);
-    const weekPnl = p.days.filter((d) => d.date >= wk).reduce((s, d) => s + d.pnl, 0);
-    out.push({ ok: weekPnl > -L.weekly_loss, guard: true, text: weekPnl <= -L.weekly_loss
-      ? `WEEKLY LIMIT hit ($${weekPnl.toFixed(0)} of −$${L.weekly_loss}${L.pct_mode && L.weekly_pct > 0 ? `, ${L.weekly_pct}%` : ""}): your rule says stop for the week`
-      : `This week $${weekPnl.toFixed(0)} (stop at −$${L.weekly_loss})` });
-  } catch { out.push({ ok: null, text: "Weekly P&L: couldn't read Robinhood" }); }
-  try {
-    const n = (await todayCounts()).opened;   // v3.24: Robinhood fills, not the journal
-    out.push({ ok: n < L.max_trades_day, guard: true, text: `Trade ${n + 1} today (your max ${L.max_trades_day})` });
-  } catch { /* */ }
+  } else if (cost != null) out.push({ ok: maxLoss > 0 ? cost <= maxLoss : null, guard: true, text: `Most this trade can lose: $${cost.toFixed(0)}${cap ? (cost <= maxLoss ? ` (inside ${cap})` : ` — OVER ${cap}`) : " (no per-trade max set)"}` });
+  // Daily stop: N losing trades today, or losses of daily_x × the max loss (Agentic account).
+  if (L.daily_on !== false) {
+    try {
+      // v3.24 (A7): counted from Robinhood's own order records (round trips), the journal only if Robinhood can't be read.
+      const cnt = await todayCounts();
+      const losers = cnt.losers, dayPnl = cnt.realized;
+      const nMax = Number(L.daily_losses) || 0, dMax = maxLoss > 0 && Number(L.daily_x ?? 2) > 0 ? Number(L.daily_x ?? 2) * maxLoss : 0;
+      const hit = (nMax > 0 && losers >= nMax) || (dMax > 0 && dayPnl <= -dMax);
+      out.push({ ok: !hit, guard: true, text: hit
+        ? `DAILY STOP: ${losers} losing trade${losers === 1 ? "" : "s"} today, $${dayPnl.toFixed(0)} — your rule says done for the day`
+        : `Today: ${losers} losing trade${losers === 1 ? "" : "s"}, $${dayPnl.toFixed(0)} (daily stop at ${nMax || "—"} losers${dMax ? ` or −$${dMax}` : ""})` });
+    } catch { out.push({ ok: null, text: "Daily stop: couldn't read today's trades" }); }
+  }
+  if (L.weekly_on !== false) {
+    try {
+      const weekPnl = await weekPnlNow();
+      out.push({ ok: weekPnl > -L.weekly_loss, guard: true, text: weekPnl <= -L.weekly_loss
+        ? `WEEKLY LIMIT hit ($${weekPnl.toFixed(0)} of −$${L.weekly_loss}${L.pct_mode && L.weekly_pct > 0 ? `, ${L.weekly_pct}%` : ""}): your rule says stop for the week`
+        : `This week $${weekPnl.toFixed(0)} (stop at −$${L.weekly_loss})` });
+    } catch { out.push({ ok: null, text: "Weekly P&L: couldn't read Robinhood" }); }
+  }
+  if (L.trades_on !== false) {
+    try {
+      const n = (await todayCounts()).opened;   // v3.24: Robinhood fills, not the journal
+      out.push({ ok: n < L.max_trades_day, guard: true, text: `Trade ${n + 1} today (your max ${L.max_trades_day})` });
+    } catch { /* */ }
+  }
   return out;
+}
+async function weekPnlNow(): Promise<number> {
+  const p = await dailyPnl();
+  const wk = mondayOf(etParts().date);
+  return p.days.filter((d) => d.date >= wk).reduce((s, d) => s + d.pnl, 0);
 }
 
 /* ===================================================================== v3.14
@@ -4567,10 +4745,11 @@ export function evalLevel(level: number, d: "up" | "down", bars: Bar[], mins: nu
   let trigger: string | null = null;
   if (d === "up") {
     if (p.c <= level && b.c > level) trigger = "break";
-    else if (p.c > level && b.l <= level + tol && b.c > level && b.c > b.o && awayFrom(1)) trigger = "pullback-hold";
+    // v3.26 (9 Oct MSFT: "rejection" fired on bars whose highs never reached the level): the bar must TOUCH it.
+    else if (p.c > level && b.l <= level && b.c > level && b.c > b.o && awayFrom(1)) trigger = "pullback-hold";
   } else {
     if (p.c >= level && b.c < level) trigger = "break";
-    else if (p.c < level && b.h >= level - tol && b.c < level && b.c < b.o && awayFrom(-1)) trigger = "rejection";
+    else if (p.c < level && b.h >= level && b.c < level && b.c < b.o && awayFrom(-1)) trigger = "rejection";
   }
   return trigger ? { trigger, d, tf: mins, bar: b, prev: p, close_at: new Date(closeAt).toISOString() } : null;
 }
@@ -4583,14 +4762,15 @@ export function crossings(level: number, bars: Bar[]) {
 async function watchRows(day = marketClock().date, statuses = "watching,proposed") {
   return await db(`otto_watch?select=*&day=eq.${day}&status=in.(${statuses})&order=created_at.asc&limit=200`).catch(() => []);
 }
-export async function watchAdd(x: { ticker: string; level: number; dir?: string; source: "signal" | "desk" | "scanner"; note?: string; source_ref?: string; by?: string; status?: string }) {
+export async function watchAdd(x: { ticker: string; level: number; dir?: string; source: "signal" | "desk" | "scanner"; note?: string; source_ref?: string; by?: string; status?: string; coach_dir?: string | null }) {
   const ticker = String(x.ticker || "").toUpperCase().replace(/[^A-Z.]/g, "").slice(0, 8);
   const level = Math.round(Number(x.level) * 100) / 100;
   if (!ticker || !(level > 0)) throw new Error("need a ticker and a price level");
   if (x.source !== "scanner") await watchLevelGate(ticker, level);   // v3.22: no level >10% from the live price
   const dir = ["up", "down", "both"].includes(String(x.dir)) ? String(x.dir) : "both";
   const row = { day: watchDay(), ticker, level, dir, source: x.source, status: x.status || (x.source === "scanner" ? "proposed" : "watching"),
-    note: String(x.note || "").slice(0, 200) || null, source_ref: x.source_ref || null, added_by: String(x.by || "").slice(0, 60) || null };
+    note: String(x.note || "").slice(0, 200) || null, source_ref: x.source_ref || null, added_by: String(x.by || "").slice(0, 60) || null,
+    ...(x.source === "signal" ? { coach_dir: x.coach_dir === "long" || x.coach_dir === "short" ? x.coach_dir : null } : {}) };
   const r = await db("otto_watch?on_conflict=day,ticker,level,dir&select=*", { method: "POST",
     headers: { prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify([row]) });
   // v3.24 (A12): a level added on the losing side of an open trade becomes that trade's ONE wrong-if.
@@ -4629,10 +4809,12 @@ async function watchFromSignals(rows: any[]) {
   for (const r of rows || []) {
     if (!r?.ticker || r.kind === "note" || r.kind === "result") continue;   // v3.16: LATE calls too — the pullback to his level is the second chance
     const fb = r.direction === "long" ? "up" : r.direction === "short" ? "down" : "both";
-    const lv = levelsFromWords(String(r.words || ""), fb);
+    // v3.26 (fix 1): no direction from the coach → every level is watched BOTH ways; the close picks the side.
+    const lv = levelsFromWords(String(r.words || ""), fb).map((x) => fb === "both" ? { ...x, dir: "both" } : x)
+      .filter((x, i, a) => a.findIndex((y) => y.level === x.level && y.dir === x.dir) === i);
     if (!lv.length && Number(r.level) > 0) lv.push({ level: Number(r.level), dir: fb });
     for (const x of lv.slice(0, 4)) {
-      try { if (await watchAdd({ ticker: r.ticker, level: x.level, dir: x.dir, source: "signal", note: String(r.summary || r.words || "").slice(0, 160), source_ref: String(r.id ?? ""), by: SIG_LABEL })) n++; }
+      try { if (await watchAdd({ ticker: r.ticker, level: x.level, dir: x.dir, source: "signal", note: String(r.summary || r.words || "").slice(0, 160), source_ref: String(r.id ?? ""), by: SIG_LABEL, coach_dir: r.direction || null })) n++; }
       catch { /* a bad number never breaks Signals */ }
     }
   }
@@ -4707,7 +4889,7 @@ export async function watchJarvis(id: number, d: "up" | "down") {
   const prompt = `${ctxLine}
 ${pre}
 [👁 WATCHER TRIGGER — no one typed this; Ifoma and Josh are away from the screen.]
-${r.ticker} level ${Number(r.level)} (${r.source === "signal" ? "a Signal level" : r.source === "scanner" ? "a level the scanner found" : "a level added on the Desk"}${r.note ? ": " + r.note : ""}).
+${r.ticker} level ${Number(r.level)} (${r.source === "signal" ? "a Signal level" : r.source === "scanner" ? "a level the scanner found" : "a level added on the Desk"}${r.note ? ": " + r.note : ""}).${r.source === "signal" ? (r.coach_dir ? ` The coach's direction: ${String(r.coach_dir).toUpperCase()}.` : " The coach gave this level with NO direction — the side comes from this close. Check it's with the day's move and the banner before you card it.") : ""}
 Trigger: ${TRIG_LABEL[f.trigger]} on the ${d === "up" ? "calls" : "puts"} side, on the ${f.tf}-minute bar that closed at ${etLabel(f.close_at)} ET — O ${b.o} H ${b.h} L ${b.l} C ${b.c}.${f.crossings >= 4 ? ` The 5-minute closes have crossed this level ${f.crossings} times today: treat it as chop unless the read is clear.` : ""}
 Is this a real ${d === "up" ? "call" : "put"} setup RIGHT NOW under the Otto Rules and the House Rules? The contract list above is live (server-fetched); check the banner and any binary event.
 - Real → call propose_action ONCE: one opening option card. Title starts with "SCALP · " when it's a quick trade. plan.setup "${SETUP_FOR[f.trigger + "|" + d] || "other"}", plan.direction "${d}", plan.signal_level ${r.source === "signal"}, TP1 at the next level, plan.stop (wrong-if) just beyond ${Number(r.level)}, stop_option sized for their max loss. If the best contract is over buying power or the max, make the cheaper ALT too, as usual. Guardrails flag, never block.
@@ -4721,12 +4903,12 @@ Work quietly. Finish with a line that is exactly READ: and then 2 short plain se
   } catch (e) { err = String((e as Error).message || e).slice(0, 200); }
   const raw = res.said.trim(), cut = raw.lastIndexOf("READ:");
   const read = (cut >= 0 ? raw.slice(cut + 5) : raw).trim();
-  const acts = res.cards.length ? await db("otto_actions?select=id,title&id=in.(" + res.cards.join(",") + ")").catch(() => []) : [];
+  const acts = res.cards.length ? await db("otto_actions?select=id,title,status&id=in.(" + res.cards.join(",") + ")").catch(() => []) : [];
   await db("otto_watch?id=eq." + r.id, { method: "PATCH", headers: { prefer: "return=minimal" },
     body: JSON.stringify({ fired: { ...(r.fired || {}), [d]: { ...f, read: read || err || "no read", cards: res.cards, error: err || null } } }) }).catch(() => {});
   await logDesk("assistant", "Jarvis · watcher", `For: 👁 ${r.ticker} ${Number(r.level)} ${d === "up" ? "▲" : "▼"} ${TRIG_LABEL[f.trigger]}\n` +
     (err ? `No card — Jarvis hit an error checking it: ${err}` : (read || (acts.length ? "Card's up." : "No setup — no card."))), acts[0]?.id || null);
-  if (acts.length) {
+  if (acts.length && acts.some((a: any) => a.status !== "paper")) {
     await markPinged(acts.map((a: any) => a.id));
     await notify("card", `🃏 ${r.ticker} card ready — ${TRIG_LABEL[f.trigger]} at ${Number(r.level)}`,
       `${String(acts[0].title || "").slice(0, 90)}. Tap to Approve or Reject (expires in 20 min).`, "./#desk");
@@ -5838,6 +6020,412 @@ export const signalInForTest = (req: Request) => signalIn(req);
 
 /* --------------------------------------------------------------- transport */
 
+/* ===================================================================== v3.26
+   9 Oct 2026 — after the −$230 day (two MSFT puts on a level the coach gave no direction for,
+   45% and 39% of the account, a cancelled PLTR winner). Ifoma's decisions, approved mockup
+   https://claude.ai/artifact/NF9dqNXmHE867LAA7HT4j9 (6 screens):
+   - every guardrail is on/off + a number in Settings; tightening now, loosening the next trading day 9:30 AM
+   - KILL SWITCH: daily stop / weekly limit / max trades hit → no new cards; ideas become PAPER cards (scored)
+   - SIZE CAP: a trade over X% of the account → Otto tries a cheaper contract for the same idea, else a paper card
+   - the Activity log (changes, breaks, trades, locks, "outside Otto")
+   - Coaches Corner: every coach post scored as if we played it (real option prices), Coach vs Jarvis + Us
+   - the 9 Oct fixes: no card on a level with no direction (the Watcher waits for a touch + close, both ways);
+     a Watcher rejection / hold must actually touch the level; the stop is sized to the max loss; a wrong-if
+     changed by an alert card moves the server rule too; "where the idea came from" on every card; made-up
+     distances / moneyness / "overnight" / "already closed" corrected. */
+
+/* ---------------- the Activity log ---------------- */
+export async function activity(kind: "change" | "break" | "trade" | "lock" | "outside" | "card", text: string, who = "Otto", ref: string | null = null, data: any = null): Promise<boolean> {
+  const row = { day: etParts().date, kind, text: unname(String(text || "")).slice(0, 1000), who: String(who || "").slice(0, 60) || null, ref, data };
+  try {
+    if (ref) {
+      const made = await db("otto_activity?on_conflict=ref", { method: "POST", headers: { prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify([row]) });
+      if (Array.isArray(made) && !made.length) return false;           // already logged
+    } else await db("otto_activity", { method: "POST", headers: { prefer: "return=minimal" }, body: JSON.stringify(row) });
+  } catch { return false; }
+  if (kind === "break") {
+    const k = "brkping|" + row.text.slice(0, 50);
+    if (!CACHE[k] || Date.now() - CACHE[k].at > 10 * 60e3) { CACHE[k] = { at: Date.now(), v: 1 }; await notify("brk", "⚠ Otto: something broke", row.text.slice(0, 160), "./#settings-activity"); }
+  }
+  return true;
+}
+// System lines on the Desk that are breaks or trades also go to the Activity log (one place to look).
+const ACT_SKIP = /^(?:Guardrails updated|📌 House|⏰|🧹|Signals|Night Charts|📄 Paper card)/;
+export function deskKind(text: string): "break" | "trade" | null {
+  const t = String(text || "");
+  if (ACT_SKIP.test(t)) return null;
+  if (/⚠|✗|\bFAILED\b|could not|couldn't|\bfailed\b|NO stop|\berror\b/i.test(t)) return "break";
+  if (/^✓|filled at|\bfilled\b|Otto closed|Auto-close|Stop placed|stopped out|closed for|position is flat/i.test(t)) return "trade";
+  return null;
+}
+export async function noteOttoCancel(orderId: string) {
+  await activity("trade", `Otto cancelled order ${orderId.slice(0, 8)} (its own stop or a close card's first step)`, "Otto", "ottocancel|" + orderId);
+}
+export async function activityGet(days = 7, kind = "") {
+  const since = addDays(etParts().date, -Math.max(1, Math.min(90, days)));
+  const rows = await db(`otto_activity?select=id,at,day,kind,text,who&day=gte.${since}${kind ? "&kind=eq." + encodeURIComponent(kind) : ""}&order=at.desc&limit=400`).catch(() => []);
+  const today = etParts().date;
+  return { ok: true, rows, breaks_today: (rows || []).filter((r: any) => r.kind === "break" && r.day === today).length,
+    latest_break: (rows || []).find((r: any) => r.kind === "break")?.at || null };
+}
+// Every 5 minutes (cron_watch): Robinhood orders on the Agentic account that Otto didn't place or cancel.
+export async function outsideSweep(day = etParts().date) {
+  let orders: any[] = [];
+  try { orders = await dayOrders(day); } catch { return { ok: false }; }
+  const known = await db(`otto_activity?select=ref&day=gte.${addDays(day, -1)}&kind=eq.trade&limit=500`).catch(() => []);
+  const mine = new Set((known || []).map((r: any) => String(r.ref || "")).filter((r: string) => r.startsWith("ottocancel|")).map((r: string) => r.slice(11)));
+  let n = 0;
+  for (const o of orders) {
+    const leg = (o.legs || [])[0] || {};
+    const what = `${o.chain_symbol || ""} ${Number(leg.strike_price) || ""}${leg.option_type === "put" ? "P" : leg.option_type === "call" ? "C" : ""} ${leg.side || ""} ${leg.position_effect || ""}`.replace(/\s+/g, " ").trim();
+    const at = o.updated_at || o.created_at;
+    if (o.state === "cancelled" && !mine.has(String(o.id))) {
+      const m = at ? etParts(new Date(at)).min : 0;
+      if (m >= 570 && m < 959 && etParts(new Date(at)).date === day)          // a day order expiring at the close is not "outside"
+        if (await activity("outside", `${what} order cancelled outside Otto (Robinhood app or another tool) at ${etLabel(at)}`, "outside Otto", "outside|cancel|" + o.id)) n++;
+    }
+    if (o.placed_agent && o.placed_agent !== "agentic")
+      if (await activity("outside", `${what} order placed outside Otto (${o.placed_agent}) at ${etLabel(o.created_at)} — ${o.state}`, "outside Otto", "outside|placed|" + o.id)) n++;
+  }
+  return { ok: true, found: n };
+}
+
+/* ---------------- the kill switch ---------------- */
+export async function lockState(fresh = false): Promise<{ locked: boolean; reasons: any[]; until: string | null; text: string }> {
+  if (fresh) delete CACHE.lockstate;
+  return cached("lockstate", 30e3, async () => {
+    const L = await getLimits();
+    if (L.kill_on === false) return { locked: false, reasons: [], until: null, text: "" };
+    const today = etParts().date;
+    const reasons: any[] = [];
+    const openNext = nyIso(isTradingDay(today) && etParts().min < 570 ? today : nextTradingDay(today), "9:30 AM");
+    const maxLoss = L.max_loss_on === false ? 0 : Number(L.max_trade_loss) || 0;
+    let cnt: any = null;
+    try { cnt = await todayCounts(); } catch { /* fail open: no lock on unreadable data */ }
+    if (cnt && L.kill_daily !== false && L.daily_on !== false) {
+      const nMax = Number(L.daily_losses) || 0, dMax = maxLoss > 0 && Number(L.daily_x ?? 2) > 0 ? Number(L.daily_x ?? 2) * maxLoss : 0;
+      if ((nMax > 0 && cnt.losers >= nMax) || (dMax > 0 && cnt.realized <= -dMax))
+        reasons.push({ kind: "daily", until: openNext, text: `daily stop hit (${cnt.losers} losing trade${cnt.losers === 1 ? "" : "s"}, ${cnt.realized < 0 ? "−" : ""}$${Math.abs(cnt.realized).toFixed(0)})` });
+    }
+    if (cnt && L.kill_trades !== false && L.trades_on !== false && cnt.opened >= Number(L.max_trades_day))
+      reasons.push({ kind: "trades", until: openNext, text: `max trades hit (${cnt.opened} of ${L.max_trades_day} today)` });
+    if (L.kill_weekly !== false && L.weekly_on !== false) {
+      try {
+        const wk = await weekPnlNow();
+        if (wk <= -Number(L.weekly_loss)) reasons.push({ kind: "weekly", until: nyIso(nextTradingDay(fridayOf(today)), "9:30 AM"),
+          text: `weekly limit hit (${wk < 0 ? "−" : ""}$${Math.abs(wk).toFixed(0)} of −$${L.weekly_loss})` });
+      } catch { /* fail open */ }
+    }
+    if (!reasons.length) return { locked: false, reasons, until: null, text: "" };
+    const until = reasons.map((r) => r.until).filter(Boolean).sort().slice(-1)[0] || null;
+    const text = `${reasons.map((r) => r.text).join(" · ")} — no new cards until ${until ? etLabel(until) : "the next trading day"}`;
+    for (const r of reasons) {
+      if (await activity("lock", `Kill switch: ${r.text}. Locked until ${r.until ? etLabel(r.until) : "the next trading day"}. Signals keep listening; ideas become paper cards.`, "Otto", `lock|${today}|${r.kind}`))
+        await notify("lock", "🔒 Otto locked new cards", `${r.text}. Until ${r.until ? etLabel(r.until) : "the next trading day"}.`);
+    }
+    return { locked: true, reasons, until, text };
+  });
+}
+
+/* ---------------- where the idea came from ---------------- */
+// coach_call = the coach gave this direction · coach_level = his level, Jarvis's direction (the Watcher's close) ·
+// coach_post = his ticker, Jarvis's direction · coach_against = Jarvis went the other way · jarvis = Jarvis's own.
+export const ORIGIN_LABEL: Record<string, string> = { coach_call: "Coach's call", coach_level: "Coach's level + Jarvis's direction",
+  coach_post: "Coach's post + Jarvis's direction", coach_against: "Against the coach's direction", jarvis: "Jarvis's own" };
+const dirOfCoach = (d: any) => d === "long" ? "up" : d === "short" ? "down" : null;
+export async function originOf(plan: any): Promise<{ origin: string; row: any | null }> {
+  const want = plan?.direction === "down" ? "down" : "up";
+  let row: any = null;
+  if (plan?.jason_id) row = (await db(`otto_jason?select=id,ticker,direction,kind,level,words&id=eq.${Number(plan.jason_id) || 0}`).catch(() => []))?.[0] || null;
+  if (!row && plan?.watch_id) {
+    const w = (await db(`otto_watch?select=id,source,source_ref,coach_dir&id=eq.${Number(plan.watch_id) || 0}`).catch(() => []))?.[0];
+    if (w?.source === "signal") {
+      row = w.source_ref ? (await db(`otto_jason?select=id,ticker,direction,kind,level,words&id=eq.${Number(w.source_ref) || 0}`).catch(() => []))?.[0] || null : null;
+      const cd = dirOfCoach(w.coach_dir || row?.direction);
+      return { origin: !cd ? "coach_level" : cd === want ? "coach_call" : "coach_against", row };
+    }
+  }
+  if (row) { const cd = dirOfCoach(row.direction); return { origin: !cd ? (Number(row.level) > 0 || levelsFromWords(row.words || "").length ? "coach_level" : "coach_post") : cd === want ? "coach_call" : "coach_against", row }; }
+  return { origin: "jarvis", row: null };
+}
+// "WATCH LITE TO HOLD PHM" — a card on the second name is a guess. Words that aren't tickers in his posts:
+const POST_WORDS = new Set("WATCH HOLD HELD TO IF IT DOES COULD BE NICE BOUNCE WIDE SPREAD ALERT ABOVE BELOW OVER UNDER LETS GO TOOK OFF HALF HERE THIS THAT THE AND FOR WITH INTO FROM AT ON IN OUT NOW NEXT MY YOUR WE IS ARE WAS BREAK BREAKS BROKE RESISTANCE SUPPORT ZONE BUY SELL LONG SHORT CALL CALLS PUT PUTS ENTRY TARGET MOVING POSSIBLE REBALANCE FOR CHALLENGE HIGHS LOWS FROM YESTERDAY WAIT RESET FLIP DUMPSTER FIRE STILL MORE LESS VWAP MIN HOUR DAY WEEK ORDERS HAS THEM WEAK STRONG NO YES ALL NOT BUT SO UP DOWN NEW HIGH LOW OPEN CLOSE GAP FILL ONE TWO AN A I OK ORB HOD LOD ATH PM AM ET LOL OF BY AS".split(" "));
+export function tickersInPost(words: string): string[] {
+  return [...new Set((String(words || "").toUpperCase().match(/\b[A-Z]{2,5}\b/g) || []).filter((w) => !POST_WORDS.has(w) && !NOT_TICKER.has(w)))];
+}
+export function unclearTicker(cardTk: string, words: string): string | null {
+  const t = tickersInPost(words);
+  if (t.length < 2 || !cardTk) return null;
+  return t[0] !== cardTk.toUpperCase() ? `Ticker unclear — the post names ${t.join(" and ")} ("${String(words).slice(0, 80)}"); this card is on ${cardTk}. Check with the coach.` : null;
+}
+// Against the day's move: a put while the stock is well up from the open (9 Oct MSFT +1%), or the mirror.
+export async function dayMoveCheck(tk: string, direction: string): Promise<any | null> {
+  const day = etParts().date, start = nyIso(day, "9:30 AM");
+  if (!tk || !start || Date.now() < Date.parse(start) + 10 * 60e3) return null;
+  const bars = (await rhBars([tk], "5minute", start).catch(() => ({} as Record<string, Bar[]>)))[tk.toUpperCase()] || [];
+  if (bars.length < 2) return null;
+  const o = bars[0].o, c = bars[bars.length - 1].c, pct = (c - o) / o * 100;
+  const against = direction === "down" ? pct >= 0.5 : pct <= -0.5;
+  return against ? { ok: false, guard: true, text: `Against the day's move: ${tk} ${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% from the open (${o.toFixed(2)} → ${c.toFixed(2)})` }
+    : { ok: true, text: `${tk} ${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% from the open` };
+}
+/** v3.26 (9 Oct trade 1: stop $0.93 on a $5.25 entry = −$432): the stop is raised so a stop-out loses at most the max. */
+export function stopForMax(entry: number, stopOpt: number, qty: number, maxLoss: number): number | null {
+  if (!(maxLoss > 0) || !(entry > 0) || !(qty >= 1)) return null;
+  if ((entry - stopOpt) * 100 * qty <= maxLoss + 0.5) return null;
+  const s = roundStopUp(entry - maxLoss / (100 * qty));
+  return s > 0 && s < entry && s > stopOpt ? s : null;
+}
+/** The cheapest-risk contract for the same idea that fits under the size cap (delta ≥ .15), or null. */
+export function capFit(rows: SLRow[], capUsd: number, bp: number | null): SLRow | null {
+  const ok = (rows || []).filter((r) => r.ask > 0 && r.cost <= capUsd && (bp == null || r.cost <= bp) && Math.abs(r.delta) >= 0.15);
+  if (!ok.length) return null;
+  return ok.sort((a, b) => (Math.abs(Math.abs(a.delta) - 0.35) - Math.abs(Math.abs(b.delta) - 0.35)) || (b.vol - a.vol))[0];
+}
+
+/* ---------------- a wrong-if changed by an alert card moves the server rule ---------------- */
+// 9 Oct 10:40: "Update MSFT wrong-if: 532.40 → 532.07" only moved the TradingView alert; at 10:45 the 5-minute bar closed
+// at 532.30 and the server never closed the put.
+export function wrongIfFromAlertArgs(args: any): { tk: string; price: number } | null {
+  const txt = `${args?.name || ""} ${args?.message || ""}`;
+  if (!/wrong[- ]?if/i.test(txt)) return null;
+  const m = /\b([A-Z]{1,5})\s+[–-]?\s*\$?(\d{1,5}(?:\.\d{1,2})?)\s*[–-]\s*wrong[- ]?if/i.exec(String(args?.name || "")) ||
+    /\b([A-Z]{1,5})\b[^0-9]{0,40}?\$?(\d{1,5}(?:\.\d{1,2})?)/.exec(txt);
+  return m ? { tk: m[1].toUpperCase(), price: Number(m[2]) } : null;
+}
+export async function wrongIfFromCard(calls: any[], who: string): Promise<string[]> {
+  const notes: string[] = [];
+  for (const c of calls || []) {
+    if (c.service !== "tv" || !/alert/.test(String(c.tool))) continue;
+    const w = wrongIfFromAlertArgs(c.args); if (!w || !(w.price > 0)) continue;
+    const rows = await db("otto_actions?select=*&exit->>state=eq.armed&order=created_at.desc&limit=20").catch(() => []);
+    const a = (rows || []).find((r: any) => v322Sym(r.exit?.tv_symbol) === w.tk);
+    if (!a) continue;
+    const ex = { ...a.exit }, old = Number(ex.wrong_if);
+    if (Math.abs(old - w.price) < 0.005) continue;
+    ex.wrong_if = w.price; ex.wrong_set_at = new Date().toISOString();
+    exitLog(ex, `Wrong-if ${old} → ${w.price} (alert card approved by ${who}) — the server rule moved too`);
+    await saveExit(a.id, ex).catch(() => {});
+    const thesis = Number(a.plan?.stop);
+    const inside = thesis > 0 && (ex.direction === "down" ? w.price < thesis - 0.005 : w.price > thesis + 0.005);
+    const line = `🎯 ${w.tk} wrong-if ${old} → ${w.price} on ${a.title}: the server closes it on a ${ex.wrong_tf || 5}-minute close ${ex.direction === "down" ? "above" : "below"} ${w.price}.` +
+      (inside ? ` ⚠ That's inside the card's own level (${thesis}) — a test of the level will stop you out.` : "");
+    await logDesk("system", "Otto", line, a.id);
+    await activity("change", `${w.tk} wrong-if ${old} → ${w.price} (server rule moved)${inside ? ` · inside the card's own level ${thesis}` : ""}`, who);
+    notes.push(line);
+  }
+  return notes;
+}
+
+/* ---------------- Jarvis's numbers (made-up distances, moneyness, "overnight", "already closed") ---------------- */
+const CLOSED_CLAIM = /\b(?:no open position|already closed|it'?s (?:already )?closed|position is (?:already )?(?:closed|gone|flat)|isn'?t (?:open|held) any ?more|not holding (?:it|that|the))\b/i;
+const OVERNIGHT_CLAIM = /\b(?:overnight|from yesterday'?s close|since yesterday'?s close|vs\.? yesterday'?s close)\b/i;
+const OPTION_WORD = /\b(?:put|call|option|contract|mark|premium|shed|lost|down \$|\d+(?:\.\d+)?[PC]\b)/i;
+const ITM_CLAIM = /\bin[- ]the[- ]money\b/i;
+const DIST_CLAIM = /\$?(\d{1,4}(?:\.\d{1,2})?)\s*(?:points?\s+|pts?\s+|dollars?\s+)?(below|above|under|over|away from|from)\s+(?:the\s+)?(?:[\w.$]+\s+){0,3}?\$?(\d{2,5}(?:\.\d{1,2})?)/i;
+export function checkClaims326(text: string, f: DayFacts, px: Record<string, number>): { text: string; notes: string[] } {
+  const notes: string[] = [];
+  const fix = (msg: string) => { notes.push(`⚠ Correction (Otto checked Robinhood): ${msg}`); return ` [Corrected by Otto: ${msg}]`; };
+  const known = new Set<string>([...f.trips.map((t) => t.sym)].filter(Boolean));
+  let tgt: Target = { sym: null, strike: null, side: null };
+  const out = sentences(text).map((s) => {
+    if (!s.trim()) return s;
+    tgt = targetOf(s, known, tgt);
+    if (OTHER_DAY.test(s) && !OVERNIGHT_CLAIM.test(s)) return s;
+    const mine = f.trips.filter((t) => hits(tgt, t));
+    const open = mine.filter((t) => t.state === "open");
+    // 1. "already closed" / "no open position" on a trade Robinhood shows open
+    if (CLOSED_CLAIM.test(s) && !CALLER.test(s) && open.length) return fix(`Robinhood shows ${open[0].label} still OPEN (filled at $${open[0].entry.toFixed(2)}).`);
+    // 2. "overnight" / "from yesterday's close" on an option bought today
+    if (OVERNIGHT_CLAIM.test(s) && OPTION_WORD.test(s) && mine.length) {
+      const t = mine[0];
+      return fix(`${t.label} was bought today at ${etLabel(t.opened_at)} for $${t.entry.toFixed(2)} — there is no overnight move; its P&L is the mark vs that fill.`);
+    }
+    // 3. "in the money" on a contract that isn't
+    if (ITM_CLAIM.test(s) && !/\bnot\b[^.]{0,12}in[- ]the[- ]money|\bout[- ]of[- ]the[- ]money/i.test(s)) {
+      const t = mine[0] || (tgt.sym && tgt.strike != null && tgt.side ? { sym: tgt.sym, strike: tgt.strike, side: tgt.side, label: `${tgt.sym} ${tgt.strike}${tgt.side === "put" ? "P" : "C"}` } as any : null);
+      const p = t ? (px[t.sym] || 0) : 0;
+      if (t && p > 0) {
+        const itm = t.side === "put" ? p < t.strike : p > t.strike;
+        if (!itm) return fix(`${t.label} is OUT of the money — ${t.sym} is ${p.toFixed(2)}, ${t.side === "put" ? "above" : "below"} the ${t.strike} strike.`);
+      }
+    }
+    // 4. "$7.43 below the 532.40 resistance" — the distance to a level, against the live price
+    const dm = DIST_CLAIM.exec(s);
+    if (dm && !CALLER.test(s) && !/%/.test(dm[0])) {
+      const sym = (s.match(/\b[A-Z]{1,5}\b/g) || []).find((w) => px[w] > 0) || tgt.sym;
+      const p = sym ? (px[sym] || 0) : 0, d = Number(dm[1]), lvl = Number(dm[3]);
+      if (p > 0 && lvl > p * 0.8 && lvl < p * 1.2 && d > 0 && d < p * 0.2 && !/strike/i.test(s.slice(0, dm.index || 0).slice(-30))) {
+        const real = Math.abs(p - lvl);
+        if (Math.abs(real - d) > Math.max(0.6, real * 0.25))
+          return fix(`${sym} is ${p.toFixed(2)} — $${real.toFixed(2)} ${p < lvl ? "below" : "above"} ${lvl}, not $${d.toFixed(2)}.`);
+      }
+    }
+    return s;
+  });
+  return { text: out.join(""), notes: [...new Set(notes)] };
+}
+export async function factCheck326(text: string): Promise<{ text: string; notes: string[] }> {
+  if (!(CLOSED_CLAIM.test(text) || OVERNIGHT_CLAIM.test(text) || ITM_CLAIM.test(text) || DIST_CLAIM.test(text))) return { text, notes: [] };
+  try {
+    const f = dayFacts(await withTimeout(dayOrders(etParts().date), 8000, "Robinhood orders"));
+    const syms = [...new Set([...f.trips.map((t) => t.sym), ...((text.match(/\b[A-Z]{2,5}\b/g) || []).filter((w) => !NOT_TICKER.has(w)))])].slice(0, 8);
+    const px = syms.length ? await withTimeout(rhPrices(syms), 6000, "prices").catch(() => ({} as Record<string, number>)) : {};
+    return checkClaims326(text, f, px);
+  } catch { return { text, notes: [] }; }
+}
+
+/* ---------------- Coaches Corner ---------------- */
+const EXIT_POST = /\bTOOK (?:OFF )?(?:HALF|SOME|PROFITS?|MOST)|\bTRIM(?:MED|MING)?\b|\bTAKING (?:SOME|PROFITS?|HALF)|\bSOLD (?:HALF|SOME|ALL)|\bI'?M OUT\b|\bCLOSED (?:IT|MY|THE)|\bOUT OF (?:IT|MY|THE)\b|\bLOCKED IN\b/i;
+export const isExitPost = (r: any) => EXIT_POST.test(String(r?.words || ""));
+export type CCSide = { side: "up" | "down"; state: string; why?: string; entry_at?: string; entry_px?: number; exit_at?: string; exit_px?: number; exit_why?: string;
+  opt?: { id: string; label?: string; entry: number; exit: number } | null; pnl?: number | null; est?: boolean };
+/** One side of a coach post, on the underlying's 5-minute bars (+ the option's bars when we know the contract). */
+export function ccSide(o: { side: "up" | "down"; postAt: number; level: number | null; bars: Bar[]; exitAt?: number | null; tp1?: number | null; endAt: number }): CCSide {
+  const up = o.side === "up";
+  const after = o.bars.filter((b) => b.t + 5 * 60e3 > o.postAt && b.t < o.endAt);
+  if (!after.length) return { side: o.side, state: "pending", why: "no bars yet" };
+  let i0 = -1;
+  if (o.level && o.level > 0) {
+    // a level: the side triggers on a 5-minute close through it, or a touch-and-hold / touch-and-reject
+    for (let i = 0; i < after.length; i++) {
+      const b = after[i], L = o.level;
+      if (up ? (b.c > L && (b.l <= L || (i > 0 && after[i - 1].c <= L))) : (b.c < L && (b.h >= L || (i > 0 && after[i - 1].c >= L)))) { i0 = i; break; }
+    }
+    if (i0 < 0) return { side: o.side, state: "no_entry", why: `never ${up ? "held / broke above" : "rejected / broke below"} ${o.level}` };
+  } else i0 = 0;
+  const e = after[i0], entryAt = e.t + 5 * 60e3, entry = e.c;
+  let exitIdx = after.length - 1, why = "3:50 PM";
+  for (let i = i0 + 1; i < after.length; i++) {
+    const b = after[i], end = b.t + 5 * 60e3;
+    if (o.exitAt && end >= o.exitAt) { exitIdx = i; why = "coach's exit post"; break; }
+    if (o.tp1 && (up ? b.h >= o.tp1 : b.l <= o.tp1)) { exitIdx = i; why = "TP1"; break; }
+    if (o.level && (up ? b.c < o.level : b.c > o.level)) { exitIdx = i; why = "wrong-if (5-min close back through the level)"; break; }
+    if (end >= o.endAt - 10 * 60e3) { exitIdx = i; why = "3:50 PM"; break; }
+  }
+  const x = after[exitIdx], done = why !== "3:50 PM" || x.t + 5 * 60e3 >= o.endAt - 10 * 60e3;
+  const move = (x.c - entry) * (up ? 1 : -1);
+  return { side: o.side, state: done ? (Math.abs(move) < entry * 0.0005 ? "flat" : move > 0 ? "win" : "loss") : "open",
+    entry_at: new Date(entryAt).toISOString(), entry_px: +entry.toFixed(2), exit_at: new Date(x.t + 5 * 60e3).toISOString(), exit_px: +x.c.toFixed(2), exit_why: why,
+    pnl: +(move * 0.35 * 100).toFixed(0), est: true };
+}
+async function optBars(id: string, startIso: string, endIso: string): Promise<Bar[]> {
+  return cached(`ob|${id}|${startIso}|${endIso}`, 5 * 60e3, async () => {
+    const j = mcpJson(await call("rh", "get_option_historicals", { instrument_ids: [id], start_time: startIso, end_time: endIso, interval: "5minute" }));
+    const r = (j?.data?.results || [])[0];
+    return (r?.bars || []).filter((b: any) => !b.interpolated).map((b: any) => ({ t: Date.parse(b.begins_at), o: Number(b.open_price), h: Number(b.high_price), l: Number(b.low_price), c: Number(b.close_price) }));
+  });
+}
+const pxAt = (bars: Bar[], t: number) => { let v: number | null = null; for (const b of bars) { if (b.t + 5 * 60e3 <= t) v = b.c; else break; } return v ?? (bars[0]?.o ?? null); };
+/** Score one coach post (both ways for a level with no direction). Real option P&L when we have the contract. */
+export async function coachScore(r: any, cards: any[], exits: any[]): Promise<any> {
+  const tk = String(r.ticker || "").toUpperCase();
+  if (!tk || !r.posted_at) return { state: "unscored", why: !tk ? "no ticker" : "no time" };
+  const day = r.day, open = nyIso(day, "9:30 AM"), close = nyIso(day, "4:00 PM");
+  if (!open || !close) return { state: "unscored", why: "no session" };
+  const lv = Number(r.level) > 0 ? Number(r.level) : (levelsFromWords(r.words || "")[0]?.level || null);
+  const cd = dirOfCoach(r.direction);
+  const sides: ("up" | "down")[] = cd ? [cd] : lv ? ["up", "down"] : [];
+  if (!sides.length) return { state: "unscored", why: "no direction and no level" };
+  const bars = (await rhBars([tk], "5minute", open, Date.parse(close) < Date.now() ? close : undefined))[tk] || [];
+  const ex = exits.find((x: any) => x.ticker === tk && Date.parse(x.posted_at) > Date.parse(r.posted_at));
+  const out: CCSide[] = [];
+  for (const sd of sides) {
+    const card = cards.find((a: any) => (a.plan?.direction === "down" ? "down" : "up") === sd && a.exit?.option_id);
+    const s = ccSide({ side: sd, postAt: Date.parse(r.posted_at), level: lv, bars, exitAt: ex ? Date.parse(ex.posted_at) : null, tp1: card ? Number(card.plan?.tp1) || null : null,
+      endAt: Date.parse(close) });
+    if (card && s.entry_at && s.exit_at && ["win", "loss", "flat", "open"].includes(s.state)) {
+      try {
+        const ob = await optBars(card.exit.option_id, open, Date.parse(close) < Date.now() ? close : new Date().toISOString());
+        const e = pxAt(ob, Date.parse(s.entry_at)), x = pxAt(ob, Date.parse(s.exit_at));
+        if (e && x) { s.opt = { id: card.exit.option_id, label: String(card.title || "").replace(/^.*?Buy 1\s+/i, "").split(" @")[0], entry: e, exit: x }; s.pnl = Math.round((x - e) * 100); s.est = false; }
+      } catch { /* the estimate stays */ }
+    }
+    out.push(s);
+  }
+  const final = out.every((s) => !["open", "pending"].includes(s.state));
+  return { state: final ? "scored" : "live", level: lv, coach_dir: cd, sides: out, exit_post: ex ? { at: ex.posted_at, words: ex.words } : null };
+}
+export async function coachCorner(range = "today") {
+  const today = etParts().date;
+  const since = range === "week" ? mondayOf(today) : range === "30" ? addDays(today, -30) : range === "all" ? "2026-01-01" : today;
+  const rows = await db(`otto_jason?select=*&day=gte.${since}&order=posted_at.asc&limit=400`).catch(() => []);
+  const posts = (rows || []).filter((r: any) => r.ticker && (r.kind === "call" || r.kind === "level" || r.kind === "result"));
+  const exits = posts.filter((r: any) => isExitPost(r));
+  const main = posts.filter((r: any) => r.kind !== "result" && !(isExitPost(r) && !dirOfCoach(r.direction) && !(Number(r.level) > 0)));
+  // the cards for each post: its own card + Watcher cards on its levels
+  const acts = await db(`otto_actions?select=id,title,status,plan,exit,outcome,created_at,created_by,checks&created_at=gte.${since}T00:00:00Z&order=created_at.asc&limit=400`).catch(() => []);
+  const watch = await db(`otto_watch?select=id,source_ref&day=gte.${since}&source=eq.signal&limit=400`).catch(() => []);
+  const trades = await db(`otto_trades?select=action_id,pnl&action_id=not.is.null`).catch(() => []);
+  const pnlBy: Record<string, number> = {};
+  (trades || []).forEach((t: any) => { if (t.pnl != null) pnlBy[t.action_id] = (pnlBy[t.action_id] || 0) + Number(t.pnl); });
+  const done = !["Sat", "Sun"].includes(etParts().wd) && etParts().min >= 965;
+  let budget = 12;
+  const out: any[] = [];
+  for (const r of main) {
+    const wIds = new Set((watch || []).filter((w: any) => String(w.source_ref) === String(r.id)).map((w: any) => Number(w.id)));
+    const cards = (acts || []).filter((a: any) => a.id === r.action_id || Number(a.plan?.jason_id) === Number(r.id) || wIds.has(Number(a.plan?.watch_id)));
+    let cc = r.cc;
+    const finalDay = r.day < today || done;
+    if (!(cc && cc.state === "scored") && budget-- > 0) {
+      try { cc = await coachScore(r, cards, exits); } catch (e) { cc = { state: "unscored", why: String((e as Error).message).slice(0, 100) }; }
+      if (finalDay && cc && (cc.state === "scored" || cc.state === "unscored"))
+        await db("otto_jason?id=eq." + r.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ cc }) }).catch(() => {});
+    }
+    const cd = dirOfCoach(r.direction);
+    const did = cards.map((a: any) => {
+      const d = a.plan?.direction === "down" ? "down" : "up";
+      const filled = a.status === "done" && a.exit && !["planned", "waiting_fill", "dead"].includes(a.exit.state);
+      const we = a.status === "paper" ? "auto-rejected" : a.status === "done" ? (filled ? "took it" : "approved, never filled (cancelled)") : a.status === "failed" ? "failed to place" : a.status === "rejected" ? "passed" : a.status === "expired" ? "passed (expired)" : a.status;
+      return { id: a.id, title: a.title, status: a.status, direction: d, origin: a.plan?.origin || null, wrong_side: !!cd && cd !== d, we, pnl: pnlBy[a.id] ?? null };
+    });
+    out.push({ id: r.id, day: r.day, at: r.posted_at, label: r.posted_label, ticker: r.ticker, kind: r.kind, direction: r.direction || null, words: r.words,
+      type: cd ? (/BOUNCE/i.test(r.words || "") ? "bounce" : "call") : (/BOUNCE/i.test(r.words || "") ? "bounce" : "level"),
+      unclear: tickersInPost(r.words || "").length >= 2, cc: cc || null, cards: did,
+      us_pnl: did.some((d: any) => d.pnl != null) ? did.reduce((s: number, d: any) => s + (d.pnl || 0), 0) : null });
+  }
+  // totals + splits
+  const coachPnl = (x: any) => (x.cc?.sides || []).filter((s: any) => ["win", "loss", "flat"].includes(s.state)).reduce((t: number, s: any) => t + (Number(s.pnl) || 0), 0);
+  const scoredSides = (l: any[], pick?: (x: any, s: any) => boolean) => l.flatMap((x) => (x.cc?.sides || []).filter((s: any) => ["win", "loss", "flat"].includes(s.state) && (!pick || pick(x, s))));
+  const agg = (sides: any[]) => { const w = sides.filter((s) => s.state === "win").length, lo = sides.filter((s) => s.state === "loss").length;
+    return { n: sides.length, wins: w, losses: lo, win_pct: w + lo ? Math.round(w / (w + lo) * 100) : null, pnl: Math.round(sides.reduce((t, s) => t + (Number(s.pnl) || 0), 0)) }; };
+  const min = (x: any) => x.at ? etParts(new Date(x.at)).min : 0;
+  const bannerCache: Record<string, string | null> = {};
+  for (const x of out.slice(-60)) if (x.at) bannerCache[x.id] = await bannerAt(x.at).catch(() => null);
+  const tone = (v: string | null) => !v ? null : /long/i.test(v) ? "up" : /short/i.test(v) ? "down" : null;
+  const splits = [
+    { key: "Calls (he gives direction)", ...agg(scoredSides(out, (x) => x.type === "call")) },
+    { key: "Levels · if held", ...agg(scoredSides(out, (x, s) => x.type === "level" && ((x.cc?.level && s.side === "up" && /SUP|HOLD|HELD/i.test(x.words)) || (s.side === "down" && /RES/i.test(x.words))))) },
+    { key: "Levels · if broke", ...agg(scoredSides(out, (x, s) => x.type === "level" && ((s.side === "up" && /RES/i.test(x.words)) || (s.side === "down" && /SUP/i.test(x.words))))) },
+    { key: "Bounces", ...agg(scoredSides(out, (x) => x.type === "bounce")) },
+    { key: "Posted 9:30–10:00", ...agg(scoredSides(out, (x) => min(x) < 600)) },
+    { key: "Posted after 10:00", ...agg(scoredSides(out, (x) => min(x) >= 600)) },
+    { key: "With the market mood", ...agg(scoredSides(out, (x, s) => tone(bannerCache[x.id]) === s.side)) },
+    { key: "Against the market mood", ...agg(scoredSides(out, (x, s) => !!tone(bannerCache[x.id]) && tone(bannerCache[x.id]) !== s.side)) },
+  ];
+  const coach = agg(scoredSides(out));
+  const usCards = out.flatMap((x) => x.cards);
+  const us = { pnl: Math.round(usCards.reduce((t: number, c: any) => t + (Number(c.pnl) || 0), 0)), wins: usCards.filter((c: any) => (c.pnl || 0) > 0).length,
+    losses: usCards.filter((c: any) => (c.pnl || 0) < 0).length, passed: out.filter((x) => !x.cards.some((c: any) => c.we === "took it")).length,
+    wrong_side: usCards.filter((c: any) => c.wrong_side).length };
+  return { ok: true, range, since, posts: out.reverse(), coach: { ...coach, pnl: Math.round(out.reduce((t, x) => t + coachPnl(x), 0)), posts: out.length,
+    pending: out.filter((x) => x.cc?.state !== "scored").length }, us, splits };
+}
+/** The Friday report card: totals, follow / wait, and the posts to bring to the 1:1. */
+export async function coachReport() {
+  const cc = await coachCorner("week");
+  const ok = cc.splits.filter((s: any) => s.n >= 3 && s.win_pct != null);
+  const best = ok.slice().sort((a: any, b: any) => (b.win_pct - a.win_pct) || (b.pnl - a.pnl))[0] || null;
+  const worst = ok.slice().sort((a: any, b: any) => (a.win_pct - b.win_pct) || (a.pnl - b.pnl))[0] || null;
+  const ask: any[] = [];
+  for (const x of cc.posts) {
+    if (x.unclear) ask.push({ day: x.day, ticker: x.ticker, text: `“${String(x.words).slice(0, 90)}” — which ticker, and what level?` });
+    else if (x.cards.some((c: any) => c.wrong_side)) ask.push({ day: x.day, ticker: x.ticker, text: `“${String(x.words).slice(0, 90)}” — we read it the other way. What did you mean?` });
+    else if (x.type === "level" && x.cards.some((c: any) => (c.pnl || 0) < 0)) ask.push({ day: x.day, ticker: x.ticker, text: `${x.ticker} level, no direction (“${String(x.words).slice(0, 60)}”) — short at the touch, or wait for the break?` });
+  }
+  return { coach: cc.coach, us: cc.us, gap: cc.coach.pnl - cc.us.pnl, follow: best, wait: worst && best && worst.key !== best.key ? worst : null, ask: ask.slice(0, 6) };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
@@ -5887,6 +6475,9 @@ Deno.serve(async (req) => {
         try { await cardSweep(); } catch (e) { console.error("sweep", e); }
       }
       if (isTradingDay(c.date) && c.min >= 550 && c.min < 560) { try { await signalSelfTest(); } catch (e) { console.error("selftest", e); } }
+      // v3.26: the kill switch is checked every minute (it logs + pings once when it locks); "outside Otto" every 5 minutes.
+      if (isTradingDay(c.date) && c.min >= 570 && c.min <= 965) { try { await lockState(true); } catch (e) { console.error("lock", e); } }
+      if (isTradingDay(c.date) && c.min >= 575 && c.min <= 990 && c.min % 5 === 0) { try { await outsideSweep(); } catch (e) { console.error("outside", e); } }
       if (isTradingDay(c.date) && c.min >= 965 && c.min <= 980 && c.min % 5 === 0) { try { await prepGradeTick(); } catch (e) { console.error("prep grade", e); } }   // v3.18
     })());
     return json({ ok: true, started: "watch", clock: c.status }, 202);
@@ -5976,7 +6567,8 @@ Deno.serve(async (req) => {
          "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear", "selftest_now",
          "playbook_get", "feedback_add", "feedback_list", "daily_now",
          "prep_get", "prep_submit", "prep_reply", "prep_watch", "prep_img", "score_extra", "check_cancel", "prep_lock",
-         "charts_get", "chart_now", "chart_review", "chart_use", "chart_chat"].includes(fn)) {
+         "charts_get", "chart_now", "chart_review", "chart_use", "chart_chat",
+         "activity_get", "coach_corner", "coach_report", "lock_state"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -6032,6 +6624,11 @@ Deno.serve(async (req) => {
       if (fn === "chart_review") return json(await chartReview(body, who));
       if (fn === "chart_use") return json(await chartUse(body, who));
       if (fn === "chart_chat") return json(await chartChat(body, who));
+      // v3.26: Activity log, Coaches Corner, the kill switch's state
+      if (fn === "activity_get") { const q = new URL(req.url).searchParams; return json(await activityGet(Number(q.get("days")) || 7, String(q.get("kind") || "").replace(/[^a-z]/g, ""))); }
+      if (fn === "coach_corner") return json(await coachCorner(String(new URL(req.url).searchParams.get("range") || "today").replace(/[^a-z0-9]/g, "")));
+      if (fn === "coach_report") return json({ ok: true, ...(await coachReport()) });
+      if (fn === "lock_state") return json({ ok: true, ...(await lockState(new URL(req.url).searchParams.get("fresh") === "1")), limits: await getLimits() });
       if (fn === "check_cancel") {      // v3.18: ✕ on a ⏰ chip
         const r = (await db(`otto_checks?id=eq.${Number(body.id) || 0}&status=eq.pending&select=what`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) }).catch(() => []))?.[0];
         if (r) await logDesk("system", "Otto", `⏰ Check-in cancelled by ${String(body.author || "the Desk").slice(0, 30)}: ${String(r.what).slice(0, 160)}`);
@@ -6252,6 +6849,9 @@ Deno.serve(async (req) => {
 
 // test hooks (v3.20)
 export const placeStopForTest = placeStop;
+export const clearCacheForTest = () => { for (const k of Object.keys(CACHE)) delete CACHE[k]; };   // v3.26 tests
+export const setLimitsForTest = setLimits;
+export const watchFromSignalsForTest = watchFromSignals;
 export const deskSetupForTest = deskSetup;
 
 export const closeNowForTest = closeNow;
@@ -6527,6 +7127,7 @@ export async function factCheck(text: string): Promise<{ text: string; notes: st
     }
   } catch { /* fail open */ }
   try { const v = await factCheck324(t); t = v.text; notes.push(...v.notes); } catch { /* v3.24, fail open */ }
+  try { const v = await factCheck326(t); t = v.text; notes.push(...v.notes); } catch { /* v3.26, fail open */ }
   return { text: t, notes };
 }
 
