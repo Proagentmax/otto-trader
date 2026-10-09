@@ -2,7 +2,7 @@
    Network-first for anything that changes, cache-first only for static assets.
    A cache-first HTML strategy would pin users to an old build forever, which is
    exactly the failure we already hit once by hand. */
-const VERSION = 'otto-v3.22.0';
+const VERSION = 'otto-v3.25.0';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',   // config.js is deliberately NOT precached
   './icon-192.png', './icon-512.png',
@@ -50,7 +50,6 @@ self.addEventListener('fetch', e => {
   // call is the whole update mechanism, and a cache-first copy would freeze the
   // brain at whatever Josh installed on day one.
   const isData = url.pathname.endsWith('week-latest.json')
-              || url.pathname.endsWith('brain-latest.json')
               || url.pathname.endsWith('config.js');
 
   if (isDoc || isData) {

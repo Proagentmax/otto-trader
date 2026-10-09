@@ -705,6 +705,63 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .pl-pin .pl-row{padding:7px 0;border-top:1px solid var(--rule);font-size:12.5px}.pl-pin .pl-row:first-of-type{border-top:0}
 .pl-pin .pl-row b.t{font:600 13px var(--mono)}
 @media (max-width:900px){.pp-grid{grid-template-columns:1fr}.pp-drop{grid-template-columns:1fr 1fr}}
+/* v3.25 Night Charts (mockup v3, approved 8 Oct 2026) */
+.nc-chips{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto}
+.nc-chip{font:12px var(--mono);border:1px solid var(--rule);background:var(--s1);border-radius:999px;padding:3px 10px;color:var(--ink-3)}
+.nc-chip b{color:var(--ink);font-weight:500}.nc-chip.ok{border-color:rgba(0,200,5,.45);color:var(--up)}.nc-chip.busy{border-color:rgba(245,180,0,.55);color:var(--warn)}
+.nc-bar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;background:var(--s1);border:1px solid var(--rule);border-radius:12px;padding:10px 12px}
+.nc-bar .lbl{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.nc-bar form{display:flex;gap:6px}
+.nc-bar input{width:110px;font:13px var(--mono);text-transform:uppercase;background:var(--surface-2);color:var(--ink);border:1px solid var(--rule);border-radius:8px;padding:6px 8px}
+.nc-status{font-size:12.5px;color:var(--ink-3);margin-left:auto}
+.nc-grid{display:grid;grid-template-columns:150px minmax(0,1fr) 320px;gap:12px;align-items:start}
+@media (max-width:1250px){.nc-grid{grid-template-columns:150px minmax(0,1fr)}.nc-chat{grid-column:1/-1}}
+@media (max-width:760px){.nc-grid{grid-template-columns:minmax(0,1fr)}.nc-status{margin-left:0;width:100%}.nc-rail{flex-direction:row!important;overflow-x:auto}}
+.nc-rail{display:flex;flex-direction:column;gap:3px}
+.nc-tk{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;border:1px solid transparent;background:none;color:var(--ink);font:inherit;text-align:left;white-space:nowrap;cursor:pointer}
+.nc-tk:hover{background:var(--surface-2)}.nc-tk[aria-selected="true"]{background:var(--surface-2);border-color:var(--rule)}
+.nc-tk .sym{font-family:var(--mono);font-weight:600}.nc-tk .ex{font-size:10px;color:var(--blue);margin-left:6px}
+.nc-dot{width:8px;height:8px;border-radius:50%;background:var(--surface-3);flex:none}
+.nc-dot.ready{background:var(--ink-3)}.nc-dot.done{background:var(--up)}.nc-dot.err{background:var(--down)}
+.nc-dot.busy{background:var(--warn);animation:ncP 1s infinite}@keyframes ncP{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.nc-dot.busy{animation:none}}
+.nc-main{display:flex;flex-direction:column;gap:12px;min-width:0}
+.nc-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 14px;align-items:baseline;margin-bottom:8px}
+.nc-head .t{font:600 16px var(--mono)}.nc-head .s{color:var(--ink-3);font-size:12px}
+.nc-tf{display:flex;gap:4px}
+.nc-tf button{font:12px var(--mono);background:none;border:1px solid var(--rule);color:var(--ink-3);border-radius:6px;padding:2px 8px;cursor:pointer}
+.nc-tf button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink-2)}
+svg.nc-svg{width:100%;height:auto;display:block}
+.nc-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--ink-3);margin-top:6px}
+.nc-sw{display:inline-block;width:12px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+.nc-read{font-size:13px;margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--rule)}
+.nc-read b{color:var(--up)}
+.nc-boxes{display:flex;flex-direction:column;gap:8px}
+.nc-box{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;border:1px solid var(--rule);border-radius:9px;background:var(--surface-2)}
+.nc-box.gone{opacity:.45}
+.nc-tag{font-size:11px;font-weight:700;border-radius:5px;padding:2px 7px;letter-spacing:.03em}
+.nc-tag.buy{background:rgba(0,200,5,.14);color:var(--up)}.nc-tag.sell{background:rgba(255,80,0,.14);color:var(--down)}
+.nc-rng{font-family:var(--mono);font-variant-numeric:tabular-nums;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.nc-rng input{width:80px;font:13px var(--mono);background:var(--bg);color:var(--ink);border:1px solid var(--blue);border-radius:5px;padding:2px 5px}
+.nc-why{font-size:12px;color:var(--ink-3)}
+.nc-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.nc-b{font:inherit;font-size:12px;border:1px solid var(--rule);background:var(--s1);color:var(--ink);border-radius:7px;padding:4px 9px;cursor:pointer}
+.nc-b:disabled{opacity:.5;cursor:default}
+.nc-b.keep[aria-pressed="true"]{border-color:var(--up);color:var(--up)}.nc-b.rem[aria-pressed="true"]{border-color:var(--down);color:var(--down)}.nc-b.adj[aria-pressed="true"]{border-color:var(--blue);color:var(--blue)}
+.nc-b.go{background:var(--up);border-color:var(--up);color:#000;font-weight:600}.nc-b.ghost{border-color:var(--up);color:var(--up)}
+.nc-b:focus-visible,.nc-tk:focus-visible{outline:2px solid var(--up);outline-offset:2px}
+@media (max-width:560px){.nc-box{grid-template-columns:auto minmax(0,1fr)}.nc-acts{grid-column:1/-1;justify-content:flex-start}}
+.nc-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid var(--rule);padding-top:10px;margin-top:10px;font-size:13px;color:var(--ink-3)}
+.nc-chat{display:flex;flex-direction:column;gap:10px;min-width:0}
+.nc-msgs{display:flex;flex-direction:column;gap:8px;max-height:520px;overflow-y:auto}
+.nc-msg{padding:8px 10px;border-radius:9px;font-size:13px;max-width:92%}
+.nc-msg .who{font-size:11px;color:var(--ink-3);margin-bottom:2px}
+.nc-msg.otto{background:var(--surface-2);border:1px solid var(--rule);align-self:flex-start}
+.nc-msg.josh{background:rgba(90,169,255,.12);border:1px solid rgba(90,169,255,.35);align-self:flex-end}
+.nc-msg.sys{align-self:center;font-size:12px;color:var(--ink-3);padding:2px}
+.nc-ask{display:flex;gap:6px}.nc-ask input{flex:1;min-width:0;font:inherit;background:var(--surface-2);color:var(--ink);border:1px solid var(--rule);border-radius:8px;padding:8px 10px}
+.nc-sugg{display:flex;flex-wrap:wrap;gap:6px}
+.nc-sugg button{font:inherit;font-size:12px;background:none;border:1px solid var(--rule);color:var(--ink-3);border-radius:999px;padding:3px 9px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -714,6 +771,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
     <div class="dk-logo">O</div>
     <div class="dk-tabs" id="dkTabs">
     <button data-go="desk" class="on"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5a8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4z"/></svg>Desk</button>
+    <button data-go="charts" title="Night Charts: Otto's buy and sell boxes for the Mag-7, SPY and QQQ"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="9" width="3" height="7"/><rect x="14" y="5" width="3" height="8"/><path d="M8.5 6v3M8.5 16v2M15.5 3v2M15.5 13v3"/></svg>Charts</button>
     <button data-go="prep" title="Morning Prep: your sentiment read, graded by Jarvis"><svg viewBox="0 0 24 24"><path d="M17 18a5 5 0 0 0-10 0"/><path d="M12 2v7M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1M8 6l4-4 4 4"/></svg>Prep</button>
     <button data-go="market"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>Market</button>
     <button data-go="perf"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Results</button>
@@ -1155,7 +1213,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
                 placeholder="Paste the whole link here — or a 6-digit code if the email has one"
                 style="font-family:var(--mono);font-size:12.5px"></textarea>
       <button class="btn solid wide" id="gVerify" style="margin-top:10px">Sign in</button>
-      <p class="hint" style="margin-top:8px">If tapping the link lands you on a GitHub 404 page, that&rsquo;s fine &mdash; copy the address out of the browser bar and paste it here. The sign-in is inside that address.</p>
+      <p class="hint" style="margin-top:8px">Tap the link in the email &mdash; it opens Otto signed in. If it doesn&rsquo;t, paste the link here.</p>
     </div>
     <button class="gcancel" id="gCancel" hidden>Not now</button>
     <p class="gsub" style="margin-top:18px;font-size:12.5px">No password. Type the code from the email &mdash; or tap the link in it, either works.</p>
@@ -1200,7 +1258,10 @@ const SESS={
 let USER=null;
 
 async function sbAuth(path,body){
-  const r=await fetch(SB_URL+"/auth/v1/"+path,{method:"POST",
+  // v3.24 (C9): GoTrue takes the email link's destination as ?redirect_to= on /otp. Sent only in the body it was
+  // ignored, so links fell back to the Site URL and landed on a GitHub 404.
+  const q=path==="otp"?"?redirect_to="+encodeURIComponent(SB_SITE):"";
+  const r=await fetch(SB_URL+"/auth/v1/"+path+q,{method:"POST",
     headers:{"content-type":"application/json",apikey:SB_ANON},
     body:JSON.stringify(body)});
   const j=await r.json().catch(()=>({}));
@@ -2099,7 +2160,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.22.0";
+const BUILD="3.25.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2422,12 +2483,12 @@ $("#biasBox").addEventListener("click",e=>{if(e.target.closest("#biasBtn"))readM
 
 function renderMarket(){
   $("#keybar").innerHTML=`<div class="stamp">Jason's six steps · live from Treasury.gov, Yahoo and Nasdaq · v${BUILD}</div>`;
-  $("#runStamp").textContent=RUN&&RUN.live?"Read "+new Date(RUN.at).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"Not read yet — one tap, about two seconds.";
+  $("#runStamp").textContent=RUN&&RUN.live?"Read "+new Date(RUN.at).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZone:"America/New_York"})+" ET":"Not read yet — one tap, about two seconds.";
   $("#clearRunBtn").hidden=!RUN;
   const nb=$("#newsBox");
   if(nb){const n=RUN&&RUN.news;
     nb.innerHTML=`<div class="plan wait" style="margin-top:14px"><div class="lab">What's moving · the story behind the numbers</div>`+
-      (n?`<div class="md" style="border:0;padding-top:4px;margin-top:4px">${md(n.text)}</div><div class="cov" style="color:var(--ink-3);margin-top:6px">Searched ${new Date(n.at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}. This is the news, not a signal — it fills your catalyst box, it doesn't pick your trade.</div>`
+      (n?`<div class="md" style="border:0;padding-top:4px;margin-top:4px">${md(n.text)}</div><div class="cov" style="color:var(--ink-3);margin-top:6px">Searched ${new Date(n.at).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"})} ET. This is the news, not a signal — it fills your catalyst box, it doesn't pick your trade.</div>`
         :`<div class="cov">The 10-year, crude, the yen, today's calendar and which Mag-7 name has news — searched and summarised in five lines, for the catalyst box on your plan.</div>`)+
       `<button class="btn wide${n?"":" solid"}" id="newsBtn" style="margin-top:12px">${n?"Search again":"What's moving today?"}</button></div>`}
   $("#steps").innerHTML=ROUTINE.map(s=>{
@@ -2714,6 +2775,7 @@ function openDesk(){
   $$(".nav button").forEach(x=>x.setAttribute("aria-selected",x.dataset.p==="desk"));
   $("#dkWho").value=LS.get("deskWho","Ifoma");
   dkRenderLeft();dkRenderRight();dkRenderStrip();dkRenderBanner();
+  if(typeof ncLoad==="function")ncLoad(true);
   dkShow(DK.opened?LS.get("dkView","desk"):(typeof layHome==="function"?layHome():"desk"));DK.opened=true;
   dkStart();
 }
@@ -2887,8 +2949,8 @@ function dkWho(){return ($("#dkWho")&&$("#dkWho").value)||"Ifoma"}
 function dkRenderLeft(){
   const p=DK.panel||{},Q=dkQuotes();
   const cal=(DK.sent&&DK.sent.calendar)||[];
-  let h=dkWatchCard()+(cal.length||DK.sent?`<div class="dk-cardx"><div class="dk-h">Today <b>${new Date().toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}</b></div>${cal.length?cal.map(e=>`<div class="dk-row"><span>${esc(dkTime(e.date))} · ${esc(e.title)}</span><span class="dk-tag ${e.importance>=1?(Date.parse(e.date)>Date.now()?"near":""):""}">${e.importance>=1?(Date.parse(e.date)>Date.now()?"binary":"passed"):"med"}</span></div>`).join(""):`<div class="mut">No US releases today.</div>`}</div>`:"");   // v3.18 fix: the Watcher card was dropped by operator precedence since v3.14
-  h+=`<div class="dk-cardx"><div class="dk-h">Morning read <b>${new Date().toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"})}</b></div>
+  let h=(typeof ncDeskCard==="function"?ncDeskCard():"")+dkWatchCard()+(cal.length||DK.sent?`<div class="dk-cardx"><div class="dk-h">Today <b>${nyChip()}</b></div>${cal.length?cal.map(e=>`<div class="dk-row"><span>${esc(dkTime(e.date))} · ${esc(e.title)}</span><span class="dk-tag ${e.importance>=1?(Date.parse(e.date)>Date.now()?"near":""):""}">${e.importance>=1?(Date.parse(e.date)>Date.now()?"binary":"passed"):"med"}</span></div>`).join(""):`<div class="mut">No US releases today.</div>`}</div>`:"");   // v3.18 fix: the Watcher card was dropped by operator precedence since v3.14
+  h+=`<div class="dk-cardx"><div class="dk-h">Morning read <b>${nyChip()}</b></div>
     <div class="mut" style="color:var(--ink-2)">Ask the desk for today's read: the three inputs, SPY/QQQ, the Mag 7, the calendar.</div>
     <button class="dk-link" data-q="Morning read: the three macro inputs, SPY/QQQ and the Mag 7, today's calendar and earnings on my watchlist. Bias and the 2–3 setups worth watching. No orders.">Run the morning read →</button></div>`;
   // Watchlist: prices only, by decision (4 Oct) — no Jason-level distances yet.
@@ -2900,7 +2962,7 @@ function dkRenderLeft(){
   else h+=w.map(s=>{const q=dkQ(Q,s);return `<div class="dk-row"><span><b>${esc(s.split(":")[1]||s)}</b></span><span class="mono">${q?dkNum(q.close):"—"} ${q?dkPct(q.change):""}</span></div>`}).join("");
   h+=`</div>`;
   // v3.10: Jason's homework and levels moved to More.
-  laySetCards("left",h,box=>{dkBindQuick(box);dkWatchBind(box);
+  laySetCards("left",h,box=>{dkBindQuick(box);dkWatchBind(box);box.querySelectorAll("[data-nc-open]").forEach(b=>b.addEventListener("click",()=>dkShow("charts")));
     box.querySelectorAll("[data-go2]").forEach(b=>b.addEventListener("click",()=>{closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.go2);if(t)t.click()}))});
 }
 
@@ -2947,7 +3009,9 @@ function dkRenderRight(){
 }
 
 /* ---------- messages ---------- */
-function dkTime(t){if(!t)return "";const d=new Date(t);return isNaN(d)?"":d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}
+function dkTime(t){if(!t)return "";const d=new Date(t);return isNaN(d)?"":d.toLocaleTimeString("en-US", {hour:"numeric",minute:"2-digit",timeZone:"America/New_York"})}
+/* v3.24 (C3): Desk dates are New York dates, whatever clock the device is set to. */
+function nyChip(){return new Date().toLocaleDateString("en-US",{weekday:"short",month:"numeric",day:"numeric",timeZone:"America/New_York"}).replace(",","")+" · New York time"}
 function dkCard(a){
   if(!a)return "";
   const r=a.risk||{},st=a.status||"pending";
@@ -3184,7 +3248,7 @@ async function dkOauthReturn(){
    4 Oct 2026, approved mockup otto-v3.1-mockup.html. The sentiment banner
    (Josh's intermarket sheet on live TradingView data, verdict only, no sizing),
    desktop Market / Journal / Review / Score / Jason pages inside the Desk shell. */
-const DK_VIEWS=["desk","prep","market","perf","journal","review","score","playbook","jason","more","help"];
+const DK_VIEWS=["desk","charts","prep","market","perf","journal","review","score","playbook","jason","more","help"];
 function dkShow(v){
   if(!DK_VIEWS.includes(v))v="desk";
   DK.view=v;LS.set("dkView",v);
@@ -3193,11 +3257,11 @@ function dkShow(v){
   if(v==="desk"){dkRenderMsgs(true);return}
   const pg=$("#dkPage");pg.scrollTop=0;
   if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see this page.</p></div>`;return}
-  ({prep:dkPrep,market:dkMarket,perf:dkPerf,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,more:dkMore,help:dkHelp})[v]();
+  ({charts:dkCharts,prep:dkPrep,market:dkMarket,perf:dkPerf,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,more:dkMore,help:dkHelp})[v]();
 }
 const dkLoading=t=>`<div class="dk-empty" style="margin:60px auto">${esc(t||"Loading…")}</div>`;
 const dkErr=e=>`<div class="dk-empty dk-err" style="margin:60px auto">${esc(String(e&&e.message||e))}</div>`;
-const dkDate=t=>{try{return new Date(t).toLocaleDateString([], {month:"numeric",day:"numeric"})+" "+new Date(t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}catch(e){return ""}};
+const dkDate=t=>{try{return new Date(t).toLocaleDateString("en-US", {month:"numeric",day:"numeric",timeZone:"America/New_York"})+" "+new Date(t).toLocaleTimeString("en-US", {hour:"numeric",minute:"2-digit",timeZone:"America/New_York"})}catch(e){return ""}};
 const dkMoney=n=>n==null||!isFinite(n)?"—":`<span class="${n>=0?"up":"dn"}">${n>=0?"+":"−"}$${Math.abs(n).toFixed(2)}</span>`;
 
 /* ---------- the banner ---------- */
@@ -3959,7 +4023,7 @@ function sgRender(stick){
   if(!bs.length)h+=`<div class="dk-empty"><b style="color:var(--ink)">⚡ Otto Signals</b><br>Nothing from ${m} in the last 3 days yet. When he posts in ${esc(d.channel_name||"Discord")}, it shows up here within seconds, Jarvis builds the card, and both phones ping.</div>`;
   let day="";
   for(const b of bs){
-    const dd=new Date(b.at).toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"});
+    const dd=new Date(b.at).toLocaleDateString("en-US", {weekday:"short",month:"short",day:"numeric",timeZone:"America/New_York"});
     if(dd!==day){day=dd;h+=`<div class="sg-day">${esc(dd)} · ${esc(d.channel_name||"")} · ${m} only</div>`}
     const cards=b.cards||[],call=cards.length>0;
     const msgs=(b.msgs||[]).map((x,i)=>`<div class="sg-txt">${esc(x.text||"")}</div>${(x.imgs||[]).map(id=>`<img class="sg-img" data-sgimg="${id}" alt="${m}'s chart">`).join("")}`).join("");
@@ -4029,7 +4093,7 @@ function alRender(stick){
   if(!rows.length)h+=`<div class="dk-empty"><b style="color:var(--ink)">🔔 TradingView Alerts</b><br>No alerts have fired yet.</div>`;
   let day="";
   for(const r of rows){
-    const dd=new Date(r.created_at).toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"});
+    const dd=new Date(r.created_at).toLocaleDateString("en-US", {weekday:"short",month:"short",day:"numeric",timeZone:"America/New_York"});
     if(dd!==day){day=dd;h+=`<div class="sg-day">${esc(dd)}</div>`}
     if(r.author==="TradingView"){
       const p=alParse(r.content),prot=/^Otto ·/.test(p.t)||/^🛡/.test(p.st);
@@ -4198,6 +4262,141 @@ async function dkJasonScore(){
     <div class="mut" style="font-size:11.5px;margin-top:6px">"Worked" = the stock closed the day in the signal's direction from the 5-minute bar he posted in. Cards we took are also graded TP1 vs stop. Calls are dated ideas: they never go into Jarvis's teaching brain.</div></div>`;
 }
 
+/* ---------- v3.25: Night Charts (approved mockup v3, 8 Oct 2026) ----------
+   Otto finds the zones on the weekly + daily bars, Jarvis picks the boxes; you keep / adjust / remove them,
+   talk them through with Jarvis, and "Use kept boxes today" puts them on the Watcher (near edge). Server: ?fn=charts_get,
+   chart_now, chart_review, chart_use, chart_chat. Nothing here places an order. */
+const NC={data:null,cur:null,tf:"D",adj:{},msg:"",pollT:null,asking:false,busyKey:"",lastReady:-1};
+const ncWho=()=>(($("#dkWho")||{}).value||LS.get("deskWho","Ifoma")).trim()||"Ifoma";
+const ncDay=d=>{try{return new Date(d+"T12:00:00Z").toLocaleDateString("en-US",{weekday:"short",month:"numeric",day:"numeric",timeZone:"UTC"}).replace(",","")}catch(e){return d}};
+const ncF=v=>(+v).toFixed(2);
+async function ncLoad(quiet){
+  try{NC.data=await dkApi("charts_get")}catch(e){if(!quiet&&DK.view==="charts")$("#dkPage").innerHTML=dkErr(e);return}
+  const d=NC.data,busy=d.rows.some(r=>r.status==="charting");
+  if(NC.busyKey&&!busy){NC.msg=`${NC.busyKey} charted ${dkTime(new Date())} with fresh Robinhood prices.`;NC.busyKey=""}
+  const sig=d.ready*10+(busy?1:0);if(sig!==NC.lastReady&&DK.open){NC.lastReady=sig;dkRenderLeft()}
+  if(DK.view==="charts")ncRender();
+  clearTimeout(NC.pollT);if(busy&&DK.open)NC.pollT=setTimeout(()=>ncLoad(true),DK.view==="charts"?5000:30000);
+}
+setInterval(()=>{if(DK.open&&!DK.locked&&document.visibilityState==="visible")ncLoad(true)},10*60e3);
+function ncDeskCard(){
+  const d=NC.data;if(!d||DK.locked)return "";
+  const L=d.list.length,n=d.ready||0,busy=d.rows.some(r=>r.status==="charting");
+  const what=n>=L?"Night Charts ready":busy?"Charting now":n?"Partly charted":"Not charted yet";
+  return `<div class="dk-cardx"><div class="dk-h">Night Charts <b>${esc(ncDay(d.day))}</b></div><button class="dk-link" data-nc-open style="background:none;border:0;padding:0;cursor:pointer;text-align:left">📈 ${what} · ${n} of ${L} · Open Charts ›</button></div>`;
+}
+async function dkCharts(){if(!NC.data)$("#dkPage").innerHTML=dkLoading("Loading Night Charts…");await ncLoad()}
+function ncSvg(r,bars){
+  const W=900,H=380,PL=10,PR=64,PT=14,PB=26,n=bars.length;
+  const boxes=(r.boxes||[]).filter(b=>b.review!=="rem");
+  const vals=bars.flatMap(b=>[b[2],b[3]]).concat(boxes.flatMap(b=>[b.a,b.b]),[+r.last]);
+  const lo=Math.min(...vals),hi=Math.max(...vals),pad=(hi-lo)*.05||1,ymin=lo-pad,ymax=hi+pad;
+  const y=v=>PT+(ymax-v)/(ymax-ymin)*(H-PT-PB),cw=(W-PL-PR)/Math.max(n,1);let s="";
+  for(let i=0;i<=5;i++){const v=ymin+(ymax-ymin)*i/5,yy=y(v);s+=`<line x1="${PL}" x2="${W-PR}" y1="${yy}" y2="${yy}" stroke="var(--rule)"/><text x="${W-PR+6}" y="${yy+4}" fill="var(--ink-3)" font-family="ui-monospace,Menlo,monospace" font-size="11">${ncF(v)}</text>`}
+  boxes.forEach(b=>{const t=y(Math.max(b.a,b.b)),bt=y(Math.min(b.a,b.b)),c=b.type==="buy"?"0,200,5":"255,80,0";
+    s+=`<rect x="${PL}" y="${t}" width="${W-PL-PR}" height="${Math.max(2,bt-t)}" fill="rgba(${c},.15)" stroke="rgb(${c})"/>`});
+  bars.forEach((b,i)=>{const x=PL+i*cw+cw/2,col=b[4]>=b[1]?"var(--up)":"var(--down)";
+    s+=`<line x1="${x}" x2="${x}" y1="${y(b[2])}" y2="${y(b[3])}" stroke="${col}"/><rect x="${x-cw*.32}" y="${y(Math.max(b[1],b[4]))}" width="${cw*.64}" height="${Math.max(1,Math.abs(y(b[1])-y(b[4])))}" fill="${col}"/>`});
+  const L=+r.last;if(L>0)s+=`<line x1="${PL}" x2="${W-PR}" y1="${y(L)}" y2="${y(L)}" stroke="var(--ink)" stroke-dasharray="2 3" opacity=".5"/><rect x="${W-PR+2}" y="${y(L)-9}" width="60" height="18" rx="3" fill="var(--ink)"/><text x="${W-PR+6}" y="${y(L)+4}" fill="var(--bg)" font-family="ui-monospace,Menlo,monospace" font-size="11">${ncF(L)}</text>`;
+  return `<svg class="nc-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(r.ticker)} ${NC.tf==="W"?"weekly":"daily"} candles with the buy and sell boxes">${s}</svg>`;
+}
+function ncRender(){
+  const pg=$("#dkPage"),d=NC.data;if(!d)return;
+  // keep what's being typed across a refresh
+  const keepIds=["ncQ","ncAdd",...$$("#dkPage .nc-rng input").map(i=>i.id)],kept={};keepIds.forEach(id=>{const el=document.getElementById(id);if(el)kept[id]=el.value});
+  const focus=document.activeElement&&document.activeElement.id;
+  const extras=d.rows.filter(r=>!d.list.includes(r.ticker)).map(r=>r.ticker);
+  const list=[...d.list,...extras];
+  if(!NC.cur||!list.includes(NC.cur))NC.cur=(d.rows.find(r=>r.status==="ready")||{}).ticker||list[0];
+  const cur=NC.cur,r=d.rows.find(x=>x.ticker===cur),busyAny=d.rows.some(x=>x.status==="charting");
+  const dot=x=>{const q=d.rows.find(y=>y.ticker===x);return !q?["","Not charted yet"]:q.status==="charting"?["busy","Charting…"]:q.status==="error"?["err","Error: "+(q.error||"")]:q.used_at?["done","Reviewed · on the Watcher"]:["ready","Charted · not reviewed yet"]};
+  const rail=list.map(t=>{const [c,tt]=dot(t);return `<button class="nc-tk" data-nct="${esc(t)}" aria-selected="${t===cur}"><span><span class="sym">${esc(t)}</span>${extras.includes(t)?'<span class="ex">today only</span>':""}</span><span class="nc-dot ${c}" title="${esc(tt)}"></span></button>`}).join("");
+  let main="";
+  if(!r||r.status==="error"||(r.status==="charting"&&!r.charted_at)){
+    const why=!r?`${esc(cur)} isn't charted for ${esc(ncDay(d.day))} yet. Press <b>Chart ${esc(cur)} now</b> — about 1 minute.`
+      :r.status==="charting"?`Charting ${esc(cur)}… about 1 minute. This page updates by itself.`:`Charting ${esc(cur)} failed: ${esc(r.error||"unknown error")}. Press Chart ${esc(cur)} now to try again.`;
+    main=`<div class="dk-cardx"><div class="nc-head"><span class="t">${esc(cur)}</span></div><div class="mut" style="padding:30px 0;text-align:center">${why}</div></div>`;
+  }else{
+    const bars=(NC.tf==="W"?r.weekly:r.daily)||[];
+    const sub=`${NC.tf==="W"?"Weekly · "+bars.length+" weeks":"Daily · "+bars.length+" sessions"} · ${r.status==="charting"?"re-charting now…":(r.mode==="morning"?"updated ":"charted ")+esc(dkTime(r.charted_at))} · Robinhood prices`;
+    const bx=r.boxes||[];
+    const rows=bx.map(b=>{const rv=b.review||"",lo=Math.min(b.a,b.b),hi=Math.max(b.a,b.b),ed=NC.adj[b.id];
+      const rng=ed?`<input id="ncA_${esc(b.id)}" value="${ncF(lo)}" inputmode="decimal" aria-label="Box low"> – <input id="ncB_${esc(b.id)}" value="${ncF(hi)}" inputmode="decimal" aria-label="Box high"> <button class="nc-b" data-ncsave="${esc(b.id)}">Save</button> <button class="nc-b" data-nccancel="${esc(b.id)}">Cancel</button>`:`${ncF(lo)} – ${ncF(hi)}`;
+      return `<div class="nc-box${rv==="rem"?" gone":""}"><span class="nc-tag ${b.type}">${b.type==="buy"?"BUY":"SELL"}</span><div style="min-width:0"><div class="nc-rng">${rng}${b.used?' <span class="mut" style="font-size:11px">· on the Watcher</span>':""}</div><div class="nc-why">${esc(b.why||"")}${b.by&&rv?` · ${esc(rv==="keep"?"kept":rv==="adj"?"moved":"removed")} by ${esc(b.by)}`:""}</div></div>
+        <div class="nc-acts"><button class="nc-b keep" aria-pressed="${rv==="keep"}" data-ncrv="keep" data-ncid="${esc(b.id)}">Keep</button><button class="nc-b adj" aria-pressed="${rv==="adj"||!!ed}" data-ncadj="${esc(b.id)}">Adjust</button><button class="nc-b rem" aria-pressed="${rv==="rem"}" data-ncrv="rem" data-ncid="${esc(b.id)}">Remove</button></div></div>`}).join("");
+    const keptN=bx.filter(b=>b.review==="keep"||b.review==="adj").length;
+    main=`<div class="dk-cardx"><div class="nc-head"><div><span class="t">${esc(cur)}</span> <span class="s">${sub}</span></div>
+        <div class="nc-tf"><button aria-pressed="${NC.tf==="W"}" data-nctf="W">Weekly</button><button aria-pressed="${NC.tf==="D"}" data-nctf="D">Daily</button></div></div>
+        ${bars.length?ncSvg(r,bars):`<div class="mut">No bars saved.</div>`}
+        <div class="nc-legend"><span><i class="nc-sw" style="background:rgba(0,200,5,.15);border:1px solid var(--up)"></i>Buy box</span><span><i class="nc-sw" style="background:rgba(255,80,0,.15);border:1px solid var(--down)"></i>Sell box</span><span>Between them = chatter, no trade</span></div>
+        <div class="nc-read"><b>Jarvis's read:</b> ${esc(r.read||"")}</div></div>
+      <div class="dk-cardx"><div class="dk-h">Boxes <b>${bx.length}</b></div><div class="nc-boxes">${rows||`<div class="mut">No boxes — nothing clean within 12% of the price.</div>`}</div>
+        <div class="nc-foot"><span>${keptN} of ${bx.filter(b=>b.review!=="rem").length} kept${r.used_at?` · put on the Watcher ${esc(dkTime(r.used_at))}`:""}</span><button class="nc-b go" id="ncUse"${keptN?"":" disabled"} title="Each kept box goes on today's Watcher at its near edge: buy box → top edge (calls side), sell box → bottom edge (puts side). No TradingView alerts.">Use kept boxes today</button></div></div>`;
+  }
+  const msgs=r?(r.chat||[]).map(m=>m.w==="sys"?`<div class="nc-msg sys">${esc(m.t)} · ${esc(dkTime(m.at))}</div>`
+    :`<div class="nc-msg ${m.w==="otto"?"otto":"josh"}"><div class="who">${m.w==="otto"?"Jarvis":esc(m.by||"You")} · ${esc(dkTime(m.at))}</div>${m.w==="otto"?`<div class="md">${md(m.t||"")}</div>`:esc(m.t)}</div>`).join(""):"";
+  const canChat=r&&r.charted_at;
+  pg.innerHTML=`<div class="dkp">
+    <div class="dkp-head"><h2>📈 Night Charts</h2><span class="mut">Otto charts at night · you and Jarvis go over it together</span>
+      <div class="nc-chips"><span class="nc-chip"><b>${esc(ncDay(d.day))}</b> · New York time</span>
+        ${d.night_at?`<span class="nc-chip ok">Ready ${esc(dkTime(d.night_at))}</span>`:""}${d.morning_at?`<span class="nc-chip">Updated <b>${esc(dkTime(d.morning_at))}</b></span>`:""}
+        <span class="nc-chip${busyAny?" busy":""}">${d.ready} of ${d.list.length} charted${busyAny?" · charting…":""}</span></div></div>
+    <div class="nc-bar"><span class="lbl">Chart now</span>
+      <button class="nc-b ghost" id="ncOne"${busyAny?" disabled":""}>Chart ${esc(cur)} now</button>
+      <button class="nc-b" id="ncAll"${busyAny?" disabled":""}>Chart all ${d.list.length}</button>
+      <form id="ncAddF"><input id="ncAdd" maxlength="6" placeholder="Any ticker" aria-label="Ticker to chart" autocomplete="off"><button class="nc-b"${busyAny?" disabled":""}>Chart it</button></form>
+      <span class="nc-status">${esc(NC.msg||"Fresh prices from Robinhood. About 1 minute per stock. Any ticker stays on the list for today only.")}</span></div>
+    <div class="nc-grid">
+      <div class="dk-cardx"><div class="dk-h">Mag-7 + SPY + QQQ</div><div class="nc-rail">${rail}</div></div>
+      <div class="nc-main">${main}</div>
+      <div class="dk-cardx nc-chat"><div class="dk-h">Talk it through · ${esc(cur)}</div>
+        <div class="nc-msgs" id="ncMsgs">${msgs||`<div class="mut">Chart ${esc(cur)} first, then ask Jarvis about any box.</div>`}${NC.asking?`<div class="nc-msg otto"><div class="who">Jarvis</div>Thinking…</div>`:""}</div>
+        ${canChat?`<div class="nc-sugg"><button data-ncsay="Why this box?">Why this box?</button><button data-ncsay="What's the plan at the open?">What's the plan at the open?</button><button data-ncsay="Move the buy box down">Move the buy box down</button></div>
+        <form class="nc-ask" id="ncAsk"><input id="ncQ" placeholder="Ask Jarvis about this chart…" autocomplete="off"${NC.asking?" disabled":""}><button class="nc-b go"${NC.asking?" disabled":""}>Send</button></form>`:""}</div>
+    </div></div>`;
+  for(const id in kept){const el=document.getElementById(id);if(el)el.value=kept[id]}
+  if(focus){const el=document.getElementById(focus);if(el)el.focus()}
+  const m=$("#ncMsgs");if(m)m.scrollTop=m.scrollHeight;
+  ncBind();
+}
+async function ncDo(fn,body,okMsg){
+  try{const j=await dkApi(fn,{...body,author:ncWho()});if(okMsg)NC.msg=typeof okMsg==="function"?okMsg(j):okMsg;
+    if(j.row&&NC.data){const i=NC.data.rows.findIndex(x=>x.id===j.row.id);if(i>=0)NC.data.rows[i]=j.row}
+    return j}
+  catch(e){NC.msg="⚠ "+e.message;ncRender();return null}
+}
+function ncStart(what,body){NC.busyKey=what;NC.msg=`Charting ${what}… about 1 minute${body.all?" per stock":""}. This page updates by itself.`;
+  ncDo("chart_now",body).then(j=>{if(!j)NC.busyKey="";ncLoad(true)})}
+function ncBind(){
+  const pg=$("#dkPage"),cur=NC.cur;
+  pg.querySelectorAll("[data-nct]").forEach(b=>b.onclick=()=>{NC.cur=b.dataset.nct;NC.adj={};ncRender()});
+  pg.querySelectorAll("[data-nctf]").forEach(b=>b.onclick=()=>{NC.tf=b.dataset.nctf;ncRender()});
+  const one=$("#ncOne");if(one)one.onclick=()=>ncStart(cur,{ticker:cur});
+  const all=$("#ncAll");if(all)all.onclick=()=>ncStart("all "+NC.data.list.length,{all:true});
+  const af=$("#ncAddF");if(af)af.onsubmit=e=>{e.preventDefault();const t=$("#ncAdd").value.trim().toUpperCase().replace(/[^A-Z.]/g,"");
+    if(!t){NC.msg="Type a ticker first, like PLTR.";ncRender();return}
+    $("#ncAdd").value="";NC.cur=t;
+    if(NC.data.rows.some(r=>r.ticker===t&&r.status==="ready")){NC.msg=`${t} is already charted — opened it. Press Chart ${t} now to re-chart.`;ncRender();return}
+    ncStart(t,{ticker:t})};
+  pg.querySelectorAll("[data-ncrv]").forEach(b=>b.onclick=async()=>{b.disabled=true;await ncDo("chart_review",{ticker:cur,day:NC.data.day,box_id:b.dataset.ncid,review:b.dataset.ncrv});delete NC.adj[b.dataset.ncid];ncRender()});
+  pg.querySelectorAll("[data-ncadj]").forEach(b=>b.onclick=()=>{NC.adj[b.dataset.ncadj]=!NC.adj[b.dataset.ncadj];ncRender()});
+  pg.querySelectorAll("[data-nccancel]").forEach(b=>b.onclick=()=>{delete NC.adj[b.dataset.nccancel];ncRender()});
+  pg.querySelectorAll("[data-ncsave]").forEach(b=>b.onclick=async()=>{const id=b.dataset.ncsave;
+    const lo=parseFloat(document.getElementById("ncA_"+id).value),hi=parseFloat(document.getElementById("ncB_"+id).value);
+    if(!(lo>0)||!(hi>0)){NC.msg="Type a low and a high price.";ncRender();return}
+    b.disabled=true;const j=await ncDo("chart_review",{ticker:cur,day:NC.data.day,box_id:id,review:"adj",low:lo,high:hi});if(j){delete NC.adj[id];NC.msg=""}ncRender()});
+  const use=$("#ncUse");if(use)use.onclick=async()=>{use.disabled=true;
+    const j=await ncDo("chart_use",{ticker:cur,day:NC.data.day},j=>`${cur}: ${j.added.length} level${j.added.length===1?"":"s"} on today's Watcher (${j.added.join(", ")||"none"})${j.skipped.length?" · skipped "+j.skipped.join("; "):""}.`);
+    if(j){await ncLoad(true)}};
+  const say=async q=>{q=String(q||"").trim();if(!q||NC.asking)return;NC.asking=true;
+    const r=NC.data.rows.find(x=>x.ticker===cur);if(r)r.chat=[...(r.chat||[]),{w:"josh",by:ncWho(),t:q,at:new Date().toISOString()}];ncRender();
+    await ncDo("chart_chat",{ticker:cur,day:NC.data.day,text:q});NC.asking=false;ncRender()};
+  pg.querySelectorAll("[data-ncsay]").forEach(b=>b.onclick=()=>say(b.dataset.ncsay));
+  const ask=$("#ncAsk");if(ask)ask.onsubmit=e=>{e.preventDefault();const q=$("#ncQ").value;$("#ncQ").value="";say(q)};
+}
+function ncFromHash(){if(location.hash!=="#charts")return;try{if(!DK.open&&typeof openDesk==="function")openDesk();dkShow("charts")}catch(e){}}
+window.addEventListener("hashchange",ncFromHash);window.addEventListener("load",()=>setTimeout(ncFromHash,1500));
+
 /* ---------- v3.8: your layout (approved mockup otto-v3.8-layout-mockup.html) ----------
    Side tabs: order, names, hidden (→ More), landing tab. Side cards: order, column,
    collapsed. One layout shared by both laptops (otto_settings "layout" via
@@ -4205,7 +4404,7 @@ async function dkJasonScore(){
 var LAY_TABS=[...document.querySelectorAll("#dkTabs button[data-go]")].map(b=>b.dataset.go);
 var LAY_LABEL=Object.fromEntries([...document.querySelectorAll("#dkTabs button[data-go]")].map(b=>[b.dataset.go,b.lastChild.textContent.trim()]));
 var LAY_LOCK=new Set(["desk"]);
-var LAY_CARDS={left:["watcher","today","morning-read","watchlist","jason-s-homework","jason-s-levels-today"],
+var LAY_CARDS={left:["night-charts","watcher","today","morning-read","watchlist","jason-s-homework","jason-s-levels-today"],
   right:["robinhood","protected-trades","waiting-for-approval","jason-today","tradingview-alerts","jarvis-brain"]};
 var LAY=(()=>{try{return JSON.parse(localStorage.getItem("otto:layout")||"null")}catch(e){return null}})();
 var LAY_DRAFT=null,LAY_NODES=LAY_NODES||{left:{},right:{}},LAY_DRAG=null,LAY_SYNC=0;
@@ -4214,7 +4413,9 @@ function layTabs(){
   if(!LAY_TABS)return [];
   const saved=layCur().tabs||[],seen=new Set(),out=[];
   for(const t of saved)if(LAY_TABS.includes(t.k)&&!seen.has(t.k)){seen.add(t.k);out.push({k:t.k,l:(t.l||"").trim()||LAY_LABEL[t.k],hide:!!t.hide&&!LAY_LOCK.has(t.k)})}
-  for(const k of LAY_TABS)if(!seen.has(k))out.push({k,l:LAY_LABEL[k],hide:false});
+  // v3.25: a tab added in a new build goes in at its default place (Charts right after Desk), not at the bottom
+  for(const k of LAY_TABS)if(!seen.has(k)){const i=LAY_TABS.indexOf(k),prev=LAY_TABS.slice(0,i).reverse().find(p=>out.some(o=>o.k===p));
+    out.splice(prev?out.findIndex(o=>o.k===prev)+1:0,0,{k,l:LAY_LABEL[k],hide:false});seen.add(k)}
   return out;
 }
 function layHome(){

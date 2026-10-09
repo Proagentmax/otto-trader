@@ -51,7 +51,7 @@
 //   ?fn=chat     the Coach: a full AI trading assistant with Jason's corpus as
 //                its foundation (search tool) plus web search, streamed
 //   ?fn=brain    the corpus itself, for the Week / Insights tabs
-//   ?fn=seed     write a new corpus version (GET copies the repo file, POST takes a JSON array)
+//   ?fn=seed     write a new corpus version (POST a JSON array; v3.24: no public copy any more)
 //   ?fn=write    plain Claude call for the app's small drafting jobs
 //   ?fn=plan     grade the morning plan of attack (text + optional chart screenshot)
 //   ?fn=routine  the six-step morning routine, live (Treasury.gov, Yahoo, Nasdaq calendar)
@@ -187,36 +187,20 @@ let BRAIN: any[] | null = null;
 
 async function loadBrain(): Promise<any[]> {
   if (BRAIN) return BRAIN;
-  // Preferred: the versioned copy in Postgres, which is private to signed-in
-  // users. Falls back to the public GitHub copy while that migration lands, so
-  // the Coach never goes dark mid-transition.
-  try {
-    const url = Deno.env.get("SUPABASE_URL");
-    const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (url && svc) {
-      const r = await fetch(
-        url + "/rest/v1/brain_versions?select=payload&order=version.desc&limit=1",
-        { headers: { apikey: svc, authorization: "Bearer " + svc } });
-      if (r.ok) {
-        const rows = await r.json();
-        if (Array.isArray(rows) && rows[0]?.payload?.length) {
-          BRAIN = rows[0].payload; return BRAIN!;
-        }
-      }
-    }
-  } catch (_) { /* fall through */ }
-  // Fallback to the public copy only while the table is still being filled.
-  // Once brain-latest.json is removed from the repo this path 404s, and that
-  // should be a loud error rather than a Coach that quietly knows nothing.
-  const r = await fetch("https://proagentmax.github.io/otto-trader/brain-latest.json");
-  if (!r.ok) throw new Error("no corpus: brain_versions is empty and the public copy is gone");
-  const fallback = await r.json();
+  if (TEST?.brain) { BRAIN = await TEST.brain(); return BRAIN!; }
+  // v3.24 (C6, Ifoma 8 Oct): the brain lives ONLY in Postgres (brain_versions), private to signed-in users.
+  // The public brain-latest.json copy is gone from the repo; there is no fallback to it.
+  const url = Deno.env.get("SUPABASE_URL");
+  const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !svc) throw new Error("no corpus: the service role isn't available to read brain_versions");
+  const r = await fetch(url + "/rest/v1/brain_versions?select=payload&order=version.desc&limit=1",
+    { headers: { apikey: svc, authorization: "Bearer " + svc } });
+  if (!r.ok) throw new Error("no corpus: brain_versions couldn't be read (" + r.status + ")");
+  const rows = await r.json();
   // A Coach that quietly knows nothing is worse than one that errors: it would
   // answer "he never covered that" to every question and sound authoritative.
-  if (!Array.isArray(fallback) || !fallback.length) {
-    throw new Error("no corpus: the public copy is empty or malformed");
-  }
-  BRAIN = fallback;
+  if (!Array.isArray(rows) || !rows[0]?.payload?.length) throw new Error("no corpus: brain_versions is empty — seed it with ?fn=seed (POST)");
+  BRAIN = rows[0].payload;
   return BRAIN!;
 }
 
@@ -1115,6 +1099,9 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     // v3.22: levels more than 10% from the live price go back once, then no card.
     await levelGate(plan);
   }
+  // v3.24 (C10a): no close / stop card for a contract the Agentic account doesn't hold (8 Oct 9:45 NVDA stop card, 9 min after the close).
+  const gone = await nothingToClose(calls);
+  if (gone) throw new Error(`NO CARD — nothing to close: ${gone}. Don't propose a stop or sell for it.`);
   const out: any[] = [];
   const review: string[] = [];
   let cost = 0, costKnown = true;
@@ -1184,6 +1171,8 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     const atStop = exit ? (exit.entry_limit - exit.stop_option) * 100 * exit.qty : null;
     try { checks = checks.concat(await limitChecks(risk.cost, atStop)); } catch { /* */ }
     checks = bpChecks.concat(checks);
+    // v3.24 (A8): already through its wrong-if → red line on the card (it's still built; Approve still places it).
+    if (exit) { const st = await staleEntry({ exit, plan }).catch(() => null); if (st) checks.unshift({ ok: false, guard: true, stale: true, text: st }); }
   }
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
     title: unname(input.title || "Action").slice(0, 140),
@@ -1229,6 +1218,23 @@ async function actOn(id: string, decision: string, who: string) {
   const claimed = await db("otto_actions?id=eq." + id + "&status=eq.pending", { method: "PATCH",
     body: JSON.stringify({ status: "running", decided_by: who, decided_at: now }) });
   if (!claimed || !claimed.length) return publicAction((await db("otto_actions?id=eq." + id + "&select=*"))[0]);
+  // v3.24 (C10b): a close / stop card whose position is already gone is not sent.
+  const gone = await nothingToClose(a.calls || []);
+  if (gone) {
+    const r = await db("otto_actions?id=eq." + id, { method: "PATCH",
+      body: JSON.stringify({ status: "failed", result: [{ tool: "place_option_order", ok: false, text: `Nothing to close — ${gone}. Nothing was sent to Robinhood.` }] }) });
+    await logDesk("system", "Otto", `${a.title}: nothing to close — ${gone}. Nothing was sent to Robinhood (approved by ${who}).`, id);
+    return publicAction(r?.[0] || a);
+  }
+  // v3.24 (A8): re-check the live price at Approve. Stale = red line + Desk note, and the order still goes in.
+  if (a.exit?.state === "planned") {
+    const st = await withTimeout(staleEntry(a), 4000, "stale check").catch(() => null);
+    if (st) {
+      const checks = [{ ok: false, guard: true, stale: true, text: st }, ...(a.checks || []).filter((c: any) => !c.stale)];
+      await db("otto_actions?id=eq." + id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ checks }) }).catch(() => {});
+      await logDesk("system", "Otto", `⚠ ${a.title}: approved by ${who} while ${st}. Placing it anyway (guardrails flag, never block); the stop will be sized from the actual fill.`, id);
+    }
+  }
   const results: any[] = [];
   let failed = false, orderId: string | null = null;
   for (const c of a.calls) {
@@ -1428,7 +1434,11 @@ const GUARD_RULE = `\n\nGUARDRAILS FLAG — THEY NEVER BLOCK (Ifoma, 6 Oct 2026)
 WHAT RUNS ON ITS OWN — SAY ONLY THIS. You do not watch the market between messages. You run only when someone writes on the Desk, when the 👁 Watcher sees a trigger at a level on its list (the server checks every minute on 5- and 10-minute closes), when a TradingView alert Otto set fires (checked every 2 minutes), when Otto Signals catches a post, and on the open-position check (every few minutes while a trade is open). Never say "I'm watching", "watching every bar", "the card drops automatically", "I'll flag you at 1:30" or "I'll ping you" unless one of those mechanisms will actually do it. If they want a level watched, put it on the Watcher with add_watch_level (no card needed) and say so — that is how you'll see it. If you want to look again at a set time ("I'll check at 1:30"), call schedule_check first — then it's true. The server checks every reply for promises and makes you correct any that nothing backs.
 HOUSE RULES. The House Rules block (below the clock) is their standing instructions. Follow them every time. When Ifoma or Josh gives a standing instruction ("from now on", "always", "next time", "in the future"), call save_house_rule with it in one plain sentence, then confirm in one line. Don't save one-off requests.
 THE CLOCK. The CLOCK line is computed by the server and is always right about the date, weekday, time and whether the market is open. Tool timestamps are UTC unless they say ET. If you ever feel the market is closed, re-read the CLOCK line before saying so.
-A PROTECTED TRADE'S STOP. On a trade Otto protects, a pending sell-to-close (pending_sell_quantity 1) is Otto's own stop order. It is not a stuck or "zombie" order — never tell anyone to cancel it unless they're closing the trade.`;
+A PROTECTED TRADE'S STOP. On a trade Otto protects, a pending sell-to-close (pending_sell_quantity 1) is Otto's own stop order. It is not a stuck or "zombie" order — never tell anyone to cancel it unless they're closing the trade.
+
+FILLS, POSITIONS AND P&L — ROBINHOOD ONLY (v3.24, Ifoma 8 Oct). Say a trade filled, is open, hit TP1, was stopped, or made/lost $X ONLY from the "TRADES TODAY FROM ROBINHOOD" part of the context line or a Robinhood call you made in this turn (get_option_orders / get_option_positions). An order that isn't there as bought did NOT fill — say "not filled". The entry is the fill price, never the card's limit. The daily stop counts losing round trips from that line. The server checks every reply against Robinhood and corrects anything that doesn't match.
+NO WORKING NOTES. Tool work is silent: never write "let me grab the instrument ID…", ids or tool names in your reply — only what they need to read.
+A WATCHER LEVEL ON AN OPEN TRADE. A level added on the losing side of an open trade (below it for calls, above for puts) replaces that trade's wrong-if — one wrong-if per trade; the server closes it on a 5-minute close through it (auto-close on). Say that, nothing more.`;
 
 function unname(t: any): string {
   return String(t ?? "").replace(/(\bJason(?: Murray)?)[’‘`]s\b/g, "$1's")   // v3.16: curly apostrophes too
@@ -1694,8 +1704,9 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
           const scan = who === "scanner";
           const row = await watchAdd({ ticker: input.ticker, level: Number(input.level), dir: input.dir, note: input.note,
             source: scan ? "scanner" : "desk", by: scan ? "Jarvis (scanner)" : `${o.author || "Desk"} via Jarvis` });
-          if (row && !scan) await logDesk("system", "Otto", `👁 Watching ${row.ticker} ${Number(row.level)} ${row.dir === "up" ? "▲" : row.dir === "down" ? "▼" : "▲▼"} today (added by Jarvis for ${o.author || "the Desk"}).`);
-          content = row ? (scan ? `Proposed: ${row.ticker} ${row.level} (${row.dir}). It shows in the Watcher panel for them to Add.`
+          if (row && !scan && !row.trade_wrong_if) await logDesk("system", "Otto", `👁 Watching ${row.ticker} ${Number(row.level)} ${row.dir === "up" ? "▲" : row.dir === "down" ? "▼" : "▲▼"} today (added by Jarvis for ${o.author || "the Desk"}).`);
+          content = row?.trade_wrong_if ? `${row.ticker} ${row.level} is now the ONE wrong-if on the open trade "${row.trade_wrong_if.title}"${row.trade_wrong_if.same ? " (it already was)" : ` (replaced ${row.trade_wrong_if.old})`}. The server closes it on a 5-minute close through it when auto-close is on (otherwise a close card). Say exactly that — don't promise to watch it yourself.`
+            : row ? (scan ? `Proposed: ${row.ticker} ${row.level} (${row.dir}). It shows in the Watcher panel for them to Add.`
             : `On the Watcher for ${row.day}: ${row.ticker} ${row.level} (${row.dir}). The server checks it every minute on 5- and 10-minute closes and wakes you on a trigger.`)
             : "Already on today's list.";
         } else if (b.name === "save_house_rule") {
@@ -1975,7 +1986,7 @@ export function etAnnotate(text: string, now = new Date()): string {
 const CACHE: Record<string, { at: number; v: any }> = {};
 async function cached<T>(key: string, ms: number, f: () => Promise<T>): Promise<T> {
   const c = CACHE[key];
-  if (c && Date.now() - c.at < ms) return c.v;
+  if (c && Date.now() - c.at < ms && Date.now() >= c.at) return c.v;   // v3.24: a clock that moved back never serves a stale copy
   const v = await f();
   CACHE[key] = { at: Date.now(), v };
   return v;
@@ -2946,9 +2957,10 @@ async function exitTickLocked(a: any) {
     if (!o) return { id: a.id, state: ex.state, note: "entry order not found yet" };
     if (EXIT_DEAD_ORDER.has(o.state)) {
       const why = orderReason(o);                    // v3.22: Robinhood's own reason, never a guess
-      ex.state = "dead"; ex.dead_reason = `${o.state}${why ? ": " + why : " (Robinhood gave no reason)"}`; exitLog(ex, `Entry ${o.state}, nothing to protect${why ? " — " + why : ""}`);
+      // v3.24 (A14): "cancelled" when it was cancelled; "Rejected by Robinhood: …" only when Robinhood rejected it.
+      ex.state = "dead"; ex.dead_reason = deadWord(o.state, why); exitLog(ex, `Entry ${deadWord(o.state, why)}, nothing to protect`);
       await saveExit(a.id, ex);
-      await logDesk("system", "Otto", `${a.title}: the entry was ${o.state}${why ? ` (Robinhood: ${why})` : " (Robinhood gave no reason)"}, so no stop or alerts were set.`, a.id);
+      await logDesk("system", "Otto", `${a.title}: the entry was ${deadWord(o.state, why)}, so no stop or alerts were set.`, a.id);
       return { id: a.id, state: ex.state };
     }
     if (o.state !== "filled") { await saveExit(a.id, ex); return { id: a.id, state: ex.state, order: o.state }; }
@@ -2958,6 +2970,10 @@ async function exitTickLocked(a: any) {
     ex.qty = Math.floor(Number(o.processed_quantity || ex.qty));
     ex.state = "armed"; ex.armed_at = new Date().toISOString(); ex.fired = [];
     exitLog(ex, `Entry filled: ${ex.qty} @ $${ex.fill_price.toFixed(2)}`);
+    // v3.24 (A8): the stop is sized from the actual fill (8 Oct NVDA: limit $1.60, filled $0.86, stop was still $0.48).
+    const ns = stopFromFill(Number(ex.entry_limit), Number(ex.stop_option), ex.fill_price);
+    if (ns != null && ns !== ex.stop_option) { exitLog(ex, `Stop re-sized from the fill: $${Number(ex.stop_option).toFixed(2)} → $${ns.toFixed(2)} (same ${Math.round(ex.stop_option / ex.entry_limit * 100)}% of the price as the card)`); ex.stop_from_card = ex.stop_option; ex.stop_option = ns; }
+    const staleAtFill = await withTimeout(staleEntry({ exit: ex }), 4000, "stale check").catch(() => null);
     // v3.9.2: the stop goes on (and is saved) BEFORE the TradingView alerts, so a slow or
     // failing TradingView can never delay the stop or lose its order id.
     let stopOk = false;
@@ -2969,7 +2985,9 @@ async function exitTickLocked(a: any) {
     await logDesk("system", "Otto", `✓ ${a.title}: filled at $${ex.fill_price.toFixed(2)}. ` +
       (stopOk ? `Stop on at $${ex.stop_option.toFixed(2)} (about −$${loss.toFixed(0)} if it fills there). ` : rthNow() ? "" : "Stop goes on at 9:30 ET. ") +
       `Alerts: wrong-if ${ex.wrong_if} ${ex.alerts?.wrong != null ? "✓" : "✗"}, TP1 ${ex.tp1} ${ex.alerts?.tp1 != null ? "✓" : "✗"}.` +
-      (ex.alert_error ? ` (${ex.alert_error})` : ""), a.id);
+      (ex.alert_error ? ` (${ex.alert_error})` : "") +
+      (ex.stop_from_card ? ` Stop sized from the fill (card had $${Number(ex.stop_from_card).toFixed(2)}).` : "") +
+      (staleAtFill ? ` ⚠ ${staleAtFill}: the server closes it on the next 5-minute close through ${ex.wrong_if} if auto-close is on.` : ""), a.id);
     await notify("fill", `✓ Filled: ${a.title.replace(/^Buy\s+/i, "")} @ $${ex.fill_price.toFixed(2)}`,
       (stopOk ? `Stop on at $${ex.stop_option.toFixed(2)} (about −$${loss.toFixed(0)}). ` : `Stop goes on at 9:30 ET. `) +
       (ex.alerts?.wrong != null && ex.alerts?.tp1 != null ? `Alerts set at ${ex.wrong_if} and ${ex.tp1}.`
@@ -2987,6 +3005,7 @@ async function exitTickLocked(a: any) {
     exitLog(ex, `Position flat (${how})`);
     await saveExit(a.id, ex);
     await logDesk("system", "Otto", `${a.title}: position is flat (${how}). Leftover stop and trade alerts cleaned up. Write the one-line reason in the Journal.`, a.id);
+    await expireCloseCards(ex.option_id).catch(() => {});   // v3.24 (C10c)
     if (how === "stopped out") await notify("stopped", `🛑 Stopped out: ${a.title.replace(/^Buy\s+/i, "")}`, `The $${Number(ex.stop_option).toFixed(2)} stop filled. Write the one-line reason in the Journal.`);
     return { id: a.id, state: ex.state };
   }
@@ -3038,6 +3057,18 @@ async function exitTickLocked(a: any) {
     const fresh = evs.filter((e: any) => !(ex.fired || []).includes(key(e)));
     if (fresh.length) {
       ex.fired = [...(ex.fired || []), ...fresh.map(key)].slice(-60);
+      // v3.24 (A11): a wrong-if alert must still be true on the LATEST completed bar (8 Oct TSM: the alert came
+      // 20+ minutes late, the last close was 469.885 vs 467.90). If not: no close, no card — logged.
+      const wrongOnly = fresh.every((e: any) => String(e.tv_alert_id ?? e.alert_id) === String(ex.alerts?.wrong));
+      if (wrongOnly) {
+        const lt = await latestThrough(ex);
+        if (lt.through === false) {
+          exitLog(ex, `Stale alert ignored: TradingView said wrong-if ${ex.wrong_if}, but the latest ${Number(ex.wrong_tf) === 5 ? 5 : 15}-minute close is ${lt.close} (${lt.at ? etLabel(lt.at) : "?"})`);
+          await logDesk("system", "Otto", `${a.title}: a late TradingView wrong-if alert (${ex.wrong_if}) was ignored — the latest ${Number(ex.wrong_tf) === 5 ? 5 : 15}-minute bar closed at ${lt.close}, not through it. The trade stays on; the stop is unchanged.`, a.id);
+          await saveExit(a.id, ex);
+          return { id: a.id, state: ex.state, held, stale_alert: true };
+        }
+      }
       const recent = ex.close_at && Date.now() - Date.parse(ex.close_at) < 10 * 60_000;
       const LIMx = await getLimits().catch(() => LIMIT_DEFAULTS);
       if (LIMx.auto_close && rthNow() && !recent) {
@@ -3899,7 +3930,8 @@ export async function exitRuleCheck(a: any, now = Date.now()): Promise<{ met: bo
   const tp = after.find((b) => up ? b.h >= ex.tp1 : b.l <= ex.tp1);
   if (tp) return { met: true, why: `TP1 ${ex.tp1} reached (${tk} ${up ? "high" : "low"} ${up ? tp.h : tp.l} on the ${etLabel(new Date(tp.t).toISOString())} bar)`, detail: "" };
   let lastClose: number | null = null;
-  for (const b of after) {
+  const wSince = Date.parse(ex.wrong_set_at || "") || 0;     // v3.24 (A12): a moved wrong-if counts only bars after the move
+  for (const b of after.filter((x) => x.t + 5 * 60e3 > wSince)) {
     const ends = tf === 5 || new Date(b.t + 5 * 60e3).getUTCMinutes() % tf === 0;
     if (!ends) continue;
     lastClose = b.c;
@@ -4435,10 +4467,9 @@ export async function limitChecks(cost: number | null, atStop: number | null = n
   } else if (cost != null) out.push({ ok: L.max_trade_loss > 0 ? cost <= L.max_trade_loss : null, guard: true, text: `Most this trade can lose: $${cost.toFixed(0)}${cap ? (cost <= L.max_trade_loss ? ` (inside ${cap})` : ` — OVER ${cap}`) : " (no per-trade max set)"}` });
   // Daily stop: N losing trades today, or losses of 2× the max loss (Agentic account).
   try {
-    const today = etParts().date;
-    const t = await db("otto_trades?select=account,pnl,closed_at&closed_at=gte." + new Date(Date.now() - 864e5).toISOString());
-    const mine = (t || []).filter((x: any) => /agentic/i.test(String(x.account || "")) && x.pnl != null && etParts(new Date(x.closed_at)).date === today);
-    const losers = mine.filter((x: any) => Number(x.pnl) < 0).length, dayPnl = mine.reduce((s: number, x: any) => s + Number(x.pnl), 0);
+    // v3.24 (A7): counted from Robinhood's own order records (round trips), the journal only if Robinhood can't be read.
+    const cnt = await todayCounts();
+    const losers = cnt.losers, dayPnl = cnt.realized;
     const nMax = Number(L.daily_losses) || 0, dMax = L.max_trade_loss > 0 ? 2 * L.max_trade_loss : 0;
     const hit = (nMax > 0 && losers >= nMax) || (dMax > 0 && dayPnl <= -dMax);
     out.push({ ok: !hit, guard: true, text: hit
@@ -4454,9 +4485,7 @@ export async function limitChecks(cost: number | null, atStop: number | null = n
       : `This week $${weekPnl.toFixed(0)} (stop at −$${L.weekly_loss})` });
   } catch { out.push({ ok: null, text: "Weekly P&L: couldn't read Robinhood" }); }
   try {
-    const today = etParts().date;
-    const t = await db("otto_trades?select=opened_at&opened_at=gte." + new Date(Date.now() - 864e5).toISOString());
-    const n = t.filter((x: any) => etParts(new Date(x.opened_at)).date === today).length;
+    const n = (await todayCounts()).opened;   // v3.24: Robinhood fills, not the journal
     out.push({ ok: n < L.max_trades_day, guard: true, text: `Trade ${n + 1} today (your max ${L.max_trades_day})` });
   } catch { /* */ }
   return out;
@@ -4564,6 +4593,16 @@ export async function watchAdd(x: { ticker: string; level: number; dir?: string;
     note: String(x.note || "").slice(0, 200) || null, source_ref: x.source_ref || null, added_by: String(x.by || "").slice(0, 60) || null };
   const r = await db("otto_watch?on_conflict=day,ticker,level,dir&select=*", { method: "POST",
     headers: { prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify([row]) });
+  // v3.24 (A12): a level added on the losing side of an open trade becomes that trade's ONE wrong-if.
+  if (x.source === "desk" && !/· (?:plan|Morning Prep|Night Charts)$/.test(String(x.by || ""))) {
+    const w = await wrongIfFromWatch(ticker, level, String(x.by || "the Desk")).catch(() => null);
+    if (w) {
+      const made = r?.[0] || null;
+      if (made) await db("otto_watch?id=eq." + made.id, { method: "PATCH", headers: { prefer: "return=minimal" },
+        body: JSON.stringify({ status: "removed", note: `wrong-if for ${String(w.action.title).slice(0, 120)}` }) }).catch(() => {});
+      return { ...(made || row), status: "removed", trade_wrong_if: { title: w.action.title, old: w.old, same: !!w.same } };
+    }
+  }
   return r?.[0] || null;
 }
 // "SPY ABOVE 778.60 / SUPPORT 776 AND 775 / NVDA BELOW 240 PUTS" → levels with a side.
@@ -4726,7 +4765,7 @@ async function watchSet(b: any, who: string) {
   const by = String(b?.author || who.split("@")[0]).slice(0, 40);
   if (b?.add) {
     const r = await watchAdd({ ticker: b.add.ticker, level: b.add.level, dir: b.add.dir, source: "desk", note: b.add.note, by });
-    if (r) await logDesk("system", "Otto", `👁 ${by} added ${r.ticker} ${Number(r.level)} ${r.dir === "up" ? "▲" : r.dir === "down" ? "▼" : "▲▼"} to the Watcher.`);
+    if (r && !r.trade_wrong_if) await logDesk("system", "Otto", `👁 ${by} added ${r.ticker} ${Number(r.level)} ${r.dir === "up" ? "▲" : r.dir === "down" ? "▼" : "▲▼"} to the Watcher.`);
     return { ok: true, row: r };
   }
   const id = Number(b?.id);
@@ -5749,8 +5788,11 @@ export async function prepLock(b: any, who: string) {
   const moved = !!prev && (Number(prev.entry) !== plan.entry || prev.ticker !== plan.ticker || prev.side !== plan.side);
   if (moved && prev.watch_id)   // only the plan's own level (one the plan added), never someone else's
     await db(`otto_watch?id=eq.${prev.watch_id}&added_by=eq.${encodeURIComponent(`${row.author} · plan`)}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ status: "removed" }) }).catch(() => {});
-  const w = await watchAdd({ ticker: plan.ticker, level: plan.entry, dir: plan.side === "calls" ? "up" : "down", source: "desk",
+  const wdir = plan.side === "calls" ? "up" : "down";
+  const w0 = await watchAdd({ ticker: plan.ticker, level: plan.entry, dir: wdir, source: "desk",
     note: `${row.author}'s plan: ${plan.how} ${plan.entry} (${plan.tf}) · wrong if ${plan.wrong_if} · target ${plan.target}`, by: `${row.author} · plan` }).catch(() => null);
+  // v3.24 (C1): a re-lock on a level that's already on the list (or was taken off) keeps / puts it back on the Watcher.
+  const w = await watchEnsure({ ticker: plan.ticker, level: plan.entry, dir: wdir }, w0).catch(() => w0);
   const locked = { ...plan, note: unname(String(check.note || "")).slice(0, 200), fixes_overridden: !check.ok ? fixes : [], locked_at: new Date().toISOString(),
     by: String(b.author || row.author).slice(0, 30), watch_id: w?.id ?? (moved ? null : prev?.watch_id ?? null), changes: (prev?.changes || 0) + (prev ? 1 : 0) };
   await db(`otto_prep?id=eq.${id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ plan: locked }) });
@@ -5840,12 +5882,25 @@ Deno.serve(async (req) => {
       // v3.16: scheduled check-ins, missed card pings, and the 9:10 Signal self-test.
       if (isTradingDay(c.date) && c.min >= 540 && c.min <= 980) {
         try { await checksTick(); } catch (e) { console.error("checks", e); }
+        try { await checksStuck(); } catch (e) { console.error("checks stuck", e); }      // v3.24 (C2)
+        try { await staleTick(); } catch (e) { console.error("stale", e); }              // v3.24 (A8)
         try { await cardSweep(); } catch (e) { console.error("sweep", e); }
       }
       if (isTradingDay(c.date) && c.min >= 550 && c.min < 560) { try { await signalSelfTest(); } catch (e) { console.error("selftest", e); } }
       if (isTradingDay(c.date) && c.min >= 965 && c.min <= 980 && c.min % 5 === 0) { try { await prepGradeTick(); } catch (e) { console.error("prep grade", e); } }   // v3.18
     })());
     return json({ ok: true, started: "watch", clock: c.status }, 202);
+  }
+  if (fn0 === "cron_charts") {      // v3.25: every 10 min; works only in the night (8:30–10 PM) and 8:45 AM windows
+    if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
+    background(chartsCron().catch((e) => console.error("charts", e)));
+    return json({ ok: true, started: "charts" }, 202);
+  }
+  if (fn0 === "chart_one") {         // v3.25: one stock per run
+    if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
+    const bj = await req.json().catch(() => ({}));
+    background(chartOne(bj).catch((e) => console.error("chart_one", e)));
+    return json({ ok: true, started: "chart_one" }, 202);
   }
   if (fn0 === "check_jarvis") {      // v3.16: a scheduled check-in, as its own run
     if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
@@ -5920,7 +5975,8 @@ Deno.serve(async (req) => {
          "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set",
          "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear", "selftest_now",
          "playbook_get", "feedback_add", "feedback_list", "daily_now",
-         "prep_get", "prep_submit", "prep_reply", "prep_watch", "prep_img", "score_extra", "check_cancel", "prep_lock"].includes(fn)) {
+         "prep_get", "prep_submit", "prep_reply", "prep_watch", "prep_img", "score_extra", "check_cancel", "prep_lock",
+         "charts_get", "chart_now", "chart_review", "chart_use", "chart_chat"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -5970,6 +6026,12 @@ Deno.serve(async (req) => {
       if (fn === "house_rules_get") return json({ ok: true, rules: await houseRules() });
       if (fn === "watch_get") return json(await watchGet());
       if (fn === "watch_set") return json(await watchSet(body, who));
+      // v3.25 Night Charts
+      if (fn === "charts_get") return json(await chartsGet(new URL(req.url).searchParams.get("day") || undefined));
+      if (fn === "chart_now") return json(await chartNow(body, who));
+      if (fn === "chart_review") return json(await chartReview(body, who));
+      if (fn === "chart_use") return json(await chartUse(body, who));
+      if (fn === "chart_chat") return json(await chartChat(body, who));
       if (fn === "check_cancel") {      // v3.18: ✕ on a ⏰ chip
         const r = (await db(`otto_checks?id=eq.${Number(body.id) || 0}&status=eq.pending&select=what`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) }).catch(() => []))?.[0];
         if (r) await logDesk("system", "Otto", `⏰ Check-in cancelled by ${String(body.author || "the Desk").slice(0, 30)}: ${String(r.what).slice(0, 160)}`);
@@ -6067,16 +6129,9 @@ Deno.serve(async (req) => {
       const svc  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
       if (!base || !svc) return json({ ok: false, error: "service role not available" }, 500);
 
-      // POST a JSON array of week files to seed directly; GET still copies the
-      // public repo file, for as long as that file exists.
-      let payload: any = null;
-      if (req.method === "POST") {
-        payload = await req.json().catch(() => null);
-      } else {
-        const src = await fetch("https://proagentmax.github.io/otto-trader/brain-latest.json");
-        if (!src.ok) return json({ ok: false, error: "public copy not reachable (already deleted?)" }, 502);
-        payload = await src.json();
-      }
+      // v3.24 (C6): POST a JSON array of week files. The public repo copy is gone, so GET no longer seeds.
+      if (req.method !== "POST") return json({ ok: false, error: "seed takes a POST with the corpus (a JSON array of week files)" }, 405);
+      const payload: any = await req.json().catch(() => null);
       if (!Array.isArray(payload) || !payload.length) {
         return json({ ok: false, error: "that did not look like a corpus" }, 502);
       }
@@ -6085,7 +6140,7 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { apikey: svc, authorization: "Bearer " + svc,
                    "content-type": "application/json", prefer: "return=representation" },
-        body: JSON.stringify({ notes: req.method === "POST" ? "seeded by POST" : "seeded from the public repo copy", payload }),
+        body: JSON.stringify({ notes: "seeded by POST", payload }),
       });
       if (!ins.ok) return json({ ok: false, error: "insert failed: " + (await ins.text()).slice(0, 200) }, 502);
       const row = await ins.json();
@@ -6430,7 +6485,8 @@ export function factsLine(f: { prep: any[] | null; sig: any[] | null; ord: any[]
   const fl = f.ord == null ? "unknown" : f.ord.length ? `${f.ord.length} (${f.ord.filter((o: any) => o.state === "filled").length} filled, ${f.ord.filter((o: any) => EXIT_DEAD_ORDER.has(o.state)).length} cancelled/rejected)` : "none";
   const sg = f.sig == null ? "unknown" : f.sig.length ? `${f.sig.length} (${f.sig.filter((r: any) => r.kind === "call").length} calls)` : "none";
   return `TODAY SO FAR (checked by the server — never say "none" of these without checking; the server corrects a false "none"): morning reads: ${pr}; Agentic option orders: ${fl}; coach signal posts: ${sg}. ` +
-    `Cite a coaching call only by a date you got from search_jason — a call date that isn't in the brain is removed as "(source not found)".`;
+    `Cite a coaching call only by a date you got from search_jason — a call date that isn't in the brain is removed as "(source not found)".` +
+    (f.ord ? " " + tradesLine(dayFacts(f.ord)) : "");   // v3.24
 }
 const NONE_CLAIMS = [
   { kind: "prep", re: /[^.!?\n]*\b(?:no|don't have|do not have|haven't (?:seen|got|gotten|received)|didn't (?:see|get)|don't see|nobody (?:has )?posted|hasn't posted|no one posted)\s+(?:[\w']+\s+){0,3}?(?:prep|morning reads?|morning sentiment|plan of attack|pre-market plan)\b[^.!?\n]*[.!?]?/gi },
@@ -6470,6 +6526,7 @@ export async function factCheck(text: string): Promise<{ text: string; notes: st
       t = n.text; notes.push(...n.notes);
     }
   } catch { /* fail open */ }
+  try { const v = await factCheck324(t); t = v.text; notes.push(...v.notes); } catch { /* v3.24, fail open */ }
   return { text: t, notes };
 }
 
@@ -6564,3 +6621,752 @@ export async function signalPack(r: any): Promise<string> {
 }
 
 export const SIGNAL_TARGET_S = 30;
+
+/* ============================================================ v3.24 (8 Oct 2026) — honesty + safety + cleanup
+   Decisions (Ifoma, 8 Oct; claude/otto-v324-plan.md):
+   A6/A13  fills, positions, P&L and the daily stop in Jarvis's words come only from Robinhood's order records;
+           a claim with no matching record is corrected before it's saved ("365P filled at 3.70, TP1 already hit").
+   A7      the daily-stop / trades-today counters on a card count Robinhood round trips, not the journal.
+   A10     "bounced off 195.50" when the stock never traded 195.50 today → corrected with the day's high/low.
+   A14     "cancelled" when it was cancelled; "Rejected by Robinhood: …" only when Robinhood rejected it.
+           Jarvis's working notes ("Let me grab the instrument ID…") never reach the Desk.
+   A8      stale entry = red banner, still place: a card whose stock is already through its wrong-if gets a red
+           line (on the card while it waits, at Approve, and at the fill); the stop is sized from the actual fill.
+   A11     a wrong-if alert is checked against the LATEST completed bar; if that bar no longer closes through,
+           no close card ("stale alert ignored").
+   A12     a Watcher level added on the losing side of an open trade becomes that trade's ONE wrong-if (replaces,
+           never stacks); the server closes on a 5-minute close through it.
+   C1      a plan re-lock keeps its entry on the Watcher · C2 a check-in stuck on "running" is failed after 10 min. */
+
+// Sentences end at . ! ? … followed by a space (or a newline) — never inside "202.5C" or "$1.74".
+export const sentences = (t: string) => String(t || "").split(/(?<=[.!?…][*_"')\]]*)(?=\s)|(?<=\n)/);
+
+export type Trip = { sym: string; label: string; option_id: string; strike: number; side: string; opened_at: string;
+  entry: number; qty: number; state: "open" | "closed" | "partial"; exit: number | null; closed_at: string | null; pnl: number | null };
+export type Unfilled = { sym: string; label: string; option_id: string; strike: number; side: string; state: string; created_at: string; reason: string };
+export type DayFacts = { trips: Trip[]; unfilled: Unfilled[]; losers: number; realized: number; closed: number };
+
+const oTime = (o: any) => String(o?.last_transaction_at || o?.updated_at || o?.created_at || "");
+/** Today's round trips from Robinhood's own order records (the same matching the 5:15 recap uses). */
+export function dayFacts(orders: any[]): DayFacts {
+  const trips: Trip[] = [], unfilled: Unfilled[] = [];
+  const opens = (orders || []).filter((o: any) => (o.legs || []).some((l: any) => l.position_effect === "open"))
+    .sort((a: any, b: any) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+  const closes = (orders || []).filter((o: any) => (o.legs || []).some((l: any) => l.position_effect === "close"));
+  for (const o of opens) {
+    const l = (o.legs || []).find((x: any) => x.position_effect === "open");
+    const sym = String(o.chain_symbol || l?.chain_symbol || "").toUpperCase();
+    const base = { sym, label: legLabel(o, l), option_id: String(l?.option_id || ""), strike: Number(l?.strike_price) || 0, side: String(l?.option_type || "") };
+    const b = avgFill(o, l);
+    if (b.q > 0) {
+      const sells = closes.filter((c: any) => (c.legs || []).some((x: any) => x.option_id === l.option_id));
+      let sq = 0, sv = 0, last = "";
+      for (const c of sells) { const f = avgFill(c, c.legs.find((x: any) => x.option_id === l.option_id)); if (f.q > 0) { sq += f.q; sv += f.q * f.px; if (oTime(c) > last) last = oTime(c); } }
+      const exit = sq > 0 ? sv / sq : null;
+      const pnl = exit != null ? +((exit - b.px) * 100 * Math.min(sq, b.q)).toFixed(2) : null;
+      trips.push({ ...base, opened_at: oTime(o), entry: +b.px.toFixed(4), qty: b.q, state: sq <= 0 ? "open" : sq < b.q ? "partial" : "closed", exit, closed_at: last || null, pnl });
+    } else if (EXIT_DEAD_ORDER.has(o.state) || !["filled", "partially_filled"].includes(o.state)) {
+      unfilled.push({ ...base, state: String(o.state || "?"), created_at: String(o.created_at || ""), reason: orderReason(o) });
+    }
+  }
+  const done = trips.filter((t) => t.state !== "open" && t.pnl != null);
+  return { trips, unfilled, losers: done.filter((t) => (t.pnl as number) < 0).length, realized: +done.reduce((s, t) => s + (t.pnl as number), 0).toFixed(2), closed: done.length };
+}
+const sgn$ = (n: number) => `${n >= 0 ? "+" : "−"}$${Math.abs(n).toFixed(0)}`;
+export function tripLine(t: Trip): string {
+  return t.state === "open" ? `${t.label} bought ${t.qty} @ $${t.entry.toFixed(2)}, still open`
+    : `${t.label} bought @ $${t.entry.toFixed(2)} → sold @ $${(t.exit as number).toFixed(2)} = ${sgn$(t.pnl as number)}${t.state === "partial" ? " (part still open)" : ""}`;
+}
+export function tradesLine(f: DayFacts): string {
+  const tr = f.trips.length ? f.trips.map(tripLine).join("; ") : "none filled";
+  const un = f.unfilled.length ? ` Never filled: ${f.unfilled.map((u) => `${u.label} (${deadWord(u.state)})`).join(", ")}.` : "";
+  return `TRADES TODAY FROM ROBINHOOD (the only source for fills, positions, P&L and the daily stop — never the card's limit price, never a guess): ${tr}. ` +
+    `Losing round trips today: ${f.losers}. Realized: ${sgn$(f.realized)}.${un} If an order isn't in this list as bought, it did NOT fill: say "not filled".`;
+}
+/** A14: our own words for an order that never filled. */
+export function deadWord(state: string, reason = ""): string {
+  const s = String(state || "");
+  if (s === "rejected" || s === "failed") return `Rejected by Robinhood: ${reason || "no reason given"}`;
+  if (s === "cancelled" || s === "canceled") return "cancelled before it filled";
+  if (s === "expired") return "expired unfilled (day order)";
+  return s ? `${s}, not filled` : "not filled";
+}
+
+/* ---- A6/A13: what Jarvis says about fills, positions, P&L and the daily stop ---- */
+const CALLER = /\b(?:if|when|once|unless|until|in case|as soon as|should|would|could|might|will|won't|before)\b/i;
+const NEG_FILL = /\b(?:not|never|no|n't|un)\s*(?:yet\s+|been\s+)?fill|unfilled|hasn't|didn't|wasn't|waiting (?:to|for (?:a|the)) fill|to fill\b|fill or kill/i;
+const FILL_RE = /\b(?:filled|got filled|fill(?:ed)? at|got in at|entered at|bought (?:it |them |one |1 )?(?:at|@)|entry (?:fill|price) (?:was|of|at))\b/i;
+const ENTRY_RE = /\b(?:entry|avg(?:erage)? cost|cost basis)\s*(?:fill\s*|price\s*)?(?:of|was|at|@|:)?\s*\$(\d+\.\d{2})\b/i;
+// A sentence about another day (yesterday, "on Sep 22", "Oct 1") isn't about today's trades.
+const OTHER_DAY = /\b(?:yesterday|last (?:week|time|session|night|friday|monday|tuesday|wednesday|thursday)|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.? \d{1,2}\b|\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})? (?:call|trade|close|session))/i;
+const NOT_TICKER = new Set("I A ET AM PM OK TP RSI VWAP EMA SMA OI ITM OTM ATM DTE ALT READ NOTE USD CPI FOMC NFP PPI GDP ORB HOD LOD ATH EOD PT SL RR TV RH API ID IV MA AH NY NYSE US AI IPO ETF SEC FED CEO ON OFF UP AT IN IS IT TO OF BE NO YES AND THE OR NOT ALL NEW BUY SELL HOLD LONG SHORT CALL CALLS PUT PUTS SCALP WATCH CARD STOP WIN LOSS P C R H L O".split(" "));
+const TP_RE = /\bTP1\b(?:\s+(?:is|was|got|has|had|already|been|now|just)){0,3}\s+(?:hit|reached|tagged|touched|filled)\b|\bhit\s+TP1\b/i;
+const STOP_RE = /\b(?:stopped out|got stopped|(?:was|were|both|all) stopped|stop (?:got |was |has )?(?:hit|filled|triggered)|stops? (?:got |were )?(?:hit|filled))\b/i;
+const DS_RE = /\bdaily stop(?: flag)?(?:\s+(?:is|was|has been|now|already)){0,3}\s+(?:active|hit|triggered|on|reached|in effect)\b|\b(?:hit|reached|triggered|tripped)\s+(?:the |your |our )?daily stop\b/i;
+const NWORD: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, zero: 0, no: 0 };
+const LOSERS_RE = /\b(\d|one|two|three|four|five|zero|no)\s+(?:losing (?:trades?|round trips?)|losers|losses)\b(?!\s+(?:or|before|allowed|max))/i;
+const LOSERS_RULE = /\b(?:after|at|rule|allows?|limit|max|before|stop at|stops? after|or)\s+(?:\d|one|two|three)\s+los/i;
+const PNL_WORD = /\b(?:loss|lost|losing|profit|gain|gained|made|P&L|P\/L|PnL|net|realized|banked|booked|loser|winner)\b/i;
+const PNL_SKIP = /\b(?:max|limit|cap|at the stop|if the stop|if it|risk|risking|costs?|premium|buying power|budget|per trade|allow|goal|target|potential|worst case|up to|at most|would|could|weekly|stop at|the stop is|stop on at|−\$\d+ if)\b/i;
+const MONEY_RE = /([-−+])?\s?\$\s?(\d[\d,]*(?:\.\d+)?)(?:\s?[–-]\s?\$?(\d[\d,]*(?:\.\d+)?))?/g;
+const STRIKE_RE = /\b(\d{1,4}(?:\.\d{1,2})?)\s?([CP])\b/;
+
+type Target = { sym: string | null; strike: number | null; side: string | null };
+function targetOf(s: string, known: Set<string>, prev: Target): Target {
+  const all = (s.match(/\b[A-Z]{2,5}\b/g) || []).filter((w) => !NOT_TICKER.has(w));
+  const words = [...all.filter((w) => known.has(w)), ...all.filter((w) => !known.has(w))];
+  const mk = s.match(new RegExp(`\\b([A-Z]{1,5})\\s+${STRIKE_RE.source.slice(2)}`));
+  const sym = mk ? mk[1] : words[0] || null;
+  const st = s.match(STRIKE_RE);
+  if (!sym && !st) return prev;
+  return { sym: sym || prev.sym, strike: st ? Number(st[1]) : (sym && sym !== prev.sym ? null : prev.strike), side: st ? (st[2] === "P" ? "put" : "call") : (sym && sym !== prev.sym ? null : prev.side) };
+}
+const hits = (t: Target, x: { sym: string; strike: number; side: string }) => (!t.sym || t.sym === x.sym) && (t.strike == null || Math.abs(t.strike - x.strike) < 0.01) && (!t.side || t.side === x.side);
+
+export function checkTradeClaims(text: string, f: DayFacts, nMax = 2): { text: string; notes: string[] } {
+  const notes: string[] = [];
+  const known = new Set<string>([...f.trips.map((t) => t.sym), ...f.unfilled.map((u) => u.sym)].filter(Boolean));
+  let tgt: Target = { sym: null, strike: null, side: null };
+  const fix = (msg: string) => { notes.push(`⚠ Correction (Otto checked Robinhood): ${msg}`); return ` [Corrected by Otto: ${msg}]`; };
+  const parts = sentences(text);
+  const out = parts.map((s) => {
+    if (!s.trim()) return s;
+    tgt = targetOf(s, known, tgt);
+    if (OTHER_DAY.test(s)) return s;
+    const anyTarget = !!(tgt.sym || tgt.strike != null);
+    const mine = f.trips.filter((t) => hits(tgt, t)), dead = f.unfilled.filter((u) => hits(tgt, u));
+    const what = tgt.sym ? `${tgt.sym}${tgt.strike != null ? " " + tgt.strike + (tgt.side === "put" ? "P" : tgt.side === "call" ? "C" : "") : ""}` : "that order";
+    const noFill = () => dead.length ? `Robinhood shows the ${dead[0].label} order ${deadWord(dead[0].state, dead[0].reason)} — it never filled.`
+      : `Robinhood shows no ${what} fill today — it is not filled.`;
+    // 1. a fill (and its price)
+    if (FILL_RE.test(s) && !NEG_FILL.test(s) && !/\bstop(?:\s+order)?\s+(?:fills?|filled)\b/i.test(s) && !CALLER.test(s.split(FILL_RE)[0].slice(-40))) {
+      if (anyTarget && !mine.length && (dead.length || tgt.sym)) return fix(noFill());
+      if (!anyTarget && !f.trips.length) return fix("Robinhood shows no filled orders in the Agentic account today.");
+      const pm = s.match(/(?:filled|fill|entered|in|bought(?: it| them| one| 1)?|entry(?: fill| price)?(?: was| of)?)(?:\s+\w+){0,2}?\s+(?:at|@)\s+\$?(\d+(?:\.\d+)?)/i);
+      if (pm && mine.length === 1) {
+        const x = Number(pm[1]), t = mine[0];
+        if (x > 0 && x < t.entry * 4 && x > t.entry / 4 && Math.abs(x - t.entry) > Math.max(0.02, t.entry * 0.03) && !(t.exit != null && Math.abs(x - t.exit) <= 0.02))
+          return fix(`${t.label} filled at $${t.entry.toFixed(2)} (Robinhood), not $${x.toFixed(2)}.`);
+      }
+    }
+    // 1b. "entry $1.88" when the fill was $1.74 (8 Oct 9:52 position check)
+    const em = s.match(ENTRY_RE);
+    if (em && !CALLER.test(s)) {
+      const x = Number(em[1]), t = mine.length === 1 ? mine[0] : (!anyTarget && f.trips.filter((z) => z.state !== "closed").length === 1 ? f.trips.find((z) => z.state !== "closed") : null);
+      if (t && x < t.entry * 4 && x > t.entry / 4 && Math.abs(x - t.entry) > Math.max(0.02, t.entry * 0.03))
+        return fix(`${t.label} filled at $${t.entry.toFixed(2)} (Robinhood) — that's the entry, not $${x.toFixed(2)}.`);
+    }
+    // 2. TP1 hit / stopped out — only on a trade that exists
+    if ((TP_RE.test(s) || STOP_RE.test(s)) && !CALLER.test(s)) {
+      if (/\b(?:both|all)(?: \w+)? stopped|stops? (?:got |were )?(?:hit|filled)\b/i.test(s)) {
+        const named = new Set((s.match(/\b[A-Z]{2,5}\b/g) || []).filter((w) => known.has(w)));
+        const pool = named.size >= 2 ? f.trips.filter((t) => named.has(t.sym)) : f.trips;
+        const lost = pool.filter((t) => t.state !== "open" && (t.pnl as number) < 0);
+        if (lost.length < Math.max(2, pool.length)) return fix(`Robinhood shows ${lost.length} losing round trip${lost.length === 1 ? "" : "s"} today${f.trips.length ? " (" + f.trips.map(tripLine).join("; ") + ")" : ""}.`);
+      } else if (anyTarget || f.trips.length === 0) {
+        if (!mine.length) return fix(`${noFill()} There is no ${what} position, so no TP1 or stop.`);
+        if (STOP_RE.test(s) && mine.every((t) => t.state === "open")) return fix(`Robinhood shows ${mine[0].label} still open — not stopped out.`);
+        if (STOP_RE.test(s) && /stopped/i.test(s) && mine.every((t) => t.state !== "open" && (t.pnl as number) >= 0)) return fix(`${tripLine(mine[0])} — closed for a gain, not stopped out.`);
+      }
+    }
+    // 3. the daily stop and the losing-trade count
+    const ds = DS_RE.test(s) && !/\b(?:not|isn't|no)\b[^.]{0,20}daily stop|daily stop[^.]{0,25}\b(?:not|isn't)\b/i.test(s) && !CALLER.test(s);
+    const lm = LOSERS_RULE.test(s) ? null : s.match(LOSERS_RE);
+    const claimed = lm ? (/^\d$/.test(lm[1]) ? Number(lm[1]) : NWORD[lm[1].toLowerCase()]) : null;
+    const hitNow = nMax > 0 && f.losers >= nMax;
+    if ((ds && !hitNow) || (claimed != null && /today|already|so far|daily stop/i.test(s) && claimed !== f.losers)) {
+      return fix(`Robinhood shows ${f.losers} losing round trip${f.losers === 1 ? "" : "s"} today${f.trips.length ? " (" + f.trips.filter((t) => t.state !== "open").map(tripLine).join("; ") + ")" : ""} — the daily stop (${nMax} losers) is ${hitNow ? "hit" : "NOT hit"}.`);
+    }
+    // 4. dollar P&L — only amounts sitting next to a P&L word ("loss ~$80", "+$11 realized"), never prices or % moves
+    if (PNL_WORD.test(s) && !PNL_SKIP.test(s)) {
+      MONEY_RE.lastIndex = 0;
+      const ms = [...s.matchAll(MONEY_RE)].filter((m) => {
+        const at = m.index || 0, before = s.slice(Math.max(0, at - 30), at), after = s.slice(at + m[0].length, at + m[0].length + 22);
+        if (/^\s*\(?[+−-]?\d+(?:\.\d+)?%/.test(after) || /^\s*\/\s*(?:day|share)/i.test(after)) return false;
+        return PNL_WORD.test(before) || /^\s*(?:\*\*)?\s*(?:loss|profit|gain|realized|P&L|net|on the (?:day|trade))/i.test(after);
+      }).map((m) => ({ sign: m[1], a: Number(m[2].replace(/,/g, "")), b: m[3] ? Number(m[3].replace(/,/g, "")) : null }))
+        .filter((m) => m.a >= 5 && m.a < 5000);
+      if (ms.length) {
+        const named = new Set((s.match(/\b[A-Z]{2,5}\b/g) || []).filter((w) => known.has(w)));
+        const total = named.size > 1 || /\b(?:today|total|on the day|the day|day's|so far|overall)\b/i.test(s);
+        const realizedTalk = /\b(?:realized|closed|stopped|sold|banked|booked|lost|made|net|on the day|today)\b/i.test(s);
+        const pool = anyTarget && !total ? mine : f.trips;
+        const closedPool = pool.filter((t) => t.state !== "open" && t.pnl != null);
+        const openOnly = pool.length > 0 && closedPool.length === 0;
+        if (!(openOnly && !realizedTalk) && !(anyTarget && !total && !pool.length && !dead.length)) {
+          const neg = /\b(?:loss|lost|losing|down|red)\b|−|-\$/i.test(s), pos = /\b(?:profit|gain|gained|made|up|green|banked)\b|\+\$/i.test(s);
+          const approx = /~|≈|\babout\b|\baround\b|\broughly\b/i.test(s);
+          const knowns = [...closedPool.map((t) => t.pnl as number), ...(total || !anyTarget ? [f.realized] : [])];
+          const ok = ms.every((m) => {
+            const vals = m.b != null ? [m.a, m.b] : [m.a];
+            return knowns.some((k) => vals.some((v) => Math.abs(Math.abs(k) - v) <= Math.max(3, Math.abs(k) * (approx ? 0.2 : 0.1))) &&
+              !(m.sign === "−" || m.sign === "-" ? k > 0 : m.sign === "+" ? k < 0 : (neg && !pos && k > 0) || (pos && !neg && k < 0)));
+          });
+          if (!ok && (closedPool.length || realizedTalk)) {
+            const where = anyTarget && !total && mine.length ? mine.map(tripLine).join("; ") : f.trips.length ? f.trips.map(tripLine).join("; ") : "no fills today";
+            return fix(`Robinhood's numbers: ${where}${anyTarget && !total ? "" : `; realized today ${sgn$(f.realized)}`}.`);
+          }
+        }
+      }
+    }
+    return s;
+  });
+  return { text: out.join(""), notes: [...new Set(notes)] };
+}
+
+/* ---- A10: "bounced off 195.50" — did it trade there today? ---- */
+const PX_VERB = /\b(?:bounced|bouncing|bounce|held|holding|tagged|touched|hit|tested|reclaimed|rejected|broke|broken|dipped|wicked|traded|came (?:down|back)|pulled back|flushed|swept|printed|confirmed it hard|up \d+(?:\.\d+)?% )\s*(?:off|from|at|to|into|through|below|above|down to|up to|back to|of)?\s+\$?(\d{1,5}(?:\.\d{1,2})?)\b|\b(?:is |trading |sitting |sits |currently )?at \*{0,2}\$?(\d{1,5}(?:\.\d{1,2})?)\*{0,2} (?=(?:right )?now\b)/gi;
+export function checkPriceClaims(text: string, range: Record<string, { lo: number; hi: number }>): { text: string; notes: string[] } {
+  const notes: string[] = [];
+  const syms = Object.keys(range);
+  let cur: string | null = null;
+  const out = sentences(text).map((s) => {
+    const named = (s.match(/\b[A-Z]{1,5}\b/g) || []).find((w) => syms.includes(w));
+    if (named) cur = named;
+    if (!cur || OTHER_DAY.test(s) || CALLER.test(s) || /\b(?:needs? to|has to|must|watch|target|TP1|wrong-if|stop|if|level to)\b/i.test(s)) return s;
+    const r = range[cur];
+    PX_VERB.lastIndex = 0;
+    for (const m of s.matchAll(PX_VERB)) {
+      const v = Number(m[1] ?? m[2]);
+      if (!(v > 0) || v < r.lo * 0.7 || v > r.hi * 1.3) continue;          // not a stock price (option price, %, time)
+      const tol = Math.max(v * 0.0015, 0.05);
+      if (v < r.lo - tol || v > r.hi + tol) {
+        const msg = `${cur} traded ${r.lo.toFixed(2)}–${r.hi.toFixed(2)} today — it never traded ${v}.`;
+        notes.push(`⚠ Correction (Otto checked the day's bars): ${msg}`);
+        return ` [Corrected by Otto: ${msg}]`;
+      }
+    }
+    return s;
+  });
+  return { text: out.join(""), notes: [...new Set(notes)] };
+}
+async function dayRanges(syms: string[]): Promise<Record<string, { lo: number; hi: number }>> {
+  const day = etParts().date;
+  const start = nyIso(day, "4:00 AM") || new Date(Date.now() - 12 * 3600e3).toISOString();
+  const b = await rhBars(syms.slice(0, 10), "5minute", start);
+  const out: Record<string, { lo: number; hi: number }> = {};
+  for (const [k, v] of Object.entries(b)) if (v.length) out[k] = { lo: Math.min(...v.map((x) => x.l)), hi: Math.max(...v.map((x) => x.h)) };
+  return out;
+}
+
+/* ---- Jarvis's working notes never reach the Desk ---- */
+const NARR_START = /^\s*(?:(?:OK|Okay|Alright|Now|First|Next|Good|Got it)[,.]?\s+)?(?:let me (?:grab|pull|fetch|look up|get|check|try|search|scan|see|re-?check)|let's (?:grab|pull|fetch|look up)|i'?ll (?:grab|pull|fetch|look up)|i need to (?:grab|pull|fetch|look up)|grabbing|fetching|pulling (?:up )?(?:the|live|it)|looking up|one moment|hold on)\b[^.!?…:\n]*(?:[.!?…:]+|$)\s*/i;
+const NARR_ID = /\b(?:stop_order_id|option_id|instrument_id|order_id|chain_id|ref_id|get_option_\w+|get_equity_\w+|place_option_order|cancel_option_order|propose_action|option_shortlist|rh__\w+|tv__\w+|mcp-tv-\w+)\b/;
+export function stripNarration(text: string): string {
+  const out = sentences(text).map((s) => {
+    if (!s.trim()) return s;
+    const lead = s.match(/^\s*/)![0];
+    if (NARR_START.test(s) && s.length < 400) {
+      let rest = s;                                   // glued clauses ("…simultaneously.Let me try…") come off one by one
+      for (let i = 0; i < 4 && NARR_START.test(rest); i++) rest = rest.replace(NARR_START, "");
+      rest = rest.replace(/^\*\*\s*(?=\S)/, (m) => (/\*\*/.test(rest.slice(m.length)) ? m : ""));
+      if (NARR_ID.test(rest) && /\b(?:let me|i'?ll|i need|grab|fetch|pull|look up|is for the|the id)\b/i.test(rest)) return "";
+      return rest.trim() ? lead + rest : "";
+    }
+    if (NARR_ID.test(s) && /\b(?:let me|i'?ll|i need|grab|fetch|pull|look up|is for the|the id)\b/i.test(s)) return "";
+    return s;
+  }).join("");
+  return out.replace(/\n{3,}/g, "\n\n").trim() || String(text || "").trim();
+}
+/** All the v3.24 checks, after the v3.22 ones (factCheck calls this). Every check fails open. */
+export async function factCheck324(text: string): Promise<{ text: string; notes: string[] }> {
+  let t = stripNarration(text);
+  const notes: string[] = [];
+  const claims = [FILL_RE, ENTRY_RE, TP_RE, STOP_RE, DS_RE, LOSERS_RE].some((r) => r.test(t)) || (PNL_WORD.test(t) && /\$\s?\d/.test(t));
+  if (claims) {
+    try {
+      const f = dayFacts(await withTimeout(dayOrders(etParts().date), 8000, "Robinhood orders"));
+      const L = await getLimits().catch(() => LIMIT_DEFAULTS);
+      const r = checkTradeClaims(t, f, Number(L.daily_losses) || 0);
+      t = r.text; notes.push(...r.notes);
+    } catch { /* fail open */ }
+  }
+  try {
+    PX_VERB.lastIndex = 0;
+    if (PX_VERB.test(t)) {
+      const syms = [...new Set((t.match(/\b[A-Z]{1,5}\b/g) || []))].filter((w) => !/^(?:ET|AM|PM|OK|TP|RSI|VWAP|EMA|SMA|OI|ITM|OTM|ATM|DTE|ALT|READ|NOTE|USD|CPI|FOMC|NFP|PPI|GDP|I|A)$/.test(w)).slice(0, 6);
+      if (syms.length) {
+        const rg = await withTimeout(dayRanges(syms), 8000, "day ranges");
+        if (Object.keys(rg).length) { const r = checkPriceClaims(t, rg); t = r.text; notes.push(...r.notes); }
+      }
+    }
+  } catch { /* fail open */ }
+  return { text: t, notes };
+}
+
+/* ---- A7: the daily stop and trades-today counted from Robinhood ---- */
+export async function todayCounts(): Promise<{ losers: number; realized: number; opened: number; src: "robinhood" | "journal" }> {
+  const today = etParts().date;
+  try {
+    const f = dayFacts(await withTimeout(dayOrders(today), 8000, "Robinhood orders"));
+    return { losers: f.losers, realized: f.realized, opened: f.trips.length, src: "robinhood" };
+  } catch {
+    const t = await db("otto_trades?select=account,pnl,closed_at,opened_at&opened_at=gte." + new Date(Date.now() - 864e5).toISOString());
+    const mine = (t || []).filter((x: any) => /agentic/i.test(String(x.account || "")));
+    const closed = mine.filter((x: any) => x.pnl != null && x.closed_at && etParts(new Date(x.closed_at)).date === today);
+    return { losers: closed.filter((x: any) => Number(x.pnl) < 0).length, realized: closed.reduce((s: number, x: any) => s + Number(x.pnl), 0),
+      opened: mine.filter((x: any) => x.opened_at && etParts(new Date(x.opened_at)).date === today).length, src: "journal" };
+  }
+}
+
+/* ---- A8: a card whose stock is already through its wrong-if ---- */
+export function pastWrongIf(direction: string, wrong: number, px: number) { return px > 0 && wrong > 0 && (direction === "down" ? px > wrong : px < wrong); }
+export function staleLine(tk: string, direction: string, wrong: number, px: number) {
+  return `${tk} is already ${direction === "down" ? "above" : "below"} ${wrong} (now ${px.toFixed(2)}) — this trade is wrong before it starts`;
+}
+export async function staleEntry(a: any): Promise<string | null> {
+  const ex = a?.exit || {}, p = a?.plan || {};
+  const tk = v322Sym(ex.tv_symbol || p.tv_symbol), wrong = Number(ex.wrong_if ?? p.stop), dir = ex.direction || p.direction;
+  if (!tk || !(wrong > 0)) return null;
+  const px = (await rhPrices([tk]).catch(() => ({} as Record<string, number>)))[tk];
+  return pastWrongIf(dir, wrong, px) ? staleLine(tk, dir, wrong, px) : null;
+}
+/** Put the red line on (or take it off) a pending card. Returns the line when it's stale. */
+export async function markStale(a: any): Promise<string | null> {
+  const line = await staleEntry(a).catch(() => null);
+  const had = (a.checks || []).some((c: any) => c.stale);
+  if (!!line === had && (!line || (a.checks || []).some((c: any) => c.stale && c.text === line))) return line;
+  const checks = [...(line ? [{ ok: false, guard: true, stale: true, text: line }] : []), ...(a.checks || []).filter((c: any) => !c.stale)];
+  await db("otto_actions?id=eq." + a.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ checks }) }).catch(() => {});
+  a.checks = checks;
+  if (line && !had) await logDesk("system", "Otto", `⚠ ${a.title}: ${line}. The card stays up — Approve still places it (guardrails flag, never block).`, a.id);
+  return line;
+}
+// Every cron minute from 9:00: pending opening cards get the red line while they're stale.
+export async function staleTick() {
+  const rows = await db("otto_actions?select=id,title,status,plan,exit,checks,created_at&status=eq.pending&order=created_at.desc&limit=20").catch(() => []);
+  for (const a of (rows || []).filter((r: any) => r.exit?.state === "planned")) await markStale(a);
+}
+/** A8: the protective stop is sized from the actual fill, keeping the card's stop/limit ratio. */
+export function stopFromFill(entryLimit: number, stopOpt: number, fill: number): number | null {
+  if (!(fill > 0) || !(entryLimit > 0) || !(stopOpt > 0)) return null;
+  if (Math.abs(fill - entryLimit) <= Math.max(0.02, entryLimit * 0.02)) return null;
+  const s = roundStopUp(fill * (stopOpt / entryLimit));
+  return s > 0 && s < fill ? s : null;
+}
+
+/* ---- A11: is the alert still true on the latest completed bar? ---- */
+export async function latestThrough(ex: any, now = Date.now()): Promise<{ through: boolean | null; close: number | null; at: string | null }> {
+  const tk = v322Sym(ex.tv_symbol), tf = Number(ex.wrong_tf) === 5 ? 5 : 15, up = ex.direction !== "down";
+  const since = Date.parse(ex.wrong_set_at || ex.armed_at || "") || now - 6 * 3600e3;
+  try {
+    const bars = completedBars((await rhBars([tk], "5minute", new Date(Math.min(since, now - 30 * 60e3) - 10 * 60e3).toISOString()))[tk] || [], 5, now)
+      .filter((b) => tf === 5 || new Date(b.t + 5 * 60e3).getUTCMinutes() % tf === 0);
+    const b = bars[bars.length - 1];
+    if (!b) return { through: null, close: null, at: null };
+    return { through: up ? b.c < ex.wrong_if : b.c > ex.wrong_if, close: b.c, at: new Date(b.t + 5 * 60e3).toISOString() };
+  } catch { return { through: null, close: null, at: null }; }
+}
+
+/* ---- A12: a Watcher level on an open trade becomes its wrong-if ---- */
+export async function wrongIfFromWatch(ticker: string, level: number, by: string): Promise<any | null> {
+  const armed = await db("otto_actions?select=*&exit->>state=eq.armed&limit=20").catch(() => []);
+  const mine = (armed || []).filter((a: any) => v322Sym(a.exit?.tv_symbol) === ticker);
+  if (!mine.length) return null;
+  const px = (await rhPrices([ticker]).catch(() => ({} as Record<string, number>)))[ticker];
+  for (const a of mine) {
+    const ex0 = a.exit, up = ex0.direction !== "down";
+    const ref = px > 0 ? px : Number(ex0.tp1);
+    if (!(ref > 0) || (up ? !(level < ref) : !(level > ref))) continue;          // not on the losing side: an ordinary level
+    let fresh: any = null;
+    for (let i = 0; i < 3 && !fresh; i++) { fresh = await exitLease(a.id); if (!fresh) await new Promise((r) => setTimeout(r, 1500)); }
+    if (!fresh) continue;
+    try {
+      const ex: any = { ...(fresh.exit || {}) };
+      const old = ex.wrong_if;
+      if (Number(old) === level) return { action: fresh, old, level, same: true };
+      ex.wrong_if = level; ex.wrong_tf = 5; ex.wrong_set_at = new Date().toISOString();
+      exitLog(ex, `Wrong-if moved ${old} → ${level} (Watcher level from ${by}); one wrong-if per trade`);
+      if (ex.alerts?.wrong != null) {
+        try { await call("tv", "mcp-tv-delete-alert", { alert_ids: [ex.alerts.wrong] }); } catch { /* the stale alert is ignored anyway (A11) */ }
+        ex.alerts = { ...(ex.alerts || {}), wrong: null };
+      }
+      await saveExit(a.id, ex);
+      try { await armAlerts(fresh, ex, ["wrong"]); await saveExit(a.id, ex); } catch { /* retried by the exit engine */ }
+      const L = await getLimits().catch(() => LIMIT_DEFAULTS);
+      await logDesk("system", "Otto", `🎯 ${ticker} ${level} is now the wrong-if on ${fresh.title} (was ${old} — replaced, not added). ` +
+        (L.auto_close ? `Otto closes it on a 5-minute close ${up ? "below" : "above"} ${level} (server rule; auto-close is on).`
+          : `Auto-close is OFF, so a 5-minute close ${up ? "below" : "above"} ${level} puts up a close card for Approve.`), a.id);
+      return { action: fresh, old, level };
+    } finally {
+      await db("otto_actions?id=eq." + a.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ exit_lock: null }) }).catch(() => {});
+    }
+  }
+  return null;
+}
+
+/* ---- C1: a plan's entry stays on the Watcher after a re-lock ---- */
+export async function watchEnsure(x: { ticker: string; level: number; dir: string }, added: any): Promise<any | null> {
+  if (added) return added;
+  const day = watchDay(), lvl = Math.round(Number(x.level) * 100) / 100;
+  const ex = (await db(`otto_watch?select=*&day=eq.${day}&ticker=eq.${String(x.ticker).toUpperCase()}&dir=eq.${x.dir}&limit=20`).catch(() => []) || [])
+    .find((r: any) => Number(r.level) === lvl);
+  if (!ex) return null;
+  if (ex.status !== "watching") {
+    const r = await db(`otto_watch?id=eq.${ex.id}&select=*`, { method: "PATCH", body: JSON.stringify({ status: "watching" }) }).catch(() => []);
+    return r?.[0] || { ...ex, status: "watching" };
+  }
+  return ex;
+}
+
+/* ---- C2: a check-in that never finished ---- */
+export async function checksStuck(now = Date.now()) {
+  const old = new Date(now - 10 * 60e3).toISOString();
+  const rows = await db(`otto_checks?select=*&status=eq.running&due_at=lt.${old}&limit=10`).catch(() => []);
+  for (const r of rows || []) {
+    const m = "timed out — the check-in started but never finished (10 minutes)";
+    const done = await db(`otto_checks?id=eq.${r.id}&status=eq.running&select=id`, { method: "PATCH", body: JSON.stringify({ status: "error", result: m }) }).catch(() => []);
+    if (!done?.length) continue;
+    await logDesk("system", "Otto", `⏰ The ${fmtMin(etParts(new Date(r.due_at)).min)} check-in "${String(r.what).slice(0, 120)}" failed: ${m}. Nothing was checked — look yourself or set a new one.`);
+    await notify("checkin", "⏰ A check-in failed", `${String(r.what).slice(0, 80)} — it never finished. Nothing was checked.`);
+  }
+}
+
+/* ---- C10 (Ifoma, 8 Oct night: all three): close / stop cards for a position that isn't open ---- */
+const closeLegs = (calls: any[]) => (calls || []).filter((c: any) => c?.tool === "place_option_order")
+  .flatMap((c: any) => (c.args?.legs || []).filter((l: any) => l.side === "sell" && l.position_effect === "close").map((l: any) => String(l.option_id || "")))
+  .filter(Boolean);
+/** "Robinhood shows no position in …" when every contract a card would sell to close isn't held; null otherwise (or if Robinhood can't be read). */
+export async function nothingToClose(calls: any[]): Promise<string | null> {
+  const ids = [...new Set(closeLegs(calls))];
+  if (!ids.length) return null;
+  try {
+    const acct = await agenticAccount();
+    for (const id of ids) if ((await heldQty(acct, id)) > 0) return null;
+    let label = "that contract";
+    try { const ins = (mcpJson(await call("rh", "get_option_instruments", { ids: ids[0] }))?.data?.instruments || [])[0];
+      if (ins) label = legLabel({ chain_symbol: ins.chain_symbol }, { strike_price: ins.strike_price, option_type: ins.type, expiration_date: ins.expiration_date, option_id: ids[0] }); } catch { /* */ }
+    return `Robinhood shows no ${label} position in the Agentic account`;
+  } catch { return null; }                                      // fail open: a person still decides
+}
+/** When a protected trade goes flat, its waiting close / stop cards expire. */
+export async function expireCloseCards(optionId: string) {
+  const rows = await db("otto_actions?select=id,title,calls&status=eq.pending&order=created_at.desc&limit=40").catch(() => []);
+  for (const r of (rows || []).filter((x: any) => closeLegs(x.calls).includes(String(optionId)))) {
+    const done = await db(`otto_actions?id=eq.${r.id}&status=eq.pending`, { method: "PATCH",
+      body: JSON.stringify({ status: "expired", decided_by: "otto (trade closed)", decided_at: new Date().toISOString() }) }).catch(() => []);
+    if (done?.length) await logDesk("system", "Otto", `${r.title}: taken down — the trade is already closed, nothing to sell.`, r.id);
+  }
+}
+
+/* ============================================================ v3.25 (8 Oct 2026) — Night Charts
+   Decisions (Ifoma, 8 Oct; claude/otto-v325-night-charts.md, mockup v3):
+   - Mag-7 + SPY + QQQ charted every trading night, ready by 9 PM ET, updated 8:45 AM. Own "Charts" tab.
+   - The CODE finds candidate zones on the weekly then daily bars by the Otto Rules (prior lows/highs hit 2+ times,
+     the top of big candles, unfilled gaps); JARVIS picks the best 2–4 as buy / sell boxes, says why, and writes the read.
+     Boxes are always a candidate's exact prices — Jarvis never invents a number.
+   - Josh keeps / adjusts / removes each box; a per-chart chat with Jarvis. Re-charting keeps the boxes he kept.
+   - "Use kept boxes today" → the Watcher only (no TradingView alerts — the 20-alert cap), at the box's NEAR edge:
+     buy box → its top edge, calls side (dir up); sell box → its bottom edge, puts side (dir down).
+   - Two buttons: "Chart <stock> now" and "Chart all 9"; plus any ticker (on the list for that day only). */
+
+export const CHART_LIST = ["SPY", "QQQ", "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA"];
+export type CBar = [number, number, number, number, number];   // [t (bar start, ms), o, h, l, c]
+export type Zone = { id: string; type: "buy" | "sell"; a: number; b: number; why: string; score: number; tf: "W" | "D"; kind: string };
+
+const r2 = (v: number) => Math.round(v * 100) / 100;
+// Robinhood day/week bars start at 00:00 UTC on their own date, so label them by the UTC date (not New York, which is the evening before).
+const mdET = (t: number) => { const d = new Date(t); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`; };
+
+/** Candidate zones from weekly + daily bars (pure — tested). Every zone carries the dates that made it. */
+export function findZones(daily: CBar[], weekly: CBar[], last: number): Zone[] {
+  if (!(last > 0)) return [];
+  const raw: Omit<Zone, "id">[] = [];
+  const swingPts = (bars: CBar[], k: number, side: "low" | "high") => {
+    const out: { p: number; t: number }[] = [];
+    for (let i = k; i < bars.length - k; i++) {
+      const v = side === "low" ? bars[i][3] : bars[i][2];
+      let ok = true;
+      for (let j = i - k; j <= i + k && ok; j++) if (j !== i && (side === "low" ? bars[j][3] < v : bars[j][2] > v)) ok = false;
+      if (ok) out.push({ p: v, t: bars[i][0] });
+    }
+    return out;
+  };
+  const cluster = (pts: { p: number; t: number }[], tolPct: number, tf: "W" | "D", side: "low" | "high") => {
+    const s = [...pts].sort((x, y) => x.p - y.p);
+    let g: typeof s = [];
+    const flush = () => {
+      if (g.length >= 2) {
+        let a = Math.min(...g.map((x) => x.p)), b = Math.max(...g.map((x) => x.p));
+        const minW = last * 0.0025; if (b - a < minW) { const m = (a + b) / 2; a = m - minW / 2; b = m + minW / 2; }
+        const dates = [...g].sort((x, y) => x.t - y.t).map((x) => mdET(x.t)).join(", ");
+        raw.push({ type: "buy", a, b, tf, kind: side === "low" ? "prior-lows" : "prior-highs", score: g.length * 2 + (tf === "W" ? 3 : 0),
+          why: `${tf === "W" ? "Weekly" : "Daily"} ${side === "low" ? "lows" : "highs"} ${dates} (${g.length} touches)` });
+      }
+      g = [];
+    };
+    for (const x of s) { if (g.length && x.p - g[0].p > g[0].p * tolPct) flush(); g.push(x); }
+    flush();
+  };
+  const d = daily.slice(-160), w = weekly.slice(-104);
+  cluster(swingPts(d, 2, "low"), 0.006, "D", "low"); cluster(swingPts(d, 2, "high"), 0.006, "D", "high");
+  cluster(swingPts(w, 1, "low"), 0.012, "W", "low"); cluster(swingPts(w, 1, "high"), 0.012, "W", "high");
+  // big candles: the top of a big green candle (support), the top of a big red one (resistance)
+  const recent = d.slice(-90), bodies = recent.map((b) => Math.abs(b[4] - b[1])).sort((x, y) => x - y);
+  const med = bodies[Math.floor(bodies.length / 2)] || 0;
+  for (const b of recent) {
+    const body = Math.abs(b[4] - b[1]);
+    if (!(med > 0) || body < med * 2.2) continue;
+    const top = Math.max(b[1], b[4]);
+    raw.push({ type: "buy", a: top - body * 0.25, b: top, tf: "D", kind: b[4] > b[1] ? "big-green" : "big-red", score: 3,
+      why: `Top of the big ${b[4] > b[1] ? "green" : "red"} daily candle ${mdET(b[0])}` });
+  }
+  // unfilled daily gaps
+  for (let i = Math.max(1, d.length - 120); i < d.length; i++) {
+    const prev = d[i - 1], cur = d[i], after = d.slice(i + 1);
+    if (cur[3] > prev[2] && after.every((x) => x[3] > prev[2]) && last > prev[2] && cur[3] - prev[2] > last * 0.003)
+      raw.push({ type: "buy", a: prev[2], b: cur[3], tf: "D", kind: "gap", score: 3, why: `Unfilled gap up ${mdET(cur[0])}` });
+    if (cur[2] < prev[3] && after.every((x) => x[2] < prev[3]) && last < prev[3] && prev[3] - cur[2] > last * 0.003)
+      raw.push({ type: "buy", a: cur[2], b: prev[3], tf: "D", kind: "gap", score: 3, why: `Unfilled gap down ${mdET(cur[0])}` });
+  }
+  // side by position: under the price = buy box, over it = sell box; through the price or too far = dropped
+  const kept: Omit<Zone, "id">[] = [];
+  for (const z of raw) {
+    const a = Math.min(z.a, z.b), b = Math.max(z.a, z.b);
+    if (a <= last && b >= last) continue;
+    const near = b < last ? b : a, dist = Math.abs(near - last) / last;
+    if (dist > 0.12) continue;
+    const type = b < last ? "buy" : "sell";
+    // a broken level flips: old highs under the price are support now, old lows over it are resistance now
+    const flip = type === "buy" && /highs|big red/.test(z.why) ? " — old resistance, now support"
+      : type === "sell" && /lows|big green/.test(z.why) ? " — old support, now resistance" : "";
+    kept.push({ ...z, a: r2(a), b: r2(b), type, flip, score: +(z.score + Math.max(0, 3 - dist * 40)).toFixed(2) } as any);
+  }
+  // merge overlapping zones of the same side: the stronger one stays, reasons add up
+  kept.sort((x, y) => y.score - x.score);
+  const out: Omit<Zone, "id">[] = [];
+  for (const z of kept) {
+    const o = out.find((y) => y.type === z.type && Math.min(y.b, z.b) - Math.max(y.a, z.a) > 0);
+    if (o) { if (!o.why.includes(z.why) && o.why.split("; ").length < 3) o.why += "; " + z.why; (o as any).flip ||= (z as any).flip; o.score = +(o.score + 1).toFixed(2); continue; }
+    out.push({ ...z });
+  }
+  const buys = out.filter((z) => z.type === "buy").slice(0, 6), sells = out.filter((z) => z.type === "sell").slice(0, 6);
+  return [...buys, ...sells].sort((x, y) => y.score - x.score)
+    .map(({ flip, ...z }: any, i) => ({ ...z, why: z.why + (flip || ""), id: "C" + (i + 1) }));
+}
+
+/** Re-charting keeps what Josh kept or adjusted, drops repeats of what he removed, and adds the new picks. */
+export function mergeBoxes(old: any[], picks: any[]): any[] {
+  const ov = (x: any, y: any) => Math.min(x.b, y.b) - Math.max(x.a, y.a) > 0;
+  const keep = (old || []).filter((b) => b.review === "keep" || b.review === "adj");
+  const gone = (old || []).filter((b) => b.review === "rem");
+  const out = [...keep];
+  for (const p of picks) if (!out.some((k) => k.type === p.type && ov(k, p)) && !gone.some((g) => g.type === p.type && ov(g, p))) out.push(p);
+  return [...out, ...gone.filter((g) => !out.some((o) => o.id === g.id))];
+}
+
+const toCBars = (bars: Bar[]): CBar[] => bars.map((b) => [b.t, r2(b.o), r2(b.h), r2(b.l), r2(b.c)]);
+async function chartBars(tk: string): Promise<{ daily: CBar[]; weekly: CBar[] }> {
+  const get = async (interval: string, days: number) => parseRhBars(mcpJson(await withTimeout(call("rh", "get_equity_historicals",
+    { symbols: [tk], interval, start_time: new Date(Date.now() - days * 864e5).toISOString() }), 20_000, `Robinhood ${interval} bars`)))[tk] || [];
+  const [d, w] = await Promise.all([get("day", 400), get("week", 760)]);
+  return { daily: toCBars(d), weekly: toCBars(w) };
+}
+const barsLine = (bars: CBar[], n: number) => bars.slice(-n).map((b) => `${mdET(b[0])} o${b[1]} h${b[2]} l${b[3]} c${b[4]}`).join(" · ");
+
+export const BOX_RULES = `OTTO RULES — BUY BOX / SELL BOX:
+- Green buy box = strong support (prior lows that held, the top of a big green candle). Red sell box = strong resistance (prior highs that rejected, big red candles). Everything in between is chatter: no trade.
+- Find the zones on the weekly first, then the daily. Be picky and patient: the best setup, not any setup.
+- Do the opposite of what feels natural: buy weakness in the buy box, sell strength in the sell box. Don't buy the first poke above resistance.
+- If price breaks out of a box on a daily close, the range changes and the next box is the target.`;
+const PICK_TOOL = { name: "pick_boxes", description: "Pick tonight's boxes for this stock from the numbered candidate zones, and write the read.",
+  input_schema: { type: "object", properties: {
+    boxes: { type: "array", minItems: 1, maxItems: 4, items: { type: "object", properties: {
+      id: { type: "string", description: "A candidate id from the list (C1, C2…). Never invent a zone." },
+      why: { type: "string", description: "One short plain sentence: why this box matters for tomorrow." } }, required: ["id", "why"] } },
+    read: { type: "string", description: "2–3 plain sentences: where price is (in a box or in the chatter), and the plan — calls only at a buy box, puts only at a sell box, nothing in between." } },
+    required: ["boxes", "read"] } };
+
+/** Chart one stock for a day: bars → candidate zones → Jarvis picks → saved (kept boxes survive a re-chart). */
+export async function chartOne(x: { ticker: string; day?: string; by?: string; mode?: string; extra?: boolean }) {
+  const tk = v322Sym(x.ticker), day = x.day || watchDay();
+  if (!tk) throw new Error("need a ticker");
+  const prev = (await db(`otto_charts?select=*&day=eq.${day}&ticker=eq.${tk}`).catch(() => []))?.[0] || null;
+  const base = { day, ticker: tk, extra: x.extra ?? prev?.extra ?? !CHART_LIST.includes(tk) };
+  await db("otto_charts?on_conflict=day,ticker", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify([{ ...base, status: "charting", error: null, updated_at: new Date().toISOString() }]) }).catch(() => {});
+  try {
+    const { daily, weekly } = await chartBars(tk);
+    if (daily.length < 30) throw new Error(`Robinhood has too little history for ${tk} (${daily.length} daily bars)`);
+    const px = (await rhPrices([tk]).catch(() => ({} as Record<string, number>)))[tk];
+    const last = px > 0 ? px : daily[daily.length - 1][4];
+    const cands = findZones(daily, weekly, last);
+    let picks: any[] = [], read = "";
+    if (cands.length) {
+      const list = cands.map((z) => `${z.id} ${z.type.toUpperCase()} ${z.a}–${z.b} (score ${z.score}) — ${z.why}`).join("\n");
+      try {
+        const out = await claudeTool({ model: MODEL, max_tokens: 900,
+          system: [{ type: "text", text: `You are Jarvis inside Otto Trader, charting ${tk} for ${prettyDate(day)} the way the Otto Rules chart.${NAME_RULE}\n\n${BOX_RULES}` }],
+          tools: [PICK_TOOL], messages: [{ role: "user", content:
+            `${tk} last price ${last.toFixed(2)}.\nWEEKLY (last 12): ${barsLine(weekly, 12)}\nDAILY (last 25): ${barsLine(daily, 25)}\n\nCANDIDATE ZONES (found on the bars by the server — pick from these only):\n${list}\n\nPick the best 2–4: at least the nearest strong buy box under price and the nearest strong sell box over it when they exist. Write the read.` }] },
+          "pick_boxes", 60_000);
+        for (const b of (Array.isArray(out?.boxes) ? out.boxes : [])) {
+          const z = cands.find((c) => c.id === String(b.id || "").trim().toUpperCase());
+          if (z && !picks.some((p) => p.cand === z.id)) picks.push({ cand: z.id, type: z.type, a: z.a, b: z.b, why: `${unname(String(b.why || "")).slice(0, 200)} (${z.why})`, tf: z.tf });
+        }
+        read = unname(String(out?.read || "")).slice(0, 600);
+      } catch (e) { read = `Jarvis couldn't pick tonight (${String((e as Error).message).slice(0, 80)}) — these are the strongest zones by the count.`; }
+      if (!picks.length) {
+        for (const t of ["buy", "sell"] as const) { const z = cands.find((c) => c.type === t); if (z) picks.push({ cand: z.id, type: z.type, a: z.a, b: z.b, why: z.why, tf: z.tf }); }
+        if (!read) read = "These are the strongest zones by the count.";
+      }
+    } else read = `No clean zone within 12% of ${last.toFixed(2)} on the weekly or daily — nothing to box tonight.`;
+    const stamp = new Date().toISOString();
+    const fresh = picks.map((p, i) => ({ id: `${tk}-${Date.now().toString(36)}-${i}`, ...p, review: null, at: stamp }));
+    const boxes = mergeBoxes(prev?.boxes || [], fresh);
+    const chat = [...(prev?.chat || []), { w: "otto", t: `Charted ${tk}${x.mode === "morning" ? " for the open" : ""} at ${fmtMin(etParts().min)} ET${prev?.boxes?.length ? " (re-chart: boxes you kept stay kept)" : ""}. ${read}`, at: stamp, by: x.by || "Otto" }].slice(-60);
+    await db("otto_charts?on_conflict=day,ticker", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([{ ...base, status: "ready", last, daily: daily.slice(-60), weekly: weekly.slice(-60), candidates: cands, boxes, read, chat,
+        error: null, charted_at: stamp, mode: x.mode || "manual", charted_by: String(x.by || "Otto").slice(0, 60), updated_at: stamp }]) });
+    await chartsReadyPing(day).catch(() => {});
+    return { ok: true, ticker: tk, boxes: boxes.length };
+  } catch (e) {
+    const m = String((e as Error).message || e).slice(0, 200);
+    await db(`otto_charts?day=eq.${day}&ticker=eq.${tk}`, { method: "PATCH", headers: { prefer: "return=minimal" },
+      body: JSON.stringify({ status: "error", error: m, updated_at: new Date().toISOString() }) }).catch(() => {});
+    return { ok: false, ticker: tk, error: m };
+  }
+}
+async function chartsReadyPing(day: string) {
+  const rows = await db(`otto_charts?select=ticker,status&day=eq.${day}`).catch(() => []);
+  const ready = (rows || []).filter((r: any) => CHART_LIST.includes(r.ticker) && r.status === "ready").length;
+  if (ready < CHART_LIST.length) return;
+  const s = await setting("charts_ready_sent").catch(() => null);
+  if (s?.day === day) return;
+  await putSetting("charts_ready_sent", { day, at: new Date().toISOString() }, "charts").catch(() => {});
+  await notify("charts", `📈 Night Charts ready for ${prettyDate(day).replace(/, \d{4}$/, "")}`, "Mag-7 + SPY + QQQ are charted. Open the Charts tab to keep, adjust or remove the boxes.", "./#charts");
+}
+/** Start one run per stock (each its own function call); falls back to one after another. */
+export async function chartMany(tickers: string[], day: string, by: string, mode: string) {
+  for (const t of tickers) await db("otto_charts?on_conflict=day,ticker", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify([{ day, ticker: t, status: "charting", error: null, extra: !CHART_LIST.includes(t), updated_at: new Date().toISOString() }]) }).catch(() => {});
+  const left: string[] = [];
+  for (const t of tickers) if (!(await kick("chart_one", { ticker: t, day, by, mode }))) left.push(t);
+  if (left.length) background((async () => { for (const t of left) await chartOne({ ticker: t, day, by, mode }); })());
+  return { ok: true, started: tickers.length };
+}
+/** cron (every 10 min): the night run 8:30–10 PM ET on trading days (for the next trading day), the 8:45 AM update. */
+export async function chartsCron(now = new Date()) {
+  const e = etParts(now);
+  if (isTradingDay(e.date) && e.min >= 1230 && e.min < 1320) {
+    const day = nextTradingDay(e.date), s = await setting("charts_night").catch(() => null);
+    if (s?.day === day) return { ok: true, skipped: "night run done" };
+    await putSetting("charts_night", { day, at: now.toISOString() }, "cron");
+    return chartMany(CHART_LIST, day, "Otto (night)", "night");
+  }
+  if (isTradingDay(e.date) && e.min >= 520 && e.min < 560) {
+    const s = await setting("charts_morning").catch(() => null);
+    if (s?.day === e.date) return { ok: true, skipped: "morning update done" };
+    await putSetting("charts_morning", { day: e.date, at: now.toISOString() }, "cron");
+    const extra = ((await db(`otto_charts?select=ticker&day=eq.${e.date}&extra=eq.true`).catch(() => [])) || []).map((r: any) => r.ticker);
+    return chartMany([...CHART_LIST, ...extra], e.date, "Otto (8:45 update)", "morning");
+  }
+  return { ok: true, skipped: "not a chart window" };
+}
+
+/* ---- the Charts tab ---- */
+const chartDay = (d?: string) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || "")) ? String(d) : watchDay();
+export async function chartsGet(day0?: string) {
+  const day = chartDay(day0);
+  const rows = await db(`otto_charts?select=*&day=eq.${day}&order=ticker.asc`).catch(() => []) || [];
+  const order = (t: string) => { const i = CHART_LIST.indexOf(t); return i < 0 ? 100 : i; };
+  rows.sort((a: any, b: any) => order(a.ticker) - order(b.ticker) || String(a.ticker).localeCompare(b.ticker));
+  const night = rows.filter((r: any) => r.mode === "night" && r.charted_at).map((r: any) => r.charted_at).sort().pop() || null;
+  const morning = rows.filter((r: any) => r.mode === "morning" && r.charted_at).map((r: any) => r.charted_at).sort().pop() || null;
+  return { ok: true, day, list: CHART_LIST, rows, ready: rows.filter((r: any) => CHART_LIST.includes(r.ticker) && r.status === "ready").length,
+    night_at: night, morning_at: morning, reviewed: rows.filter((r: any) => r.used_at).length };
+}
+async function chartRow(tk: string, day0?: string) {
+  const day = chartDay(day0);
+  const r = (await db(`otto_charts?select=*&day=eq.${day}&ticker=eq.${v322Sym(tk)}`))?.[0];
+  if (!r) throw new Error(`${v322Sym(tk)} isn't charted for ${day} yet — press Chart now.`);
+  return r;
+}
+export async function chartReview(b: any, who: string) {
+  const r = await chartRow(b.ticker, b.day);
+  const by = String(b.author || who.split("@")[0]).slice(0, 40);
+  const boxes = (r.boxes || []).map((x: any) => ({ ...x }));
+  const bx = boxes.find((x: any) => x.id === b.box_id);
+  if (!bx) throw new Error("that box isn't on this chart any more — refresh");
+  const review = ["keep", "adj", "rem"].includes(b.review) ? b.review : null;
+  const chat = [...(r.chat || [])];
+  if (review === "adj") {
+    const lo = Math.min(Number(b.low), Number(b.high)), hi = Math.max(Number(b.low), Number(b.high));
+    if (!(lo > 0) || !(hi > lo)) throw new Error("give the box a low and a high price");
+    if (r.last > 0 && (pctOff(lo, r.last) > 0.15 || pctOff(hi, r.last) > 0.15)) throw new Error(`${r.ticker} is ${Number(r.last).toFixed(2)} — a box more than 15% away is probably a typo`);
+    if (lo <= r.last && hi >= r.last) throw new Error(`${r.ticker} ${Number(r.last).toFixed(2)} is inside that range — a box sits under the price (buy) or over it (sell)`);
+    bx.a = r2(lo); bx.b = r2(hi); bx.type = hi < r.last ? "buy" : "sell"; bx.review = "adj";
+    chat.push({ w: "sys", t: `${by} moved the ${bx.type} box to ${bx.a}–${bx.b}`, at: new Date().toISOString() });
+  } else {
+    bx.review = bx.review === review ? null : review;
+    if (bx.review) chat.push({ w: "sys", t: `${by} ${bx.review === "keep" ? "kept" : "removed"} the ${bx.type} box ${bx.a}–${bx.b}`, at: new Date().toISOString() });
+  }
+  bx.by = by;
+  const u = await db(`otto_charts?id=eq.${r.id}&select=*`, { method: "PATCH", body: JSON.stringify({ boxes, chat: chat.slice(-60), updated_at: new Date().toISOString() }) });
+  return { ok: true, row: u?.[0] || null };
+}
+/** "Use kept boxes today": each kept/adjusted box → one Watcher level at its near edge. */
+export async function chartUse(b: any, who: string) {
+  const r = await chartRow(b.ticker, b.day);
+  const by = String(b.author || who.split("@")[0]).slice(0, 40);
+  const kept = (r.boxes || []).filter((x: any) => x.review === "keep" || x.review === "adj");
+  if (!kept.length) throw new Error("Keep or adjust at least one box first.");
+  const added: string[] = [], skipped: string[] = [];
+  for (const x of kept) {
+    const up = x.type === "buy", level = up ? Math.max(x.a, x.b) : Math.min(x.a, x.b);
+    try {
+      await watchAdd({ ticker: r.ticker, level, dir: up ? "up" : "down", source: "desk", by: `${by} · Night Charts`,
+        note: `Night Charts ${up ? "buy" : "sell"} box ${x.a}–${x.b}: ${String(x.why || "").slice(0, 120)}` });
+      added.push(`${level} ${up ? "▲" : "▼"}`);
+    } catch (e) { skipped.push(`${level} (${String((e as Error).message).slice(0, 80)})`); }
+  }
+  const at = new Date().toISOString();
+  const boxes = (r.boxes || []).map((x: any) => kept.some((k: any) => k.id === x.id) ? { ...x, used: true } : x);
+  const chat = [...(r.chat || []), { w: "sys", t: `${by} put ${added.length} level${added.length === 1 ? "" : "s"} on today's Watcher: ${added.join(", ") || "none"}${skipped.length ? ` · skipped ${skipped.join("; ")}` : ""}`, at }];
+  await db(`otto_charts?id=eq.${r.id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ boxes, chat: chat.slice(-60), used_at: at, updated_at: at }) });
+  if (added.length) await logDesk("system", "Otto", `📈 Night Charts: ${by} put ${r.ticker} ${added.join(", ")} on the Watcher for ${r.day} (buy box → its top edge, calls side; sell box → its bottom edge, puts side).`);
+  return { ok: true, added, skipped };
+}
+const CHART_REPLY = { name: "chart_reply", description: "Answer about this chart; optionally move one box when they ask you to.",
+  input_schema: { type: "object", properties: {
+    text: { type: "string", description: "Your answer, 1–4 plain sentences, from the chart, the boxes' reasons and the Otto Rules." },
+    move: { type: "object", description: "Only if they asked you to move a box.", properties: { box_id: { type: "string" }, low: { type: "number" }, high: { type: "number" } }, required: ["box_id", "low", "high"] } },
+    required: ["text"] } };
+export async function chartChat(b: any, who: string) {
+  const r = await chartRow(b.ticker, b.day);
+  const by = String(b.author || who.split("@")[0]).slice(0, 40), q = String(b.text || "").trim().slice(0, 600);
+  if (!q) throw new Error("type a question");
+  const chat = [...(r.chat || []), { w: "josh", by, t: q, at: new Date().toISOString() }];
+  const boxes = (r.boxes || []).map((x: any) => `${x.id} ${x.type.toUpperCase()} ${x.a}–${x.b}${x.review ? ` [${x.review}]` : ""} — ${x.why}`).join("\n");
+  const cands = (r.candidates || []).map((z: any) => `${z.id} ${z.type} ${z.a}–${z.b} — ${z.why}`).join("\n");
+  let text = "", moved = "";
+  try {
+    const out = await claudeTool({ model: MODEL, max_tokens: 700,
+      system: [{ type: "text", text: `You are Jarvis inside Otto Trader, going over the ${r.ticker} Night Chart with ${by}. Team approach: explain, don't grade.${NAME_RULE}\n\n${BOX_RULES}` }],
+      tools: [CHART_REPLY], messages: [{ role: "user", content:
+        `${r.ticker} last ${r.last}. Read: ${r.read}\nBOXES:\n${boxes || "(none)"}\nCANDIDATE ZONES:\n${cands || "(none)"}\nDAILY (last 20): ${barsLine(r.daily || [], 20)}\nWEEKLY (last 10): ${barsLine(r.weekly || [], 10)}\nCHAT SO FAR:\n${chat.slice(-10).map((m: any) => `${m.w === "otto" ? "Jarvis" : m.by || m.w}: ${m.t}`).join("\n")}\n\nAnswer ${by}'s last message.` }] },
+      "chart_reply", 45_000);
+    text = unname(String(out?.text || "")).slice(0, 1200);
+    if (out?.move?.box_id) {
+      try { await chartReview({ ticker: r.ticker, day: r.day, box_id: out.move.box_id, review: "adj", low: out.move.low, high: out.move.high, author: "Jarvis" }, who); moved = ` (Moved the box to ${r2(Math.min(out.move.low, out.move.high))}–${r2(Math.max(out.move.low, out.move.high))}.)`; }
+      catch (e) { moved = ` (Couldn't move the box: ${String((e as Error).message).slice(0, 100)})`; }
+    }
+  } catch (e) { text = `Jarvis couldn't answer just now (${String((e as Error).message).slice(0, 100)}). Try again.`; }
+  const fresh = (await db(`otto_charts?select=chat&id=eq.${r.id}`).catch(() => []))?.[0]?.chat || chat;
+  // keep lines written meanwhile (a box move, a review) after the question, in order
+  const merged = [...chat, ...fresh.filter((m: any) => !chat.some((c: any) => c.at === m.at && c.t === m.t))];
+  merged.push({ w: "otto", t: text + moved, at: new Date().toISOString() });
+  const u = await db(`otto_charts?id=eq.${r.id}&select=*`, { method: "PATCH", body: JSON.stringify({ chat: merged.slice(-60), updated_at: new Date().toISOString() }) });
+  return { ok: true, row: u?.[0] || null };
+}
+export async function chartNow(b: any, who: string) {
+  const by = String(b.author || who.split("@")[0]).slice(0, 40), day = watchDay();
+  if (b.all) return chartMany(CHART_LIST, day, by, "manual");
+  const tk = v322Sym(b.ticker);
+  if (!tk || !/^[A-Z.]{1,6}$/.test(tk)) throw new Error("type a ticker like PLTR");
+  if (!CHART_LIST.includes(tk)) {
+    const px = (await rhPrices([tk]).catch(() => ({} as Record<string, number>)))[tk];
+    if (!(px > 0)) throw new Error(`Robinhood has no price for ${tk} — check the ticker.`);
+  }
+  return chartMany([tk], day, by, "manual");
+}

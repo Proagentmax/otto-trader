@@ -141,11 +141,12 @@ const pings: { kind: string; title: string; body: string }[] = [];
 let extractHook: ((text: string) => any[]) | null = null;
 (globalThis as any).__OTTO_TEST__ = {
   db: fakeDb, call: fakeCall,
+  brain: () => [{ call: { date: "2026-10-01", title: "t" }, rules: [], setups: [], levels: [], _transcript: "x" }],   // v3.24: Postgres only, no public file
   notify: (kind: string, title: string, body: string) => pings.push({ kind, title, body }),
   extract: (text: string) => (extractHook ? extractHook(text) : []),
   claude: async (body: any) => { claudeBodies.push(body); if (!claudeScript) return sse(textReply("ok")); const ev = claudeScript(body); if (ev instanceof Error) throw ev; return sse(ev); },
 };
-(globalThis as any).fetch = (u: any) => /brain-latest\.json/.test(String(u)) ? Promise.resolve(new Response(JSON.stringify([{ call: { date: "2026-10-01", title: "t" }, rules: [], setups: [], levels: [], _transcript: "x" }]))) : Promise.reject(new Error("network disabled in tests"));
+(globalThis as any).fetch = (u: any) => Promise.reject(new Error("network disabled in tests: " + String(u).slice(0, 80)));
 (Deno as any).serve = () => ({ finished: Promise.resolve() });
 
 const M = await import("../otto-proxy.ts");
@@ -249,9 +250,12 @@ Deno.test("guardrails: today's SPY card ($144 at the stop on a $1,197 account) i
 });
 Deno.test("guardrails: daily stop after 2 losing Agentic trades — flagged, still built", async () => {
   reset(); setNow("2026-10-06T17:30:00Z");
-  T.otto_trades.push({ id: "t1", account: "Agentic ••7012", pnl: -53, closed_at: "2026-10-06T16:29:00Z" },
-    { id: "t2", account: "Agentic ••7012", pnl: -20, closed_at: "2026-10-06T17:00:00Z" },
-    { id: "t3", account: "Individual ••6166", pnl: -500, closed_at: "2026-10-06T17:00:00Z" });
+  // v3.24 (A7): counted from Robinhood's own order records (two losing round trips in the Agentic account).
+  const leg = (id: string, side: string, eff: string, px: string) => ({ option_id: id, side, position_effect: eff, chain_symbol: "SPY", strike_price: "780", option_type: "call", executions: [{ price: px, quantity: "1" }] });
+  orders.push({ id: "b1", state: "filled", chain_symbol: "SPY", created_at: "2026-10-06T14:10:00Z", legs: [leg("o1", "buy", "open", "1.00")] },
+    { id: "s1", state: "filled", chain_symbol: "SPY", created_at: "2026-10-06T16:29:00Z", legs: [leg("o1", "sell", "close", "0.47")] },
+    { id: "b2", state: "filled", chain_symbol: "SPY", created_at: "2026-10-06T16:40:00Z", legs: [leg("o2", "buy", "open", "1.00")] },
+    { id: "s2", state: "filled", chain_symbol: "SPY", created_at: "2026-10-06T17:00:00Z", legs: [leg("o2", "sell", "close", "0.80")] });
   const c: any[] = await M.limitChecks(100, 50);
   const d = c.find((x) => /DAILY STOP/.test(x.text));
   assert(d && d.ok === false, JSON.stringify(c));
@@ -973,7 +977,8 @@ Deno.test("v3.20: nothing fits → the card is still built, with a red 'over buy
   callHook = fakeChain("MU", 1080.7, 5, 17.9, 120);     // even the cheapest MU contract is over $120
   const c: any = await M.proposeAction(optCard("MU", "MU-2026-10-09-call-1080", 17.9, "up", 16.8, 1090, 1079.5), "signals");
   assert(c.status === "pending", "card built");
-  assert(c.checks[0].ok === false && /Over buying power: costs \$1790/.test(c.checks[0].text) && /No contract on the list fits/.test(c.checks[0].text), JSON.stringify(c.checks[0]));
+  const bp = c.checks.find((x: any) => /Over buying power/.test(x.text));   // v3.24: a stale-entry line may come first
+  assert(bp && bp.ok === false && /Over buying power: costs \$1790/.test(bp.text) && /No contract on the list fits/.test(bp.text), JSON.stringify(c.checks));
 });
 
 Deno.test("v3.20: Ifoma's own ticket over buying power is never bounced — only flagged", async () => {
@@ -1293,8 +1298,8 @@ Deno.test("v3.22: an entry Robinhood rejects after Approve → the Desk and the 
   T.otto_actions = [{ id: "card-rej", title: "Buy 1 SPY 781C", status: "done", created_at: new Date().toISOString(), decided_at: new Date().toISOString(),
     exit: { state: "waiting_fill", order_id: "e-rej", option_id: OPT, qty: 1, entry_limit: 3.5, stop_option: 2, tv_symbol: "AMEX:SPY", direction: "up", wrong_if: 778, tp1: 784, log: [] } }];
   await M.exitTick(T.otto_actions[0]);
-  assert(T.otto_actions[0].exit.state === "dead" && T.otto_actions[0].exit.dead_reason === "rejected: Insufficient buying power.", JSON.stringify(T.otto_actions[0].exit));
-  assert(/the entry was rejected \(Robinhood: Insufficient buying power\.\), so no stop or alerts were set/.test(deskText()), deskText());
+  assert(T.otto_actions[0].exit.state === "dead" && T.otto_actions[0].exit.dead_reason === "Rejected by Robinhood: Insufficient buying power.", JSON.stringify(T.otto_actions[0].exit));
+  assert(/the entry was Rejected by Robinhood: Insufficient buying power\., so no stop or alerts were set/.test(deskText()), deskText());   // v3.24 wording
 });
 
 Deno.test("v3.22: the exact 7 Oct lines — '(Oct 3 call, 29:20)' removed, \"I don't have a prep section\" corrected, 'No card: the coach's own morning read' left alone", () => {
@@ -1382,4 +1387,429 @@ Deno.test("v3.23: the 9:10 self-test fails (and pings) when post → card is slo
   const sp = r.steps.find((s: any) => /^Speed/.test(s.name));
   assert(!r.ok && sp && !sp.ok && /slower than the 30s target/.test(sp.note), JSON.stringify(r.steps));
   assert(pings.some((p) => /self-test failed/.test(p.title) && /Speed/.test(p.body)), JSON.stringify(pings));
+});
+
+/* ======================= v3.24 — honesty + safety (replays of the 8 Oct misses) ======================= */
+import { ORDERS_1008, ordersAt, BARS_1008 } from "./fixtures_2026-10-08.ts";
+const bars1008 = (tool: string, args: any) => tool === "get_equity_historicals"
+  ? { data: { results: (args.symbols || []).filter((s: string) => BARS_1008[s]).map((s: string) => ({ symbol: s, interval: "5minute", bars: BARS_1008[s] })) } } : null;
+const px1008 = (px: Record<string, number>) => (tool: string, args: any) =>
+  tool === "get_equity_quotes" ? { data: { results: (args.symbols || []).map((s: string) => ({ quote: { symbol: s, last_trade_price: px[s] ? String(px[s]) : undefined } })) } } : null;
+const hooks = (...hs: ((t: string, a: any) => any)[]) => (t: string, a: any) => { for (const h of hs) { const r = h(t, a); if (r) return r; } return null; };
+const at1008 = (iso: string) => { reset(); setNow(iso); orders = ordersAt(iso) as any[]; };
+
+Deno.test("v3.24 (A13): TSLA 1:07 PM — '365P filled at 3.70, TP1 already hit' is corrected: never filled", async () => {
+  at1008("2026-10-08T17:07:30Z");
+  callHook = hooks(bars1008, px1008({ TSLA: 370.45 }));
+  const r = await M.factCheck("TSLA is at $370.45 right now — the 365P filled at 3.70 with TP1 at 368. TP1 is already hit.");
+  assert(/\[Corrected by Otto: Robinhood shows the TSLA 365P 10\/14 order confirmed, not filled — it never filled\.\]/.test(r.text), r.text);
+  assert(!/365P filled at 3\.70/.test(r.text) && !/TP1 is already hit/.test(r.text), "both false sentences replaced: " + r.text);
+  assert(r.notes.length >= 1 && r.notes.every((n: string) => /never filled/.test(n)), JSON.stringify(r.notes));
+});
+Deno.test("v3.24 (A6): the 9:58 PLTR review — fake loss, 'both stopped', 'daily stop active' corrected; true lines stay", async () => {
+  at1008("2026-10-08T13:58:20Z");
+  callHook = hooks(bars1008, px1008({ PLTR: 201.2 }));
+  const said = "NVDA 240C closed at $0.60 for −$26. Then the 9:55 bar closed at $199.33 — wrong-if triggered, out at roughly ~$0.90–$1.00 on the option (entry $1.74, loss ~$74–$84). " +
+    "Two trades done today (NVDA 240C, PLTR 202.5C), both stopped. **Daily stop flag is active** — any new trade today gets a red banner per the guardrails.";
+  const r = await M.factCheck(said);
+  assert(/NVDA 240C closed at \$0\.60 for −\$26\./.test(r.text), "true NVDA line kept: " + r.text);
+  assert(/PLTR 202\.5C 10\/09 bought @ \$1\.74 → sold @ \$1\.87 = \+\$13/.test(r.text), "real PLTR result shown: " + r.text);
+  assert(/1 losing round trip today/.test(r.text) && /daily stop \(2 losers\) is NOT hit/.test(r.text), r.text);
+  assert(!/loss ~\$74/.test(r.text) && !/both stopped/.test(r.text) && !/Daily stop flag is active/.test(r.text), "false lines gone: " + r.text);
+});
+Deno.test("v3.24 (A6): 9:52 position check — 'entry $1.88' (the limit) corrected to the $1.74 fill", async () => {
+  at1008("2026-10-08T13:52:10Z");
+  callHook = hooks(bars1008, px1008({}));
+  const r = await M.factCheck("**PLTR 202.5C 10/09 — position check**\n| Option mark | $2.43 (entry $1.88, +$0.55 / +29%) |");
+  assert(/filled at \$1\.74 \(Robinhood\) — that's the entry, not \$1\.88/.test(r.text), r.text);
+});
+Deno.test("v3.24 (A7): the 9:50 PLTR card counts NVDA's −$26 — '1 losing trade', from Robinhood (the journal was empty)", async () => {
+  at1008("2026-10-08T13:50:30Z");
+  callHook = hooks(bars1008, px1008({}));
+  const c: any[] = await M.limitChecks(174, 80);
+  const d = c.find((x) => /losing trade/.test(x.text));
+  assert(d && /Today: 1 losing trade, \$-26/.test(d.text) && d.ok === true, JSON.stringify(c));
+  assert(c.some((x) => /Trade 2 today/.test(x.text)), "NVDA was trade 1: " + JSON.stringify(c));
+});
+Deno.test("v3.24 (A7): a second loser hits the daily stop — flagged red, card still built", async () => {
+  at1008("2026-10-08T16:00:00Z");
+  orders = [...ordersAt("2026-10-08T16:00:00Z"),
+    { id: "x-b", chain_symbol: "AMD", state: "filled", created_at: "2026-10-08T15:30:00Z", updated_at: "2026-10-08T15:30:00Z", legs: [{ option_id: "amd", side: "buy", position_effect: "open", strike_price: "630", option_type: "put", executions: [{ price: "2.00", quantity: "1" }] }] },
+    { id: "x-s", chain_symbol: "AMD", state: "filled", created_at: "2026-10-08T15:45:00Z", updated_at: "2026-10-08T15:45:00Z", legs: [{ option_id: "amd", side: "sell", position_effect: "close", strike_price: "630", option_type: "put", executions: [{ price: "1.50", quantity: "1" }] }] }] as any[];
+  const c: any[] = await M.limitChecks(150, 50);
+  const d = c.find((x) => /DAILY STOP/.test(x.text));
+  assert(d && d.ok === false && /2 losing trades today/.test(d.text), JSON.stringify(c));
+});
+Deno.test("v3.24 (A10): 'PLTR at 195.50 right now' (it never traded below 197.00) → corrected with the day's range", async () => {
+  at1008("2026-10-08T13:47:40Z");
+  callHook = hooks(bars1008, px1008({ PLTR: 199.9 }));
+  const r = await M.factCheck("**PLTR at 195.50 right now** is the hottest thing on the board — coach posted the bounce zone call at 9:47 AM (#77). If PLTR holds 195.50 on a 5-min close I'll build the card.");
+  assert(/\[Corrected by Otto: PLTR traded 197\.00–204\.44 today — it never traded 195\.5\.\]/.test(r.text), r.text);
+  assert(/If PLTR holds 195\.50 on a 5-min close/.test(r.text), "the 'if' line is left alone: " + r.text);
+});
+Deno.test("v3.24: true trade talk is left alone (recap total, QQQ +$24, quotes table, yesterday's trade)", async () => {
+  at1008("2026-10-08T21:15:00Z");
+  callHook = hooks(bars1008, px1008({}));
+  const ok = ["Four trades closed, Realized on closed trades today: +$45 — TSM and QQQ puts carried the day; NVDA was the only red trade.",
+    "QQQ 751P: sold at $2.82 for +$24 realized on the $2.58 fill.",
+    "| **META** | $722.81 | +$1.50 (+0.2%) | Barely green, grinding. |",
+    "QQQ — yesterday sold at $3.65, **+$11 realized.** Small but clean.",
+    "Not filled yet — the TSLA order is still working.",
+    "If PLTR fills at 1.80 the stop goes on at 0.94."];
+  for (const s of ok) { const r = await M.factCheck(s); assert(r.text.trim() === s.trim() && !r.notes.length, "changed: " + s + " → " + r.text); }
+});
+Deno.test("v3.24: Jarvis's working notes come off the Desk text (8 Oct QQQ check-in); the rest stays", () => {
+  const raw = "Let me grab the position and quote simultaneously.Let me try the correct Agentic account number.**QQQ 751P is +$24 on the $2.58 fill.** The stop_order_id is for the stop order, let me grab it.\nHolding — TP1 752.";
+  const t = M.stripNarration(raw);
+  assert(!/Let me/.test(t) && !/stop_order_id/.test(t), t);
+  assert(/\*\*QQQ 751P is \+\$24 on the \$2\.58 fill\.\*\*/.test(t) && /Holding — TP1 752\./.test(t), t);
+  assert(M.stripNarration("I'll check the 10:30 bar close at 10:31 AM ET.") === "I'll check the 10:30 bar close at 10:31 AM ET.", "a promise is not narration");
+});
+Deno.test("v3.24 (A14): Josh's cancelled TSLA entry says 'cancelled before it filled' — no 'Robinhood gave no reason'", async () => {
+  at1008("2026-10-08T17:09:00Z");
+  T.otto_actions = [{ id: "card-tsla", title: "Buy 1 TSLA 365P 10/14 @ $3.70", status: "done", created_at: "2026-10-08T17:06:30Z", decided_at: "2026-10-08T17:06:34Z",
+    exit: { state: "waiting_fill", order_id: "tsla-buy", option_id: "4b0d0ed3-b9ea-46d3-af93-72685509d6f8", qty: 1, entry_limit: 3.7, stop_option: 2.6, tv_symbol: "NASDAQ:TSLA", direction: "down", wrong_if: 372, tp1: 368, log: [] } }];
+  await M.exitTick(T.otto_actions[0]);
+  assert(T.otto_actions[0].exit.state === "dead" && T.otto_actions[0].exit.dead_reason === "cancelled before it filled", JSON.stringify(T.otto_actions[0].exit));
+  assert(/the entry was cancelled before it filled/.test(deskText()) && !/gave no reason/.test(deskText()), deskText());
+});
+Deno.test("v3.24 (A14): a real Robinhood rejection still says 'Rejected by Robinhood: <reason>'", () => {
+  assert(M.deadWord("rejected", "Insufficient buying power.") === "Rejected by Robinhood: Insufficient buying power.", "rejected");
+  assert(M.deadWord("failed") === "Rejected by Robinhood: no reason given", "failed");
+  assert(M.deadWord("cancelled") === "cancelled before it filled", "cancelled");
+});
+
+/* ---- A8: the NVDA card from 7 Oct, approved 9:28, filled 9:30 at $0.86 already below its 235 wrong-if ---- */
+const nvdaCard = () => ({ title: "Buy 1 NVDA 240C 10/12 @ $1.60", summary: "Signal #72",
+  calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: OPT, side: "buy", position_effect: "open" }], type: "limit", price: "1.60", quantity: "1", time_in_force: "gfd" } }],
+  plan: { tv_symbol: "NASDAQ:NVDA", direction: "up", setup: "otto signal", tp1: 240, stop: 235, stop_option: 0.48, entry_underlying: 237.5 } });
+Deno.test("v3.24 (A8): stale entry — red line on the card, Approve still places it, Desk says so", async () => {
+  at1008("2026-10-08T13:20:00Z");
+  orders = [];
+  callHook = hooks(bars1008, px1008({ NVDA: 236.1 }), fakeChain("NVDA", 236.1, 2.5, 1.6, 1166));
+  const card: any = await M.proposeAction(nvdaCard(), "signals");
+  card.id = T.otto_actions[T.otto_actions.length - 1].id = crypto.randomUUID();
+  assert(!card.checks.some((c: any) => c.stale), "not stale at 236.10: " + JSON.stringify(card.checks));
+  // pre-open: NVDA slips to 234.88 while the card waits → the cron puts the red line on
+  setNow("2026-10-08T13:27:00Z"); callHook = hooks(bars1008, px1008({ NVDA: 234.88 }), fakeChain("NVDA", 234.88, 2.5, 1.6, 1166));
+  await M.staleTick();
+  const row = T.otto_actions.find((a) => a.id === card.id);
+  assert(row.checks[0].stale && /NVDA is already below 235 \(now 234\.88\) — this trade is wrong before it starts/.test(row.checks[0].text), JSON.stringify(row.checks));
+  assert(/The card stays up — Approve still places it/.test(deskText()), deskText());
+  setNow("2026-10-08T13:28:39Z");
+  const done: any = await M.actOnForTest(card.id, "approve", "Josh");
+  assert(done.status === "done" && calls.some((c) => c.tool === "place_option_order" && c.args.price === "1.60"), "order still placed");
+  assert(/approved by Josh while NVDA is already below 235/.test(deskText()), deskText());
+});
+Deno.test("v3.24 (A8): the stop is sized from the actual fill — $1.60 limit, $0.86 fill → stop $0.26 (not $0.48)", async () => {
+  assert(M.stopFromFill(1.6, 0.48, 0.86) === 0.26, "0.86 × 30% = 0.258 → 0.26: " + M.stopFromFill(1.6, 0.48, 0.86));
+  assert(M.stopFromFill(1.6, 0.48, 1.6) === null && M.stopFromFill(1.6, 0.48, 1.59) === null, "same price → card's stop");
+  at1008("2026-10-08T13:30:10Z");
+  orders = [{ id: "nv-b", chain_symbol: "NVDA", state: "filled", processed_quantity: "1", price: "1.60", created_at: "2026-10-08T13:28:39Z", updated_at: "2026-10-08T13:30:01Z",
+    legs: [{ option_id: OPT, side: "buy", position_effect: "open", executions: [{ price: "0.86", quantity: "1" }] }] }];
+  callHook = hooks(bars1008, px1008({ NVDA: 234.6 }));
+  T.otto_actions = [{ id: "card-nv", title: "Buy 1 NVDA 240C 10/12 @ $1.60", status: "done", created_at: "2026-10-07T19:00:00Z", decided_at: "2026-10-08T13:28:39Z",
+    exit: { state: "waiting_fill", order_id: "nv-b", option_id: OPT, qty: 1, entry_limit: 1.6, stop_option: 0.48, tv_symbol: "NASDAQ:NVDA", direction: "up", wrong_if: 235, tp1: 240, wrong_tf: 5, log: [] } }];
+  await M.exitTick(T.otto_actions[0]);
+  const stop = calls.find((c) => c.tool === "place_option_order" && c.args.type === "stop_market");
+  assert(stop && stop.args.stop_price === "0.26", "stop placed at 0.26: " + JSON.stringify(stop?.args));
+  assert(/Stop sized from the fill \(card had \$0\.48\)/.test(deskText()) && /NVDA is already below 235/.test(deskText()), deskText());
+});
+
+/* ---- A11 + A12: TSM, 8 Oct ---- */
+const tsmTrade = (wrong = 467.9) => ({ id: "card-tsm", title: "Buy 1 TSM 472.5C 10/09 @ $1.57", status: "done", created_at: "2026-10-08T14:06:00Z", decided_at: "2026-10-08T14:06:32Z",
+  exit: { state: "armed", option_id: OPT, qty: 1, entry_limit: 1.57, stop_option: 0.47, stop_order_id: "tsm-stop", tv_symbol: "NYSE:TSM", direction: "up", wrong_if: wrong, tp1: 473, wrong_tf: 5,
+    armed_at: "2026-10-08T14:09:00Z", alerts: { wrong: 501, tp1: 502 }, fired: [], log: [] } });
+Deno.test("v3.24 (A11): the late 10:37 TSM wrong-if alert is ignored — the latest 5-min close (10:30–10:35) is 469.60, no close card", async () => {
+  at1008("2026-10-08T14:37:10Z");
+  orders = [{ id: "tsm-stop", state: "confirmed", type: "stop_market", legs: [{ option_id: OPT, side: "sell", position_effect: "close" }] }];
+  callHook = hooks(bars1008, px1008({ TSM: 469.9 }), (t: string) => t === "mcp-tv-get-alerts-log" ? { events: [{ tv_alert_id: 501, fire_id: "f1", fired_at: "2026-10-08T14:36:50Z" }] } : null);
+  T.otto_actions = [tsmTrade()];
+  const r: any = await M.exitTick(T.otto_actions[0]);
+  assert(r.stale_alert === true, JSON.stringify(r));
+  assert(T.otto_actions.length === 1 && !orders.some((o) => o.type === "market"), "no close card, nothing sold");
+  assert(/late TradingView wrong-if alert \(467\.9\) was ignored — the latest 5-minute bar closed at 469\.6,/.test(deskText()), deskText());
+});
+Deno.test("v3.24 (A11): a wrong-if alert that IS true on the latest bar still closes by the card rule", async () => {
+  at1008("2026-10-08T14:15:10Z");
+  orders = [{ id: "tsm-stop", state: "confirmed", type: "stop_market", legs: [{ option_id: OPT, side: "sell", position_effect: "close" }] }];
+  callHook = hooks(bars1008, px1008({ TSM: 467.9 }), (t: string) => t === "mcp-tv-get-alerts-log" ? { events: [{ tv_alert_id: 501, fire_id: "f2", fired_at: "2026-10-08T14:15:02Z" }] } : null);
+  T.otto_actions = [tsmTrade(468)];
+  const r: any = await M.exitTick(T.otto_actions[0]);
+  assert(!r.stale_alert && (r.auto || T.otto_actions.length > 1), "not ignored: " + JSON.stringify(r));
+});
+Deno.test("v3.24 (A12): Josh's 469.44 Watcher level becomes the TSM wrong-if (replaces 467.90); the server closes on a 5-min close below it", async () => {
+  at1008("2026-10-08T14:32:20Z");
+  callHook = hooks(bars1008, px1008({ TSM: 469.6 }));
+  T.otto_actions = [tsmTrade()];
+  const row: any = await M.watchAdd({ ticker: "TSM", level: 469.44, dir: "down", source: "desk", by: "Josh via Jarvis" });
+  const ex = T.otto_actions[0].exit;
+  assert(ex.wrong_if === 469.44 && ex.wrong_tf === 5 && ex.wrong_set_at, JSON.stringify(ex));
+  assert(row?.trade_wrong_if?.old === 467.9, JSON.stringify(row));
+  assert(calls.some((c) => c.tool === "mcp-tv-delete-alert" && c.args.alert_ids[0] === 501), "old 467.90 alert removed (one wrong-if)");
+  assert(T.otto_watch.every((w) => w.status !== "watching"), "not a separate entry level: " + JSON.stringify(T.otto_watch));
+  assert(/TSM 469\.44 is now the wrong-if on Buy 1 TSM 472\.5C 10\/09 @ \$1\.57 \(was 467\.9 — replaced, not added\)/.test(deskText()), deskText());
+  // the 10:10 bar (467.90) was before the move: it doesn't count. 10:35 closed 469.885 (above). 10:40 closed 469.12 → met at 10:45.
+  const before: any = await M.exitRuleCheck(T.otto_actions[0], RealDate.parse("2026-10-08T14:40:30Z"));
+  assert(!before.met, "not met yet: " + JSON.stringify(before));
+  const after: any = await M.exitRuleCheck(T.otto_actions[0], RealDate.parse("2026-10-08T14:45:10Z"));
+  assert(after.met && /wrong-if 469\.44: TSM closed a 5-minute bar at 469\.12/.test(after.why), JSON.stringify(after));
+});
+Deno.test("v3.24 (A12): a level ABOVE an open call (or a ticker with no trade) is an ordinary Watcher level", async () => {
+  at1008("2026-10-08T14:50:20Z");
+  callHook = hooks(bars1008, px1008({ TSM: 469.6, PLTR: 199.9 }));
+  T.otto_actions = [tsmTrade()];
+  const r1: any = await M.watchAdd({ ticker: "TSM", level: 471.5, dir: "up", source: "desk", by: "Josh" });
+  const r2: any = await M.watchAdd({ ticker: "PLTR", level: 198.5, dir: "down", source: "desk", by: "Josh" });
+  assert(r1 && !r1.trade_wrong_if && r1.status === "watching" && r2 && !r2.trade_wrong_if, JSON.stringify([r1, r2]));
+  assert(T.otto_actions[0].exit.wrong_if === 467.9, "trade untouched");
+});
+
+/* ---- C1 / C2 ---- */
+Deno.test("v3.24 (C1): a re-lock on a level that was taken off puts it back on the Watcher", async () => {
+  at1008("2026-10-08T13:00:00Z");
+  T.otto_watch = [{ id: 901, day: "2026-10-08", ticker: "NVDA", level: 237.5, dir: "up", status: "removed", source: "desk", fired: {} }];
+  const w: any = await M.watchEnsure({ ticker: "NVDA", level: 237.5, dir: "up" }, null);
+  assert(w && w.id === 901 && T.otto_watch[0].status === "watching", JSON.stringify(T.otto_watch));
+});
+Deno.test("v3.24 (C2): a check-in stuck on 'running' for 10+ minutes is failed, and the Desk and phone are told", async () => {
+  at1008("2026-10-08T17:30:00Z");
+  T.otto_checks = [{ id: 7, day: "2026-10-08", due_at: "2026-10-08T17:15:00Z", what: "Look at QQQ 751P vs 752", by: "Jarvis", status: "running" },
+    { id: 8, day: "2026-10-08", due_at: "2026-10-08T17:27:00Z", what: "recent", by: "Jarvis", status: "running" }];
+  await M.checksStuck();
+  assert(T.otto_checks[0].status === "error" && /timed out/.test(T.otto_checks[0].result), JSON.stringify(T.otto_checks[0]));
+  assert(T.otto_checks[1].status === "running", "a 3-minute-old run is left alone");
+  assert(/check-in "Look at QQQ 751P vs 752" failed: timed out/.test(deskText()) && pings.some((p) => /check-in failed/.test(p.title)), deskText());
+});
+Deno.test("v3.24: today's Robinhood trades go into Jarvis's context line", () => {
+  const line = M.tradesLine(M.dayFacts(ORDERS_1008 as any[]));
+  assert(/NVDA 240C 10\/12 bought @ \$0\.86 → sold @ \$0\.60 = −\$26/.test(line) && /Losing round trips today: 1/.test(line) && /Realized: \+\$45/.test(line), line);
+  assert(/Never filled: TSLA 365P 10\/14 \(cancelled before it filled\)/.test(line), line);
+});
+
+/* ---- C10 (Ifoma, 8 Oct night: all three) ---- */
+const noPos = (t: string) => t === "get_option_positions" ? { data: { positions: [] } } : t === "get_option_instruments" ? { data: { instruments: [{ chain_symbol: "NVDA", strike_price: "240.0000", type: "call", expiration_date: "2026-10-12" }] } } : null;
+const stopCard = () => ({ title: "Stop-Market STC — NVDA 240C 10/12 @ $0.48", summary: "check-in",
+  calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: OPT, side: "sell", position_effect: "close" }], quantity: "1", type: "stop_market", stop_price: "0.48", time_in_force: "gfd" } }] });
+Deno.test("v3.24 (C10a): the 9:45 check-in stop card for NVDA (closed at 9:36) is not made — nothing to close", async () => {
+  at1008("2026-10-08T13:45:31Z");
+  callHook = noPos;
+  let err = "";
+  try { await M.proposeAction(stopCard(), "checkin"); } catch (e) { err = (e as Error).message; }
+  assert(/NO CARD — nothing to close: Robinhood shows no NVDA 240C 10\/12 position/.test(err) && !T.otto_actions.length, err);
+});
+Deno.test("v3.24 (C10b): a stop card approved after the position is gone is NOT sent to Robinhood", async () => {
+  at1008("2026-10-08T13:46:36Z");
+  const id = crypto.randomUUID();
+  T.otto_actions = [{ id, ...stopCard(), status: "pending", created_at: "2026-10-08T13:45:31Z", created_by: "checkin" }];
+  callHook = noPos;
+  const r: any = await M.actOnForTest(id, "approve", "ottotrader@vinecreativestudio.com");
+  assert(r.status === "failed" && /Nothing to close/.test(r.result[0].text), JSON.stringify(r));
+  assert(!calls.some((c) => c.tool === "place_option_order"), "nothing sent");
+  assert(/nothing to close — Robinhood shows no NVDA 240C 10\/12 position/.test(deskText()), deskText());
+});
+Deno.test("v3.24 (C10c): when a protected trade goes flat, its waiting stop/close cards come down", async () => {
+  at1008("2026-10-08T13:36:30Z");
+  callHook = noPos;
+  T.otto_actions = [{ ...tsmTrade(), id: "nv-tr", title: "Buy 1 NVDA 240C", exit: { ...tsmTrade().exit, stop_order_id: null, alerts: {} } },
+    { id: "nv-stop", ...stopCard(), status: "pending", created_at: "2026-10-08T13:35:40Z" },
+    { id: "other", title: "Buy 1 QQQ", calls: [{ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: "qqq", side: "buy", position_effect: "open" }] } }], status: "pending", created_at: "2026-10-08T13:35:00Z" }];
+  await M.exitTick(T.otto_actions[0]);
+  assert(T.otto_actions[0].exit.state === "closed", JSON.stringify(T.otto_actions[0].exit));
+  assert(T.otto_actions[1].status === "expired" && T.otto_actions[2].status === "pending", JSON.stringify(T.otto_actions.map((a) => a.status)));
+});
+Deno.test("v3.24 (C10): a real stop for a held contract still goes up (Robinhood shows the position)", async () => {
+  at1008("2026-10-08T13:33:00Z");
+  callHook = null;
+  const c: any = await M.proposeAction(stopCard(), "ottotrader@vinecreativestudio.com");
+  assert(c.status === "pending", JSON.stringify(c));
+});
+
+/* =============================== v3.25 — NIGHT CHARTS =============================== */
+import { NVDA_DAILY, NVDA_WEEKLY, NVDA_LAST_1008 } from "./fixtures_nvda_daily_weekly.ts";
+const rhBarsOf = (sym: string, bars: any[], interval: string) => ({ symbol: sym, interval, bars: bars.map((b: any) => ({
+  begins_at: new RealDate(b[0]).toISOString(), open_price: String(b[1]), high_price: String(b[2]), low_price: String(b[3]), close_price: String(b[4]) })) });
+const chartHook = (px = NVDA_LAST_1008) => hooks((tool: string, args: any) => {
+  if (tool !== "get_equity_historicals") return null;
+  const s = (args.symbols || [])[0];
+  if (s !== "NVDA") return { data: { results: [] } };
+  return { data: { results: [rhBarsOf("NVDA", args.interval === "week" ? NVDA_WEEKLY : NVDA_DAILY, args.interval)] } };
+}, px1008({ NVDA: px, PLTR: 199.9 }));
+const chartsIdle = async () => { for (let i = 0; i < 400 && T.otto_charts.some((r) => r.status === "charting"); i++) await sleep(20); };   // let background chart runs finish
+const nightReset = (iso = "2026-10-09T01:00:00Z") => { reset(); T.otto_charts = []; setNow(iso); };   // 9:00 PM ET Thu 8 Oct
+const pickScript = (ids: string[], read = "NVDA sits in the chatter between the boxes.") => (body: any) =>
+  toolReply("pick_boxes", { boxes: ids.map((id) => ({ id, why: `box ${id} matters` })), read });
+
+Deno.test("v3.25: findZones on real NVDA bars (8 Oct, 230.50) — buy boxes under the price, sell boxes over it, every one with its dates", () => {
+  const z = M.findZones(NVDA_DAILY as any, NVDA_WEEKLY as any, NVDA_LAST_1008);
+  assert(z.length >= 3 && z.length <= 12, "count " + z.length);
+  for (const x of z) {
+    assert(x.a < x.b, "a<b " + JSON.stringify(x));
+    assert(x.type === "buy" ? x.b < NVDA_LAST_1008 : x.a > NVDA_LAST_1008, "side by position " + JSON.stringify(x));
+    assert(Math.abs((x.type === "buy" ? x.b : x.a) - NVDA_LAST_1008) / NVDA_LAST_1008 <= 0.12, "within 12% " + JSON.stringify(x));
+    assert(/\d+\/\d+/.test(x.why), "dates in the reason " + x.why);
+  }
+  const sell = z.find((x) => x.type === "sell")!;
+  assert(sell && sell.a === 232.28 && sell.b === 234.76 && /Weekly highs 6\/1, 8\/31/.test(sell.why), JSON.stringify(sell));
+  assert(!z.some((x) => /gap up 10\/2/.test(x.why)), "the 10/2 gap is filled at 230.50 — not 'unfilled'");
+  const flip = z.find((x) => x.type === "buy" && /highs/.test(x.why))!;
+  assert(/old resistance, now support/.test(flip.why), flip.why);
+  assert(z.map((x) => x.id).join() === z.map((_, i) => "C" + (i + 1)).join(), "ids C1..");
+});
+Deno.test("v3.25: findZones — no price or no bars → no zones (never a made-up box)", () => {
+  assert(M.findZones(NVDA_DAILY as any, NVDA_WEEKLY as any, 0).length === 0, "no price");
+  assert(M.findZones([], [], 230).length === 0, "no bars");
+});
+Deno.test("v3.25: mergeBoxes — a re-chart keeps kept/adjusted boxes, never brings back a removed one, adds new picks", () => {
+  const old = [{ id: "k", type: "buy", a: 226, b: 228, review: "keep" }, { id: "r", type: "sell", a: 232, b: 235, review: "rem" }, { id: "n", type: "buy", a: 210, b: 212, review: null }];
+  const picks = [{ id: "p1", type: "buy", a: 227, b: 228.5 }, { id: "p2", type: "sell", a: 233, b: 234 }, { id: "p3", type: "buy", a: 215, b: 216 }];
+  const m = M.mergeBoxes(old, picks);
+  const ids = m.map((x: any) => x.id);
+  assert(ids.includes("k") && !ids.includes("p1"), "kept stays, overlapping pick skipped " + ids);
+  assert(!ids.includes("p2"), "removed zone not re-added " + ids);
+  assert(ids.includes("p3") && !ids.includes("n"), "new pick in, unreviewed old box replaced " + ids);
+  assert(m.find((x: any) => x.id === "r")?.review === "rem", "removed box stays marked removed");
+});
+Deno.test("v3.25: chartOne — Jarvis picks only from the candidates; a made-up id is dropped; the row is ready with the read", async () => {
+  nightReset();
+  callHook = chartHook();
+  claudeScript = (b: any) => toolReply("pick_boxes", { boxes: [{ id: "C1", why: "strong support" }, { id: "C99", why: "invented" }, { id: "c2", why: "resistance" }], read: "In the chatter. Calls only at the buy box." });
+  const r: any = await M.chartOne({ ticker: "NVDA", day: "2026-10-09", by: "Otto (night)", mode: "night" });
+  assert(r.ok && r.boxes === 2, JSON.stringify(r));
+  const row = T.otto_charts.find((x) => x.ticker === "NVDA");
+  assert(row.status === "ready" && row.day === "2026-10-09" && row.last === NVDA_LAST_1008 && row.extra === false, JSON.stringify({ ...row, daily: 0, weekly: 0, candidates: 0 }));
+  for (const bx of row.boxes) { const c = row.candidates.find((z: any) => z.id === bx.cand); assert(c && c.a === bx.a && c.b === bx.b, "box = candidate's exact prices " + JSON.stringify(bx)); }
+  assert(row.read === "In the chatter. Calls only at the buy box.", row.read);
+  assert(/^Charted NVDA/.test(row.chat[0].t), row.chat[0].t);
+  const sys = claudeBodies[0].system[0].text;
+  assert(/OTTO RULES/.test(sys) && /pick from these only/.test(claudeBodies[0].messages[0].content), "rules + candidates sent");
+});
+Deno.test("v3.25: chartOne — Claude down → the strongest buy and sell zone, and the read says so", async () => {
+  nightReset();
+  callHook = chartHook();
+  claudeScript = () => new Error("overloaded") as any;
+  const r: any = await M.chartOne({ ticker: "NVDA", day: "2026-10-09", mode: "night" });
+  const row = T.otto_charts[0];
+  assert(r.ok && row.boxes.length === 2 && row.boxes.some((b: any) => b.type === "buy") && row.boxes.some((b: any) => b.type === "sell"), JSON.stringify(row.boxes));
+  assert(/couldn't pick tonight/.test(row.read), row.read);
+});
+Deno.test("v3.25: chartOne — Robinhood has no bars → status error with the reason (no empty 'ready' chart)", async () => {
+  nightReset();
+  callHook = chartHook();
+  const r: any = await M.chartOne({ ticker: "ZZZZ", day: "2026-10-09" });
+  assert(!r.ok && T.otto_charts[0].status === "error" && /too little history/.test(T.otto_charts[0].error), JSON.stringify(T.otto_charts[0]));
+});
+Deno.test("v3.25: re-chart keeps the box Josh kept; the ready ping goes out once when all 9 are ready", async () => {
+  nightReset();
+  callHook = chartHook();
+  claudeScript = pickScript(["C1", "C2"]);
+  await M.chartOne({ ticker: "NVDA", day: "2026-10-09", mode: "night" });
+  const row = T.otto_charts[0], keep = row.boxes[0];
+  await M.chartReview({ ticker: "NVDA", day: "2026-10-09", box_id: keep.id, review: "keep", author: "Josh" }, "josh@x");
+  await M.chartOne({ ticker: "NVDA", day: "2026-10-09", mode: "morning" });
+  const b2 = T.otto_charts[0].boxes;
+  assert(b2.some((b: any) => b.id === keep.id && b.review === "keep"), "kept box survived " + JSON.stringify(b2));
+  assert(b2.filter((b: any) => b.type === keep.type && Math.min(b.b, keep.b) - Math.max(b.a, keep.a) > 0).length === 1, "no duplicate over the kept box");
+  assert(/re-chart: boxes you kept stay kept/.test(T.otto_charts[0].chat.at(-1).t), T.otto_charts[0].chat.at(-1).t);
+  assert(pings.length === 0, "not all 9 yet");
+  for (const t of M.CHART_LIST.filter((t: string) => t !== "NVDA")) T.otto_charts.push({ id: ++ID, day: "2026-10-09", ticker: t, status: "ready" });
+  await M.chartOne({ ticker: "NVDA", day: "2026-10-09", mode: "night" });
+  await M.chartOne({ ticker: "NVDA", day: "2026-10-09", mode: "night" });
+  assert(pings.filter((p) => p.kind === "charts").length === 1 && /Night Charts ready for Fri/.test(pings[0].title), JSON.stringify(pings));
+});
+Deno.test("v3.25: chartReview — adjust checks the numbers; keep/remove toggle; each logs a line", async () => {
+  nightReset();
+  callHook = chartHook();
+  claudeScript = pickScript(["C1", "C2"]);
+  await M.chartOne({ ticker: "NVDA", day: "2026-10-09" });
+  const id = T.otto_charts[0].boxes.find((b: any) => b.type === "buy").id;
+  const bad = async (low: number, high: number) => { try { await M.chartReview({ ticker: "NVDA", day: "2026-10-09", box_id: id, review: "adj", low, high, author: "Josh" }, "j@x"); return ""; } catch (e) { return (e as Error).message; } };
+  assert(/inside that range/.test(await bad(229, 232)), "straddles the price");
+  assert(/15% away/.test(await bad(150, 152)), "typo guard");
+  await M.chartReview({ ticker: "NVDA", day: "2026-10-09", box_id: id, review: "adj", low: 228.5, high: 227, author: "Josh" }, "j@x");
+  let bx = T.otto_charts[0].boxes.find((b: any) => b.id === id);
+  assert(bx.a === 227 && bx.b === 228.5 && bx.review === "adj" && bx.type === "buy", JSON.stringify(bx));
+  await M.chartReview({ ticker: "NVDA", day: "2026-10-09", box_id: id, review: "rem", author: "Josh" }, "j@x");
+  await M.chartReview({ ticker: "NVDA", day: "2026-10-09", box_id: id, review: "rem", author: "Josh" }, "j@x");
+  bx = T.otto_charts[0].boxes.find((b: any) => b.id === id);
+  assert(bx.review === null, "second tap undoes");
+  assert(/Josh moved the buy box to 227–228\.5/.test(T.otto_charts[0].chat.map((c: any) => c.t).join("\n")), "log line");
+});
+Deno.test("v3.25: Use kept boxes today → Watcher at the NEAR edge (buy = top, up; sell = bottom, down); never a TradingView alert", async () => {
+  nightReset("2026-10-09T12:50:00Z");   // 8:50 AM ET Fri 9 Oct
+  callHook = chartHook();
+  claudeScript = pickScript(["C1", "C2"]);
+  await M.chartOne({ ticker: "NVDA", day: "2026-10-09" });
+  for (const b of T.otto_charts[0].boxes) await M.chartReview({ ticker: "NVDA", day: "2026-10-09", box_id: b.id, review: "keep", author: "Josh" }, "j@x");
+  const buy = T.otto_charts[0].boxes.find((b: any) => b.type === "buy"), sell = T.otto_charts[0].boxes.find((b: any) => b.type === "sell");
+  const r: any = await M.chartUse({ ticker: "NVDA", day: "2026-10-09", author: "Josh" }, "j@x");
+  assert(r.added.length === 2, JSON.stringify(r));
+  const w = T.otto_watch.filter((x) => x.ticker === "NVDA");
+  assert(w.some((x) => x.level === buy.b && x.dir === "up") && w.some((x) => x.level === sell.a && x.dir === "down"), JSON.stringify(w));
+  assert(w.every((x) => x.status === "watching" && /Night Charts$/.test(x.added_by) && x.day === "2026-10-09"), JSON.stringify(w));
+  assert(!calls.some((c) => c.tool === "mcp-tv-create-alert"), "no TradingView alert (Watcher only)");
+  assert(T.otto_charts[0].used_at && T.otto_charts[0].boxes.every((b: any) => b.used), "marked used");
+  assert(/Night Charts: Josh put NVDA/.test(deskText()), deskText());
+});
+Deno.test("v3.25: Use kept boxes with nothing kept → a plain error; a Night Charts level never replaces a trade's wrong-if (A12)", async () => {
+  nightReset("2026-10-09T12:50:00Z");
+  callHook = chartHook();
+  claudeScript = pickScript(["C1", "C2"]);
+  await M.chartOne({ ticker: "NVDA", day: "2026-10-09" });
+  let msg = ""; try { await M.chartUse({ ticker: "NVDA", day: "2026-10-09" }, "j@x"); } catch (e) { msg = (e as Error).message; }
+  assert(/Keep or adjust at least one box/.test(msg), msg);
+  T.otto_actions = [{ ...tsmTrade(), exit: { ...tsmTrade().exit, tv_symbol: "NASDAQ:NVDA" } }];
+  const buy = T.otto_charts[0].boxes.find((b: any) => b.type === "buy");
+  await M.chartReview({ ticker: "NVDA", day: "2026-10-09", box_id: buy.id, review: "keep", author: "Josh" }, "j@x");
+  await M.chartUse({ ticker: "NVDA", day: "2026-10-09", author: "Josh" }, "j@x");
+  assert(T.otto_actions[0].exit.wrong_if === 467.9, "wrong-if untouched: " + T.otto_actions[0].exit.wrong_if);
+  assert(T.otto_watch.some((x) => x.ticker === "NVDA" && x.level === buy.b && x.status === "watching"), "ordinary Watcher level");
+});
+Deno.test("v3.25: chartsCron — 9:00 PM Thu runs once for Fri; 8:50 AM Fri updates the 9 + Josh's extra ticker; 3 PM does nothing", async () => {
+  nightReset("2026-10-09T01:00:00Z");
+  callHook = chartHook();
+  claudeScript = pickScript(["C1"]);
+  const a: any = await M.chartsCron(new RealDate("2026-10-09T01:00:00Z") as any);
+  assert(a.started === 9 && T.otto_charts.length === 9 && T.otto_charts.every((r) => r.day === "2026-10-09"), JSON.stringify(a));
+  const b: any = await M.chartsCron(new RealDate("2026-10-09T01:10:00Z") as any);
+  assert(b.skipped === "night run done", JSON.stringify(b));
+  T.otto_charts.push({ id: ++ID, day: "2026-10-09", ticker: "PLTR", status: "ready", extra: true });
+  const c: any = await M.chartsCron(new RealDate("2026-10-09T12:50:00Z") as any);
+  assert(c.started === 10, "9 + PLTR: " + JSON.stringify(c));
+  const d: any = await M.chartsCron(new RealDate("2026-10-09T19:00:00Z") as any);
+  assert(d.skipped === "not a chart window", JSON.stringify(d));
+  const sat: any = await M.chartsCron(new RealDate("2026-10-11T01:00:00Z") as any);   // Sat 9 PM
+  assert(sat.skipped === "not a chart window", "no weekend run " + JSON.stringify(sat));
+  await chartsIdle();
+  assert(!T.otto_charts.some((r) => r.status === "charting"), "background runs finished");
+});
+Deno.test("v3.25: Chart now — any ticker is checked on Robinhood first; a bad one is refused in plain words", async () => {
+  nightReset("2026-10-09T01:00:00Z");
+  callHook = chartHook();
+  claudeScript = pickScript(["C1"]);
+  let msg = ""; try { await M.chartNow({ ticker: "QQQQQ" }, "j@x"); } catch (e) { msg = (e as Error).message; }
+  assert(/Robinhood has no price for QQQQQ/.test(msg), msg);
+  msg = ""; try { await M.chartNow({ ticker: "12$" }, "j@x"); } catch (e) { msg = (e as Error).message; }
+  assert(/type a ticker/.test(msg), msg);
+  const r: any = await M.chartNow({ ticker: "pltr", author: "Josh" }, "j@x");
+  assert(r.started === 1 && T.otto_charts.find((x) => x.ticker === "PLTR")?.extra === true, JSON.stringify(T.otto_charts));
+  await chartsIdle();
+  assert(!T.otto_charts.some((r) => r.status === "charting"), "background runs finished");
+});
+Deno.test("v3.25: chart chat — Jarvis answers, can move a box (checked like Josh's own move), the chat keeps both lines", async () => {
+  nightReset();
+  callHook = chartHook();
+  claudeScript = pickScript(["C1", "C2"]);
+  await M.chartOne({ ticker: "NVDA", day: "2026-10-09" });
+  const buy = T.otto_charts[0].boxes.find((b: any) => b.type === "buy");
+  claudeScript = () => toolReply("chart_reply", { text: "Tightened it to the gap.", move: { box_id: buy.id, low: buy.a + 0.2, high: buy.b } });
+  await M.chartChat({ ticker: "NVDA", day: "2026-10-09", text: "tighten the buy box", author: "Josh" }, "j@x");
+  const row = T.otto_charts[0], bx = row.boxes.find((b: any) => b.id === buy.id);
+  assert(bx.review === "adj" && Math.abs(bx.a - (buy.a + 0.2)) < 0.01, JSON.stringify(bx));
+  const t = row.chat.map((c: any) => `${c.w}:${c.t}`).join("\n");
+  assert(/^otto:Charted NVDA at 9:00 PM ET[^\n]*\njosh:tighten the buy box\nsys:Jarvis moved[^\n]*\notto:Tightened/.test(t), "order: " + t);
+  assert(/josh:tighten the buy box/.test(t) && /otto:Tightened it to the gap\. \(Moved the box to/.test(t) && /sys:Jarvis moved the buy box/.test(t), t);
+  claudeScript = () => toolReply("chart_reply", { text: "Moved.", move: { box_id: buy.id, low: 229, high: 232 } });
+  await M.chartChat({ ticker: "NVDA", day: "2026-10-09", text: "put it on the price", author: "Josh" }, "j@x");
+  assert(/Couldn't move the box: .*inside that range/.test(T.otto_charts[0].chat.at(-1).t), T.otto_charts[0].chat.at(-1).t);
 });
