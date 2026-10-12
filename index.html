@@ -791,6 +791,75 @@ svg.nc-svg{width:100%;height:auto;display:block}
 .nc-ask{display:flex;gap:6px}.nc-ask input{flex:1;min-width:0;font:inherit;background:var(--surface-2);color:var(--ink);border:1px solid var(--rule);border-radius:8px;padding:8px 10px}
 .nc-sugg{display:flex;flex-wrap:wrap;gap:6px}
 .nc-sugg button{font:inherit;font-size:12px;background:none;border:1px solid var(--rule);color:var(--ink-3);border-radius:999px;padding:3px 9px;cursor:pointer}
+
+/* ---- v3.28: phone layout (screens under 1100px). Laptop layout untouched. ---- */
+.mb-only,.dk-rail #mbMore{display:none}
+@media (max-width:1099px){
+  .mb-only{display:flex}
+  .dk{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+  /* bottom tab bar */
+  .dk-rail{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:50;flex-direction:row;justify-content:space-around;align-items:stretch;padding:4px 4px calc(6px + env(safe-area-inset-bottom));border-right:0;border-bottom:0;border-top:1px solid var(--rule);background:#08090A}
+  .dk-rail .dk-tabs{display:contents}
+  .dk-rail button,.dk-rail .dk-tabs button{display:none;width:auto;flex:1 1 0;min-height:56px;font-size:11.5px;border-radius:12px}
+  .dk-rail button svg{width:22px;height:22px;margin-bottom:3px}
+  .dk-rail .dk-tabs button[data-go="desk"],.dk-rail .dk-tabs button[data-go="perf"],.dk-rail .dk-tabs button[data-go="coach"],.dk-rail .dk-tabs button[data-go="charts"],.dk-rail #mbMore{display:grid}
+  .dk-rail .dk-tabs button[hidden]{display:none!important}
+  .dk-rail .dk-tabs button[data-go="desk"]{order:1}.dk-rail .dk-tabs button[data-go="perf"]{order:2}.dk-rail .dk-tabs button[data-go="coach"]{order:3}.dk-rail .dk-tabs button[data-go="charts"]{order:4}.dk-rail #mbMore{order:5}
+  /* the phone strip sits at the top now */
+  .dk-strip{order:-5;position:sticky;top:0;z-index:20;padding:10px 14px}
+  .dk-banner{order:-4}
+  .dk-col.r{order:-3;overflow:visible}
+  .dk-desk{order:5}.dk-col#dkLeft{order:6;overflow:visible}.dk-page{order:-2}
+  .dk-col{padding:12px 14px}
+  .dk-head .dk-pill,.sg-foot,.dk-head b{display:none}
+  .dk-head{padding:8px 14px}
+  /* cards to approve first, big rows */
+  #dkRight .dk-cardx:has(.dk-appr){order:-2;border-color:rgba(0,200,5,.45);background:linear-gradient(180deg,#0f1a12,var(--s1))}
+  .dk-appr{min-height:58px;align-items:center;font-size:16px;font-weight:600;padding:10px 8px}
+  .dk-appr small{font-size:12.5px}
+  .dk-appr .dk-tag{font-size:13px;padding:5px 10px}
+  .dk-cardx{padding:14px}
+  .dk-row{font-size:14.5px;padding:8px 0}
+  /* fold the secondary cards */
+  #dkLeft .dk-cardx>.dk-h,#dkRight .dk-cardx.mbfold>.dk-h{cursor:pointer;min-height:30px;align-items:center;margin-bottom:0}
+  #dkLeft .dk-cardx>.dk-h::after,#dkRight .dk-cardx.mbfold>.dk-h::after{content:"›";color:var(--ink-3);font-size:18px;margin-left:6px;transition:transform .15s}
+  #dkLeft .dk-cardx.mbopen>.dk-h::after,#dkRight .dk-cardx.mbfold.mbopen>.dk-h::after{transform:rotate(90deg)}
+  #dkLeft .dk-cardx:not(.mbopen)>:not(.dk-h),#dkRight .dk-cardx.mbfold:not(.mbopen)>:not(.dk-h){display:none!important}
+  #dkLeft .dk-cardx.mbopen>.dk-h,#dkRight .dk-cardx.mbfold.mbopen>.dk-h{margin-bottom:8px}
+  .dk-min{display:none!important}
+  /* chat is its own view */
+  #mbChatBtn{width:100%;min-height:54px;margin:12px 14px 0;width:calc(100% - 28px);order:4;align-items:center;justify-content:center;gap:8px;border:1px solid var(--rule);background:var(--surface-2);border-radius:14px;font-weight:700;font-size:15px;color:var(--ink)}
+  .dk:not(.mb-chat):not(.v-page) .dk-desk{display:none}
+  .dk.mb-chat .dk-desk{min-height:calc(100vh - 220px)}
+  .dk-ctabs{padding:8px 14px 0;overflow-x:auto}
+  .dk-ctabs button{min-height:44px;font-size:14px;white-space:nowrap}
+  .dk-quick{flex-wrap:nowrap;overflow-x:auto;margin:0 14px 8px;scrollbar-width:none}
+  .dk-quick button{flex:none;min-height:42px;padding:0 14px;font-size:13.5px}
+  .dk-compose{margin:0 14px 10px;position:sticky;bottom:calc(72px + env(safe-area-inset-bottom));z-index:15}
+  .dk-compose textarea{font-size:16px;min-height:44px}
+  .dk-compose .dk-att,.dk-go{min-height:44px;font-size:14px}
+  .dk-msgs{padding:10px 14px}
+  /* approve / reject buttons (card dialog + inline cards) */
+  .dk-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .dk-btn,.dk-act .dk-btn{min-height:54px;font-size:16px;font-weight:700;border-radius:14px}
+  #dlgCard{width:100vw;max-width:100vw;margin:auto 0 0;border-radius:20px 20px 0 0}
+  /* one More sheet instead of 15 tabs */
+  #dkCust,#dkMore,#dkMoreBox{display:none!important}
+  .dk-rail .sp,.dk-logo{display:none}
+  #mbScrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:58}
+  #mbSheet{position:fixed;left:0;right:0;bottom:0;z-index:59;background:var(--surface);border-radius:20px 20px 0 0;border-top:1px solid var(--rule);padding:12px 14px calc(22px + env(safe-area-inset-bottom))}
+  #mbSheet[hidden],#mbScrim[hidden]{display:none}
+  #mbSheet .grab{width:40px;height:4px;border-radius:2px;background:var(--surface-3);margin:0 auto 12px}
+  #mbGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  #mbGrid button{min-height:76px;border-radius:14px;background:var(--surface-2);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600}
+  #mbGrid button svg{width:24px;height:24px;stroke:var(--ink-2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .dk.mb-chat #dkRight,.dk.mb-chat #dkLeft,.dk.mb-chat #dkBanner{display:none}
+  .dk.mb-chat #mbChatBtn{order:-1;margin-top:10px}
+  .dk-compose textarea{order:-2;flex:1 0 100%}
+  .fb-fab{bottom:calc(86px + env(safe-area-inset-bottom))!important;right:12px!important}
+  /* pages inside the Desk shell */
+  .dk-page{padding-bottom:12px}
+}
 </style>
 </head>
 <body>
@@ -814,6 +883,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
     <button data-go="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>Help</button>
     <button data-go="classic" title="The phone layout: Week, Coach, Journal, Market"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Classic</button>
     </div>
+    <button id="mbMore" class="mb-only" type="button" aria-label="More"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
     <button class="dk-more" id="dkMore" hidden title="Hidden tabs"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
     <div class="dk-morebox" id="dkMoreBox" hidden></div>
     <div class="sp"></div>
@@ -832,6 +902,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
 
   <div class="dk-col" id="dkLeft"></div>
 
+  <button class="mb-only" id="mbChatBtn" type="button">💬 Ask Jarvis · Signals · Alerts</button>
   <div class="dk-desk">
     <div class="dk-head">
       <b>The Desk</b>
@@ -871,6 +942,8 @@ svg.nc-svg{width:100%;height:auto;display:block}
   <div class="dk-col r" id="dkRight"></div>
   <div class="dk-page" id="dkPage"></div>
   <input type="file" id="dkCallFile" accept=".vtt,.srt,.json" hidden>
+  <div id="mbScrim" hidden></div>
+  <div id="mbSheet" hidden role="dialog" aria-label="More"><div class="grab"></div><div id="mbGrid"></div></div>
 </div>
 
 <header class="top">
@@ -2225,7 +2298,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.27.0";
+const BUILD="3.28.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -4700,6 +4773,40 @@ $("#layReset").addEventListener("click",async()=>{
   layEdit(false);await layPersist({tabs:[],home:"desk",cards:{left:[],right:[]},min:[],reset:true});
   layApplyRail();layApplyCards();toast("Back to the default layout");
 });
+
+// ---- v3.28: phone layout helpers (More sheet, chat view, folded cards) ----
+(function(){
+  const MB=[["prep","Prep"],["market","Market"],["score","Score"],["journal","Journal"],["review","Review"],["playbook","Playbook"],["jason","Calls"],["help","Help"],["settings","Settings"]];
+  const sh=$("#mbSheet"),sc=$("#mbScrim"),gr=$("#mbGrid");if(!sh||!gr)return;
+  const ico=k=>{const b=document.querySelector(`.dk-rail button[data-go="${k}"] svg`);return b?b.outerHTML:""};
+  function mbClose(){sh.hidden=true;sc.hidden=true}
+  $("#mbMore").addEventListener("click",()=>{
+    gr.innerHTML=MB.map(([k,l])=>`<button type="button" data-mb="${k}">${ico(k)}${l}</button>`).join("");
+    sh.hidden=false;sc.hidden=false});
+  sc.addEventListener("click",mbClose);
+  gr.addEventListener("click",e=>{const b=e.target.closest("[data-mb]");if(!b)return;mbClose();
+    const t=document.querySelector(`.dk-rail button[data-go="${b.dataset.mb}"]`);if(t)t.click()});
+  // keep "More" lit when one of its pages is open
+  const prim=["desk","perf","coach","charts"];
+  new MutationObserver(()=>{const on=!!document.querySelector(".dk-rail .dk-tabs button.on")&&prim.indexOf((document.querySelector(".dk-rail .dk-tabs button.on")||{dataset:{}}).dataset.go)<0;$("#mbMore").classList.toggle("on",on)})
+    .observe($(".dk-rail"),{subtree:true,attributes:true,attributeFilter:["class"]});
+  // chat view toggle
+  const cb=$("#mbChatBtn");
+  function chat(on){$("#dk").classList.toggle("mb-chat",on);cb.textContent=on?"✕ Close chat":"💬 Ask Jarvis · Signals · Alerts";if(on)setTimeout(()=>{const m=$("#dkMsgs");if(m)m.scrollTop=m.scrollHeight},50)}
+  cb.addEventListener("click",()=>chat(!$("#dk").classList.contains("mb-chat")));
+  // leaving the Desk tab closes the chat view
+  $$(".dk-rail button[data-go]").forEach(b=>b.addEventListener("click",()=>{if(b.dataset.go!=="desk")chat(false)}));
+  // mark the TradingView alerts card as foldable (re-done after every render)
+  const mk=()=>{const r=$("#dkRight");if(r)r.querySelectorAll(".dk-cardx").forEach(c=>{const h=c.querySelector(".dk-h");if(h&&/^\s*TradingView alerts/i.test(h.textContent))c.classList.add("mbfold")})};
+  if($("#dkRight")){new MutationObserver(mk).observe($("#dkRight"),{childList:true});mk()}
+  // fold / unfold secondary cards
+  $("#dk").addEventListener("click",e=>{
+    if(innerWidth>1099)return;
+    const h=e.target.closest(".dk-h");if(!h)return;const c=h.parentElement;if(!c||!c.classList.contains("dk-cardx"))return;
+    const inL=c.parentElement&&c.parentElement.id==="dkLeft",inR=c.classList.contains("mbfold");
+    if(inL||inR){c.classList.toggle("mbopen");e.stopPropagation()}
+  },true);
+})();
 $("#dkMore").addEventListener("click",e=>{e.stopPropagation();const b=$("#dkMoreBox");b.hidden=!b.hidden;if(!b.hidden){const r=$("#dkMore").getBoundingClientRect(),rr=$(".dk-rail").getBoundingClientRect();if(innerWidth>1099)b.style.top=Math.max(8,r.top-rr.top-20)+"px";else b.style.top=""}});
 $("#dkMoreBox").addEventListener("click",e=>{const x=e.target.closest("[data-more]");if(!x)return;$("#dkMoreBox").hidden=true;const b=$(`#dkTabs button[data-go="${x.dataset.more}"]`);if(b)b.click()});
 document.addEventListener("click",e=>{if(!e.target.closest("#dkMoreBox,#dkMore")&&$("#dkMoreBox"))$("#dkMoreBox").hidden=true});
