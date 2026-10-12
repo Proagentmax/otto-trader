@@ -1208,7 +1208,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
         (opts.manual ? "" : " Otto looked for a cheaper contract for the same idea (delta .15 or higher) — none fit under the cap.");
     }
   }
-  // v3.27 (second push: the deploy gate caught 3 stale tests; no logic change here).
+  // v3.27 (third push: the deploy gate caught stale tests twice; no logic change here).
   // v3.27: only the sources switched on in Settings may go LIVE; every other idea is a PAPER card (shown, scored, never approvable).
   // The manual Order ticket is Ifoma/Josh's own explicit order and is not affected.
   if (opening && !paper && !opts.manual) {

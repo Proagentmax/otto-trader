@@ -2080,15 +2080,15 @@ Deno.test("v3.26 Coaches Corner: MSFT 532.40 scored both ways; ABBV exits at his
 });
 
 Deno.test("v3.27: a source that is not switched on to go LIVE becomes a PAPER card (never approvable); the manual ticket is unaffected", async () => {
-  reset(); T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false } }];   // defaults: only the coach's call may go live
+  reset(); (M as any).clearCacheForTest(); T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false } }];   // defaults: only the coach's call may go live
   const c: any = await M.proposeAction(spyCard(), "watcher");
   assert(c.status === "paper", "jarvis/watcher idea is paper by default: " + c.status);
   assert(c.checks.some((x: any) => x.paper && /PAPER/.test(x.text) && /never sent to Robinhood/.test(x.text)), JSON.stringify(c.checks));
-  T.otto_actions = [];
+  T.otto_actions = []; (M as any).clearCacheForTest();
   T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false, live_coach_call: true, live_coach_level: true, live_jarvis: true } }];
   const d: any = await M.proposeAction(spyCard(), "watcher");
   assert(d.status === "pending", "switched on, so it can be approved: " + d.status);
-  T.otto_actions = [];
+  T.otto_actions = []; (M as any).clearCacheForTest();
   T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false } }];
   const m: any = await M.proposeAction(spyCard(), "ottotrader@vinecreativestudio.com", { manual: true });
   assert(m.status === "pending", "manual ticket is not paper: " + m.status);
