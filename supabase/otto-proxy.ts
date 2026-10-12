@@ -1208,6 +1208,15 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
         (opts.manual ? "" : " Otto looked for a cheaper contract for the same idea (delta .15 or higher) — none fit under the cap.");
     }
   }
+  // v3.27: only the sources switched on in Settings may go LIVE; every other idea is a PAPER card (shown, scored, never approvable).
+  // The manual Order ticket is Ifoma/Josh's own explicit order and is not affected.
+  if (opening && !paper && !opts.manual) {
+    const og27 = String(plan?.origin || "jarvis");
+    const key27 = og27 === "coach_call" ? "live_coach_call" : og27 === "coach_level" || og27 === "coach_post" ? "live_coach_level" : "live_jarvis";
+    const allowed27 = key27 === "live_coach_call" ? LIM[key27] !== false : LIM[key27] === true;
+    if (!allowed27) paper = `PAPER · ${ORIGIN_LABEL[og27] || og27} is not switched on to go LIVE (Settings, Limits & goals, Which ideas can go LIVE). Practice only: scored, never sent to Robinhood.`;
+    else if (og27 === "coach_call" && originRow?.late) paper = "PAPER · the coach's post came after the move (marked late). Never chase a missed price. Practice only: scored, never sent to Robinhood.";
+  }
   let banner: any = null, checks: any[] = [];
   if (opening) {
     try { const b = await sentimentNow(); banner = { verdict: b.verdict, score: b.score, fresh: b.fresh, at: b.at }; } catch { /* */ }
@@ -4395,7 +4404,9 @@ const LIMIT_DEFAULTS: any = { phase: 1, max_trade_loss: 100, weekly_loss: 150, m
   auto_close: true, review_min: 15, max_trade_pct: 10, weekly_pct: 20, daily_losses: 2,
   // v3.26 (Ifoma, 9 Oct): every guardrail is on/off + a number in Settings. Size cap and kill switch are new.
   size_cap_on: true, size_cap_pct: 30, max_loss_on: true, daily_on: true, daily_x: 2, weekly_on: true, trades_on: true,
-  kill_on: true, kill_daily: true, kill_weekly: true, kill_trades: true };
+  kill_on: true, kill_daily: true, kill_weekly: true, kill_trades: true,
+  // v3.27: which ideas may go LIVE (real money). Everything else is a PAPER card: shown, scored, never approvable.
+  live_coach_call: true, live_coach_level: false, live_jarvis: false };
 async function agenticValue(): Promise<number | null> {
   return cached("agentic_value", 5 * 60e3, async () => {
     try {
@@ -4426,10 +4437,11 @@ export async function getLimits(): Promise<any> {
 const num0 = (v: any) => { const n = Number(v); return isFinite(n) ? n : 0; };
 const bool = (v: any) => v === true || v === "true" || v === 1 || v === "1" || v === "on";
 // v3.26: which edits loosen a guardrail (off, or a higher number). Those wait for the next trading day 9:30 AM ET.
-const LIM_TOGGLES = ["size_cap_on", "max_loss_on", "daily_on", "weekly_on", "trades_on", "kill_on", "kill_daily", "kill_weekly", "kill_trades"];
+const LIM_TOGGLES = ["size_cap_on", "max_loss_on", "daily_on", "weekly_on", "trades_on", "kill_on", "kill_daily", "kill_weekly", "kill_trades", "live_coach_call", "live_coach_level", "live_jarvis"];
 const LIM_HIGHER_LOOSER = ["size_cap_pct", "max_trade_pct", "max_trade_loss", "weekly_pct", "weekly_loss", "max_trades_day", "daily_losses", "daily_x"];
 const ZERO_IS_OFF = new Set(["size_cap_pct", "max_trade_pct", "max_trade_loss", "daily_losses", "daily_x"]);
 export function isLooser(k: string, oldV: any, newV: any): boolean {
+  if (k.startsWith("live_")) return !bool(oldV) && bool(newV);   // v3.27: letting a source go LIVE loosens; turning it off tightens
   if (LIM_TOGGLES.includes(k)) return bool(oldV) && !bool(newV);
   if (LIM_HIGHER_LOOSER.includes(k)) {
     const f = (x: any) => { const n = num0(x); return ZERO_IS_OFF.has(k) && n === 0 ? Infinity : n; };
@@ -4447,6 +4459,7 @@ const LIM_LABEL: Record<string, string> = { size_cap_on: "Size cap", size_cap_pc
   max_trade_loss: "Max loss per trade $", daily_on: "Daily stop", daily_losses: "Daily stop (losing trades)", daily_x: "Daily stop (× max loss)",
   weekly_on: "Weekly limit", weekly_pct: "Weekly limit %", weekly_loss: "Weekly limit $", trades_on: "Max trades per day", max_trades_day: "Max trades per day",
   kill_on: "Kill switch", kill_daily: "Kill switch · daily stop", kill_weekly: "Kill switch · weekly limit", kill_trades: "Kill switch · max trades",
+  live_coach_call: "LIVE · coach's call", live_coach_level: "LIVE · coach's level, Jarvis's direction", live_jarvis: "LIVE · Jarvis/Josh's own ideas",
   auto_close: "Auto-close exits", warn_pct: "Warn over % of account", monthly_goal_pct: "Monthly goal %", phase: "Phase", big_day: "Big-loss day $", review_min: "Review every (min)" };
 const limShow = (k: string, v: any) => typeof v === "boolean" || LIM_TOGGLES.includes(k) || k === "auto_close" ? (bool(v) ? "on" : "off") : String(v);
 async function applyPendingLimits(L: any): Promise<any> {

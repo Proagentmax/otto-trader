@@ -435,6 +435,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 /* v3.26: paper cards, where the idea came from, the kill-switch banner, Activity, Coaches Corner, the new Limits */
 .dk-act.st-paper{border:1.5px dashed #3a3f47;background:#111215;opacity:.9}.dk-act.st-paper .dk-act-h b{color:#b8bfc9;text-decoration:line-through;text-decoration-color:#646c78}
 .dk-paper{margin:6px 0 2px;font-size:13.5px;font-weight:600;color:#ffb08f}
+.stp{display:inline-block;font:800 11px var(--body);letter-spacing:.08em;padding:4px 9px;border-radius:6px;margin:0 8px 6px 0}.stp-live{background:var(--up);color:#000}.stp-paper{background:#3a3f47;color:#e6e9ed}
 .og{display:inline-block;font:700 10.5px var(--body);letter-spacing:.05em;padding:3px 8px;border-radius:999px;margin:0 0 6px;text-transform:uppercase}
 .og-coach_call{background:#16305c;color:#9cc3ff}.og-coach_level,.og-coach_post{background:#3a2a12;color:#ffc27a}.og-coach_against{background:#3a1608;color:#ff8a5c}.og-jarvis{background:var(--surface-3);color:#c7cdd6}
 .dk-lockbar{display:flex;gap:10px;align-items:flex-start;background:#2a1208;border:1px solid #6b2a0e;border-radius:12px;padding:12px 14px;margin:0 0 10px;font-size:13px;line-height:1.5;color:#e8c3b3}
@@ -1164,6 +1165,11 @@ svg.nc-svg{width:100%;height:auto;display:block}
       <div class="lm-row"><label for="lmWeekPct">Stop the week after losing</label><input class="f" id="lmWeekPct" type="number" min="0" max="100" step="0.5" inputmode="decimal"><span class="mut">% of the account</span> <span class="mut" id="lmWeekUsd"></span></div></div>
     <div class="lm-card"><div class="lm-hd"><b>Max trades per day</b><label class="lm-sw"><input type="checkbox" id="lmTradesOn"> On</label></div>
       <div class="lm-row"><label for="lmDay">Trades a day, max</label><input class="f" id="lmDay" type="number" min="1" step="1" inputmode="numeric"></div></div>
+    <div class="lm-card" style="border-color:#1d5a24"><div class="lm-hd"><b>Which ideas can go LIVE<span class="lm-new">NEW</span></b></div>
+      <p class="hint" style="margin:4px 0 6px">Switched on = a card from that source can be approved and sent to Robinhood. Switched off = a PAPER card: shown, scored, never sent. Turning one off works right away; turning one on starts the next trading day at 9:30 AM.</p>
+      <label class="lm-sw" style="font-weight:500"><input type="checkbox" id="lmLiveCall" style="width:18px;height:18px"> Coach's call (his level and his direction)</label>
+      <label class="lm-sw" style="font-weight:500"><input type="checkbox" id="lmLiveLevel" style="width:18px;height:18px"> Coach's level or ticker, Jarvis picks the direction</label>
+      <label class="lm-sw" style="font-weight:500"><input type="checkbox" id="lmLiveJarvis" style="width:18px;height:18px"> Jarvis, Baby J and Josh's own ideas</label></div>
     <div class="lm-card" style="border-color:#6b2a0e"><div class="lm-hd"><b>Kill switch<span class="lm-new">NEW</span></b><label class="lm-sw"><input type="checkbox" id="lmKillOn"> On</label></div>
       <p class="hint" style="margin:4px 0 6px">When a limit below is hit: no new cards until it resets. Signals keep listening; ideas become paper cards and are scored. When off, those limits only add a red flag to cards.</p>
       <label class="lm-sw" style="font-weight:500"><input type="checkbox" id="lmKillDaily" style="width:18px;height:18px"> Lock on the daily stop · until the next trading day</label>
@@ -2219,7 +2225,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.26.0";
+const BUILD="3.27.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3095,12 +3101,13 @@ function dkCard(a){
   if(r.flag)risk+=`<div class="dk-warnbox">⚠ This risks ${(r.pct*100).toFixed(0)}% of the account — over your 20% flag. The Otto Rules call ~40% in one trade "crazy" (Oct 1). You can still approve.</div>`;
   const res=(a.result||[]).map(x=>`<div class="${x.ok?"up":"dn"}" style="font-size:12px;margin-top:6px">${x.ok?"✓":"✗"} ${esc(x.tool)}</div><pre style="white-space:pre-wrap;font-size:11.5px;margin:2px 0 0;color:var(--ink-2)">${esc(String(x.text||"").slice(0,700))}</pre>`).join("");
   const tag={pending:"near",running:"near",done:"ok",failed:"bad",paper:"bad"}[st]||"";
-  const label={pending:"needs your approval",running:"running…",done:"done",failed:"failed",rejected:"rejected",expired:"expired — ask again for fresh prices",paper:"auto-rejected · paper card"}[st]||st;
+  const label={pending:"needs your approval",running:"running…",done:"done",failed:"failed",rejected:"rejected",expired:"expired — ask again for fresh prices",paper:"paper · practice only"}[st]||st;
+  const stp=!(a.plan||a.exit)?"":st==="paper"?`<span class="stp stp-paper">PAPER · PRACTICE ONLY</span>`:`<span class="stp stp-live">LIVE · REAL MONEY</span>`;
   const og=a.plan&&a.plan.origin?`<div class="og og-${esc(a.plan.origin)}">${esc(OG_LABEL[a.plan.origin]||a.plan.origin)}</div>`:"";
   const pc=st==="paper"?(a.checks||[]).find(x=>x.paper):null;
   const who=a.decided_by?` <span class="mut" style="font-size:11px">· ${esc(a.decided_by.split("@")[0])} ${dkTime(a.decided_at)}</span>`:"";
   return `<div class="dk-act st-${esc(st)}" data-act="${esc(a.id)}">
-    ${og}<div class="dk-act-h"><b>${esc(a.title)}</b><span><span class="dk-tag ${tag}">${esc(label)}</span>${who}</span></div>
+    ${stp}${og}<div class="dk-act-h"><b>${esc(a.title)}</b><span><span class="dk-tag ${tag}">${esc(label)}</span>${who}</span></div>
     ${pc?`<div class="dk-paper">${esc(String(pc.text).replace(/^AUTO-REJECTED · /,""))}</div><div class="mut" style="font-size:12px">Shown and scored in Score and Coaches Corner. It can't be approved${/size cap/i.test(pc.text)?' — <a href="#" data-openlim="1">change the cap in Settings</a>':""}.</div>`:""}
     ${dkGuard(a)}
     ${a.summary?`<pre class="dk-sum">${esc(a.summary)}</pre>`:""}
@@ -4707,10 +4714,10 @@ layApplyRail();
 /* ---------- Limits & goals ---------- */
 const LM_FIELDS=[["size_cap_on","#lmCapOn","b"],["size_cap_pct","#lmCapPct","n"],["max_loss_on","#lmLossOn","b"],["max_trade_pct","#lmTradePct","n"],
   ["daily_on","#lmDailyOn","b"],["daily_losses","#lmLosers","n"],["daily_x","#lmDailyX","n"],["weekly_on","#lmWeekOn","b"],["weekly_pct","#lmWeekPct","n"],
-  ["trades_on","#lmTradesOn","b"],["max_trades_day","#lmDay","n"],["kill_on","#lmKillOn","b"],["kill_daily","#lmKillDaily","b"],["kill_weekly","#lmKillWeekly","b"],["kill_trades","#lmKillTrades","b"],
+  ["trades_on","#lmTradesOn","b"],["max_trades_day","#lmDay","n"],["kill_on","#lmKillOn","b"],["kill_daily","#lmKillDaily","b"],["kill_weekly","#lmKillWeekly","b"],["kill_trades","#lmKillTrades","b"],["live_coach_call","#lmLiveCall","b"],["live_coach_level","#lmLiveLevel","b"],["live_jarvis","#lmLiveJarvis","b"],
   ["auto_close","#lmAuto","b"],["review_min","#lmReview","n"],["phase","#lmPhase","n"],["monthly_goal_pct","#lmGoal","n"],["warn_pct","#lmWarn","n"],["big_day","#lmBig","n"]];
 const LM_NAME={size_cap_on:"Size cap",size_cap_pct:"Size cap %",max_loss_on:"Max loss per trade",max_trade_pct:"Max loss %",daily_on:"Daily stop",daily_losses:"Daily stop (losers)",daily_x:"Daily stop (× max loss)",
-  weekly_on:"Weekly limit",weekly_pct:"Weekly limit %",trades_on:"Max trades per day",max_trades_day:"Max trades per day",kill_on:"Kill switch",kill_daily:"Kill switch · daily",kill_weekly:"Kill switch · weekly",kill_trades:"Kill switch · max trades"};
+  weekly_on:"Weekly limit",weekly_pct:"Weekly limit %",trades_on:"Max trades per day",max_trades_day:"Max trades per day",kill_on:"Kill switch",kill_daily:"Kill switch · daily",kill_weekly:"Kill switch · weekly",kill_trades:"Kill switch · max trades",live_coach_call:"LIVE · coach's call",live_coach_level:"LIVE · coach's level",live_jarvis:"LIVE · Jarvis/Josh's own"};
 let LM=null;
 function lmWait(L){
   const p=L&&L.pending,ch=p&&p.changes?Object.entries(p.changes):[];
@@ -4723,7 +4730,7 @@ async function openLimits(){
   const m=$("#lmMsg");m.className="hint";m.textContent="Loading…";
   $("#dlgLimits").showModal();
   try{const [j,ls]=await Promise.all([dkApi("limits_get"),dkApi("lock_state").catch(()=>null)]);const L=LM=j.limits;
-    for(const [k,sel,t] of LM_FIELDS){const el=$(sel);if(!el)continue;if(t==="b")el.checked=L[k]!==false;else el.value=L[k]??""}
+    for(const [k,sel,t] of LM_FIELDS){const el=$(sel);if(!el)continue;if(t==="b")el.checked=k.startsWith("live_")?L[k]===true:L[k]!==false;else el.value=L[k]??""}
     const av=L.account_value;
     $("#lmCapUsd").textContent=av?`% of the account · now $${L.size_cap_usd||Math.round(av*(L.size_cap_pct||0)/100)} of $${Math.round(av)}`:"% of the account";
     $("#lmTradeUsd").textContent=av?`= $${L.max_trade_loss} today`:"";$("#lmWeekUsd").textContent=av?`= $${L.weekly_loss} today`:"";
@@ -4792,7 +4799,7 @@ $("#lmSave").addEventListener("click",async()=>{
   const b=$("#lmSave"),m=$("#lmMsg");
   // v3.26: send only what changed, so a waiting (loosening) change isn't touched by an unrelated save
   const body={author:($("#dkWho")&&$("#dkWho").value)||"Ifoma"};let n=0;
-  for(const [k,sel,t] of LM_FIELDS){const el=$(sel);if(!el)continue;const v=t==="b"?el.checked:+el.value;const was=LM?(t==="b"?LM[k]!==false:+LM[k]):null;if(v!==was){body[k]=v;n++}}
+  for(const [k,sel,t] of LM_FIELDS){const el=$(sel);if(!el)continue;const v=t==="b"?el.checked:+el.value;const was=LM?(t==="b"?(k.startsWith("live_")?LM[k]===true:LM[k]!==false):+LM[k]):null;if(v!==was){body[k]=v;n++}}
   if(!n){$("#dlgLimits").close();return}
   b.disabled=true;b.textContent="Saving…";
   try{const j=await dkApi("limits_set",body);LM=j.limits;

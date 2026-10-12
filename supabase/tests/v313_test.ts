@@ -154,7 +154,8 @@ const M = await import("../otto-proxy.ts");
 function assert(c: unknown, msg: string) { if (!c) throw new Error("ASSERT: " + msg); }
 // v3.26: the size cap and the kill switch are ON in production; the older tests below test other things, so they start
 // with both off (the v3.26 tests at the end turn them on).
-const PRE326 = () => [{ key: "limits", value: { size_cap_on: false, kill_on: false } }];
+// v3.27: the older tests predate the LIVE-source switches, so they run with every source allowed to go live.
+const PRE326 = () => [{ key: "limits", value: { size_cap_on: false, kill_on: false, live_coach_call: true, live_coach_level: true, live_jarvis: true } }];
 function reset() {
   T.otto_actions = []; T.otto_desk = []; T.otto_settings = PRE326(); T.otto_trades = []; T.otto_watch = []; T.otto_activity = [];
   T.otto_checks = []; T.otto_jason = []; T.otto_prep = []; T.otto_prep_imgs = []; T.otto_signal_batches = []; T.otto_signal_msgs = []; T.otto_signal_imgs = [];
@@ -1857,6 +1858,7 @@ Deno.test("v3.26 limits: tightening works now; loosening waits for the next trad
   // before the open on a trading day, a loosening starts at 9:30 the same morning
   assert(/2026-10-13T13:30/.test(M.looseningStarts(new RealDate("2026-10-13T11:00:00Z") as any)), "7 AM Tue → 9:30 Tue");
   assert(M.isLooser("size_cap_pct", 30, 0) && M.isLooser("kill_daily", true, false) && !M.isLooser("weekly_pct", 20, 15) && !M.isLooser("auto_close", true, false), "isLooser");
+  assert(M.isLooser("live_jarvis", false, true) && !M.isLooser("live_jarvis", true, false) && !M.isLooser("live_coach_call", true, true), "v3.27 isLooser live_*");
 });
 
 Deno.test("v3.26 limits: Cancel change drops the waiting loosening; turning a limit back on is immediate", async () => {
@@ -2075,4 +2077,19 @@ Deno.test("v3.26 Coaches Corner: MSFT 532.40 scored both ways; ABBV exits at his
   assert(up.opt && up.est === false && up.pnl === 56, "real option P&L 1.84 → 2.40 = +$56: " + JSON.stringify(up));
   assert(row.cards[0].we === "passed" && row.type === "level", JSON.stringify(row.cards));
   assert(T.otto_jason[0].cc?.state === "scored", "saved once the day is done");
+});
+
+Deno.test("v3.27: a source that is not switched on to go LIVE becomes a PAPER card (never approvable); the manual ticket is unaffected", async () => {
+  reset(); T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false } }];   // defaults: only the coach's call may go live
+  const c: any = await M.proposeAction(spyCard(), "watcher");
+  assert(c.status === "paper", "jarvis/watcher idea is paper by default: " + c.status);
+  assert(c.checks.some((x: any) => x.paper && /PAPER/.test(x.text) && /never sent to Robinhood/.test(x.text)), JSON.stringify(c.checks));
+  T.otto_actions = [];
+  T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false, live_jarvis: true } }];
+  const d: any = await M.proposeAction(spyCard(), "watcher");
+  assert(d.status === "pending", "switched on, so it can be approved: " + d.status);
+  T.otto_actions = [];
+  T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false } }];
+  const m: any = await M.proposeAction(spyCard(), "ottotrader@vinecreativestudio.com", { manual: true });
+  assert(m.status === "pending", "manual ticket is not paper: " + m.status);
 });
