@@ -1831,7 +1831,7 @@ const MSFT_DAY = () => [
   o26("e2", "2026-10-09T14:36:24Z", 527.5, "open", 4.00), o26("x2", "2026-10-09T14:46:44Z", 527.5, "close", 3.20)];
 function r26(iso = "2026-10-09T15:00:00Z", limits: any = {}) {
   reset(); setNow(iso); (M as any).clearCacheForTest();
-  T.otto_settings = [{ key: "limits", value: { ...limits } }];       // v3.26 defaults: size cap 30% ON, kill switch ON
+  T.otto_settings = [{ key: "limits", value: { live_coach_call: true, live_coach_level: true, live_jarvis: true, ...limits } }];   // v3.27: every source may go live here, so these tests still prove the kill-switch / size-cap paper path       // v3.26 defaults: size cap 30% ON, kill switch ON
   T.otto_activity = []; T.otto_jason = [];
 }
 const port = (v: number, bp = v) => (tool: string) => tool === "get_portfolio" ? { data: { total_value: String(v), buying_power: { buying_power: String(bp) } } } : null;
@@ -2085,7 +2085,7 @@ Deno.test("v3.27: a source that is not switched on to go LIVE becomes a PAPER ca
   assert(c.status === "paper", "jarvis/watcher idea is paper by default: " + c.status);
   assert(c.checks.some((x: any) => x.paper && /PAPER/.test(x.text) && /never sent to Robinhood/.test(x.text)), JSON.stringify(c.checks));
   T.otto_actions = [];
-  T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false, live_jarvis: true } }];
+  T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false, live_coach_call: true, live_coach_level: true, live_jarvis: true } }];
   const d: any = await M.proposeAction(spyCard(), "watcher");
   assert(d.status === "pending", "switched on, so it can be approved: " + d.status);
   T.otto_actions = [];
