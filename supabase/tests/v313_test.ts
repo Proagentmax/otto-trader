@@ -1378,6 +1378,55 @@ Deno.test("v3.23: two tickers at once keep the old multi-step loop (not forced o
   assert(first && !first.tool_choice && first.tools.length > 1, "old loop for two calls");
 });
 
+/* ======================= v3.29 — a coach LEVEL post gets the one-step path too (12 Oct: 71–107 s on the old loop) ======================= */
+function seedMuLevel(extra: any = {}) {
+  T.otto_jason.push({ id: 811, created_at: "2026-10-06T19:12:54Z", day: "2026-10-06", posted_at: "2026-10-06T19:12:40Z", posted_label: "3:12 PM", kind: "level", ticker: "MU", direction: null, level: 1060, late: false, words: "MU 1060 KEY LEVEL", source: "watcher", ...extra });
+  T.otto_signal_batches.push({ id: 8, created_at: "2026-10-06T19:12:54Z", day: "2026-10-06", msg_ids: ["m1"], rows: [811], status: "jarvis" });
+}
+
+Deno.test("v3.29: one level post, no direction → ONE request, card tool not forced, both sides pre-fetched, card made + pinged once", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuLevel();
+  let bad = "";
+  claudeScript = (body: any) => {
+    const chk = (c: unknown, m: string) => { if (!c && !bad) bad = m; };
+    chk(!body.tool_choice, "card NOT forced for a level");
+    chk(body.tools.length === 1 && body.tools[0].name === "propose_action", "only the card tool");
+    const p = JSON.stringify(body.messages[0]);
+    chk(/He posted a LEVEL/.test(p), "level rule"); chk(/PRICE: MU \$/.test(p), "price"); chk(/5-MIN BARS/.test(p), "bars");
+    chk(/calls, expiries/.test(p) && /puts, expiries/.test(p), "both sides pre-fetched");
+    return muCard(body);   // like production: Jarvis does not put the level row id in the plan
+  };
+  await M.signalJarvis(8);
+  assert(!bad, bad);
+  const b = T.otto_signal_batches[0];
+  assert(claudeBodies.length === 1, "one Claude request, got " + claudeBodies.length);
+  assert(b.cards.length === 1 && T.otto_actions.length === 1, "one card");
+  assert(pings.filter((p) => /Card ready/.test(p.title)).length === 1, "pinged once: " + JSON.stringify(pings));
+  assert(b.timing?.one_step === true && b.timing.cards === 1, JSON.stringify(b.timing));
+  assert(T.otto_jason[0].action_id === b.cards[0], "the level row is linked to its card");
+});
+
+Deno.test("v3.29: a level that is not a setup → ONE request, no card, Jarvis's one-line reason is the read (no 'ran out of steps')", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuLevel();
+  claudeScript = () => textReply("READ: MU 1060 is 40 points above the live price and the 5-minute bars are flat, so there is no setup yet.");
+  await M.signalJarvis(8);
+  const b = T.otto_signal_batches[0];
+  assert(claudeBodies.length === 1, "one request, got " + claudeBodies.length);
+  assert(!b.cards.length && T.otto_actions.length === 0, "no card");
+  assert(/no setup yet/.test(b.read) && !/ran out of steps/.test(String(b.read) + String(b.error)), String(b.read) + " | " + String(b.error));
+  assert(!pings.some((p) => /Card ready/.test(p.title)), "no card ping");
+});
+
+Deno.test("v3.29: two level posts for DIFFERENT tickers, or a level + a call for different tickers, keep the old multi-step loop", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuLevel();
+  T.otto_jason.push({ id: 812, created_at: "2026-10-06T19:12:54Z", day: "2026-10-06", posted_at: "2026-10-06T19:12:41Z", posted_label: "3:12 PM", kind: "level", ticker: "AMD", direction: null, level: 160, late: false, words: "AMD 160", source: "watcher" });
+  T.otto_signal_batches[0].rows = [811, 812];
+  let first: any = null;
+  claudeScript = (body: any) => { first ||= body; return textReply("READ: two levels"); };
+  await M.signalJarvis(8);
+  assert(first && !first.tool_choice && first.tools.length > 1, "old loop for two tickers");
+});
+
 Deno.test("v3.23: the 9:10 self-test fails (and pings) when post → card is slower than 30 s", async () => {
   reset(); setNow("2026-10-07T13:10:00Z"); callHook = muHook(781.2, "SPY");
   T.otto_settings.push({ key: "signal_beat", value: { at: "2026-10-07T13:09:50Z", state: "ok", queue: 0, queue_age: 0 } });

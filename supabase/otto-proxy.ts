@@ -1649,6 +1649,7 @@ async function deskTools(services: string[] = ["tv", "rh"]) {
 
 type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; allowClose?: boolean; maxRounds?: number; deadline?: number; author?: string; planExtra?: Record<string, unknown>;
   mustCard?: boolean; dryRun?: boolean;
+  optionalCard?: boolean;   // v3.29: one step, but the card tool is NOT forced (a coach LEVEL may get a card or a one-line 'no card, because')
   oneStep?: boolean; onCard?: (id: string) => Promise<void> };   // v3.23: a Signal card in ONE forced step (+ one retry), then stop   // v3.16: mustCard = a Signal call must end in a card; dryRun = the self-test (cards checked, not stored)
 type DeskResult = { said: string; cards: string[]; timedOut?: boolean; outOfRounds?: boolean; did: string[]; failed: string[]; finalText: string; dry?: any[]; errors?: string[]; cardRead?: string };
 
@@ -1688,7 +1689,7 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
   for (let round = 0; round < maxR; round++) {
     if (Date.now() > deadline - 15000) { said += OUT_OF_TIME; send({ t: "text", v: OUT_OF_TIME }); return done({ timedOut: true }); }
     // v3.16: a Signal call must end in a card — on the last step (or when time is short) the card is the only move left.
-    const force = (o.oneStep || (o.mustCard && (round >= maxR - 2 || Date.now() > deadline - 50000))) && o.allowPropose && !cards.length && !dry.length
+    const force = ((o.oneStep && !o.optionalCard) || (o.mustCard && (round >= maxR - 2 || Date.now() > deadline - 50000))) && o.allowPropose && !cards.length && !dry.length
       && tools.some((t: any) => t.name === "propose_action");
     finalText = "";
     let r: Response;
@@ -3776,8 +3777,13 @@ export async function signalJarvis(bid: number) {
     const open1 = tradeable.filter((r: any) => !carded.some((c: any) => c.ticker === r.ticker));
     const callRows = open1.filter((r: any) => r.kind === "call");
     const oneStep = callRows.length === 1 && new Set(open1.map((r: any) => r.ticker)).size === 1;
-    const [setup, pre] = await Promise.all([oneStep ? deskSetup({ fast: true }) : deskSetup(),
-      (oneStep ? signalPack(callRows[0]) : signalPrefetch(open1)).catch(() => "")]);
+    // v3.29: level posts only, one ticker → the same one-step path, but the card is optional (a level may not be a setup).
+    const levelOne = !oneStep && callRows.length === 0 && open1.length > 0 && open1.every((r: any) => r.kind === "level")
+      && new Set(open1.map((r: any) => r.ticker)).size === 1 && !!v322Sym(open1[0].ticker);
+    const fast = oneStep || levelOne;
+    const anchor = oneStep ? callRows[0] : open1[open1.length - 1];
+    const [setup, pre] = await Promise.all([fast ? deskSetup({ fast: true }) : deskSetup(),
+      (fast ? signalPack(anchor) : signalPrefetch(open1)).catch(() => "")]);
     const { cs, sys, tools, ctxLine } = setup;
     const preBlock = pre ? `\nPRE-FETCHED BY THE SERVER (live, use these — the option_id values are exact; don't page the chain again unless nothing here works):\n${pre}\n` +
       `Build the card from ★ if it fits buying power, otherwise ◆ — one card. Limit price = the ask or a cent under. Make the card in your FIRST or SECOND step — speed is the edge on a signal.\n` : "";
@@ -3789,12 +3795,12 @@ export async function signalJarvis(bid: number) {
     try {
       // v3.9.4: no TradingView tools in a card build — TradingView has been slow/rate-limited and it ate Jarvis's
       // time. Prices, chains and quotes come from Robinhood; the banner (Yahoo) is in the context line.
-      if (oneStep) {
-        res = await runDesk({ msgs: [{ role: "user", content: ctxLine + "\n" + signalPrompt(cfg, all, carded) + "\n" + ONE_STEP_RULE + "\n" + pre }], sys,
-          tools: [signalProposeTool(tools)], cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 2, mustCard: true, oneStep: true,
+      if (fast) {
+        res = await runDesk({ msgs: [{ role: "user", content: ctxLine + "\n" + signalPrompt(cfg, all, carded) + "\n" + (oneStep ? ONE_STEP_RULE : LEVEL_ONE_STEP_RULE) + "\n" + pre }], sys,
+          tools: [signalProposeTool(tools)], cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 2, mustCard: oneStep, oneStep: true, optionalCard: levelOne,
           deadline: t0 + RUN_BUDGET_MS, onCard: async (id: string) => {        // ping the card the moment it exists, before the read is saved
             pinged.add(id);
-            const row = callRows[0];
+            const row = anchor;
             row.action_id = id;
             await db("otto_jason?id=eq." + row.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ action_id: id }) }).catch(() => {});
             await markPinged([id]);
@@ -3833,7 +3839,7 @@ export async function signalJarvis(bid: number) {
     try { const fc = await factCheck(read); if (fc.notes.length) read = fc.text.trim() + "\n\n" + fc.notes.join("\n"); } catch { /* v3.22 */ }
     if (missing.length && cut >= 0) read += `\n\n⚠ No card for ${missing.map((r: any) => r.ticker).join(", ")}: ${why}.`;   // the feed tag says "no card" (status stays "done")
     const prevT = pinged.size ? ((await db("otto_signal_batches?select=timing&id=eq." + bid).catch(() => []))?.[0]?.timing || null) : null;
-    const timing = prevT || { posted: all[0]?.posted_at || null, caught: b.created_at, card_ms: Date.now() - t0, cards: res.cards.length, total_ms: all[0]?.posted_at ? Date.now() - Date.parse(all[0].posted_at) : null, one_step: oneStep };
+    const timing = prevT || { posted: all[0]?.posted_at || null, caught: b.created_at, card_ms: Date.now() - t0, cards: res.cards.length, total_ms: all[0]?.posted_at ? Date.now() - Date.parse(all[0].posted_at) : null, one_step: fast };
     await sigBatch(bid, { status: err ? "error" : "done", read: read || null, cards: res.cards, error: err || (missing.length ? why : null), timing });
     if (acts.length) await markPinged(acts.map((a: any) => a.id));
     for (const a of acts.filter((x: any) => !pinged.has(x.id) && x.status !== "paper")) {
@@ -7206,6 +7212,10 @@ export const actOnForTest = actOn;
    the coach gives none; the read stays on the main model; one card per post (no "ALT —"); one retry, then no card + why. */
 
 export const ONE_STEP_RULE = `ONE STEP (speed is the edge): everything you need is below, fetched live by the server a moment ago — the live price, today's 5-minute bars, the contracts (★ = best by the Otto Rules, ◆ = best that fits buying power) and buying power. Do NOT look anything up. Make the card NOW with propose_action — this is your only step (the server allows one retry if it bounces the card). ONE card: ★ if it fits buying power, otherwise ◆; nothing fits → the cheapest anyway (red banner). Limit = the ask or a cent under. Levels (entry, wrong-if, TP1) must be within 10% of the live price. Keep the summary to 4 short lines. Put the feed read in the card's "read" field: 1–3 short plain lines — what he said, your direction and WHY, what proves it wrong.`;
+
+// v3.29 (13 Oct): a coach LEVEL post (no call) from one ticker also gets the one-step path. 12 Oct: level posts took the old
+// multi-step loop, 71–107 s to a card vs 20 s one-step. Not forced: a level that isn't a setup gets a one-line reason instead.
+export const LEVEL_ONE_STEP_RULE = `ONE STEP (speed is the edge): everything you need is below, fetched live by the server a moment ago — the live price, today's 5-minute bars, the contracts (★ = best by the Otto Rules, ◆ = best that fits buying power) and buying power. Do NOT look anything up. He posted a LEVEL, not a call. Decide NOW, in this one step. If the level and the live price give a setup by the Otto Rules, make ONE card with propose_action: the direction is yours; ★ if it fits buying power, otherwise ◆; nothing fits → the cheapest anyway (red banner). Limit = the ask or a cent under. Levels (entry, wrong-if, TP1) must be within 10% of the live price. Keep the summary to 4 short lines. Put the feed read in the card's "read" field: 1–3 short plain lines — what he said, your direction and WHY, what proves it wrong. If it is NOT a setup right now (price far from the level, no edge), make NO card: answer with the word READ: and 1–3 plain lines saying why.`;
 
 export function signalProposeTool(tools: any[]) {
   const base = tools.find((x: any) => x?.name === "propose_action") || PROPOSE_TOOL("");
