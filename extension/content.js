@@ -7,7 +7,7 @@
    answers; a scrolled-up channel is scrolled back to the newest post (scroll only — still no clicking)
    and reported; posts whose author can't be confirmed are counted. */
 (() => {
-  const VER = "1.3.0";
+  const VER = "1.3.1";
   let cfg = null, paused = false;
   const seen = new Map();            // message id -> { mentor, sig, at }
   const MAX_AGE_MS = 12 * 3600e3;    // older than this on screen = ignore (yesterday's chat)

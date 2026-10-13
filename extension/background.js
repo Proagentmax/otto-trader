@@ -6,9 +6,9 @@
    v1.3: edits / late charts arrive as {edited:true} with a new key (id#e<hash>); the Discord tab also nudges the
    check-in every minute (Chrome can hold back the alarm on an idle PC); scrolled-up and unknown-author counts
    travel in the heartbeat. */
-const VER = "1.3.0";
-const QUIET_MS = 12000;     // send once he's been quiet this long…
-const MAX_WAIT_MS = 30000;  // …or this long after the first new line, whichever comes first
+const VER = "1.3.1";
+const QUIET_MS = 3000;      // v1.3.1 (13 Oct): was 12 s. Send once he's been quiet this long…
+const MAX_WAIT_MS = 8000;   // v1.3.1: was 30 s. …or this long after the first new line, whichever comes first
 
 const store = {
   get: (k) => new Promise((r) => chrome.storage.local.get(k, (v) => r(v[k]))),

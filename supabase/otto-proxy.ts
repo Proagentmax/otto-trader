@@ -1077,7 +1077,17 @@ function costOf(tool: string, a: any): { cost: number | null; note: string } {
 
 /* ------------------------------------------------------------ propose / act */
 
-export async function proposeAction(input: any, who: string, opts: { manual?: boolean; planExtra?: Record<string, unknown> } = {}) {
+// v3.30 (item 2): the LIVE / PAPER word at the front of a card title is set by the SERVER from the card's real status.
+// Jarvis wrote "LIVE —" on a PAPER card (META 12 Oct 14:06). Whatever he wrote there is stripped first.
+const STAMP_RE = /^\s*(?:LIVE|PAPER)\s*(?:[—–:·|-]+\s*)?/i;
+export const bareTitle = (t: any): string => String(t ?? "").replace(STAMP_RE, "").replace(/^Buy\s+/i, "");
+export const stampTitle = (t: any, paper: boolean): string => (paper ? "PAPER — " : "LIVE — ") + String(t ?? "").replace(STAMP_RE, "").trim();
+// v3.30 (item 1): the NO CARD message for a coach level with no direction.
+const noCardLevel = (row: any): string => {
+  const lv = Number(row?.level) > 0 ? Number(row.level) : levelsFromWords(row?.words || "")[0]?.level;
+  return `NO CARD — the coach posted a level with no direction ("${String(row?.words || "").slice(0, 80)}"). Don't pick a side: it's on the Watcher both ways, and the card comes when price touches ${lv ?? "the level"} and a 5-minute candle closes. Say that in your read.`;
+};
+export async function proposeAction(input: any, who: string, opts: { manual?: boolean; planExtra?: Record<string, unknown>; blockLevels?: Record<string, any> } = {}) {
   const calls = Array.isArray(input.calls) ? input.calls.slice(0, 6) : [];
   if (!calls.length) throw new Error("no calls");
   // v3.1: an opening option order must carry its plan, so the scorecard can grade it.
@@ -1099,8 +1109,13 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
   if (opening && plan) {
     try { const o = await originOf(plan); plan.origin = o.origin; originRow = o.row; } catch { plan.origin = "jarvis"; }
     if (who === "signals" && !opts.manual && plan.origin === "coach_level" && originRow && !originRow.direction) {
-      const lv = Number(originRow.level) > 0 ? Number(originRow.level) : levelsFromWords(originRow.words || "")[0]?.level;
-      throw new Error(`NO CARD — the coach posted a level with no direction ("${String(originRow.words || "").slice(0, 80)}"). Don't pick a side: it's on the Watcher both ways, and the card comes when price touches ${lv ?? "the level"} and a 5-minute candle closes. Say that in your read.`);
+      throw new Error(noCardLevel(originRow));
+    }
+    // v3.30 (item 1, 13 Oct): Jarvis never puts plan.jason_id on the card, so the rule above did not fire (12 Oct: 5 direction-less
+    // level posts got cards). The batch tells the server which tickers have only a direction-less level open; no card for those.
+    if (who === "signals" && !opts.manual && !originRow && opts.blockLevels) {
+      const tkB = String(plan.tv_symbol || "").split(":").pop()?.toUpperCase() || "";
+      if (tkB && opts.blockLevels[tkB]) throw new Error(noCardLevel(opts.blockLevels[tkB]));
     }
   }
   // v3.21 (Ifoma, 7 Oct night): one card per ticker + direction. 7 Oct 10:32 two QQQ put cards went up at once.
@@ -1238,7 +1253,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     if (exit) { const st = await staleEntry({ exit, plan }).catch(() => null); if (st) checks.unshift({ ok: false, guard: true, stale: true, text: st }); }
   }
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
-    title: unname(input.title || "Action").slice(0, 140),
+    title: (opening ? stampTitle(unname(input.title || "Action"), !!paper) : unname(input.title || "Action")).slice(0, 140),
     summary: unname(input.summary || "").slice(0, 4000),
     calls: out, risk, review: review.join("\n\n---\n\n"), status: paper ? "paper" : "pending", created_by: who,
     plan: plan ? { ...plan, setup: String(plan.setup).toLowerCase().slice(0, 40) } : null, banner, checks,
@@ -1647,7 +1662,7 @@ async function deskTools(services: string[] = ["tv", "rh"]) {
   return { tools, help: help.join("\n") || "(no connector is connected yet)", status };
 }
 
-type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; allowClose?: boolean; maxRounds?: number; deadline?: number; author?: string; planExtra?: Record<string, unknown>;
+type DeskRun = { msgs: any[]; sys: string; tools: any[]; cs: Chunk[]; who: string; send: (o: any) => void; allowPropose: boolean; allowClose?: boolean; maxRounds?: number; deadline?: number; author?: string; planExtra?: Record<string, unknown>; blockLevels?: Record<string, any>;
   mustCard?: boolean; dryRun?: boolean;
   optionalCard?: boolean;   // v3.29: one step, but the card tool is NOT forced (a coach LEVEL may get a card or a one-line 'no card, because')
   oneStep?: boolean; onCard?: (id: string) => Promise<void> };   // v3.23: a Signal card in ONE forced step (+ one retry), then stop   // v3.16: mustCard = a Signal call must end in a card; dryRun = the self-test (cards checked, not stored)
@@ -1771,7 +1786,7 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
         } else if (b.name === "propose_action") {
           if (!o.allowPropose) throw new Error("no cards in this run");
           send({ t: "tool", v: "Preparing card: " + String(input.title || "") });
-          const card = await proposeAction(input, who, { planExtra: o.planExtra });
+          const card = await proposeAction(input, who, { planExtra: o.planExtra, blockLevels: o.blockLevels });
           cards.push(card.id);
           if (o.oneStep) { cardRead = unname(String(input.read || "")); if (o.onCard && card.status !== "paper") await o.onCard(card.id).catch(() => {}); }
           send({ t: "action", v: card });
@@ -2949,7 +2964,7 @@ async function placeStop(a: any, ex: any, acct: string) {
     ex.stop_error = msg.slice(0, 300);
     exitLog(ex, "Stop order FAILED: " + ex.stop_error);
     await logDesk("system", "Otto", `⚠ ${a.title}: the protective stop at $${ex.stop_option.toFixed(2)} could not be placed (${ex.stop_error}). This trade has NO stop working. Close it or set one by hand.`, a.id);
-    await notify("no_stop", `⚠ No stop on ${a.title.replace(/^Buy\s+/i, "")}`, `The protective stop at $${ex.stop_option.toFixed(2)} couldn't be placed. Open the Desk.`);
+    await notify("no_stop", `⚠ No stop on ${bareTitle(a.title)}`, `The protective stop at $${ex.stop_option.toFixed(2)} couldn't be placed. Open the Desk.`);
     return false;
   }
 }
@@ -3076,7 +3091,7 @@ async function exitTickLocked(a: any) {
       (ex.alert_error ? ` (${ex.alert_error})` : "") +
       (ex.stop_from_card ? ` Stop sized from the fill (card had $${Number(ex.stop_from_card).toFixed(2)}).` : "") +
       (staleAtFill ? ` ⚠ ${staleAtFill}: the server closes it on the next 5-minute close through ${ex.wrong_if} if auto-close is on.` : ""), a.id);
-    await notify("fill", `✓ Filled: ${a.title.replace(/^Buy\s+/i, "")} @ $${ex.fill_price.toFixed(2)}`,
+    await notify("fill", `✓ Filled: ${bareTitle(a.title)} @ $${ex.fill_price.toFixed(2)}`,
       (stopOk ? `Stop on at $${ex.stop_option.toFixed(2)} (about −$${loss.toFixed(0)}). ` : `Stop goes on at 9:30 ET. `) +
       (ex.alerts?.wrong != null && ex.alerts?.tp1 != null ? `Alerts set at ${ex.wrong_if} and ${ex.tp1}.`
         : `⚠ TradingView alerts NOT set (${ex.alerts?.wrong != null ? "" : "wrong-if " + ex.wrong_if + " "}${ex.alerts?.tp1 != null ? "" : "TP1 " + ex.tp1}) — Otto keeps retrying.${ex.alert_error ? " " + ex.alert_error : ""}`));
@@ -3094,7 +3109,7 @@ async function exitTickLocked(a: any) {
     await saveExit(a.id, ex);
     await logDesk("system", "Otto", `${a.title}: position is flat (${how}). Leftover stop and trade alerts cleaned up. Write the one-line reason in the Journal.`, a.id);
     await expireCloseCards(ex.option_id).catch(() => {});   // v3.24 (C10c)
-    if (how === "stopped out") await notify("stopped", `🛑 Stopped out: ${a.title.replace(/^Buy\s+/i, "")}`, `The $${Number(ex.stop_option).toFixed(2)} stop filled. Write the one-line reason in the Journal.`);
+    if (how === "stopped out") await notify("stopped", `🛑 Stopped out: ${bareTitle(a.title)}`, `The $${Number(ex.stop_option).toFixed(2)} stop filled. Write the one-line reason in the Journal.`);
     return { id: a.id, state: ex.state };
   }
   if (held !== ex.qty) { exitLog(ex, `Holding ${held} now (was ${ex.qty})`); ex.qty = held; }
@@ -3121,7 +3136,7 @@ async function exitTickLocked(a: any) {
       if (!still.length) exitLog(ex, "Alerts set on retry");
       else if (!ex.alert_warned_day || ex.alert_warned_day !== today) {
         ex.alert_warned_day = today;
-        await notify("trade_alert", `⚠ Alerts not set: ${a.title.replace(/^Buy\s+/i, "")}`,
+        await notify("trade_alert", `⚠ Alerts not set: ${bareTitle(a.title)}`,
           `Otto couldn't set the TradingView ${still.join(" + ")} alert${still.length > 1 ? "s" : ""}${ex.alert_error ? " — " + ex.alert_error : ""}. The stop is unaffected. Otto keeps retrying.`);
       }
       await saveExit(a.id, ex);
@@ -3165,7 +3180,7 @@ async function exitTickLocked(a: any) {
         const why = wrong ? `wrong-if ${ex.wrong_if} hit (${ex.wrong_tf || 15}-minute close)` : `TP1 ${ex.tp1} reached`;
         ex.close_at = new Date().toISOString();
         exitLog(ex, `${why} → Jarvis deciding (auto-close on)`);
-        await notify("trade_alert", `🔔 ${a.title.replace(/^Buy\s+/i, "")}: ${wrong ? "wrong-if hit" : "TP1 reached"}`, `${why}. Jarvis is deciding now (auto-close is on).`);
+        await notify("trade_alert", `🔔 ${bareTitle(a.title)}: ${wrong ? "wrong-if hit" : "TP1 reached"}`, `${why}. Jarvis is deciding now (auto-close is on).`);
         await saveExit(a.id, ex);
         // v3.21: the server confirms the card's rule on Robinhood bars and closes; otherwise it falls through to a close card.
         let closed = false;
@@ -3191,7 +3206,7 @@ async function exitTickLocked(a: any) {
         if (stopOpen) calls.push({ service: "rh", tool: "cancel_option_order", args: { order_id: ex.stop_order_id } });
         calls.push({ service: "rh", tool: "place_option_order", args: { legs: [{ option_id: ex.option_id, side: "sell", position_effect: "close" }],
           quantity: String(ex.qty), type: "market", time_in_force: "gfd" } });
-        const card = await proposeAction({ title: `Close ${String(a.title).replace(/^Buy\s+/i, "")} (${wrong ? "wrong if hit" : "TP1"})`,
+        const card = await proposeAction({ title: `Close ${bareTitle(a.title)} (${wrong ? "wrong if hit" : "TP1"})`,
           summary: [`Why          ${why}`,
             `Plan         ${wrong ? "out: the idea is proven wrong" : "TP1: bank it (1 contract = no runner)"}`,
             `Order        ${stopOpen ? "cancel the $" + ex.stop_option.toFixed(2) + " stop, then " : ""}sell to close ${ex.qty} at market`,
@@ -3199,7 +3214,7 @@ async function exitTickLocked(a: any) {
           calls }, "otto");
         ex.close_card = card.id; ex.close_at = new Date().toISOString();
         exitLog(ex, `${why} → close card ${String(card.id).slice(0, 8)}`);
-        await notify("trade_alert", `🔔 ${a.title.replace(/^Buy\s+/i, "")}: ${wrong ? "wrong-if hit" : "TP1 reached"}`, `${why}. A close card is waiting for Approve.`);
+        await notify("trade_alert", `🔔 ${bareTitle(a.title)}: ${wrong ? "wrong-if hit" : "TP1 reached"}`, `${why}. A close card is waiting for Approve.`);
         await logDesk("assistant", "Jarvis", `${a.title}: ${why}. Your plan says ${wrong ? "out" : "take it"}. The close card is up${stopOpen ? "; the stop stays on until someone approves it" : ""}.`, card.id);
       }
     }
@@ -3671,7 +3686,7 @@ ${rows.map(jLine).join("\n")}
 ${carded.length ? "Already carded today (do NOT make a second card for these unless he gives a new direction or a new entry): " + carded.map((r: any) => `${r.ticker} ${r.direction || ""} at ${r.posted_label || "?"}`).join("; ") + "\n" : ""}
 Do this:
 1. A CALL (he gives the direction — long/short, calls/puts, above/below a level to trade it) gets ONE opening option card via propose_action, in HIS direction. A post that names a ticker with NO direction and no level gets a card only if you can read a clear direction from his words, his chart, the banner and the price right now (fetch it) — say plainly the direction is yours.
-1a. v3.26 (Ifoma, 9 Oct): a LEVEL with no direction from him ("MSFT 532.40 RESISTANCE", "ABBV AT RESISTANCE", "752 POSSIBLE BOUNCE ZONE") gets NO card — don't pick a side. The server puts it on the Watcher both ways; the card comes when price touches it and a 5-minute candle closes. Put the level in your read. plan.setup = "otto signal", plan.jason_id = the #id above. Fill in everything he did NOT give — the contract (delta .30–.40, volume > open interest, a sensible expiry), limit, quantity inside our limits, TP1, wrong-if and stop_option — as precisely as you can. In the card summary say which parts are ${cfg.mentor}'s and which are yours.
+1a. v3.26 (Ifoma, 9 Oct): a LEVEL with no direction from him ("MSFT 532.40 RESISTANCE", "ABBV AT RESISTANCE", "752 POSSIBLE BOUNCE ZONE") gets NO card — don't pick a side. The server puts it on the Watcher both ways; the card comes when price touches it and a 5-minute candle closes. Put the level in your read. (v3.30: the server refuses a card for a level with no direction, so don't build one.) When he DOES give a direction with a level ("buy above X"), plan.setup = "otto signal", plan.jason_id = the #id above, and fill in everything he did NOT give — the contract (delta .30–.40, volume > open interest, a sensible expiry), limit, quantity inside our limits, TP1, wrong-if and stop_option — as precisely as you can; in the card summary say which parts are ${cfg.mentor}'s and which are yours.
 2. A LATE post (he says he missed calling it / it already moved): still make the card, start the title with "LATE", and say plainly in the summary that chasing breaks his entry rules.
 3. If the banner, one of his rules or our limits argue against it, say so in the card summary — but still make the card. Ifoma and Josh decide.
 3b. ONE card per post (Ifoma, 8 Oct): card ★ if it fits buying power, otherwise ◆; if nothing fits, card the cheapest anyway (it gets a red banner).
@@ -3782,6 +3797,10 @@ export async function signalJarvis(bid: number) {
       && new Set(open1.map((r: any) => r.ticker)).size === 1 && !!v322Sym(open1[0].ticker);
     const fast = oneStep || levelOne;
     const anchor = oneStep ? callRows[0] : open1[open1.length - 1];
+    // v3.30 (item 1): tickers whose only open post is a level with no direction → the server refuses a card for them.
+    const blockLevels: Record<string, any> = {};
+    for (const r of open1) if (r.kind === "level" && !r.direction && !open1.some((x: any) => x.ticker === r.ticker && x.kind !== "level")) blockLevels[String(v322Sym(r.ticker) || r.ticker).toUpperCase()] = r;
+    const levelNoDir = levelOne && open1.every((r: any) => !r.direction);
     const [setup, pre] = await Promise.all([fast ? deskSetup({ fast: true }) : deskSetup(),
       (fast ? signalPack(anchor) : signalPrefetch(open1)).catch(() => "")]);
     const { cs, sys, tools, ctxLine } = setup;
@@ -3796,8 +3815,8 @@ export async function signalJarvis(bid: number) {
       // v3.9.4: no TradingView tools in a card build — TradingView has been slow/rate-limited and it ate Jarvis's
       // time. Prices, chains and quotes come from Robinhood; the banner (Yahoo) is in the context line.
       if (fast) {
-        res = await runDesk({ msgs: [{ role: "user", content: ctxLine + "\n" + signalPrompt(cfg, all, carded) + "\n" + (oneStep ? ONE_STEP_RULE : LEVEL_ONE_STEP_RULE) + "\n" + pre }], sys,
-          tools: [signalProposeTool(tools)], cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 2, mustCard: oneStep, oneStep: true, optionalCard: levelOne,
+        res = await runDesk({ msgs: [{ role: "user", content: ctxLine + "\n" + signalPrompt(cfg, all, carded) + "\n" + (oneStep ? ONE_STEP_RULE : levelNoDir ? LEVEL_NO_DIR_RULE : LEVEL_ONE_STEP_RULE) + "\n" + pre }], sys,
+          tools: [signalProposeTool(tools)], cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 2, mustCard: oneStep, oneStep: true, optionalCard: levelOne, blockLevels,
           deadline: t0 + RUN_BUDGET_MS, onCard: async (id: string) => {        // ping the card the moment it exists, before the read is saved
             pinged.add(id);
             const row = anchor;
@@ -3814,7 +3833,7 @@ export async function signalJarvis(bid: number) {
       } else
       res = await runDesk({ msgs: [{ role: "user", content: prompt + "\n(Use Robinhood tools for prices, option chains and quotes — TradingView tools are not available in this run.)" }], sys,
         tools: tools.filter((t: any) => t.name !== "close_position" && !/^tv__/.test(String(t.name || ""))),
-        cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 8, mustCard, deadline: t0 + RUN_BUDGET_MS });
+        cs, who: "signals", send: () => {}, allowPropose: true, allowClose: false, maxRounds: 8, mustCard, blockLevels, deadline: t0 + RUN_BUDGET_MS });
     } catch (e) { err = String((e as Error).message || e).slice(0, 300); }
     const acts = res.cards.length ? await db("otto_actions?select=id,title,plan,status&id=in.(" + res.cards.join(",") + ")").catch(() => []) : [];
     const open = tradeable.filter((r: any) => !r.action_id);
@@ -7211,16 +7230,19 @@ export const actOnForTest = actOn;
    pre-fetched; target post → card under 30 s (the 9:10 self-test fails over 30 s); Jarvis still picks direction when
    the coach gives none; the read stays on the main model; one card per post (no "ALT —"); one retry, then no card + why. */
 
-export const ONE_STEP_RULE = `ONE STEP (speed is the edge): everything you need is below, fetched live by the server a moment ago — the live price, today's 5-minute bars, the contracts (★ = best by the Otto Rules, ◆ = best that fits buying power) and buying power. Do NOT look anything up. Make the card NOW with propose_action — this is your only step (the server allows one retry if it bounces the card). ONE card: ★ if it fits buying power, otherwise ◆; nothing fits → the cheapest anyway (red banner). Limit = the ask or a cent under. Levels (entry, wrong-if, TP1) must be within 10% of the live price. Keep the summary to 4 short lines. Put the feed read in the card's "read" field: 1–3 short plain lines — what he said, your direction and WHY, what proves it wrong.`;
+export const ONE_STEP_RULE = `ONE STEP (speed is the edge): everything you need is below, fetched live by the server a moment ago — the live price, today's 5-minute bars, the contracts (★ = best by the Otto Rules, ◆ = best that fits buying power) and buying power. Do NOT look anything up. Make the card NOW with propose_action — this is your only step (the server allows one retry if it bounces the card). ONE card: ★ if it fits buying power, otherwise ◆; nothing fits → the cheapest anyway (red banner). Limit = the ask or a cent under. Levels (entry, wrong-if, TP1) must be within 10% of the live price. Keep the summary to 2 short lines (under 200 characters in all). Put the feed read in the card's "read" field: 1–2 short plain lines (under 220 characters in all) — what he said, your direction and WHY, what proves it wrong.`;
 
 // v3.29 (13 Oct): a coach LEVEL post (no call) from one ticker also gets the one-step path. 12 Oct: level posts took the old
 // multi-step loop, 71–107 s to a card vs 20 s one-step. Not forced: a level that isn't a setup gets a one-line reason instead.
-export const LEVEL_ONE_STEP_RULE = `ONE STEP (speed is the edge): everything you need is below, fetched live by the server a moment ago — the live price, today's 5-minute bars, the contracts (★ = best by the Otto Rules, ◆ = best that fits buying power) and buying power. Do NOT look anything up. He posted a LEVEL, not a call. Decide NOW, in this one step. If the level and the live price give a setup by the Otto Rules, make ONE card with propose_action: the direction is yours; ★ if it fits buying power, otherwise ◆; nothing fits → the cheapest anyway (red banner). Limit = the ask or a cent under. Levels (entry, wrong-if, TP1) must be within 10% of the live price. Keep the summary to 4 short lines. Put the feed read in the card's "read" field: 1–3 short plain lines — what he said, your direction and WHY, what proves it wrong. If it is NOT a setup right now (price far from the level, no edge), make NO card: answer with the word READ: and 1–3 plain lines saying why.`;
+export const LEVEL_ONE_STEP_RULE = `ONE STEP (speed is the edge): everything you need is below, fetched live by the server a moment ago — the live price, today's 5-minute bars, the contracts (★ = best by the Otto Rules, ◆ = best that fits buying power) and buying power. Do NOT look anything up. He posted a LEVEL, not a call. Decide NOW, in this one step. If the level and the live price give a setup by the Otto Rules, make ONE card with propose_action: the direction is yours; ★ if it fits buying power, otherwise ◆; nothing fits → the cheapest anyway (red banner). Limit = the ask or a cent under. Levels (entry, wrong-if, TP1) must be within 10% of the live price. Keep the summary to 2 short lines (under 200 characters in all). Put the feed read in the card's "read" field: 1–2 short plain lines (under 220 characters in all) — what he said, your direction and WHY, what proves it wrong. If it is NOT a setup right now (price far from the level, no edge), make NO card: answer with the word READ: and 1–3 plain lines saying why.`;
+
+// v3.30 (item 1): a coach LEVEL with no direction → no card, just the read (one step, nothing to look up).
+export const LEVEL_NO_DIR_RULE = `ONE STEP (speed is the edge): the live price, today's 5-minute bars and the contracts are below, fetched live by the server a moment ago. Do NOT look anything up. He posted a LEVEL with NO direction. Make NO card and don't pick a side: Otto's Watcher has this level both ways, and a card comes only when price touches it and a 5-minute candle closes. Answer with the word READ: and then 1–2 short plain lines (under 220 characters in all): the level, where the live price is now, and what Otto is waiting for.`;
 
 export function signalProposeTool(tools: any[]) {
   const base = tools.find((x: any) => x?.name === "propose_action") || PROPOSE_TOOL("");
   const t = JSON.parse(JSON.stringify(base));
-  t.input_schema.properties.read = { type: "string", description: "The read for the Otto Signals feed: 1–3 short plain lines (what he said, your direction and why, what proves it wrong)." };
+  t.input_schema.properties.read = { type: "string", description: "The read for the Otto Signals feed: 1–2 short plain lines, under 220 characters (what he said, your direction and why, what proves it wrong)." };
   t.input_schema.required = [...new Set([...(t.input_schema.required || []), "read", "plan"])];
   return t;
 }

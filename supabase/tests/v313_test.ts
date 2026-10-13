@@ -1111,7 +1111,7 @@ Deno.test("v3.21: a 2nd card on the same ticker + direction is refused (7 Oct 10
   const c1: any = await M.proposeAction(spyCard(), "watcher");
   let err = "";
   try { await M.proposeAction(spyCard(), "ottotrader@vinecreativestudio.com"); } catch (e) { err = (e as Error).message; }
-  assert(/A SPY calls card is already up: "Buy 1 SPY 781C/.test(err) && /pending/.test(err), "refused: " + err);
+  assert(/A SPY calls card is already up: "LIVE — Buy 1 SPY 781C/.test(err) && /pending/.test(err), "refused: " + err);
   const puts = spyCard(); puts.plan = { ...puts.plan, direction: "down", tp1: 776, stop: 780 };
   const cp: any = await M.proposeAction(puts, "watcher");
   assert(cp.status === "pending", "puts on SPY still allowed");
@@ -1294,7 +1294,7 @@ Deno.test("v3.22: a chain_symbol field on the order is removed before the card; 
   T.otto_actions[0].id = uid; T.otto_actions[0].created_at = new Date().toISOString();
   const r: any = await (M as any).actOnForTest(uid, "approve", "ifoma@x");
   assert(r.status === "failed" && /^Rejected by Robinhood: Order price is outside the allowed collar\./.test(T.otto_actions[0].result[0].text), JSON.stringify(T.otto_actions[0].result));
-  assert(/✗ Buy 1 ABBX — Rejected by Robinhood: Order price is outside the allowed collar\. \(approved by ifoma@x\)/.test(deskText()), deskText());
+  assert(/✗ LIVE — Buy 1 ABBX — Rejected by Robinhood: Order price is outside the allowed collar\. \(approved by ifoma@x\)/.test(deskText()), deskText());
 });
 
 Deno.test("v3.22: an entry Robinhood rejects after Approve → the Desk and the card show Robinhood's reason", async () => {
@@ -1384,8 +1384,8 @@ function seedMuLevel(extra: any = {}) {
   T.otto_signal_batches.push({ id: 8, created_at: "2026-10-06T19:12:54Z", day: "2026-10-06", msg_ids: ["m1"], rows: [811], status: "jarvis" });
 }
 
-Deno.test("v3.29: one level post, no direction → ONE request, card tool not forced, both sides pre-fetched, card made + pinged once", async () => {
-  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuLevel();
+Deno.test("v3.29: one level post WITH a direction → ONE request, card tool not forced, that side pre-fetched, card made + pinged once", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuLevel({ direction: "short" });
   let bad = "";
   claudeScript = (body: any) => {
     const chk = (c: unknown, m: string) => { if (!c && !bad) bad = m; };
@@ -1393,7 +1393,7 @@ Deno.test("v3.29: one level post, no direction → ONE request, card tool not fo
     chk(body.tools.length === 1 && body.tools[0].name === "propose_action", "only the card tool");
     const p = JSON.stringify(body.messages[0]);
     chk(/He posted a LEVEL/.test(p), "level rule"); chk(/PRICE: MU \$/.test(p), "price"); chk(/5-MIN BARS/.test(p), "bars");
-    chk(/calls, expiries/.test(p) && /puts, expiries/.test(p), "both sides pre-fetched");
+    chk(/puts, expiries/.test(p) && !/calls, expiries/.test(p), "puts side pre-fetched");
     return muCard(body);   // like production: Jarvis does not put the level row id in the plan
   };
   await M.signalJarvis(8);
@@ -1425,6 +1425,59 @@ Deno.test("v3.29: two level posts for DIFFERENT tickers, or a level + a call for
   claudeScript = (body: any) => { first ||= body; return textReply("READ: two levels"); };
   await M.signalJarvis(8);
   assert(first && !first.tool_choice && first.tools.length > 1, "old loop for two tickers");
+});
+
+/* ======================= v3.30 — 13 Oct: direction-less level posts get no card; the server stamps LIVE/PAPER; shorter cards; faster extension ======================= */
+Deno.test("v3.30 item 1: a level with NO direction → no card even when Jarvis tries one without plan.jason_id (12 Oct: 5 such cards)", async () => {
+  reset(); setNow("2026-10-06T19:12:55Z"); callHook = muHook(); seedMuLevel();   // no direction
+  let first: any = null; let n = 0;
+  claudeScript = (body: any) => { first ||= body; n++; return n === 1 ? muCard(body, { jason_id: undefined }) : textReply("READ: no card for a level with no direction; the Watcher has it both ways."); };
+  await M.signalJarvis(8);
+  const b = T.otto_signal_batches[0];
+  assert(/Make NO card/.test(JSON.stringify(first.messages[0])), "the no-direction rule is in the prompt");
+  assert(T.otto_actions.length === 0 && !b.cards.length, "no card was stored: " + JSON.stringify(b.cards));
+  assert(!pings.some((p: any) => /Card ready/.test(p.title)), "no card ping");
+  assert(claudeBodies.length <= 2, "at most 2 requests, got " + claudeBodies.length);
+});
+
+Deno.test("v3.30 item 1: proposeAction refuses a card for a blocked ticker from Signals only (Watcher touch cards and the manual ticket are unaffected)", async () => {
+  reset(); (M as any).clearCacheForTest();
+  const row = { id: 811, ticker: "SPY", kind: "level", direction: null, level: 778, words: "SPY 778 Resistance / 777 Support super tight" };
+  let err = "";
+  try { await M.proposeAction(spyCard(), "signals", { blockLevels: { SPY: row } }); } catch (e) { err = (e as Error).message; }
+  assert(/^NO CARD — the coach posted a level with no direction/.test(err) && /778/.test(err), "refused: " + err);
+  const w: any = await M.proposeAction(spyCard(), "watcher", { blockLevels: { SPY: row } });
+  assert(w.status === "pending", "watcher card allowed");
+  T.otto_actions = [];
+  const m: any = await M.proposeAction(spyCard(), "ottotrader@vinecreativestudio.com", { manual: true, blockLevels: { SPY: row } });
+  assert(m.status === "pending", "manual ticket allowed");
+  T.otto_actions = [];
+  const other: any = await M.proposeAction(spyCard(), "signals", { blockLevels: { QQQ: row } });
+  assert(other.status === "pending", "a different ticker is not blocked");
+});
+
+Deno.test("v3.30 item 2: the server sets LIVE / PAPER at the front of an opening card's title; what Jarvis wrote there is replaced (META 12 Oct 14:06)", async () => {
+  reset(); (M as any).clearCacheForTest(); T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false } }];   // only the coach's call may go live
+  const paper: any = await M.proposeAction({ ...spyCard(), title: "LIVE — Buy 1 SPY 781C 10/9 @ $3.50" }, "watcher");
+  assert(paper.status === "paper" && paper.title === "PAPER — Buy 1 SPY 781C 10/9 @ $3.50", "paper card: " + paper.title);
+  T.otto_actions = []; (M as any).clearCacheForTest();
+  T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false, live_coach_call: true, live_coach_level: true, live_jarvis: true } }];
+  const live: any = await M.proposeAction({ ...spyCard(), title: "paper: Buy 1 SPY 781C 10/9 @ $3.50" }, "watcher");
+  assert(live.status === "pending" && live.title === "LIVE — paper: Buy 1 SPY 781C 10/9 @ $3.50".replace("paper: ", ""), "live card: " + live.title);
+  T.otto_actions = [];
+  const plain: any = await M.proposeAction(spyCard(), "watcher");
+  assert(plain.title === "LIVE — Buy 1 SPY 781C 10/9 @ $3.50", "no prefix written → LIVE added: " + plain.title);
+  assert(M.bareTitle("LIVE — Buy 1 SPY 781C") === "1 SPY 781C" && M.bareTitle("PAPER - Buy 1 X") === "1 X" && M.bareTitle("Buy 1 X") === "1 X", "close/notify titles still strip the stamp");
+  assert(M.stampTitle("LIVE: Buy 1 X", true) === "PAPER — Buy 1 X" && M.stampTitle("Paper · SCALP · Buy 1 X", false) === "LIVE — SCALP · Buy 1 X", "variants are replaced");
+});
+
+Deno.test("v3.30 item 4: the Signal card rules ask for a 2-line summary and a 1–2 line read; item 3: the extension waits 3 s / 8 s", async () => {
+  assert(/summary to 2 short lines/.test(M.ONE_STEP_RULE) && /summary to 2 short lines/.test(M.LEVEL_ONE_STEP_RULE) && !/4 short lines/.test(M.ONE_STEP_RULE + M.LEVEL_ONE_STEP_RULE), "summary trimmed");
+  assert(/1–2 short plain lines/.test(M.ONE_STEP_RULE) && /1–2 short plain lines/.test(M.signalProposeTool([]).input_schema.properties.read.description), "read trimmed");
+  const bg = await Deno.readTextFile(new URL("../../extension/background.js", import.meta.url));
+  assert(/const QUIET_MS = 3000;/.test(bg) && /const MAX_WAIT_MS = 8000;/.test(bg) && /const VER = "1\.3\.1"/.test(bg), "extension 1.3.1 waits 3 s quiet / 8 s max");
+  const mf = JSON.parse(await Deno.readTextFile(new URL("../../extension/manifest.json", import.meta.url)));
+  assert(mf.version === "1.3.1", "manifest version " + mf.version);
 });
 
 Deno.test("v3.23: the 9:10 self-test fails (and pings) when post → card is slower than 30 s", async () => {
