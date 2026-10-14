@@ -4097,19 +4097,19 @@ async function armedTradeFor(optId: string) {
   const rows = await db("otto_actions?select=id,title,exit,decided_at,created_at&exit->>state=eq.armed&limit=20").catch(() => []);
   return (rows || []).find((r: any) => r.exit?.option_id === optId) || null;
 }
-async function closeNow(input: any, who: string, verified = false) {
+async function closeNow(input: any, who: string, verified = false, human: string | null = null) {
   const L = await getLimits();
-  if (!L.auto_close) throw new Error("Auto-close is OFF (Settings → Limits & goals). Use propose_action for a close card instead.");
+  if (!L.auto_close && !human) throw new Error("Auto-close is OFF (Settings → Limits & goals). Use propose_action for a close card instead.");
   if (!rthNow()) throw new Error("Market is closed: auto-close only works 9:30 AM–4:00 PM ET. Use a close card.");
   const reason = String(input.reason || "").trim().slice(0, 400);
   if (reason.length < 8) throw new Error("Give the reason in one sentence; it goes on the Desk.");
   const acct = await agenticAccount();
   const calls: any[] = [], results: any[] = [];
-  let title = "", orderId: string | null = null;
+  let title = "", orderId: string | null = null, soldQty = 0;
   if (input.symbol && !input.option_id) throw new Error("Shares have no card plan, so auto-close can't check a rule. Put up a close card with propose_action.");
   let ruleWhy = "";
   if (verified && input.rule_why) ruleWhy = String(input.rule_why);
-  if (input.option_id && !verified) {
+  if (input.option_id && !verified && !human) {
     const tr = await armedTradeFor(String(input.option_id));
     const chk = tr ? await exitRuleCheck(tr) : { met: false, why: "", detail: "no card plan on file for this position" };
     if (!chk.met) throw new Error(`Not closed — none of the card's exits is met: ${chk.detail}. Auto-close only runs on the card's own rules (wrong-if, TP1, 3:50 PM). If you still think it should come off, put up a close card with propose_action and say why in one line — a person decides.`);
@@ -4123,6 +4123,7 @@ async function closeNow(input: any, who: string, verified = false) {
     if (!(held > 0)) throw new Error("No long position in that option on the Agentic account.");
     const qty = input.quantity ? Math.min(held, Math.floor(Number(input.quantity))) : held;
     if (!(qty >= 1)) throw new Error("quantity must be at least 1 contract");
+    soldQty = qty;
     // Free the contracts: cancel any working sell-to-close on this option (Otto's stop, a stale limit).
     const since = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
     const oj = mcpJson(await call("rh", "get_option_orders", { account_number: acct, created_at_gte: since }));
@@ -4148,7 +4149,7 @@ async function closeNow(input: any, who: string, verified = false) {
     orderId = orderIdOf(mcpJson(r));
     calls.push({ service: "rh", tool: "place_option_order", args: { ...args, account_number: mask(acct) } });
     results.push({ tool: "place_option_order", ok: true, text: mcpText(r).slice(0, 1500) });
-    title = `Auto-close ${qty} ${pos[0]?.chain_symbol || ""} option${qty > 1 ? "s" : ""} (exp ${pos[0]?.expiration_date || "?"})`;
+    title = `${human ? "Close" : "Auto-close"} ${qty} ${pos[0]?.chain_symbol || ""} option${qty > 1 ? "s" : ""} (exp ${pos[0]?.expiration_date || "?"})`;
   } else if (input.symbol) {
     const sym = String(input.symbol).toUpperCase().replace(/[^A-Z.]/g, "");
     const ej = mcpJson(await call("rh", "get_equity_positions", { account_number: acct }));
@@ -4167,16 +4168,128 @@ async function closeNow(input: any, who: string, verified = false) {
   } else throw new Error("Give option_id (for an option) or symbol (for shares).");
 
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
-    title, summary: `Reason   ${ruleWhy ? "[card rule] " + ruleWhy + ". " : ""}${reason}\nOrder    sell to close at market (auto-close, no Approve)\nBy       ${who === "rules" ? "Otto (card rule, server-checked)" : "Jarvis, on " + who}`,
-    calls, risk: { cost: 0, notes: ["closing order: no new risk"] }, review: "", status: "done", created_by: "Jarvis (auto)",
-    decided_by: "auto-close", decided_at: new Date().toISOString(), result: results, ...(orderId ? { order_id: String(orderId) } : {}),
+    title, summary: `Reason   ${ruleWhy ? "[card rule] " + ruleWhy + ". " : ""}${reason}\nOrder    sell to close at market (auto-close, no Approve)\nBy       ${human ? human + ", Close Now button (a person pressed it)" : who === "rules" ? "Otto (card rule, server-checked)" : "Jarvis, on " + who}`,
+    calls, risk: { cost: 0, notes: ["closing order: no new risk"] }, review: "", status: "done", created_by: human ? human : "Jarvis (auto)",
+    decided_by: human ? human + " (Close Now button)" : "auto-close", decided_at: new Date().toISOString(), result: results, ...(orderId ? { order_id: String(orderId) } : {}),
   }) });
   const id = rows?.[0]?.id || null;
-  const by = who === "rules" ? "Otto closed (card rule)" : "Jarvis closed";
+  const by = human ? `${human} closed (Close Now button)` : who === "rules" ? "Otto closed (card rule)" : "Jarvis closed";
   const whyTxt = ruleWhy ? `${ruleWhy}${reason && reason !== ruleWhy ? " — " + reason : ""}` : reason;
-  await logDesk("system", "Otto", `🤖 ${by}: ${title} at market. Why: ${whyTxt} (Auto-close is on; turn it off in Settings → Limits & goals.)`, id);
+  await logDesk("system", "Otto", `🤖 ${by}: ${title} at market. Why: ${whyTxt}${human ? "" : " (Auto-close is on; turn it off in Settings → Limits & goals.)"}`, id);
   await notify("auto_close", `🤖 ${by}: ${title.replace(/^Auto-close /, "")}`, `Sold at market. Why: ${whyTxt}`);
-  return { ok: true, title, order_id: orderId, card: id };
+  return { ok: true, title, order_id: orderId, card: id, qty: soldQty };
+}
+
+
+/* ===================================================================== v3.33 Close Now
+   14 Oct 2026 (Ifoma + Josh; mockup close-now-mockup approved, Option B, sell at market, two taps).
+   Two Desk routes. trade_live is READ-ONLY: the open long options in the Agentic account with a fresh quote, the entry price,
+   the card's own exit lines (when Otto has the trade) and 10-minute bars for the chart. close_now is a PERSON pressing the button:
+   it sells everything held in that one option at market, cancels Otto's protective stop first, and writes it to the Desk and the
+   Activity log. A person pressing it counts as the approval, so it does not need the Auto-close switch or a card rule. It can only
+   close (never open or add), only the Agentic account, only 9:30-4:00 ET, only an option that is held. */
+const CLOSING = new Set<string>();
+const cnN0 = (v: any): number | null => { const x = Number(v); return v != null && v !== "" && Number.isFinite(x) ? x : null; };
+const cnR2 = (v: number) => Math.round(v * 100) / 100;
+export function entryOf(orders: any[], armed: any[], optId: string) {
+  let q = 0, cost = 0, last = 0, sym = "", strike = 0, typ = "";
+  for (const o of orders || []) for (const l of o.legs || []) {
+    if (l.option_id !== optId || l.position_effect !== "open" || l.side !== "buy") continue;
+    for (const x of l.executions || []) {
+      const px = Number(x.price), qq = Number(x.quantity);
+      if (px > 0 && qq > 0) { q += qq; cost += px * qq; last = Math.max(last, Date.parse(x.timestamp || "") || 0); }
+    }
+    sym = o.chain_symbol || sym; strike = Number(l.strike_price) || strike; typ = l.option_type || typ;
+  }
+  const card = (armed || []).find((r: any) => r.exit?.option_id === optId) || null;
+  const cf = cnN0(card?.exit?.fill_price);
+  const px = cf != null && cf > 0 ? cf : q ? cost / q : null;
+  return { px, src: cf != null && cf > 0 ? "card" : q ? "orders" : null, at: last || null, sym, strike, type: typ, card };
+}
+export async function tradeLive() {
+  const acct = await agenticAccount();
+  const c = marketClock();
+  const pj = mcpJson(await call("rh", "get_option_positions", { account_number: acct, nonzero: true }));
+  const longs = (pj?.data?.positions || []).filter((p: any) => p.type === "long" && Number(p.quantity) > 0).slice(0, 3);
+  const trades: any[] = [];
+  if (longs.length) {
+    const since = new Date(Date.now() - 5 * 864e5).toISOString().slice(0, 10);
+    const oj = await settle((async () => mcpJson(await call("rh", "get_option_orders", { account_number: acct, created_at_gte: since })))());
+    const orders = oj.ok ? (oj.v?.data?.orders || []) : [];
+    const armed = await db("otto_actions?select=id,title,exit&exit->>state=eq.armed&limit=20").catch(() => []);
+    for (const p of longs) {
+      const optId = String(p.option_id), sym = String(p.chain_symbol || "").toUpperCase(), qty = Math.floor(Number(p.quantity));
+      const [qs, bs] = await Promise.all([
+        settle((async () => mcpJson(await call("rh", "get_option_quotes", { instrument_ids: [optId] })))()),
+        settle(rhBars([sym], "10minute", new Date(Date.now() - 8 * 3600e3).toISOString())),
+      ]);
+      const r0 = qs.ok ? (qs.v?.data?.results || [])[0] : null, q = r0?.quote || r0 || null;
+      const bid = cnN0(q?.bid_price), ask = cnN0(q?.ask_price);
+      const e = entryOf(orders, armed, optId), ex = e.card?.exit || null;
+      const bars: Bar[] = ((bs.ok ? bs.v[sym] : null) || []).slice(-40);
+      const fb = e.at ? bars.find((b) => b.t <= e.at! && e.at! < b.t + 600e3) : null;
+      trades.push({
+        option_id: optId, sym, qty, exp: p.expiration_date || null, type: e.type || null,
+        label: e.px != null && e.strike ? `${sym} ${e.strike}${e.type === "put" ? "P" : "C"}` : `${sym} option`,
+        entry: e.px, entry_src: e.src, opened_at: e.at ? new Date(e.at).toISOString() : null,
+        bid: bid != null && bid > 0 ? bid : null, ask, quote_at: q?.updated_at || null,
+        est_pnl: bid != null && bid > 0 && e.px != null ? cnR2((bid - e.px) * 100 * qty) : null,
+        under: bars.length ? bars[bars.length - 1].c : null, under_entry: fb ? fb.o : null,
+        bars: bars.map((b) => [b.t, b.o, b.h, b.l, b.c]),
+        plan: ex ? { dir: ex.direction, wrong_if: cnN0(ex.wrong_if), tp1: cnN0(ex.tp1), tf: Number(ex.wrong_tf) === 5 ? 5 : 15, card_id: e.card.id, title: e.card.title } : null,
+        quote_error: qs.ok ? null : String(qs.error || "").slice(0, 120),
+      });
+    }
+  }
+  return { ok: true, at: new Date().toISOString(), rth: rthNow(), clock: { day: c.date, status: c.status }, trades };
+}
+export async function closeByButton(body: any, who: string) {
+  const optId = String(body?.option_id || "").trim();
+  if (!optId) return { ok: false, error: "No trade was given." };
+  const human = String(body?.author || "").replace(/[^A-Za-z .'-]/g, "").trim().slice(0, 30) || "Josh";
+  if (CLOSING.has(optId)) return { ok: false, error: "A close for this trade is already running." };
+  CLOSING.add(optId);
+  try {
+    const acct = await agenticAccount();
+    const since = new Date(Date.now() - 5 * 864e5).toISOString().slice(0, 10);
+    const oj = await settle((async () => mcpJson(await call("rh", "get_option_orders", { account_number: acct, created_at_gte: since })))());
+    const armed = await db("otto_actions?select=id,title,exit&exit->>state=eq.armed&limit=20").catch(() => []);
+    const ent = entryOf(oj.ok ? (oj.v?.data?.orders || []) : [], armed, optId);
+    const r = await closeNow({ option_id: optId, reason: `${human} pressed Close Now on the Desk (${who})` }, "desk", true, human);
+    let state = "sent", fillPx: number | null = null;
+    for (let i = 0; i < 4 && r.order_id; i++) {
+      await new Promise((res) => setTimeout(res, 1500));
+      const j = await settle((async () => mcpJson(await call("rh", "get_option_orders", { account_number: acct, order_id: r.order_id })))());
+      const o = j.ok ? (j.v?.data?.orders || [])[0] : null;
+      if (!o) continue;
+      state = String(o.state || state);
+      if (o.state === "filled") {
+        const ex = (o.legs || [])[0]?.executions || [];
+        const qf = ex.reduce((a: number, x: any) => a + Number(x.quantity), 0);
+        fillPx = qf ? ex.reduce((a: number, x: any) => a + Number(x.price) * Number(x.quantity), 0) / qf : cnN0(o.average_price);
+        break;
+      }
+      if (EXIT_DEAD_ORDER.has(o.state)) break;
+    }
+    const pnl = fillPx != null && ent.px != null ? cnR2((fillPx - ent.px) * 100 * (r.qty || 1)) : null;
+    return { ok: true, title: r.title, card: r.card, order_id: r.order_id, qty: r.qty, state, fill_px: fillPx != null ? cnR2(fillPx) : null,
+      entry_px: ent.px != null ? cnR2(ent.px) : null, pnl, by: human };
+  } catch (e) {
+    // The sell can fail AFTER Otto cancelled the protective stop. Say so plainly instead of leaving a trade bare in silence.
+    let warn = "";
+    try {
+      const acct2 = await agenticAccount();
+      const held = (mcpJson(await call("rh", "get_option_positions", { account_number: acct2, option_ids: optId }))?.data?.positions || [])
+        .some((p: any) => p.type === "long" && Number(p.quantity) > 0);
+      if (held) {
+        const since2 = new Date(Date.now() - 5 * 864e5).toISOString().slice(0, 10);
+        const os = mcpJson(await call("rh", "get_option_orders", { account_number: acct2, created_at_gte: since2 }))?.data?.orders || [];
+        const working = os.some((o: any) => EXIT_OPEN_ORDER.has(o.state) && (o.legs || []).some((l: any) => l.option_id === optId && l.side === "sell" && l.position_effect === "close"));
+        if (!working) warn = " ⚠ The trade is still open and Robinhood shows no stop order on it right now. Press Close Now again, or close it in Robinhood.";
+      }
+    } catch { /* best effort: the main error still goes back */ }
+    return { ok: false, error: (String((e as Error).message || e).slice(0, 300) + warn).slice(0, 600) };
+  } finally { CLOSING.delete(optId); }
 }
 
 // Scheduled / triggered check of everything open in the Agentic account.
@@ -6648,7 +6761,7 @@ Deno.serve(async (req) => {
          "playbook_get", "feedback_add", "feedback_list", "daily_now",
          "prep_get", "prep_submit", "prep_reply", "prep_watch", "prep_img", "score_extra", "check_cancel", "prep_lock",
          "charts_get", "chart_now", "chart_review", "chart_use", "chart_chat",
-         "activity_get", "coach_corner", "coach_report", "lock_state"].includes(fn)) {
+         "activity_get", "coach_corner", "coach_report", "lock_state", "trade_live", "close_now"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -6661,6 +6774,8 @@ Deno.serve(async (req) => {
       }
       if (fn === "act") return json({ ok: true, action: await actOn(String(body.id || ""), String(body.decision || ""), who) });
       if (fn === "panel") return json(await panel());
+      if (fn === "trade_live") return json(await tradeLive());
+      if (fn === "close_now") return json(await closeByButton(body, who));
       // ---- v3.1
       if (fn === "sentiment") return json(await sentimentNow(new URL(req.url).searchParams.get("force") === "1"));
       if (fn === "market_desk") return json(await marketDesk());

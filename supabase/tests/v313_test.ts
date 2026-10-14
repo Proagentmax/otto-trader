@@ -2195,3 +2195,132 @@ Deno.test("v3.27: a source that is not switched on to go LIVE becomes a PAPER ca
   const m: any = await M.proposeAction(spyCard(), "ottotrader@vinecreativestudio.com", { manual: true });
   assert(m.status === "pending", "manual ticket is not paper: " + m.status);
 });
+
+/* =============================== v3.33 CLOSE NOW (Ifoma + Josh, 14 Oct 2026) =============================== */
+const CN_NOW = "2026-10-14T14:43:00Z";   // 10:43 AM ET Wednesday
+const cnPos = (tool: string, args: any) => tool === "get_option_positions"
+  ? { data: { positions: [{ type: "long", quantity: "1", option_id: OPT, chain_symbol: "AAPL", expiration_date: "2026-10-17" }] } } : null;
+const cnBuy = () => ({ id: "buy-aapl", state: "filled", chain_symbol: "AAPL", legs: [{ option_id: OPT, side: "buy", position_effect: "open", strike_price: "350.0000", option_type: "call", expiration_date: "2026-10-17",
+  executions: [{ price: "1.45", quantity: "1", timestamp: "2026-10-14T14:21:10Z" }] }] });
+const cnBars = [["14:00", 349.9, 350.1, 349.6, 349.8], ["14:10", 349.8, 350.3, 349.7, 350.2], ["14:20", 350.2, 350.5, 350.0, 350.1], ["14:30", 350.1, 351.0, 350.0, 350.9], ["14:40", 350.9, 351.2, 350.6, 350.95]] as [string, number, number, number, number][];
+const cnRh: any = (() => { const r: any = toRh("AAPL", cnBars); r.bars = r.bars.map((b: any) => ({ ...b, begins_at: String(b.begins_at).replace("2026-10-06", "2026-10-14") })); r.interval = "10minute"; return r; })();
+const cnHook = (extra?: (t: string, a: any) => any) => (tool: string, args: any) => {
+  const e = extra && extra(tool, args); if (e) return e;
+  const p = cnPos(tool, args); if (p) return p;
+  if (tool === "get_option_quotes") return { data: { results: [{ quote: { bid_price: "1.62", ask_price: "1.66", updated_at: "2026-10-14T14:42:50Z" } }] } };
+  if (tool === "get_equity_historicals" && (args.symbols || []).includes("AAPL")) return { data: { results: [cnRh] } };
+  return null;
+};
+const cnSells = () => orders.filter((o) => o.type === "market" && o.legs[0].side === "sell");
+
+Deno.test("v3.33 Close Now: trade_live shows the open trade with a fresh sell price, the entry from the fill, the card's lines and bars — and writes nothing", async () => {
+  reset(); setNow(CN_NOW); (M as any).clearCacheForTest();
+  orders.push(cnBuy());
+  T.otto_actions.push({ ...armed("AAPL", "up", 349.2, 352.4, "2026-10-14T14:21:30Z", 10), id: "card-aapl" });
+  callHook = cnHook();
+  const j: any = await M.tradeLive();
+  assert(j.ok && j.rth === true && j.trades.length === 1, "one trade: " + JSON.stringify(j).slice(0, 300));
+  const t = j.trades[0];
+  assert(t.label === "AAPL 350C" && t.qty === 1 && t.entry === 1.45 && t.entry_src === "orders", "label/entry " + JSON.stringify([t.label, t.entry, t.entry_src]));
+  assert(t.bid === 1.62 && t.est_pnl === 17, "estimate is (sell price now − paid) × 100: " + t.est_pnl);
+  assert(t.plan && t.plan.wrong_if === 349.2 && t.plan.tp1 === 352.4 && t.plan.card_id === "card-aapl", "card lines " + JSON.stringify(t.plan));
+  assert(t.bars.length === 5 && t.under === 350.95 && t.under_entry === 350.2, "bars/under " + t.bars.length + " " + t.under + " " + t.under_entry);
+  assert(!calls.some((c) => /place_|cancel_/.test(c.tool)), "read-only: no order calls");
+  assert(T.otto_actions.length === 1 && T.otto_desk.length === 0, "wrote nothing");
+});
+
+Deno.test("v3.33 Close Now: the card's own fill price wins over the order lookup; no card = still works (no plan lines)", async () => {
+  reset(); setNow(CN_NOW); (M as any).clearCacheForTest();
+  orders.push(cnBuy());
+  const a: any = armed("AAPL", "up", 349.2, 352.4, "2026-10-14T14:21:30Z", 10); a.exit.fill_price = 1.5; T.otto_actions.push(a);
+  callHook = cnHook();
+  let t: any = (await M.tradeLive() as any).trades[0];
+  assert(t.entry === 1.5 && t.entry_src === "card" && t.est_pnl === 12, "card fill: " + JSON.stringify([t.entry, t.entry_src, t.est_pnl]));
+  T.otto_actions = [];
+  t = (await M.tradeLive() as any).trades[0];
+  assert(t.plan === null && t.entry === 1.45, "no card: " + JSON.stringify([t.plan, t.entry]));
+});
+
+Deno.test("v3.33 Close Now: no position → no trades; quote or bars failing → the trade still shows with unavailable numbers", async () => {
+  reset(); setNow(CN_NOW); (M as any).clearCacheForTest();
+  callHook = (tool: string) => tool === "get_option_positions" ? { data: { positions: [] } } : null;
+  const none: any = await M.tradeLive();
+  assert(none.ok && none.trades.length === 0, "none: " + JSON.stringify(none));
+  reset(); setNow(CN_NOW); (M as any).clearCacheForTest(); orders.push(cnBuy());
+  callHook = (tool: string, args: any) => { const p = cnPos(tool, args); if (p) return p; if (tool === "get_option_quotes" || tool === "get_equity_historicals") throw new Error("boom"); return null; };
+  const bad: any = await M.tradeLive();
+  const t = bad.trades[0];
+  assert(bad.ok && t && t.bid === null && t.est_pnl === null && t.bars.length === 0 && /boom/.test(t.quote_error), "degrades: " + JSON.stringify(t).slice(0, 300));
+});
+
+Deno.test("v3.33 Close Now: a person's press sells it all at market, cancels the stop first, works with Auto-close OFF and with no card rule met, and is written to the Desk", async () => {
+  reset(); setNow(CN_NOW); (M as any).clearCacheForTest();
+  T.otto_settings = [{ key: "limits", value: { auto_close: false, size_cap_on: false, kill_on: false } }];
+  orders.push(cnBuy());
+  orders.push({ id: "stop-1", state: "confirmed", type: "stop_market", legs: [{ option_id: OPT, side: "sell", position_effect: "close" }] });
+  T.otto_actions.push({ ...armed("AAPL", "up", 349.2, 352.4, "2026-10-14T14:21:30Z", 10), id: "card-aapl" });
+  callHook = cnHook((tool, args) => tool === "get_option_orders" && args.order_id && args.order_id !== "stop-1"
+    ? { data: { orders: [{ id: args.order_id, state: "filled", legs: [{ executions: [{ price: "1.61", quantity: "1" }] }] }] } } : null);
+  const r: any = await M.closeByButton({ option_id: OPT, author: "Josh" }, "ottotrader@vinecreativestudio.com");
+  assert(r.ok && r.state === "filled" && r.fill_px === 1.61 && r.entry_px === 1.45 && r.pnl === 16 && r.qty === 1, "result " + JSON.stringify(r));
+  const order = calls.map((c) => c.tool);
+  assert(order.indexOf("cancel_option_order") >= 0 && order.indexOf("cancel_option_order") < order.lastIndexOf("place_option_order"), "stop cancelled before the sell: " + order.join(","));
+  const sells = cnSells();
+  assert(sells.length === 1 && sells[0].legs[0].position_effect === "close" && sells[0].legs[0].option_id === OPT, "one market close order");
+  const row = T.otto_actions.find((x: any) => x.decided_by === "Josh (Close Now button)");
+  assert(row && row.status === "done" && row.created_by === "Josh" && /Close 1 AAPL option/.test(row.title), "done card " + JSON.stringify(row));
+  assert(/Josh closed \(Close Now button\)/.test(deskText()) && !/Auto-close is on/.test(deskText()), "Desk line:\n" + deskText());
+});
+
+Deno.test("v3.33 Close Now: market closed → refused, nothing sent; no position → refused; second press while one is running → only one sell", async () => {
+  reset(); setNow("2026-10-14T21:00:00Z");   // 5:00 PM ET
+  callHook = cnHook();
+  const shut: any = await M.closeByButton({ option_id: OPT, author: "Josh" }, "x");
+  assert(!shut.ok && /Market is closed/.test(shut.error) && cnSells().length === 0, "closed: " + JSON.stringify(shut));
+  reset(); setNow(CN_NOW); (M as any).clearCacheForTest();
+  callHook = (tool: string) => tool === "get_option_positions" ? { data: { positions: [] } } : null;
+  const flat: any = await M.closeByButton({ option_id: OPT, author: "Josh" }, "x");
+  assert(!flat.ok && /No long position/.test(flat.error) && cnSells().length === 0, "flat: " + JSON.stringify(flat));
+  const nothing: any = await M.closeByButton({}, "x");
+  assert(!nothing.ok, "needs a trade");
+  reset(); setNow(CN_NOW); (M as any).clearCacheForTest(); orders.push(cnBuy()); callHook = cnHook();
+  const [a, b]: any[] = await Promise.all([M.closeByButton({ option_id: OPT, author: "Josh" }, "x"), M.closeByButton({ option_id: OPT, author: "Josh" }, "x")]);
+  assert([a, b].filter((x) => x.ok).length === 1 && [a, b].some((x) => /already running/.test(x.error || "")), "one wins: " + JSON.stringify([a, b]).slice(0, 300));
+  assert(cnSells().length === 1, "exactly one sell order: " + cnSells().length);
+});
+
+Deno.test("v3.33 Close Now: Jarvis's own auto-close is unchanged — still refused without a card rule (human flag does not leak)", async () => {
+  reset(); setNow("2026-10-14T14:43:00Z");
+  callHook = cnHook();
+  T.otto_actions.push({ ...armed("AAPL", "up", 349.2, 352.4, "2026-10-14T14:21:30Z", 10), id: "card-aapl" });
+  let err = "";
+  try { await (M as any).closeNowForTest({ option_id: OPT, reason: "the tape stopped working, closing it" }, "auto-review"); } catch (e) { err = (e as Error).message; }
+  assert(/Not closed — none of the card's exits is met/.test(err) && cnSells().length === 0, "refused: " + err);
+});
+
+Deno.test("v3.33 Close Now: if the sell fails after the stop was cancelled, the answer says plainly that no stop is on the trade (never silent)", async () => {
+  reset(); setNow(CN_NOW); (M as any).clearCacheForTest();
+  orders.push(cnBuy());
+  orders.push({ id: "stop-9", state: "confirmed", type: "stop_market", legs: [{ option_id: OPT, side: "sell", position_effect: "close" }] });
+  callHook = cnHook((tool, args) => {
+    if (tool === "cancel_option_order") { orders = orders.filter((o) => o.id !== args.order_id); return {}; }
+    if (tool === "place_option_order" && args.type === "market") throw new Error("API error 400: market is halted");
+    return null;
+  });
+  const r: any = await M.closeByButton({ option_id: OPT, author: "Josh" }, "x");
+  assert(!r.ok && /market is halted/.test(r.error) && /no stop order on it right now/.test(r.error), "warns: " + JSON.stringify(r));
+  assert(cnSells().length === 0, "nothing sold");
+  assert(!T.otto_actions.some((a: any) => a.decided_by === "Josh (Close Now button)"), "no 'done' card for a sell that failed");
+  // and when the stop is still there, no false alarm
+  reset(); setNow(CN_NOW); (M as any).clearCacheForTest();
+  orders.push(cnBuy());
+  callHook = cnHook((tool, args) => tool === "place_option_order" && args.type === "market" ? (() => { throw new Error("API error 400: market is halted"); })() : null);
+  orders.push({ id: "stop-10", state: "confirmed", type: "stop_market", legs: [{ option_id: OPT, side: "sell", position_effect: "close" }] });
+  callHook = cnHook((tool, args) => {
+    if (tool === "cancel_option_order") return {};   // cancel did not take
+    if (tool === "place_option_order" && args.type === "market") throw new Error("API error 400: market is halted");
+    return null;
+  });
+  const r2: any = await M.closeByButton({ option_id: OPT, author: "Josh" }, "x");
+  assert(!r2.ok && !/no stop order/.test(r2.error), "no false alarm when a stop is still on: " + r2.error);
+});

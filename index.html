@@ -405,6 +405,20 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .win-lad .mk.now{color:var(--ink);font-weight:700}.win-lad .mk.now i{background:#fff;width:3px}
 .win-say{margin-top:12px;padding-top:10px;border-top:1px solid #1d3a21;font-size:14px}
 .win-chart{background:var(--s1);border:1px solid var(--rule);border-radius:12px;padding:10px;margin-top:12px}
+/* v3.33 Close Now (approved mockup close-now-mockup, Option B) */
+.tr-card{border-color:#1d5a22!important;background:#0c1d0e!important}
+.tr-row{display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;min-height:48px;padding:2px 0}
+.tr-row small{display:block;font-size:12px;color:var(--ink-2);font-weight:400}
+.tr-row:focus-visible{outline:2px solid #fff;outline-offset:2px;border-radius:8px}
+.tr-cn{width:100%;min-height:52px;border:0;border-radius:12px;background:var(--down);color:#fff;font-weight:700;font-size:17px;margin-top:8px;cursor:pointer}
+.tr-cn.big{min-height:64px;font-size:21px}
+.tr-cn:disabled{background:var(--surface-3);color:var(--ink-2);cursor:default}
+.tr-two{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:8px}
+.tr-yes{min-height:52px;border:0;border-radius:12px;background:#fff;color:#a02a00;font-weight:700;font-size:15px;line-height:1.2;cursor:pointer}
+.tr-no{min-height:52px;border:1px solid var(--rule);border-radius:12px;background:var(--surface-3);color:var(--ink);font-weight:600;font-size:15px;cursor:pointer}
+.tr-two.big .tr-yes,.tr-two.big .tr-no{min-height:64px;font-size:18px}
+.tr-msg{border-radius:12px;padding:12px;font-size:14px;margin-top:8px}.tr-msg.ok{background:#0d2a10;border:1px solid #1d5a22}.tr-msg.bad{background:#2e150c;border:1px solid #6a2a12}
+.dlg-trade{max-width:760px;width:94vw}
 @media(max-width:560px){.win-score{grid-template-columns:1fr 1fr}}
 .dk-cardx{background:var(--s1);border:1px solid var(--rule);border-radius:12px;padding:12px 13px}
 .dk-h{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;gap:8px}
@@ -858,7 +872,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
   /* approve / reject buttons (card dialog + inline cards) */
   .dk-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .dk-btn,.dk-act .dk-btn{min-height:54px;font-size:16px;font-weight:700;border-radius:14px}
-  #dlgCard{width:100vw;max-width:100vw;margin:auto 0 0;border-radius:20px 20px 0 0}
+  #dlgCard,#dlgOpenTrade{width:100vw;max-width:100vw;margin:auto 0 0;border-radius:20px 20px 0 0}
   /* essentials only on the phone */
   #dkCust,#dkMore,#dkMoreBox{display:none!important}
   .dk-rail .sp,.dk-logo{display:none}
@@ -1207,6 +1221,12 @@ svg.nc-svg{width:100%;height:auto;display:block}
   <div class="grip"></div><div class="hd" style="display:flex;justify-content:space-between;align-items:baseline"><h3>Card</h3><span id="dlgCardLeft" class="hint" style="margin:0;color:var(--warn)"></span></div>
   <div class="bd" id="dlgCardBody"></div>
   <div class="ft"><button class="btn" id="dlgCardX">Close</button></div>
+</dialog>
+
+<dialog id="dlgOpenTrade" class="dlg-card dlg-trade">
+  <div class="grip"></div><div class="hd" style="display:flex;justify-content:space-between;align-items:baseline"><h3>In a trade</h3><span id="dlgOpenTradeLeft" class="hint" style="margin:0"></span></div>
+  <div class="bd" id="dlgOpenTradeBody"></div>
+  <div class="ft"><button class="btn" id="dlgOpenTradeX">Back</button></div>
 </dialog>
 
 <dialog id="dlgPush">
@@ -2302,7 +2322,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.32.0";
+const BUILD="3.33.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2988,7 +3008,7 @@ async function dkPanel(force){
   try{DK.panel=await dkApi("panel")}catch(e){DK.panel={error:e.message}}
   (DK.panel.pending||[]).forEach(a=>DK.acts[a.id]=a);
   dkRenderStrip();dkRenderLeft();dkRenderRight();
-  dkJasonLoad();laySync();sgLoad();dkWatchLoad();
+  dkJasonLoad();laySync();sgLoad();dkWatchLoad();dkTradeLoad();
 }
 // v3.7: today's Jason posts (feed on the right, levels on the left)
 async function dkJasonLoad(){
@@ -3119,7 +3139,7 @@ function dkRenderLeft(){
 }
 
 function dkRenderRight(){
-  const p=DK.panel||{};let h="";      // v3.10: "Jason today" moved to More
+  const p=DK.panel||{};let h=trCard();      // v3.10: "Jason today" moved to More
   // Robinhood
   h+=`<div class="dk-cardx"><div class="dk-h">Robinhood <b>${p.agentic?"live":""}</b></div>`;
   if(!p.conn||!p.conn.rh)h+=`<div class="mut">Connect Robinhood in Settings. Orders only ever go to the Agentic account.</div>`;
@@ -4594,6 +4614,102 @@ function dkOpenCard(id){
 }
 $("#dlgCardBody").addEventListener("click",async e=>{await dkCardClick(e);const card=$("#dlgCardBody [data-act]");if(card&&DK.acts[card.dataset.act])dkOpenCard(card.dataset.act)});
 $("#dlgCardX").addEventListener("click",()=>$("#dlgCard").close());
+
+/* ---------- v3.33 Close Now: IN A TRADE row, big view, one button to get out (approved mockup, Option B) ---------- */
+DK.tl=null;DK.cn={};DK.cnDone=null;DK.trOpen=null;
+const trN=v=>{const n=+v;return v!=null&&v!==""&&isFinite(n)?n:null};
+const trMoney=v=>v==null?"—":(v<0?"−":v>0?"+":"")+"$"+Math.abs(v).toFixed(0);
+const trCls=v=>v>0?"up":v<0?"dn":"";
+function trCur(){return(DK.tl&&DK.tl.trades)||[]}
+async function dkTradeLoad(){
+  if(DK.locked)return;
+  const ops=DK.panel&&DK.panel.agentic&&DK.panel.agentic.options;
+  if(Array.isArray(ops)&&!ops.some(o=>+o.quantity>0)){DK.tl={ok:true,trades:[],at:new Date().toISOString(),rth:true};dkRenderRight();trRefreshDialog();return}   // nothing open: no extra call
+  try{DK.tl=await dkApi("trade_live")}catch(e){DK.tl={ok:false,error:e.message,trades:trCur(),rth:DK.tl?DK.tl.rth:true}}
+  dkRenderRight();trRefreshDialog();
+}
+function trBtn(t,big){
+  const c=DK.cn[t.option_id]||{step:"idle"},cl=big?" big":"",o=esc(t.option_id),n=t.qty||1;
+  if(DK.tl&&DK.tl.rth===false)return `<button class="tr-cn${cl}" disabled>CLOSE NOW</button><div class="tr-msg bad"><b>Market is closed.</b> Close Now works 9:30 AM to 4:00 PM ET. The trade stays open until 9:30 tomorrow, or close it in Robinhood.</div>`;
+  if(c.step==="confirm")return `<div class="tr-two${big?" big":""}"><button class="tr-yes" data-cn="yes" data-opt="${o}">Yes, sell ${n} contract${n>1?"s":""} now</button><button class="tr-no" data-cn="no" data-opt="${o}">Cancel</button></div><div class="mut" style="font-size:12px;margin-top:4px">Goes back in 5 seconds if you do nothing.${t.bid!=null?` Sell price now about $${t.bid.toFixed(2)}.`:""}</div>`;
+  if(c.step==="selling")return `<button class="tr-cn${cl}" disabled>Selling…</button><div class="mut" style="font-size:12px;margin-top:4px">Stop cancelled. Sell order sent to Robinhood. Waiting for the fill.</div>`;
+  const err=c.step==="err"?`<div class="tr-msg bad"><b>Not closed.</b> ${esc(c.msg||"")}</div>`:"";
+  return err+`<button class="tr-cn${cl}" data-cn="start" data-opt="${o}">CLOSE NOW</button>`+(big&&!err?`<div class="mut" style="font-size:12px;margin-top:4px">Sells your ${n} contract${n>1?"s":""} at market. Tap once, then confirm.</div>`:"");
+}
+function trDone(d){
+  const r=d.r||{},f=r.fill_px;
+  const txt=r.state==="filled"&&f!=null?`Sold ${r.qty||1} ${esc(d.label)} at <b>$${f.toFixed(2)}</b>.${r.pnl!=null?` Real result <b class="${trCls(r.pnl)}">${trMoney(r.pnl)}</b> (fill from Robinhood).`:""}`
+    :`Sell order sent for ${esc(d.label)} (${esc(r.state||"sent")}). Robinhood has not reported the fill yet. The trade row goes away when the position is gone; check Robinhood if it stays.`;
+  return `<div class="tr-msg ok"><b>${r.state==="filled"?"Closed.":"Close sent."}</b> ${txt} Written to the Desk and the Activity log as "Closed by ${esc(r.by||"you")} (button)".</div>`;
+}
+function trCard(){
+  const ts=trCur(),d=DK.cnDone&&Date.now()-DK.cnDone.at<10*60e3?DK.cnDone:null;
+  if(!ts.length&&!d)return"";
+  let h=`<div class="dk-cardx tr-card"><div class="dk-h">In a trade <b>${ts.length?"live":"closed"}</b></div>`;
+  h+=ts.map(t=>{const e=t.est_pnl;
+    return `<div class="tr-row" data-trade="${esc(t.option_id)}" role="button" tabindex="0"><div><b>IN A TRADE</b> ${esc(t.label)}<small>tap to open the chart and Close Now</small></div><b class="${trCls(e)}">${e==null?"price unavailable":trMoney(e)+" est."}</b></div>`+trBtn(t,false)}).join("");
+  if(d)h+=trDone(d);
+  return h+`</div>`;
+}
+function trChart(bars,plan,entU,sym){
+  const B=(bars||[]).map(b=>b.map(Number)).filter(b=>b.length>=5&&b.every(isFinite));
+  if(B.length<2)return `<div class="win-chart mut" style="font-size:13px">Chart unavailable right now.</div>`;
+  const stop=plan?trN(plan.wrong_if):null,tgt=plan?trN(plan.tp1):null,ent=trN(entU);
+  const lines=[stop,tgt,ent].filter(v=>v!=null);
+  const W=860,H=230,all=B.flatMap(b=>[b[2],b[3]]).concat(lines),lo=Math.min(...all)-.3,hi=Math.max(...all)+.3,y=v=>H-12-(v-lo)/(hi-lo)*(H-24),step=(W-60)/Math.max(B.length,12);
+  let h="";
+  const ln=(v,c,txt)=>{h+=`<line x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="${c}" stroke-dasharray="4 4"/><text x="6" y="${y(v)-4}" fill="${c}" font-size="11">${txt}</text>`};
+  if(tgt!=null)ln(tgt,"#00c805","Takes profit "+tgt.toFixed(2));
+  if(stop!=null)ln(stop,"#ff5a2e","Exit "+(tgt!=null&&tgt<stop?"over ":"under ")+stop.toFixed(2));
+  if(ent!=null)ln(ent,"#ffffff","Got in (about) "+ent.toFixed(2));
+  B.forEach((b,i)=>{const x=40+i*step,up=b[4]>=b[1],c=up?"#00c805":"#ff5a2e";
+    h+=`<line x1="${x}" x2="${x}" y1="${y(b[2])}" y2="${y(b[3])}" stroke="${c}"/><rect x="${x-step*.32}" y="${y(Math.max(b[1],b[4]))}" width="${step*.64}" height="${Math.max(2,Math.abs(y(b[1])-y(b[4])))}" fill="${c}"/>`});
+  return `<div class="win-chart"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(sym)} 10-minute candles">${h}</svg><div class="mut" style="font-size:12px">${esc(sym)}, 10-minute candles.${plan?" Green dotted = profit target, red dotted = exit line.":" No exit plan is on file for this trade, so there are no target or exit lines."}</div></div>`;
+}
+function trBig(){
+  const t=trCur().find(x=>x.option_id===DK.trOpen),d=DK.cnDone&&Date.now()-DK.cnDone.at<10*60e3?DK.cnDone:null;
+  if(!t)return d?trDone(d):`<div class="banner mut" style="padding:12px">Not in a trade. Nothing is open in the Agentic account.</div>`;
+  const e=t.est_pnl,pl=t.plan,asOf=t.quote_at||(DK.tl&&DK.tl.at)||"",qty=t.qty||1;
+  const lad=pl&&trN(pl.wrong_if)!=null&&trN(pl.tp1)!=null?winLadder({ticker:t.sym,entry_under:t.under_entry,plan:{wrong_if_level:pl.wrong_if,target_level:pl.tp1}},trN(t.under)):"";
+  const say=pl?`<b>Plan on this trade:</b> exit if a ${pl.tf}-minute candle closes ${pl.dir==="down"?"over":"under"} ${pl.wrong_if}, or take profit at ${pl.tp1}. Flat by 3:50 PM.`
+    :`<b>No exit plan on file.</b> This trade was not opened from an Otto card, so Otto has no lines for it. Close Now still works.`;
+  return `<div class="win-banner on"><div class="win-big"><span class="win-dot"></span>IN A TRADE NOW — ${esc(t.label)}</div>
+    <div class="mut" style="font-size:12.5px">Josh + Baby J · ${qty} contract${qty>1?"s":""} · Agentic account${t.exp?" · exp "+esc(t.exp):""}</div>
+    <div class="win-row"><div><span class="mut">Bought</span><b>${t.entry!=null?"$"+t.entry.toFixed(2):"—"}</b></div><div><span class="mut">Since</span><b>${t.opened_at?esc(winET(t.opened_at)):"—"}</b></div><div><span class="mut">Costs</span><b>${t.entry!=null?"$"+Math.round(t.entry*100*qty):"—"}</b></div>
+    <div><span class="mut">Option now (sell price)</span><b>${t.bid!=null?"$"+t.bid.toFixed(2):"—"}</b></div>
+    <div><span class="mut">Profit/loss <span class="win-est">ESTIMATE</span></span>${e==null?`<span class="mut">unavailable</span>`:`<b class="${trCls(e)}" style="font-size:24px">${trMoney(e)}</b>`}${asOf?`<div class="mut" style="font-size:11px">as of ${esc(winET(asOf))}</div>`:""}</div></div>
+    ${lad}<div class="win-say">${say}</div>
+    ${d?trDone(d):trBtn(t,true)}</div>${trChart(t.bars,pl,t.under_entry,t.sym)}
+    <div class="mut" style="font-size:12px;margin-top:8px">The estimate uses the price you could sell at right now. The real result is the Robinhood fill after you close. Refreshes every 20 seconds.</div>`;
+}
+function trRefreshDialog(){
+  const dl=$("#dlgOpenTrade");if(!dl||!dl.open)return;
+  $("#dlgOpenTradeBody").innerHTML=trBig();
+  $("#dlgOpenTradeLeft").textContent=DK.tl&&DK.tl.at?"price as of "+winET(DK.tl.at):"";
+}
+function trOpen(opt){if(LAY_DRAFT)return;DK.trOpen=opt;const dl=$("#dlgOpenTrade");dl.showModal();trRefreshDialog();dkTradeLoad()}
+async function trCn(act,opt){
+  const c=DK.cn[opt]||(DK.cn[opt]={step:"idle"});clearTimeout(c.t);
+  if(act==="start"){c.step="confirm";c.t=setTimeout(()=>{c.step="idle";dkRenderRight();trRefreshDialog()},5000)}
+  else if(act==="no")c.step="idle";
+  else if(act==="yes"){
+    c.step="selling";dkRenderRight();trRefreshDialog();
+    const lab=(trCur().find(t=>t.option_id===opt)||{}).label||"the trade";
+    try{const r=await dkApi("close_now",{option_id:opt,author:dkWho()});
+      DK.cnDone={at:Date.now(),r,label:lab};c.step="idle";toast(r.state==="filled"?"Closed":"Close sent")}
+    catch(e){c.step="err";c.msg=e.message}
+    setTimeout(()=>dkPanel(true),1500);
+  }
+  dkRenderRight();trRefreshDialog();
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-cn]");if(b){e.preventDefault();e.stopPropagation();return trCn(b.dataset.cn,b.dataset.opt)}
+  const r=e.target.closest("[data-trade]");if(r)trOpen(r.dataset.trade);
+});
+document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.matches&&e.target.matches("[data-trade]")){e.preventDefault();trOpen(e.target.dataset.trade)}});
+$("#dlgOpenTradeX").addEventListener("click",()=>{DK.trOpen=null;$("#dlgOpenTrade").close()});
+setInterval(()=>{const dl=$("#dlgOpenTrade");if(dl&&dl.open&&document.visibilityState==="visible")dkTradeLoad()},20e3);
+
 // Otto Signals: Paste a post (backup when the watcher is down) and Clear chats.
 SG.open={};SG.draft={};SG.busy={};
 function sgThread(b){
@@ -4821,7 +4937,7 @@ var LAY_TABS=[...document.querySelectorAll("#dkTabs button[data-go]")].map(b=>b.
 var LAY_LABEL=Object.fromEntries([...document.querySelectorAll("#dkTabs button[data-go]")].map(b=>[b.dataset.go,b.lastChild.textContent.trim()]));
 var LAY_LOCK=new Set(["desk"]);
 var LAY_CARDS={left:["night-charts","watcher","today","morning-read","watchlist","jason-s-homework","jason-s-levels-today"],
-  right:["robinhood","protected-trades","waiting-for-approval","jason-today","tradingview-alerts","jarvis-brain"]};
+  right:["in-a-trade","robinhood","protected-trades","waiting-for-approval","jason-today","tradingview-alerts","jarvis-brain"]};
 var LAY=(()=>{try{return JSON.parse(localStorage.getItem("otto:layout")||"null")}catch(e){return null}})();
 var LAY_DRAFT=null,LAY_NODES=LAY_NODES||{left:{},right:{}},LAY_DRAG=null,LAY_SYNC=0;
 const layCur=()=>LAY_DRAFT||LAY||{};
@@ -4870,6 +4986,7 @@ function layApplyCards(){
       .sort((a,b)=>{const ia=def.indexOf(a.dataset.card),ib=def.indexOf(b.dataset.card);return (ia<0?100+a._i:ia)-(ib<0?100+b._i:ib)})
       .forEach(el=>{cols[side].push(el);placed.add(el.dataset.card)});
   }
+  const ti=cols.right.findIndex(el=>el.dataset.card==="in-a-trade");if(ti>0)cols.right.unshift(cols.right.splice(ti,1)[0]);   // v3.33: the trade row is always on top
   const mins=new Set(layCur().min||[]);
   for(const [side,col] of [["left",L],["right",R]]){
     col.replaceChildren(...cols[side]);
