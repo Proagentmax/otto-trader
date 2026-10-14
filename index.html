@@ -390,6 +390,14 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .dk-dot.on{background:var(--up)}.dk-dot.bad{background:var(--down)}
 .dk-col{overflow:auto;padding:14px;border-right:1px solid var(--rule);display:flex;flex-direction:column;gap:12px;min-height:0}
 .dk-col.r{border-right:0}
+.win-banner{border-radius:14px;padding:16px 18px;margin:12px 0;border:1px solid var(--rule);background:var(--s1)}
+.win-banner.on{border:2px solid var(--up);background:linear-gradient(180deg,#0e2012,#0b160d)}
+.win-big{font-size:21px;font-weight:700}.win-row{display:flex;gap:26px;flex-wrap:wrap;margin-top:10px}.win-row b{display:block;font-size:18px}
+.win-dot{display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--up);margin-right:8px;animation:winp 1.4s infinite}@keyframes winp{50%{opacity:.25}}
+.win-score{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}.win-sc{background:var(--s1);border:1px solid var(--rule);border-radius:12px;padding:12px;text-align:center}.win-sc .n{font-size:28px;font-weight:700}
+.win-li{display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--rule)}.win-li:last-child{border:0}.win-t{flex:1}
+.win-chip{font-weight:700;font-size:12px;border-radius:7px;padding:4px 9px;min-width:58px;text-align:center;background:var(--surface-3,#222)}.win-chip.w{background:#0d2a10;color:var(--up)}.win-chip.l{background:#2e150c;color:var(--down,#ff5a2e)}.win-chip.o{background:#2a230c;color:#ffc27a}
+@media(max-width:560px){.win-score{grid-template-columns:1fr 1fr}}
 .dk-cardx{background:var(--s1);border:1px solid var(--rule);border-radius:12px;padding:12px 13px}
 .dk-h{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;gap:8px}
 .dk-h b{color:var(--ink-2);font-weight:600;text-transform:none;letter-spacing:0}
@@ -2286,7 +2294,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.31.0";
+const BUILD="3.31.1";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3720,20 +3728,33 @@ function winTradeRows(list,withDay){
 function winToday(j){
   const td=j.today||{},rt=td.routine,se=td.sentiment,day=j.clock&&j.clock.day;
   const trades=(j.trades||[]).filter(t=>t.day===day),ideas=(j.ideas||[]).filter(i=>i.day===day);
-  const lim=j.limits||{};
+  const lim=j.limits||{},open=trades.filter(t=>t.status==="open"),closed=trades.filter(t=>t.status==="closed");
+  const wins=closed.filter(t=>+t.pnl_realistic>0).length,losses=closed.filter(t=>+t.pnl_realistic<0).length;
+  const dow=(j.day_pnl==null?null:+j.day_pnl),wk=(j.week_pnl==null?null:+j.week_pnl);
+  // v3.31.1: one banner that says plainly whether Winston is in a trade (approved mockup winston-simple-mockup.html)
+  const banner=open.length?open.map(t=>{const p=t.plan||{};
+    return `<div class="win-banner on"><div class="win-big"><span class="win-dot"></span>IN A TRADE NOW — ${esc(t.label||t.ticker)}</div>
+      <div class="win-row"><div><span class="mut">Bought</span><b>${t.entry_ask!=null?"$"+(+t.entry_ask).toFixed(2):"—"}</b></div><div><span class="mut">Since</span><b>${esc(winET(t.opened_at))}</b></div><div><span class="mut">Costs</span><b>${t.entry_ask!=null?"$"+Math.round((+t.entry_ask)*100*(t.qty||1)):"—"}</b></div>
+      <div><span class="mut">Gets out if ${esc(t.ticker)} closes ${t.side==="put"?"over":"under"}</span><b>${esc(p.wrong_if_level)}</b></div><div><span class="mut">Takes profit at</span><b>${esc(p.target_level)}</b></div></div>
+      <div class="mut" style="margin-top:8px;font-size:13px">Why: ${esc(p.thesis||"—")} · ${esc(winSrc(t.source))}. Must be flat by 3:50 PM.</div></div>`}).join("")
+    :`<div class="win-banner"><div class="win-big mut">Not in a trade — watching</div><div class="mut" style="font-size:13px">${!(j.config||{}).enabled?"Winston is paused.":lim.locked?"Locked: "+esc(lim.locked.why)+".":"Market: "+esc((j.clock||{}).status||"—")+". The reasons for anything he passed on are lower down."}</div></div>`;
+  const sc=(n,l,cls)=>`<div class="win-sc"><div class="n ${cls||""}">${n}</div><div class="mut">${l}</div></div>`;
+  const money=v=>v==null||!isFinite(v)?"—":(v<0?"−":v>0?"+":"")+"$"+Math.abs(v).toFixed(0);
+  const cls=v=>v>0?"up":v<0?"dn":"";
+  const line=t=>{const o=t.status==="open",w=+t.pnl_realistic>0,l=+t.pnl_realistic<0;
+    return `<div class="win-li"><span class="win-chip ${o?"o":w?"w":l?"l":""}">${o?"OPEN":w?"WIN":l?"LOSS":"FLAT"}</span>
+      <div class="win-t"><b>${esc(t.label||t.ticker)}</b>${t.experiment?` <span class="dk-tag">${esc(t.experiment)} test</span>`:""} <span class="mut">${o?"in at $"+(+t.entry_ask).toFixed(2)+" · "+esc(winET(t.opened_at)):esc(winET(t.opened_at))+" → "+esc(winET(t.closed_at))+" · "+esc(WIN_WHY[t.exit_reason]||t.exit_reason||"")}</span></div>
+      ${o?`<span class="mut">waiting</span>`:`<b class="${l?"dn":w?"up":""}">${money(+t.pnl_realistic)}</b>`}</div>`};
   const idea=i=>`<div class="dk-row" style="align-items:flex-start"><span><b>${esc(i.ticker||"—")}</b> ${esc(i.side||"")} <span class="mut">· ${esc(winSrc(i.source))}</span><div class="mut" style="font-size:12px">${esc(i.reason||"")}${(i.rule_ids||[]).length?` · ${esc(i.rule_ids.join(", "))}`:""}</div></span><span class="dk-tag ${i.status==="taken"?"ok":i.status==="blocked"?"bad":""}">${esc(i.status)}</span></div>`;
-  return `${winHead(j)}
-    <div class="dkp-grid4">
-      <div class="dk-cardx dk-stat"><div class="n">$${(+j.equity).toFixed(2)}</div><div class="l">Paper equity · cash $${(+j.cash).toFixed(2)}</div></div>
-      <div class="dk-cardx dk-stat"><div class="n">${winM(j.day_pnl)}</div><div class="l">Today (real fills) · week ${winM(j.week_pnl)}</div></div>
-      <div class="dk-cardx dk-stat"><div class="n">${(j.open||[]).length}</div><div class="l">Open now (max ${esc((j.config||{}).max_open||1)}; flat by 3:50 PM)</div></div>
-      <div class="dk-cardx dk-stat"><div class="n">${lim.cap_usd!=null?"$"+Math.round(lim.cap_usd):"—"}</div><div class="l">Size cap · max loss ${lim.max_loss_usd!=null?"$"+Math.round(lim.max_loss_usd):"—"} per trade</div></div></div>
+  return `${winHead(j)}${banner}
+    <div class="win-score">${sc(wins,"Wins today","up")}${sc(losses,"Losses today","dn")}${sc(money(dow),"Today",cls(dow))}${sc(money(wk),"This week",cls(wk))}</div>
+    <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Today's trades <b>newest first</b></div>${trades.length?trades.slice().sort((a,b)=>String(b.opened_at).localeCompare(String(a.opened_at))).map(line).join(""):`<div class="mut" style="padding:8px 0">No trades yet today.</div>`}</div>
+    <div class="mut" style="font-size:12.5px;margin:0 0 12px">Paper balance $${(+j.equity).toFixed(2)} · cash $${(+j.cash).toFixed(2)} · size cap ${lim.cap_usd!=null?"$"+Math.round(lim.cap_usd):"—"} · max loss ${lim.max_loss_usd!=null?"$"+Math.round(lim.max_loss_usd):"—"} per trade · win/loss uses real fills (bought at the ask, sold at the bid)</div>
     <div class="dkp-grid3">
       <div class="dk-cardx"><div class="dk-h">Morning plan <b>8:45</b></div>${rt?`<div style="font-size:13px">${esc(rt.bias||"")}</div>${(rt.events||[]).length?`<div class="mut" style="font-size:12px;margin-top:6px">Events: ${esc(rt.events.join(" · "))}</div>`:""}${(rt.watch||[]).length?`<div class="mut" style="font-size:12px;margin-top:4px">Watching: ${esc(rt.watch.map(w=>w.ticker+" ("+w.why+")").join(" · "))}</div>`:""}${(rt.risks||[]).length?`<div class="mut" style="font-size:12px;margin-top:4px">Risks: ${esc(rt.risks.join(" · "))}</div>`:""}`:`<div class="mut">Not written yet today.</div>`}</div>
       <div class="dk-cardx"><div class="dk-h">Pre-open read <b>9:15</b></div>${se?`<div style="font-size:13px"><b>${esc(se.tone||"")}</b> — ${esc(se.read||"")}</div>`:`<div class="mut">Not written yet today.</div>`}</div>
       <div class="dk-cardx"><div class="dk-h">AI use today</div>${td.ai?`<div class="mono">${esc(td.ai.calls||0)} calls · ${esc(td.ai.input_tokens||0)} in / ${esc(td.ai.output_tokens||0)} out</div><div class="mut" style="font-size:12px">No daily ceiling; it only runs when something changed.</div>`:`<div class="mut">None yet.</div>`}</div></div>
-    <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Trades today</div>${winTradeRows(trades,false)}</div>
-    <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Ideas, taken and passed — with the reason <b>${ideas.length}</b></div>${ideas.length?ideas.slice(0,60).map(idea).join(""):`<div class="mut">No ideas looked at yet today.</div>`}</div>
+    <div class="dk-cardx" style="margin:12px 0"><div class="dk-h">Ideas, taken and passed — with the reason <b>${ideas.length}</b></div>${ideas.length?ideas.slice(0,60).map(idea).join(""):`<div class="mut">No ideas looked at yet today.</div>`}</div>
     <div class="dk-cardx"><div class="dk-h">Rulebook <b>switch rules on or off — paper only</b></div>
       ${(j.rules||[]).map(r=>`<div class="dk-row" style="align-items:flex-start"><span><b>${esc(r.id)}</b> ${esc(r.title||"")} <span class="mut">· ${esc(r.source||"")}${r.book_ref?" "+esc(r.book_ref):""}</span><div class="mut" style="font-size:12px;max-width:760px">${esc(r.body||"")}</div></span>
         <button class="dk-btn ${r.active?"go":"sec"}" data-wr="${esc(r.id)}" data-on="${r.active?1:0}">${r.active?"ON":"OFF"}</button></div>`).join("")}</div>`;
