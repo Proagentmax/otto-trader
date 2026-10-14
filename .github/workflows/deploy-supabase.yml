@@ -2,25 +2,25 @@
 # A push to main that changes supabase/otto-proxy.ts, a supabase/NNN_*.sql file, or this workflow:
 #   1. runs the test suite — if any test fails, nothing is deployed;
 #   2. runs every SQL file not yet in the otto_migrations ledger, once, in order (Supabase Management API);
-#   3. deploys the otto-proxy Edge Function (JWT verification stays ON, as today).
+#   3. deploys the otto-proxy and winston Edge Functions (JWT verification stays ON for both).
 # The app itself (index.html, sw.js) still goes live through GitHub Pages on the same push.
 # Needs one repository secret, added by Ifoma: SUPABASE_ACCESS_TOKEN (Supabase → Account → Access Tokens).
 # Nothing is pushed without Ifoma's "ship it".
-name: Deploy Supabase (otto-proxy + SQL)
+name: Deploy Supabase (otto-proxy + winston + SQL)
 on:
   push:
     branches: [main]
-    paths: ["supabase/otto-proxy.ts", "supabase/[0-9][0-9][0-9]_*.sql", ".github/workflows/deploy-supabase.yml"]
+    paths: ["supabase/otto-proxy.ts", "supabase/winston.ts", "supabase/[0-9][0-9][0-9]_*.sql", ".github/workflows/deploy-supabase.yml"]
   workflow_dispatch: {}
 concurrency: { group: supabase-deploy, cancel-in-progress: false }
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       PROJECT_REF: loykixugjltxukuvbbuf
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
 
       - name: Token present?
@@ -38,7 +38,7 @@ jobs:
           BEFORE="${{ github.event.before }}"
           if [ "${{ github.event_name }}" != "push" ] || [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             echo "proxy=true" >> "$GITHUB_OUTPUT"
-          elif git diff --quiet "$BEFORE" "${{ github.sha }}" -- supabase/otto-proxy.ts .github/workflows/deploy-supabase.yml; then
+          elif git diff --quiet "$BEFORE" "${{ github.sha }}" -- supabase/otto-proxy.ts supabase/winston.ts .github/workflows/deploy-supabase.yml; then
             echo "proxy=false" >> "$GITHUB_OUTPUT"
           else
             echo "proxy=true" >> "$GITHUB_OUTPUT"
@@ -73,7 +73,7 @@ jobs:
             echo "== recorded $n"
           done
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v2
         if: steps.changed.outputs.proxy == 'true'
         with: { version: 2.120.0 }
       - name: Deploy the otto-proxy Edge Function
@@ -83,3 +83,10 @@ jobs:
           cp supabase/otto-proxy.ts supabase/functions/otto-proxy/index.ts
           supabase functions deploy otto-proxy --project-ref "$PROJECT_REF"
           echo "Deployed otto-proxy $(sha256sum supabase/otto-proxy.ts | cut -c1-16)"
+      - name: Deploy the winston Edge Function
+        if: steps.changed.outputs.proxy == 'true'
+        run: |
+          mkdir -p supabase/functions/winston
+          cp supabase/winston.ts supabase/functions/winston/index.ts
+          supabase functions deploy winston --project-ref "$PROJECT_REF"
+          echo "Deployed winston $(sha256sum supabase/winston.ts | cut -c1-16)"
