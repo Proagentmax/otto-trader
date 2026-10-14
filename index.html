@@ -397,6 +397,14 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .win-score{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}.win-sc{background:var(--s1);border:1px solid var(--rule);border-radius:12px;padding:12px;text-align:center}.win-sc .n{font-size:28px;font-weight:700}
 .win-li{display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--rule)}.win-li:last-child{border:0}.win-t{flex:1}
 .win-chip{font-weight:700;font-size:12px;border-radius:7px;padding:4px 9px;min-width:58px;text-align:center;background:var(--surface-3,#222)}.win-chip.w{background:#0d2a10;color:var(--up)}.win-chip.l{background:#2e150c;color:var(--down,#ff5a2e)}.win-chip.o{background:#2a230c;color:#ffc27a}
+.win-hb{display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--s1);margin:12px 0 0}
+.win-hb i{width:9px;height:9px;border-radius:50%;background:var(--up);flex:none;animation:winp 1.6s infinite}.win-hb.bad{border-color:var(--down,#ff5a2e);color:var(--down,#ff5a2e)}.win-hb.bad i{background:var(--down,#ff5a2e);animation:none}.win-hb.off i{background:var(--ink-3);animation:none}
+.win-est{font-size:10.5px;border:1px dashed #ffc27a;color:#ffc27a;border-radius:6px;padding:1px 6px;margin-left:6px;font-weight:600}
+.win-lad{position:relative;height:50px;margin:24px 8px 6px}.win-lad .bar{position:absolute;left:0;right:0;top:22px;height:8px;border-radius:5px;background:linear-gradient(90deg,#5a1e0e,#2a2f36 40%,#2a2f36 60%,#0d4a12)}
+.win-lad .mk{position:absolute;top:0;transform:translateX(-50%);text-align:center;font-size:11px;color:var(--ink-3);white-space:nowrap}.win-lad .mk i{display:block;width:2px;height:30px;margin:2px auto 0;background:var(--ink-3)}.win-lad .mk[style*="transform:none"] i{margin-left:0}.win-lad .mk[style*="-100%"] i{margin-right:0}
+.win-lad .mk.now{color:var(--ink);font-weight:700}.win-lad .mk.now i{background:#fff;width:3px}
+.win-say{margin-top:12px;padding-top:10px;border-top:1px solid #1d3a21;font-size:14px}
+.win-chart{background:var(--s1);border:1px solid var(--rule);border-radius:12px;padding:10px;margin-top:12px}
 @media(max-width:560px){.win-score{grid-template-columns:1fr 1fr}}
 .dk-cardx{background:var(--s1);border:1px solid var(--rule);border-radius:12px;padding:12px 13px}
 .dk-h{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;gap:8px}
@@ -2294,7 +2302,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.31.1";
+const BUILD="3.32.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3691,7 +3699,7 @@ async function dkScore(){
    (Today / Report / Scoreboard) over the `winston` edge function. This tab only READS,
    plus two switches: pause, and each rule's on/off. Winston never sees Josh + Baby J's
    trades; this page may show both side by side because it runs in the browser. */
-var WIN={view:"today",j:null,day:null,busy:false,t:0};
+var WIN={view:"today",j:null,live:null,day:null,busy:false,t:0};
 async function winApi(fn,body){
   const t=await token(); if(!t)throw new Error("signed out");
   const r=await fetch(SB_URL+"/functions/v1/winston?fn="+fn,{method:body?"POST":"GET",headers:{apikey:SB_ANON,authorization:"Bearer "+t,"content-type":"application/json"},body:body?JSON.stringify(body):undefined});
@@ -3725,6 +3733,37 @@ function winTradeRows(list,withDay){
       <td class="mono">${open?"—":winM(+t.pnl_realistic)}</td><td class="mono">${open?"—":winM(+t.pnl_mid)}</td><td class="mono">${open?"—":winR(t.r_multiple)}</td>
       <td>${open?"":t.followed_rules===false?`<span class="dk-tag bad" title="${esc((t.broke||[]).join(" | "))}">broke ${(t.broke||[]).length}</span>`:`<span class="dk-tag ok">followed</span>`}</td></tr>`}).join("")}</table></div>`;
 }
+/* v3.32 (approved mockup winston-v332-mockup.html): heartbeat, price ladder, estimated P&L, plain "what he's doing", chart. All numbers pass through winN. */
+const winN=v=>{const n=+v;return v!=null&&v!==""&&isFinite(n)?n:null};
+function winHeart(j){
+  const hb=j.heartbeat,st=(j.clock||{}).status,at=hb&&hb.at?Date.parse(hb.at):NaN;
+  if(st!=="open")return `<div class="win-hb off"><i></i><span>Market ${esc(st||"closed")} · ${isFinite(at)?"last check "+esc(winET(at)):"no check recorded yet"}</span></div>`;
+  if(!isFinite(at))return `<div class="win-hb bad"><i></i><span><b>No check recorded yet today.</b> If this is still here after 9:45 AM, something is wrong.</span></div>`;
+  const age=Math.max(0,Math.round((Date.now()-at)/60000));
+  if(age>15)return `<div class="win-hb bad"><i></i><span><b>No check since ${esc(winET(at))} (${age} min).</b> He may be stuck — tell Claude.</span></div>`;
+  return `<div class="win-hb"><i></i><span>Winston is working · last checked <b>${esc(winET(at))}</b> (${age} min ago) · checks every minute while in a trade, every 10 minutes otherwise</span></div>`;
+}
+function winLadder(t,now){
+  const p=t.plan||{},stop=winN(p.wrong_if_level),tgt=winN(p.target_level),ent=winN(t.entry_under);
+  if(stop==null||tgt==null||stop===tgt)return "";
+  const pos=v=>Math.max(0,Math.min(100,(v-stop)/(tgt-stop)*100));
+  const mk=(v,lab,cls)=>v==null?"":`<div class="mk ${cls||""}" style="left:${pos(v).toFixed(1)}%;${pos(v)<12?"transform:none;text-align:left":pos(v)>88?"transform:translateX(-100%);text-align:right":""}">${lab}<br><b>${v.toFixed(2)}</b><i></i></div>`;
+  return `<div class="win-lad"><div class="bar"></div>${mk(stop,"Exit if closes "+(tgt>stop?"under":"over"))}${mk(ent,"You got in")}${mk(now,t.ticker+" now","now")}${mk(tgt,"Takes profit")}</div>
+    <div class="mut" style="font-size:12px">Left = danger, right = profit.${now==null?" Live price unavailable right now.":""}</div>`;
+}
+function winChart(bars,t){
+  const p=t.plan||{},stop=winN(p.wrong_if_level),tgt=winN(p.target_level),ent=winN(t.entry_under);
+  const B=(bars||[]).map(b=>b.map(Number)).filter(b=>b.length>=5&&b.every(isFinite));
+  if(B.length<2||stop==null||tgt==null)return `<div class="win-chart mut" style="font-size:13px">Chart unavailable right now.</div>`;
+  const W=860,H=230,all=B.flatMap(b=>[b[2],b[3]]).concat([stop,tgt]).concat(ent==null?[]:[ent]);
+  const lo=Math.min(...all)-.3,hi=Math.max(...all)+.3,y=v=>H-12-(v-lo)/(hi-lo)*(H-24),step=(W-60)/Math.max(B.length,12);
+  let h="";
+  const ln=(v,c,txt)=>{h+=`<line x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="${c}" stroke-dasharray="4 4"/><text x="6" y="${y(v)-4}" fill="${c}" font-size="11">${txt}</text>`};
+  ln(tgt,"#00c805","Takes profit "+tgt.toFixed(2));ln(stop,"#ff5a2e","Exit "+(tgt>stop?"under ":"over ")+stop.toFixed(2));if(ent!=null)ln(ent,"#ffffff","Entry "+ent.toFixed(2));
+  B.forEach((b,i)=>{const x=40+i*step,up=b[4]>=b[1],c=up?"#00c805":"#ff5a2e";
+    h+=`<line x1="${x}" x2="${x}" y1="${y(b[2])}" y2="${y(b[3])}" stroke="${c}"/><rect x="${x-step*.32}" y="${y(Math.max(b[1],b[4]))}" width="${step*.64}" height="${Math.max(2,Math.abs(y(b[1])-y(b[4])))}" fill="${c}"/>`});
+  return `<div class="win-chart"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(t.ticker)} 10-minute candles">${h}</svg><div class="mut" style="font-size:12px">${esc(t.ticker)}, 10-minute candles. Green dotted = profit target, red dotted = exit line, white = his entry.</div></div>`;
+}
 function winToday(j){
   const td=j.today||{},rt=td.routine,se=td.sentiment,day=j.clock&&j.clock.day;
   const trades=(j.trades||[]).filter(t=>t.day===day),ideas=(j.ideas||[]).filter(i=>i.day===day);
@@ -3732,21 +3771,33 @@ function winToday(j){
   const wins=closed.filter(t=>+t.pnl_realistic>0).length,losses=closed.filter(t=>+t.pnl_realistic<0).length;
   const dow=(j.day_pnl==null?null:+j.day_pnl),wk=(j.week_pnl==null?null:+j.week_pnl);
   // v3.31.1: one banner that says plainly whether Winston is in a trade (approved mockup winston-simple-mockup.html)
-  const banner=open.length?open.map(t=>{const p=t.plan||{};
+  const liveMap={};((WIN.live||{}).live||[]).forEach(l=>liveMap[l.id]=l);
+  const passed=[...new Set(ideas.filter(i=>i.status==="passed"&&i.ticker).map(i=>String(i.ticker).toUpperCase()))].slice(0,5);
+  const passTxt=passed.length?` Passed on ${esc(passed.join(", "))} (no clean setup).`:"";
+  const banner=open.length?open.map(t=>{const p=t.plan||{},lv=liveMap[t.id]||null,lm=p.last_mark||{};
+    const bid=lv&&lv.bid!=null?winN(lv.bid):winN(lm.bid),ent=winN(t.entry_ask),qty=t.qty||1;
+    const est=lv&&lv.est_pnl!=null?winN(lv.est_pnl):(bid!=null&&ent!=null?Math.round((bid-ent)*100*qty*100)/100:null);
+    const asOf=lv&&lv.at?winET(lv.at):(lm.at?winET(lm.at):"");
+    const now=lv&&lv.under!=null?winN(lv.under):winN(lm.under);
+    const estTxt=est==null?`<span class="mut">unavailable</span>`:`<b class="${est>0?"up":est<0?"dn":""}" style="font-size:24px">${est<0?"−":est>0?"+":""}$${Math.abs(est).toFixed(0)}</b>`;
     return `<div class="win-banner on"><div class="win-big"><span class="win-dot"></span>IN A TRADE NOW — ${esc(t.label||t.ticker)}</div>
-      <div class="win-row"><div><span class="mut">Bought</span><b>${t.entry_ask!=null?"$"+(+t.entry_ask).toFixed(2):"—"}</b></div><div><span class="mut">Since</span><b>${esc(winET(t.opened_at))}</b></div><div><span class="mut">Costs</span><b>${t.entry_ask!=null?"$"+Math.round((+t.entry_ask)*100*(t.qty||1)):"—"}</b></div>
-      <div><span class="mut">Gets out if ${esc(t.ticker)} closes ${t.side==="put"?"over":"under"}</span><b>${esc(p.wrong_if_level)}</b></div><div><span class="mut">Takes profit at</span><b>${esc(p.target_level)}</b></div></div>
-      <div class="mut" style="margin-top:8px;font-size:13px">Why: ${esc(p.thesis||"—")} · ${esc(winSrc(t.source))}. Must be flat by 3:50 PM.</div></div>`}).join("")
-    :`<div class="win-banner"><div class="win-big mut">Not in a trade — watching</div><div class="mut" style="font-size:13px">${!(j.config||{}).enabled?"Winston is paused.":lim.locked?"Locked: "+esc(lim.locked.why)+".":"Market: "+esc((j.clock||{}).status||"—")+". The reasons for anything he passed on are lower down."}</div></div>`;
+      <div class="win-row"><div><span class="mut">Bought</span><b>${ent!=null?"$"+ent.toFixed(2):"—"}</b></div><div><span class="mut">Since</span><b>${esc(winET(t.opened_at))}</b></div><div><span class="mut">Costs</span><b>${ent!=null?"$"+Math.round(ent*100*qty):"—"}</b></div>
+      <div><span class="mut">Option now (sell price)</span><b>${bid!=null?"$"+bid.toFixed(2):"—"}</b></div>
+      <div><span class="mut">Profit/loss <span class="win-est">ESTIMATE</span></span>${estTxt}${asOf?`<div class="mut" style="font-size:11px">as of ${esc(asOf)}</div>`:""}</div></div>
+      ${winLadder(t,now)}
+      <div class="win-say"><b>What he's doing now:</b> Holding ${esc(t.ticker)}. Watching for a 10-minute close ${t.side==="put"?"over":"under"} ${esc(p.wrong_if_level)}, or a touch of ${esc(p.target_level)}.${passTxt} Must be flat by 3:50 PM.</div>
+      <div class="mut" style="font-size:12px;margin-top:6px">Why he got in: ${esc(p.thesis||"—")} · ${esc(winSrc(t.source))}. The estimate uses the price he could sell at right now; wins and losses below always use the real fills.</div></div>
+      ${winChart((lv||{}).bars,t)}`}).join("")
+    :`<div class="win-banner"><div class="win-big mut">Not in a trade — watching</div><div class="mut" style="font-size:13px">${!(j.config||{}).enabled?"Winston is paused.":lim.locked?"Locked: "+esc(lim.locked.why)+".":"Market: "+esc((j.clock||{}).status||"—")+"."+passTxt+" The reasons are lower down."}</div></div>`;
   const sc=(n,l,cls)=>`<div class="win-sc"><div class="n ${cls||""}">${n}</div><div class="mut">${l}</div></div>`;
   const money=v=>v==null||!isFinite(v)?"—":(v<0?"−":v>0?"+":"")+"$"+Math.abs(v).toFixed(0);
   const cls=v=>v>0?"up":v<0?"dn":"";
   const line=t=>{const o=t.status==="open",w=+t.pnl_realistic>0,l=+t.pnl_realistic<0;
     return `<div class="win-li"><span class="win-chip ${o?"o":w?"w":l?"l":""}">${o?"OPEN":w?"WIN":l?"LOSS":"FLAT"}</span>
       <div class="win-t"><b>${esc(t.label||t.ticker)}</b>${t.experiment?` <span class="dk-tag">${esc(t.experiment)} test</span>`:""} <span class="mut">${o?"in at $"+(+t.entry_ask).toFixed(2)+" · "+esc(winET(t.opened_at)):esc(winET(t.opened_at))+" → "+esc(winET(t.closed_at))+" · "+esc(WIN_WHY[t.exit_reason]||t.exit_reason||"")}</span></div>
-      ${o?`<span class="mut">waiting</span>`:`<b class="${l?"dn":w?"up":""}">${money(+t.pnl_realistic)}</b>`}</div>`};
+      ${o?`<span style="text-align:right;font-size:13px">${(()=>{const t2=t,p2=t2.plan||{},lv2=liveMap[t2.id]||null,lm2=p2.last_mark||{},b2=lv2&&lv2.bid!=null?winN(lv2.bid):winN(lm2.bid),e2=winN(t2.entry_ask),est2=lv2&&lv2.est_pnl!=null?winN(lv2.est_pnl):(b2!=null&&e2!=null?(b2-e2)*100*(t2.qty||1):null);return (est2==null?"":`<b class="${est2>0?"up":est2<0?"dn":""}">${est2<0?"−":est2>0?"+":""}$${Math.abs(est2).toFixed(0)} est.</b><br>`)+`<span class="mut">holding · exit ${t2.side==="put"?"over":"under"} ${esc(p2.wrong_if_level)} · profit at ${esc(p2.target_level)}</span>`})()}</span>`:`<b class="${l?"dn":w?"up":""}">${money(+t.pnl_realistic)}</b>`}</div>`};
   const idea=i=>`<div class="dk-row" style="align-items:flex-start"><span><b>${esc(i.ticker||"—")}</b> ${esc(i.side||"")} <span class="mut">· ${esc(winSrc(i.source))}</span><div class="mut" style="font-size:12px">${esc(i.reason||"")}${(i.rule_ids||[]).length?` · ${esc(i.rule_ids.join(", "))}`:""}</div></span><span class="dk-tag ${i.status==="taken"?"ok":i.status==="blocked"?"bad":""}">${esc(i.status)}</span></div>`;
-  return `${winHead(j)}${banner}
+  return `${winHead(j)}${winHeart(j)}${banner}
     <div class="win-score">${sc(wins,"Wins today","up")}${sc(losses,"Losses today","dn")}${sc(money(dow),"Today",cls(dow))}${sc(money(wk),"This week",cls(wk))}</div>
     <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Today's trades <b>newest first</b></div>${trades.length?trades.slice().sort((a,b)=>String(b.opened_at).localeCompare(String(a.opened_at))).map(line).join(""):`<div class="mut" style="padding:8px 0">No trades yet today.</div>`}</div>
     <div class="mut" style="font-size:12.5px;margin:0 0 12px">Paper balance $${(+j.equity).toFixed(2)} · cash $${(+j.cash).toFixed(2)} · size cap ${lim.cap_usd!=null?"$"+Math.round(lim.cap_usd):"—"} · max loss ${lim.max_loss_usd!=null?"$"+Math.round(lim.max_loss_usd):"—"} per trade · win/loss uses real fills (bought at the ask, sold at the bid)</div>
@@ -3814,6 +3865,9 @@ async function dkWinston(keep){
   if(!keep)pg.innerHTML=`<div class="dkp">${winTabs()}${dkLoading("Reading Winston's book…")}</div>`;
   let j;try{j=await winApi("state");WIN.j=j}catch(e){if(DK.view==="winston")pg.innerHTML=`<div class="dkp">${winTabs()}${dkErr(e)}</div>`;return}
   if(DK.view!=="winston")return;
+  WIN.live=null;
+  if(WIN.view==="today"&&(j.open||[]).length){try{WIN.live=await winApi("live")}catch(e){WIN.live=null}}   // read-only; the screen falls back to his last saved mark
+  if(DK.view!=="winston")return;
   const sy=pg.scrollTop;
   let body=WIN.view==="report"?winReport(j):WIN.view==="score"?await winScore(j):winToday(j);
   if(DK.view!=="winston")return;
@@ -3826,7 +3880,7 @@ async function dkWinston(keep){
   pg.querySelectorAll("[data-wr]").forEach(b=>b.onclick=async()=>{if(WIN.busy)return;WIN.busy=true;b.disabled=true;
     try{await winApi("rule_set",{id:b.dataset.wr,active:b.dataset.on!=="1"})}catch(e){alert("Could not change the rule: "+e.message)}
     WIN.busy=false;dkWinston(true)});
-  clearTimeout(WIN.t);WIN.t=setTimeout(()=>{if(DK.view==="winston"&&WIN.view==="today"&&document.visibilityState==="visible"&&!WIN.busy)dkWinston(true)},30e3);
+  clearTimeout(WIN.t);WIN.t=setTimeout(()=>{if(DK.view==="winston"&&WIN.view==="today"&&document.visibilityState==="visible"&&!WIN.busy)dkWinston(true)},((j.open||[]).length?20e3:30e3));
 }
 
 

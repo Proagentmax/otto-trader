@@ -497,3 +497,52 @@ Deno.test("replay 12: experiments stay OFF until their rule is switched on, and 
   seed(); setNow("2026-10-14T14:11:00Z"); await setupCall(); aiScript = () => ({ decisions: [{ ...base({}).decisions[0], experiment: "W3" }], passes: [] });
   await X.tick(); eq(TABLES.winston_trades.length, 0, "a non-experiment rule id cannot be used as an experiment tag");
 });
+
+/* =========================== v3.32: the one-minute watch, the live route, the heartbeat =========================== */
+Deno.test("replay 13: the watch touches the target inside a still-forming bar (exit at the bid, flagged); the stop still needs a finished bar's CLOSE; no AI, no entries", async () => {
+  seed(); setNow("2026-10-14T14:11:00Z"); await setupCall(); await X.tick();
+  eq(TABLES.winston_trades.length, 1, "opened by the tick");
+  // 10:24: the 10:20 bar is still forming and has already touched 204 -> the 10-minute tick ignores it, the watch takes it
+  setNow("2026-10-14T14:24:00Z"); W.bars.NVDA.push(barRow("2026-10-14T14:20:00Z", 201, 204.3, 200.8, 203.5)); W.opts.opt1.bid = 3.6; W.opts.opt1.ask = 3.8; W.ai.n = 0; aiScript = null;
+  await X.tick(); eq(TABLES.winston_trades[0].status, "open", "the 10-minute tick does not read a forming bar");
+  const r = await X.watch(); eq(r.closed, 1, "watch closed it: " + JSON.stringify(r));
+  const c = TABLES.winston_trades[0];
+  eq([c.status, c.exit_reason, c.exit_fill, c.pnl_realistic, c.flags], ["closed", "target", 3.6, 110, ["intrabar_touch"]], "target touch, exit at the bid, flagged");
+  eq(W.ai.n, 0, "the watch never calls the AI");
+  // a stop is NOT taken intrabar: price under the wrong-if level inside a forming bar leaves the trade open
+  seed(); setNow("2026-10-14T14:11:00Z"); await setupCall(); await X.tick();
+  setNow("2026-10-14T14:24:00Z"); W.bars.NVDA.push(barRow("2026-10-14T14:20:00Z", 200, 200.5, 196.5, 197)); W.opts.opt1.bid = 1.5; W.opts.opt1.ask = 1.6; aiScript = null;
+  await X.watch(); eq(TABLES.winston_trades[0].status, "open", "forming bar below the stop level: still open (stop = a finished 10-minute close)");
+  // ...and the watch keeps the mark fresh while it waits
+  eq(TABLES.winston_trades[0].plan.last_mark.bid, 1.5, "last mark refreshed");
+  // once that bar finishes below the level the watch applies the normal stop
+  setNow("2026-10-14T14:31:00Z"); await X.watch(); eq([TABLES.winston_trades[0].status, TABLES.winston_trades[0].exit_reason], ["closed", "wrong_if"], "finished close -> wrong-if");
+});
+Deno.test("replay 14: the watch is a no-op with no open trade (no market calls, no log spam), never opens anything, and never runs on top of a tick", async () => {
+  seed(); setNow("2026-10-14T14:24:00Z"); await setupCall(); W.calls.length = 0;
+  const r = await X.watch(); eq(r.skipped, "no open trade", "skipped");
+  eq(W.calls.length, 0, "no market call when nothing is open"); eq(TABLES.winston_trades.length, 0, "opened nothing");
+  const hb = TABLES.winston_settings.find((s) => s.key === "heartbeat"); assert(hb && hb.value.kind === "watch", "heartbeat recorded");
+  setNow("2026-10-14T21:30:00Z"); eq((await X.watch()).skipped, "market not open", "after the close");
+  // a held lock = skipped, not stacked
+  seed(); setNow("2026-10-14T14:11:00Z"); await setupCall(); await X.tick(); setNow("2026-10-14T14:24:00Z");
+  const lk = TABLES.winston_settings.find((s) => s.key === "tick_lock"); lk.value = { until: new RealDate(NOW + 60e3).toISOString() };
+  eq((await X.watch()).skipped, "a tick is running", "lock respected");
+});
+Deno.test("replay 15: the app's live route needs the Otto email, writes nothing, and returns the estimate = (bid - what he paid) x 100; no bid = no estimate; the heartbeat rides on state", async () => {
+  seed(); setNow("2026-10-14T14:11:00Z"); await setupCall(); await X.tick();
+  setNow("2026-10-14T14:24:00Z"); W.bars.NVDA.push(barRow("2026-10-14T14:20:00Z", 201, 202, 200.8, 201.8)); W.opts.opt1.bid = 2.9; W.opts.opt1.ask = 3.0;
+  const jwt = (claims: any) => "Bearer x." + btoa(JSON.stringify(claims)).replace(/=+$/, "") + ".y";
+  const call = (fn: string, claims: any) => X.handle(new Request("https://x/functions/v1/winston?fn=" + fn, { headers: { authorization: jwt(claims) } }));
+  const good = { role: "authenticated", email: "ottotrader@vinecreativestudio.com", sub: "u" };
+  eq((await call("live", {})).status, 401, "no claims"); eq((await call("live", { role: "anon", email: good.email })).status, 401, "anon key");
+  dbLog.length = 0; W.calls.length = 0;
+  const j: any = await (await call("live", good)).json();
+  eq([j.ok, j.live.length, j.live[0].ticker, j.live[0].bid, j.live[0].est_pnl], [true, 1, "NVDA", 2.9, 40], "(2.90 - 2.50) x 100");
+  assert(j.live[0].bars.length >= 2 && j.live[0].under === 201.8, "bars + last price for the chart");
+  assert(dbLog.every((l) => l.method === "GET"), "the live route wrote nothing: " + JSON.stringify(dbLog.filter((l) => l.method !== "GET")));
+  assert(!W.calls.some((c) => /place|cancel|portfolio|orders|positions/.test(c.tool)), "no order or account tool");
+  W.opts.opt1.bid = 0; W.opts.opt1.ask = 3.0;
+  const k: any = await (await call("live", good)).json(); eq(k.live[0].est_pnl, null, "no bid = no estimate (never a guess)");
+  const st: any = await (await call("state", good)).json(); assert(st.heartbeat && st.heartbeat.at, "state carries the heartbeat: " + JSON.stringify(st.heartbeat));
+});

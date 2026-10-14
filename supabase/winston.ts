@@ -208,6 +208,17 @@ export function evalBars(plan: { dir: "up" | "down"; wrong_if_level: number; tar
   return null;
 }
 
+// v3.32: the target is a TOUCH, so while a trade is open the still-forming 10-minute bar counts too (the stop stays a completed-bar CLOSE).
+// Only bars that began at or after the entry count (the entry bar itself is skipped, same as evalBars), and only the unfinished bar is read here.
+export function intrabarTarget(plan: { dir: "up" | "down"; target_level: number }, bars: Bar[], enteredAtMs: number, now = nowMs()): Bar | null {
+  const done = new Set(completedBars(bars, 10, now).map((b) => b.t));
+  for (const b of bars) {
+    if (done.has(b.t) || b.t < enteredAtMs || b.t > now) continue;
+    if (plan.dir === "up" ? b.h >= plan.target_level : b.l <= plan.target_level) return b;
+  }
+  return null;
+}
+
 /* ------------------------------------------------------------------ contract choice (pure) */
 
 export type Row = { id: string; exp: string; strike: number; type: string; bid: number; ask: number; delta: number; vol: number; oi: number; label: string };
@@ -588,7 +599,7 @@ export async function closeTrade(t: any, reason: string, flags: string[] = []) {
 
 /* ------------------------------------------------------------------ managing open trades */
 
-export async function manageOpen(cfg: any, day: string, min: number, closeMin: number): Promise<{ closed: number }> {
+export async function manageOpen(cfg: any, day: string, min: number, closeMin: number, opt: { intrabar?: boolean } = {}): Promise<{ closed: number }> {
   const open: any[] = (await db("winston_trades?status=eq.open&select=*&order=id.asc")) || [];
   if (!open.length) return { closed: 0 };
   const flatMin = Math.min(num(cfg.flat_min) || 950, closeMin - 10);
@@ -601,6 +612,7 @@ export async function manageOpen(cfg: any, day: string, min: number, closeMin: n
     const ev = bars[String(t.ticker).toUpperCase()] ? evalBars({ dir: t.plan.dir, wrong_if_level: num(t.plan.wrong_if_level), target_level: num(t.plan.target_level) }, bars[String(t.ticker).toUpperCase()], entered) : null;
     let reason: string | null = null, flags: string[] = [];
     if (ev) { reason = ev.reason; flags = ev.flags; }
+    else if (opt.intrabar && bars[String(t.ticker).toUpperCase()] && intrabarTarget({ dir: t.plan.dir, target_level: num(t.plan.target_level) }, bars[String(t.ticker).toUpperCase()], entered)) { reason = "target"; flags = ["intrabar_touch"]; }
     else if (min >= flatMin || t.day !== day) reason = "flat_close";
     else if (nowMs() >= entered + num(t.plan.time_exit_min || 180) * 60e3) reason = "time";
     if (reason) { await closeTrade(t, reason, flags); closed++; continue; }
@@ -638,6 +650,7 @@ export async function tick(opts: { force?: boolean } = {}): Promise<any> {
   if (!(await takeLock("tick_lock", 4 * 60e3))) return { ok: true, skipped: "another tick is running" };
   try {
     const day = c.date;
+    await beat("tick");
     await db("winston_days?on_conflict=day", { method: "POST", headers: { prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ day, start_balance: cfg.paper_balance }) });
     const mgd = await manageOpen(cfg, day, c.min, c.closeMin);                      // 1. exits first, always (even when paused or locked)
     if (!cfg.enabled) return { ok: true, paused: true, closed: mgd.closed };
@@ -725,6 +738,45 @@ Decide now. Act on NEW coach posts (take or pass, with a reason) and on any idea
     await putSetting("tick_state", { day, snap, last_jason_id: Math.max(lastId, ...posts.map((p) => num(p.id)), 0), last_ai_ms: nowMs() });
     return { ok: true, closed: mgd.closed, results, notes: out?.notes || null };
   } finally { await freeLock("tick_lock"); }
+}
+
+/* ------------------------------------------------------------------ v3.32: the one-minute watch (only while a trade is open) */
+
+async function beat(kind: string, extra: any = {}) {
+  await putSetting("heartbeat", { at: new Date(nowMs()).toISOString(), kind, ...extra }).catch(() => {});
+}
+// Runs every minute from cron but does nothing unless a trade is open. No AI, no new entries: it only refreshes the mark and applies the same exit rules,
+// plus the intrabar target touch. It shares the tick lock so it never runs at the same moment as a tick or the flatten.
+export async function watch(opts: { force?: boolean } = {}): Promise<any> {
+  const c = marketClock();
+  if (!opts.force && !(c.status === "open" && c.min >= 571 && c.min <= c.closeMin - 1)) return { ok: true, skipped: "market not open" };
+  const open: any[] = (await db("winston_trades?status=eq.open&select=id&limit=1")) || [];
+  if (!open.length) { await beat("watch", { open: 0 }); return { ok: true, skipped: "no open trade" }; }
+  if (!(await takeLock("tick_lock", 90e3))) return { ok: true, skipped: "a tick is running" };
+  try {
+    const cfg = await getConfig();
+    const mgd = await manageOpen(cfg, c.date, c.min, c.closeMin, { intrabar: true });
+    await beat("watch", { open: 1, closed: mgd.closed });
+    return { ok: true, closed: mgd.closed };
+  } finally { await freeLock("tick_lock"); }
+}
+
+// Read-only, for the app: a fresh quote and the latest 10-minute bars for each open trade. Writes nothing.
+export async function liveForApp() {
+  const c = marketClock();
+  const open: any[] = (await db("winston_trades?status=eq.open&select=id,ticker,option_id,entry_ask,qty,opened_at,plan&order=id.asc&limit=3")) || [];
+  const out: any[] = [];
+  let bars: Record<string, Bar[]> = {};
+  try { if (open.length) bars = await bars10(open.map((t) => String(t.ticker)), c.date); } catch { /* chart unavailable */ }
+  for (const t of open) {
+    let q: Q | null = null;
+    try { q = await freshOptionQuote(t.option_id); } catch { /* estimate unavailable */ }
+    const b = (bars[String(t.ticker).toUpperCase()] || []).slice(-40);
+    const bid = q && q.bid > 0 ? q.bid : null;
+    out.push({ id: t.id, ticker: t.ticker, bid: bid, ask: q?.ask ?? null, under: b.length ? b[b.length - 1].c : null,
+      est_pnl: bid != null ? round2((bid - num(t.entry_ask)) * 100 * (t.qty || 1)) : null, at: new Date(nowMs()).toISOString(), bars: b.map((x) => [x.t, x.o, x.h, x.l, x.c]) });
+  }
+  return { ok: true, clock: { day: c.date, status: c.status, min: c.min }, live: out };
 }
 
 /* ------------------------------------------------------------------ routines, flatten, report */
@@ -825,6 +877,7 @@ export function deskUser(claims: any): string | null {
 }
 export async function stateForApp() {
   const cfg = await getConfig(), c = marketClock(), day = c.date;
+  const hb = await getSetting("heartbeat").catch(() => null);
   const [rules, trades, ideas, days, L] = await Promise.all([
     getRules(),
     db("winston_trades?select=*&order=id.desc&limit=400"),
@@ -838,7 +891,7 @@ export async function stateForApp() {
   const curve = (days || []).slice().reverse().map((d: any) => ({ day: d.day, end: d.end_balance }));
   return { ok: true, clock: { day, status: c.status, min: c.min }, config: cfg, limits: { ...L, cap_usd: isFinite(lim.capUsd) ? lim.capUsd : null, max_loss_usd: isFinite(lim.maxLossUsd) ? lim.maxLossUsd : null, locked: lim.locked },
     equity: eq.equity, cash: eq.cash, day_pnl: eq.day_pnl, week_pnl: eq.week_pnl, open: (trades || []).filter((t: any) => t.status === "open"), trades: trades || [], ideas: ideas || [],
-    days: days || [], today: (days || []).find((d: any) => d.day === day) || null, stats: computeStats(all), rules, curve };
+    heartbeat: hb || null, days: days || [], today: (days || []).find((d: any) => d.day === day) || null, stats: computeStats(all), rules, curve };
 }
 export async function setRule(body: any) {
   const id = String(body?.id || "");
@@ -880,16 +933,17 @@ export async function handle(req: Request): Promise<Response> {
   const u = new URL(req.url);
   const fn = u.searchParams.get("fn") || "state";
   const force = u.searchParams.get("force") === "1";
-  const CRON: Record<string, (o: any) => Promise<any>> = { tick, routine, sentiment, flatten, report: reportJob };
+  const CRON: Record<string, (o: any) => Promise<any>> = { tick, watch, routine, sentiment, flatten, report: reportJob };
   if (CRON[fn]) {
     if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
-    background(CRON[fn]({ force }).then((r) => wlog("cron_" + fn, r)).catch((e) => wlog("cron_" + fn + "_error", { msg: String((e as Error).message).slice(0, 200) })));
+    background(CRON[fn]({ force }).then((r) => (fn === "watch" && r?.skipped ? null : wlog("cron_" + fn, r))).catch((e) => wlog("cron_" + fn + "_error", { msg: String((e as Error).message).slice(0, 200) })));
     return json({ ok: true, started: fn }, 202);
   }
   const claims = jwtPayload(req.headers.get("authorization"));
   if (!deskUser(claims)) return json({ ok: false, error: "sign in with the Otto email" }, 401);
   try {
     if (fn === "state") return json(await stateForApp());
+    if (fn === "live") return json(await liveForApp());
     if (fn === "rule_set" && req.method === "POST") return json(await setRule(await req.json().catch(() => ({}))));
     if (fn === "config_set" && req.method === "POST") return json(await setEnabled(await req.json().catch(() => ({}))));
     return json({ ok: false, error: "unknown route" }, 404);
