@@ -822,6 +822,66 @@ svg.nc-svg{width:100%;height:auto;display:block}
 .nc-sugg{display:flex;flex-wrap:wrap;gap:6px}
 .nc-sugg button{font:inherit;font-size:12px;background:none;border:1px solid var(--rule);color:var(--ink-3);border-radius:999px;padding:3px 9px;cursor:pointer}
 
+/* v3.34 Scoreboard + grouped tabs (approved mockup scoreboard-mockup-v2.html) */
+@media(min-width:1100px){.dk-rail .dk-tabs button[data-go="scoreboard"]{font-size:9.4px;letter-spacing:-.25px}}
+.dk-sub{position:sticky;top:0;z-index:6;background:var(--bg);margin:0;padding:10px 18px 10px;flex-wrap:wrap}
+.sb{gap:12px}
+.sb .up{color:var(--up)}.sb .dn{color:var(--down)}.sb .mut{color:var(--ink-2)}
+.sb-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.sb-seg{display:flex;background:var(--s1);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+.sb-seg button,.sb-nav button,.sb-btn{background:none;border:0;color:var(--ink-2);padding:9px 16px;font:500 14px var(--body);cursor:pointer}
+.sb-seg button.on{background:var(--surface-3);color:var(--ink);font-weight:700}
+.sb-nav{display:flex;align-items:center;background:var(--s1);border:1px solid var(--rule);border-radius:10px}
+.sb-nav button{font-size:18px;padding:7px 14px}.sb-nav button:disabled{opacity:.3;cursor:default}
+.sb-nav .lbl{min-width:170px;text-align:center;font-weight:700;font-size:16px}
+.sb-btn{background:var(--s1);border:1px solid var(--rule);border-radius:10px}
+.sb-strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px}
+.sb-dchip{flex:0 0 auto;min-width:92px;background:var(--s1);border:1px solid var(--rule);border-radius:12px;padding:8px 10px;cursor:pointer;text-align:center}
+.sb-dchip.on{border-color:var(--ink);background:var(--surface-3)}.sb-dchip.inr{border-color:var(--ink-3)}
+.sb-dchip.key{cursor:default;border-style:dashed}
+.sb-dchip .d{font-size:12px;color:var(--ink-2)}.sb-dchip .a{font-size:15px;font-weight:800}.sb-dchip .b{font-size:13px;font-weight:700}
+.sb-verdict{background:var(--s1);border:1px solid var(--rule);border-radius:14px;padding:16px 18px;font-size:19px;line-height:1.5}
+.sb-verdict b{font-size:21px}
+.sb-lanes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.sb-lanes{grid-template-columns:1fr}.sb-nav .lbl{min-width:120px}}
+.sb-lane{background:var(--s1);border:1px solid var(--rule);border-radius:16px;padding:18px;border-top:4px solid #5AA9FF}
+.sb-lane.w{border-top-color:#C58BFF}
+.sb-lane h2{margin:0 0 2px;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.sb-lane .sub{font-size:12px;color:var(--ink-3);margin-bottom:10px}
+.sb-net{font-size:68px;font-weight:800;line-height:1;margin:6px 0 2px;font-variant-numeric:tabular-nums}
+.sb-netl{font-size:13px;color:var(--ink-2);margin-bottom:14px}
+.sb-wl{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sb-box{background:var(--surface-2);border-radius:12px;padding:12px 14px}
+.sb-box .n{font-size:34px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}.sb-box .l{font-size:12.5px;color:var(--ink-2)}
+.sb-note{font-size:12.5px;color:var(--ink-2);margin-top:10px}
+.sb-real{background:var(--s1);border:1px solid var(--rule);border-radius:16px;padding:16px 18px;display:flex;flex-wrap:wrap;gap:18px;align-items:center}
+.sb-real .t{flex:1;min-width:240px;color:var(--ink-2);font-size:14px}
+.sb-k{font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.sb-rn{font-size:44px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.sb-card{background:var(--s1);border:1px solid var(--rule);border-radius:16px;padding:16px 18px}
+.sb-card h3{margin:0 0 10px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.sb-leg{display:flex;gap:16px;font-size:13px;color:var(--ink-2);margin-bottom:6px}
+.sb-leg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.sb-tabs{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.sb-tabs button{background:var(--surface-2);border:1px solid var(--rule);color:var(--ink-2);border-radius:999px;padding:7px 14px;font:500 13px var(--body);cursor:pointer}
+.sb-tabs button.on{background:var(--surface-3);color:var(--ink);border-color:var(--ink-3)}
+.sb-li{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--rule)}
+.sb-li:first-child{border-top:0}
+.sb-chip{min-width:78px;text-align:center;font-size:12px;font-weight:700;border-radius:8px;padding:5px 0}
+.sb-chip.w{background:rgba(0,200,5,.15);color:var(--up)}.sb-chip.l{background:rgba(255,80,0,.15);color:var(--down)}
+.sb-chip.o{background:rgba(90,169,255,.15);color:#5AA9FF}.sb-chip.f{background:var(--surface-3);color:var(--ink-2)}
+.sb-chip.x{background:transparent;color:var(--ink-3);border:1px dashed var(--ink-3)}
+.sb-li .t{flex:1;min-width:0}.sb-li .t b{display:block;font-size:14.5px}.sb-li .t span{font-size:12.5px;color:var(--ink-2)}
+.sb-li .amt{font-size:24px;font-weight:800;text-align:right;min-width:92px;font-variant-numeric:tabular-nums}
+.sb-li .run{display:block;font-size:11.5px;color:var(--ink-3);font-weight:400}
+.sb-li.notaken{opacity:.75}
+.sb-nt{border-top:1px solid var(--rule);margin-top:8px;padding-top:8px}.sb-nt summary{cursor:pointer;color:var(--ink-2);font-size:13px}
+.sb-t{border-collapse:collapse;width:100%;font-size:14.5px}
+.sb-t td,.sb-t th{padding:9px 10px;border-top:1px solid var(--rule);text-align:left}
+.sb-t th{color:var(--ink-2);font-weight:600;font-size:12.5px}.sb-t th.j{color:#5AA9FF}.sb-t th.w{color:#C58BFF}
+.sb-t td.v{font-weight:700;font-variant-numeric:tabular-nums}.sb-t td.lead{background:rgba(255,255,255,.05)}
+.sb-dayrow{cursor:pointer}.sb-dayrow.sel td{background:var(--surface-3)}
+
 /* ---- v3.28: phone layout (screens under 1100px). Laptop layout untouched. ---- */
 @media (max-width:1099px){
   .dk{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
@@ -830,9 +890,9 @@ svg.nc-svg{width:100%;height:auto;display:block}
   .dk-rail .dk-tabs{display:contents}
   .dk-rail button,.dk-rail .dk-tabs button{display:none;width:auto;flex:1 1 0;min-height:56px;font-size:11.5px;border-radius:12px}
   .dk-rail button svg{width:22px;height:22px;margin-bottom:3px}
-  .dk-rail .dk-tabs button[data-go="desk"],.dk-rail .dk-tabs button[data-go="perf"],.dk-rail .dk-tabs button[data-go="coach"],.dk-rail .dk-tabs button[data-go="charts"],.dk-rail button[data-go="settings"]{display:grid}
+  .dk-rail .dk-tabs button[data-go="desk"],.dk-rail .dk-tabs button[data-go="scoreboard"],.dk-rail .dk-tabs button[data-go="prep"],.dk-rail button[data-go="settings"]{display:grid}
   .dk-rail .dk-tabs button[hidden]{display:none!important}
-  .dk-rail .dk-tabs button[data-go="desk"]{order:1}.dk-rail .dk-tabs button[data-go="perf"]{order:2}.dk-rail .dk-tabs button[data-go="coach"]{order:3}.dk-rail .dk-tabs button[data-go="charts"]{order:4}.dk-rail button[data-go="settings"]{order:5}
+  .dk-rail .dk-tabs button[data-go="desk"]{order:1}.dk-rail .dk-tabs button[data-go="scoreboard"]{order:2}.dk-rail .dk-tabs button[data-go="prep"]{order:3}.dk-rail button[data-go="settings"]{order:5}
   /* the phone strip sits at the top now */
   .dk-strip{order:-5;position:sticky;top:0;z-index:20;padding:10px 14px}
   .dk-banner{order:-4}
@@ -890,14 +950,9 @@ svg.nc-svg{width:100%;height:auto;display:block}
     <div class="dk-logo">O</div>
     <div class="dk-tabs" id="dkTabs">
     <button data-go="desk" class="on"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5a8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4z"/></svg>Desk</button>
-    <button data-go="charts" title="Night Charts: Otto's buy and sell boxes for the Mag-7, SPY and QQQ"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="9" width="3" height="7"/><rect x="14" y="5" width="3" height="8"/><path d="M8.5 6v3M8.5 16v2M15.5 3v2M15.5 13v3"/></svg>Charts</button>
-    <button data-go="prep" title="Morning Prep: your sentiment read, graded by Jarvis"><svg viewBox="0 0 24 24"><path d="M17 18a5 5 0 0 0-10 0"/><path d="M12 2v7M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1M8 6l4-4 4 4"/></svg>Prep</button>
-    <button data-go="market"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>Market</button>
-    <button data-go="perf"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Results</button>
-    <button data-go="coach" title="Coaches Corner: every coach post, scored as if we played it"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Coach</button>
+    <button data-go="scoreboard" title="Scoreboard: Josh + Baby J vs Winston, by day, with the running total"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Scoreboard</button>
+    <button data-go="prep" title="Pre-market: Prep, Market and Night Charts"><svg viewBox="0 0 24 24"><path d="M17 18a5 5 0 0 0-10 0"/><path d="M12 2v7M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1M8 6l4-4 4 4"/></svg>Pre-market</button>
     <button data-go="journal"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Journal</button>
-    <button data-go="review"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review</button>
-    <button data-go="score"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Score</button>
     <button data-go="playbook"><svg viewBox="0 0 24 24"><path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/></svg>Playbook</button>
     <button data-go="winston" title="Winston: a separate paper-only trader on its own $4,000 that collects data"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M9 16l3 2 3-2"/></svg>Winston</button>
     <button data-go="jason"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Calls</button>
@@ -2322,7 +2377,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.33.1";
+const BUILD="3.34.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3427,16 +3482,17 @@ async function dkOauthReturn(){
    4 Oct 2026, approved mockup otto-v3.1-mockup.html. The sentiment banner
    (Josh's intermarket sheet on live TradingView data, verdict only, no sizing),
    desktop Market / Journal / Review / Score / Jason pages inside the Desk shell. */
-const DK_VIEWS=["desk","charts","prep","market","perf","coach","journal","review","score","playbook","jason","winston","more","help"];
+const DK_VIEWS=["desk","scoreboard","charts","prep","market","perf","coach","journal","review","score","playbook","jason","winston","more","help"];
 function dkShow(v){
   if(!DK_VIEWS.includes(v))v="desk";
   DK.view=v;LS.set("dkView",v);
   $("#dk").classList.toggle("v-page",v!=="desk");$("#dk").classList.toggle("v-help",v==="help");
-  $$(".dk-rail button").forEach(b=>b.classList.toggle("on",b.dataset.go===v));
+  $$(".dk-rail button").forEach(b=>b.classList.toggle("on",b.dataset.go===dkRailKey(v)));
   if(v==="desk"){dkRenderMsgs(true);return}
   const pg=$("#dkPage");pg.scrollTop=0;
   if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see this page.</p></div>`;return}
-  ({charts:dkCharts,prep:dkPrep,market:dkMarket,perf:dkPerf,coach:dkCoach,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,winston:()=>dkWinston(),more:dkMore,help:dkHelp})[v]();
+  ({scoreboard:dkScoreboard,charts:dkCharts,prep:dkPrep,market:dkMarket,perf:dkPerf,coach:dkCoach,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,winston:()=>dkWinston(),more:dkMore,help:dkHelp})[v]();
+  dkSubBar();
 }
 const dkLoading=t=>`<div class="dk-empty" style="margin:60px auto">${esc(t||"Loading…")}</div>`;
 const dkErr=e=>`<div class="dk-empty dk-err" style="margin:60px auto">${esc(String(e&&e.message||e))}</div>`;
@@ -3713,6 +3769,208 @@ async function dkScore(){
   </div>`;
 }
 
+
+/* ================================================================ v3.34
+   14 Oct 2026. SCOREBOARD (approved mockup scoreboard-mockup-v2.html) and the grouped tabs.
+   One page for Josh + Baby J vs Winston: big Net / Money won / Money lost per side, a date toggle (Day / Week / All),
+   progression charts, a full score sheet, day-by-day and every trade. Reads only: the `score` route (now also returns `rows`)
+   and Winston's `state`. A trade is a WIN if it made money and a LOSS if it lost money, nothing else. Rejected / expired cards
+   are never counted. Josh + Baby J paper dollars are the Scoreboard's estimate (move x delta, 1 contract); real dollars come from
+   fills (status done); Winston dollars are his real-quote paper fills. Real and paper are never added together.
+   Grouped tabs: Scoreboard holds Results, Weekly review, Score detail, Coaches Corner; Pre-market holds Prep, Market, Night Charts. */
+const DK_GROUPS=[
+  {rail:"prep",items:[["prep","Prep"],["market","Market"],["charts","Night Charts"]]},
+  {rail:"scoreboard",items:[["scoreboard","Scoreboard"],["perf","Results"],["review","Weekly review"],["score","Score detail"],["coach","Coaches Corner"]]}];
+const dkGroupOf=v=>DK_GROUPS.find(g=>g.items.some(i=>i[0]===v));
+const dkRailKey=v=>{const g=dkGroupOf(v);return g?g.rail:v};
+function dkSubBar(){
+  const pg=$("#dkPage");if(!pg)return;
+  const g=dkGroupOf(DK.view),cur=pg.firstElementChild&&pg.firstElementChild.classList.contains("dk-sub")?pg.firstElementChild:null;
+  if(!g||DK.view==="desk"){if(cur)cur.remove();return}
+  if(cur&&cur.dataset.v===DK.view)return;
+  if(cur)cur.remove();
+  const nav=document.createElement("nav");nav.className="rtabs dk-sub";nav.dataset.v=DK.view;nav.setAttribute("aria-label","Sections");
+  nav.innerHTML=g.items.map(([k,l])=>`<button data-sub="${k}" class="${DK.view===k?"on":""}">${esc(l)}</button>`).join("");
+  pg.insertBefore(nav,pg.firstChild);
+}
+(function(){const pg=document.getElementById("dkPage");if(!pg)return;
+  new MutationObserver(()=>dkSubBar()).observe(pg,{childList:true});
+  pg.addEventListener("click",e=>{const b=e.target.closest(".dk-sub [data-sub]");if(b&&DK.open)dkShow(b.dataset.sub)});})();
+
+const SB={range:"day",day:null,tab:"j",j:null,w:null,werr:null};
+const sbEt=t=>{try{return new Date(t).toLocaleDateString("en-CA",{timeZone:"America/New_York"})}catch(e){return ""}};
+const sbMD=d=>{const p=String(d).split("-").map(Number);return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][p[1]-1]+" "+p[2]};
+const sbDow=d=>{const p=String(d).split("-").map(Number);return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(Date.UTC(p[0],p[1]-1,p[2])).getUTCDay()]};
+const sbWeek=d=>{const p=String(d).split("-").map(Number),t=new Date(Date.UTC(p[0],p[1]-1,p[2]));t.setUTCDate(t.getUTCDate()-((t.getUTCDay()+6)%7));return t.toISOString().slice(0,10)};
+const sbN=v=>{const n=+v;return v!=null&&v!==""&&isFinite(n)?n:null};
+const sbM=(v,plus)=>v==null?"—":(v<0?"−":(plus&&v>0?"+":""))+"$"+Math.abs(Math.round(v)).toLocaleString();
+const sbC=v=>v==null?"mut":v>0?"up":v<0?"dn":"mut";
+const sbTitle=t=>String(t||"").replace(/^\s*(PAPER|LIVE)(\s*[·-]\s*[A-Z]+)?\s*[—-]\s*/i,"").trim();
+function sbModel(){
+  const days={},slot=d=>days[d]||(days[d]={J:[],W:[],R:[],X:[]});
+  ((SB.j&&SB.j.rows)||[]).forEach(r=>{
+    const d=sbEt(r.at);if(!d)return;
+    if(r.status==="paper")slot(d).J.push({r,usd:sbN(r.est)});                 // usd null = not scored yet
+    else if(r.status==="done")slot(d).R.push({r,usd:sbN(r.pnl)});             // real money
+    else if(r.status==="rejected"||r.status==="expired")slot(d).X.push({r,usd:sbN(r.est)});   // never opened: never counted
+  });
+  ((SB.w&&SB.w.trades)||[]).forEach(t=>{if(t.experiment)return;const d=t.day||sbEt(t.opened_at);if(!d)return;
+    slot(d).W.push({t,open:t.status==="open",usd:t.status==="open"?null:sbN(t.pnl_realistic)})});
+  const today=(SB.w&&SB.w.clock&&SB.w.clock.day)||sbEt(Date.now());
+  slot(today);
+  return {days,keys:Object.keys(days).sort(),today};
+}
+const sbVals=(m,d,k)=>m.days[d][k].filter(x=>x.usd!=null).map(x=>x.usd);
+function sbStats(a){
+  const w=a.filter(x=>x>0),l=a.filter(x=>x<0),won=w.reduce((s,x)=>s+x,0),lost=l.reduce((s,x)=>s+x,0);
+  return {n:a.length,won,lost,net:won+lost,wins:w.length,losses:l.length,rate:(w.length+l.length)?w.length/(w.length+l.length):null,
+    bigW:w.length?Math.max(...w):null,bigL:l.length?Math.min(...l):null,avgW:w.length?won/w.length:null,avgL:l.length?lost/l.length:null};
+}
+function sbRange(m){
+  const i=Math.max(0,m.keys.indexOf(SB.day)),sel=m.keys[i];
+  const ks=SB.range==="day"?[sel]:SB.range==="week"?m.keys.filter(k=>sbWeek(k)===sbWeek(sel)&&k<=sel):m.keys.filter(k=>k<=sel);
+  return {i,sel,ks};
+}
+const sbGather=(m,ks,k)=>ks.flatMap(d=>sbVals(m,d,k));
+const sbDayNet=(m,d,k)=>{const a=sbVals(m,d,k);return a.length?sbStats(a).net:null};
+function sbLabel(m,r){return SB.range==="day"?sbMD(r.sel)+(r.sel===m.today?" (today)":""):SB.range==="week"?"Week of "+sbMD(r.ks[0]):"All days to "+sbMD(r.sel)}
+
+function sbLane(k,title,sub,t,extra){
+  if(!t.n)return `<div class="sb-lane ${k}"><h2>${title}</h2><div class="sub">${sub}</div><div class="sb-net mut">—</div><div class="sb-netl">No trades counted</div>${extra||""}</div>`;
+  return `<div class="sb-lane ${k}"><h2>${title}</h2><div class="sub">${sub}</div>
+    <div class="sb-net ${sbC(t.net)}">${sbM(t.net,true)}</div><div class="sb-netl">Net</div>
+    <div class="sb-wl"><div class="sb-box"><div class="n up">${sbM(t.won,true)}</div><div class="l">Money won · ${t.wins} winning trade${t.wins===1?"":"s"}</div></div>
+    <div class="sb-box"><div class="n dn">${sbM(t.lost)}</div><div class="l">Money lost · ${t.losses} losing trade${t.losses===1?"":"s"}</div></div></div>
+    <div class="sb-note">${sbM(t.won,true)} won − ${sbM(-t.lost)} lost = <b class="${sbC(t.net)}">${sbM(t.net,true)}</b></div>${extra||""}`+`</div>`;
+}
+function sbBars(m){
+  const ks=m.keys.slice(-14),w=1100,h=210,pad=30,gw=(w-pad*2)/Math.max(ks.length,1),r=sbRange(m);
+  const vals=ks.flatMap(d=>[sbDayNet(m,d,"J"),sbDayNet(m,d,"W")]).filter(v=>v!=null);
+  if(!vals.length)return `<div class="sb-note">Nothing to chart yet.</div>`;
+  const mx=Math.max(...vals,50),mn=Math.min(...vals,-50),y=v=>12+(mx-v)/(mx-mn)*(h-42);
+  let s=`<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto" role="img" aria-label="Net by day, Josh + Baby J and Winston"><line x1="${pad}" x2="${w-pad}" y1="${y(0)}" y2="${y(0)}" stroke="#2c3138"/>`;
+  ks.forEach((d,i)=>{const x0=pad+i*gw,bw=gw*.32,on=r.ks.includes(d);
+    [["J",x0+gw*.14,"#5AA9FF"],["W",x0+gw*.14+bw+4,"#C58BFF"]].forEach(([k,x,c])=>{
+      const v=sbDayNet(m,d,k);if(v==null)return;const top=v>=0?y(v):y(0),bh=Math.max(Math.abs(y(v)-y(0)),1);
+      s+=`<rect data-d="${d}" x="${x}" y="${top}" width="${bw}" height="${bh}" rx="3" fill="${c}" opacity="${on?1:.35}" style="cursor:pointer"/>
+        <text x="${x+bw/2}" y="${v>=0?top-4:top+bh+11}" text-anchor="middle" style="fill:${on?"#F2F5F8":"#646C78"};font-size:10.5px">${sbM(v,true)}</text>`});
+    s+=`<text x="${x0+gw/2}" y="${h-6}" text-anchor="middle" style="fill:${d===r.sel?"#F2F5F8":"#98A1AD"};font-size:11px">${sbMD(d)}</text>`});
+  return s+"</svg>";
+}
+function sbLines(m){
+  const ks=m.keys,w=1100,h=200,pad=34;
+  if(ks.length<2)return `<div class="sb-note">The line needs at least two trading days.</div>`;
+  const cum=k=>{let run=0,started=false;return ks.map(d=>{const a=sbVals(m,d,k);if(a.length){started=true;run+=sbStats(a).net}return started?run:null})};
+  const J=cum("J"),W=cum("W"),all=[...J,...W,0].filter(v=>v!=null),mx=Math.max(...all),mn=Math.min(...all);
+  const x=i=>pad+i*(w-pad*2)/(ks.length-1),y=v=>12+(mx-v)/((mx-mn)||1)*(h-40),r=sbRange(m);
+  const pl=(a,c)=>{const pts=a.map((v,i)=>v==null?null:[x(i),y(v),i]).filter(Boolean);if(!pts.length)return "";
+    const last=pts[pts.length-1];
+    return `<polyline fill="none" stroke="${c}" stroke-width="3" points="${pts.map(p=>p[0]+","+p[1]).join(" ")}"/>`+pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="${ks[p[2]]===r.sel?6:3.5}" fill="${c}"/>`).join("")+
+      `<text x="${last[0]-6}" y="${last[1]-9}" text-anchor="end" style="fill:${c};font-size:12px;font-weight:700">${sbM(a[last[2]],true)}</text>`};
+  let s=`<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto" role="img" aria-label="Running total since the start"><line x1="${pad}" x2="${w-pad}" y1="${y(0)}" y2="${y(0)}" stroke="#2c3138"/>${pl(J,"#5AA9FF")}${pl(W,"#C58BFF")}`;
+  const step=Math.max(1,Math.ceil(ks.length/12));
+  ks.forEach((d,i)=>{if(i%step===0||i===ks.length-1)s+=`<text x="${x(i)}" y="${h-6}" text-anchor="middle" style="fill:${d===r.sel?"#F2F5F8":"#98A1AD"};font-size:11px">${sbMD(d)}</text>`});
+  return s+"</svg>";
+}
+function sbSheet(m,ks){
+  const J=sbStats(sbGather(m,ks,"J")),W=sbStats(sbGather(m,ks,"W"));
+  const dn=k=>ks.map(d=>sbDayNet(m,d,k)).filter(v=>v!=null),best=a=>a.length?Math.max(...a):null,worst=a=>a.length?Math.min(...a):null;
+  const nd=k=>ks.filter(d=>sbVals(m,d,k).length).length;
+  const per=(S,k)=>nd(k)?S.n/nd(k):null,has=S=>S.n>0;
+  const rows=[["Net",J.net,W.net,v=>sbM(v,true),"hi",1],["Money won",J.won,W.won,v=>sbM(v,true),"hi",1],["Money lost",J.lost,W.lost,v=>sbM(v),"hi",1],
+    ["Winning trades",J.wins,W.wins,v=>v,"hi"],["Losing trades",J.losses,W.losses,v=>v,"lo"],["Win rate",J.rate,W.rate,v=>v==null?"—":Math.round(v*100)+"%","hi"],
+    ["Average win",J.avgW,W.avgW,v=>v==null?"—":sbM(v,true),"hi",1],["Average loss",J.avgL,W.avgL,v=>v==null?"—":sbM(v),"hi",1],
+    ["Biggest win",J.bigW,W.bigW,v=>v==null?"—":sbM(v,true),"hi",1],["Biggest loss",J.bigL,W.bigL,v=>v==null?"—":sbM(v),"hi",1],
+    ["Best day",best(dn("J")),best(dn("W")),v=>v==null?"—":sbM(v,true),"hi",1],["Worst day",worst(dn("J")),worst(dn("W")),v=>v==null?"—":sbM(v,true),"hi",1],
+    ["Trades per day",per(J,"J"),per(W,"W"),v=>v==null?"—":v.toFixed(1),"none"]];
+  return `<tr><th></th><th class="j">Josh + Baby J</th><th class="w">Winston</th></tr>`+rows.map(([l,a,b,f,mode,money])=>{
+    let la="",lb="";const ok=!(a==null||b==null)&&!(l!=="Best day"&&l!=="Worst day"&&(!has(J)||!has(W)));
+    if(mode!=="none"&&ok&&a!==b){const aw=mode==="hi"?a>b:a<b;la=aw?"lead":"";lb=aw?"":"lead"}
+    const col=(v,S)=>money&&v!=null&&S.n?sbC(v):"";
+    return `<tr><td>${l}</td><td class="v ${la} ${col(a,J)}">${J.n||l.startsWith("Best")||l.startsWith("Worst")?f(a):"—"}</td><td class="v ${lb} ${col(b,W)}">${W.n||l.startsWith("Best")||l.startsWith("Worst")?f(b):"—"}</td></tr>`}).join("");
+}
+function sbDays(m,sel){
+  return `<tr><th>Date</th><th class="j">Josh + Baby J</th><th class="w">Winston</th><th>Ahead</th></tr>`+m.keys.slice().reverse().slice(0,60).map(d=>{
+    const a=sbDayNet(m,d,"J"),b=sbDayNet(m,d,"W");
+    return `<tr class="sb-dayrow ${d===sel?"sel":""}" data-d="${d}"><td>${sbDow(d)} ${sbMD(d)}</td><td class="v ${sbC(a)}">${sbM(a,true)}</td><td class="v ${sbC(b)}">${sbM(b,true)}</td>
+      <td class="mut">${a==null||b==null?"—":a>b?"Josh + Baby J":b>a?"Winston":"Even"}</td></tr>`}).join("");
+}
+function sbList(m,d){
+  const day=m.days[d];let html="";
+  const chip=(o,l)=>`<span class="sb-chip ${o}">${l}</span>`;
+  if(SB.tab==="j"){
+    const rows=day.J.concat(day.R).slice().sort((a,b)=>String(a.r.at).localeCompare(String(b.r.at)));let run=0;
+    const items=rows.map(x=>{const real=x.r.status==="done",u=x.usd;if(u!=null)run+=(real?0:u);
+      const o=u==null?"o":u>0?"w":u<0?"l":"f",lab=u==null?(real?"OPEN":"SCORING"):u>0?"WIN":u<0?"LOSS":"FLAT";
+      return `<div class="sb-li">${chip(o,lab)}<div class="t"><b>${esc(sbTitle(x.r.title))}</b><span>${esc(winET(x.r.at))} · ${esc(x.r.source||"desk")}${real?" · <b style='color:var(--warn)'>REAL MONEY</b>":""}</span></div>
+        <div class="amt ${sbC(u)}">${u==null?"—":sbM(u,true)}${u!=null&&!real?`<span class="run">running ${sbM(run,true)}</span>`:""}</div></div>`}).reverse();
+    html=items.join("")||`<div class="sb-note">No Josh + Baby J trades on this day.</div>`;
+    if(day.X.length)html+=`<details class="sb-nt"><summary>Not taken (${day.X.length}): rejected or expired cards, never opened, not in any total</summary>${day.X.slice().sort((a,b)=>String(b.r.at).localeCompare(String(a.r.at))).map(x=>
+      `<div class="sb-li notaken">${chip("x","NOT TAKEN")}<div class="t"><b>${esc(sbTitle(x.r.title))}</b><span>${esc(winET(x.r.at))} · ${esc(x.r.source||"desk")} · ${esc(x.r.status)}</span></div><div class="amt mut" style="text-decoration:line-through;font-size:16px">${x.usd==null?"":sbM(x.usd)}</div></div>`).join("")}</details>`;
+  }else{
+    let run=0;
+    const rows=day.W.slice().sort((a,b)=>String(a.t.opened_at).localeCompare(String(b.t.opened_at)));
+    html=rows.map(x=>{const t=x.t,u=x.usd;if(u!=null)run+=u;
+      const o=x.open?"o":u>0?"w":u<0?"l":"f",lab=x.open?"OPEN":u>0?"WIN":u<0?"LOSS":"FLAT";
+      return `<div class="sb-li">${chip(o,lab)}<div class="t"><b>${esc(t.label||t.ticker)}</b><span>${esc(winET(t.opened_at))}${x.open?" · still open":" → "+esc(winET(t.closed_at))+" · "+esc(WIN_WHY[t.exit_reason]||t.exit_reason||"")} · ${esc(winSrc(t.source))}</span></div>
+        <div class="amt ${sbC(u)}">${u==null?"—":sbM(u,true)}${u!=null?`<span class="run">running ${sbM(run,true)}</span>`:""}</div></div>`}).reverse().join("")||`<div class="sb-note">${SB.werr?"Winston's numbers are unavailable right now: "+esc(SB.werr):"No Winston trades on this day."}</div>`;
+  }
+  return html;
+}
+function sbDraw(keep){
+  const pg=$("#dkPage"),m=sbModel(),r=sbRange(m),sy=pg.scrollTop;
+  if(!m.keys.length){pg.innerHTML=`<div class="dkp">${dkLoading("No trades recorded yet.")}</div>`;return}
+  const J=sbStats(sbGather(m,r.ks,"J")),W=sbStats(sbGather(m,r.ks,"W")),lab=sbLabel(m,r);
+  const scoring=r.ks.reduce((s,d)=>s+m.days[d].J.filter(x=>x.usd==null).length,0),wopen=r.ks.reduce((s,d)=>s+m.days[d].W.filter(x=>x.open).length,0);
+  const RR=r.ks.flatMap(d=>m.days[d].R),RV=RR.filter(x=>x.usd!=null).map(x=>x.usd),RS=sbStats(RV),ropen=RR.filter(x=>x.usd==null).length;
+  const v=(S,none)=>S.n?`are <b class="${sbC(S.net)}">${S.net>=0?"up":"down"} ${sbM(Math.abs(S.net))}</b>`:none;
+  const lead=J.n&&W.n&&J.net!==W.net?(J.net>W.net?["Josh + Baby J",J.net-W.net,"lead"]:["Winston",W.net-J.net,"leads"]):null;
+  const ix=r.i,prev=m.keys[ix-1],next=m.keys[ix+1];
+  const strip=m.keys.slice(-60).map(d=>{const a=sbDayNet(m,d,"J"),b=sbDayNet(m,d,"W");
+    return `<div class="sb-dchip ${d===r.sel?"on":r.ks.includes(d)?"inr":""}" data-d="${d}"><div class="d">${sbDow(d)} ${sbMD(d)}</div><div class="a ${sbC(a)}">${sbM(a,true)}</div><div class="b ${sbC(b)}">${sbM(b,true)}</div></div>`}).join("")+
+    `<div class="sb-dchip key"><div class="d">top: Josh + Baby J</div><div class="d">bottom: Winston</div></div>`;
+  const realTxt=r.ks.length===1&&r.sel===m.today&&!RR.length?"No live trades placed today.":RR.length?`${RS.wins} winning and ${RS.losses} losing real trade${RS.n===1?"":"s"}${ropen?`, ${ropen} still open`:""}.`:"No live trades in this period.";
+  pg.innerHTML=`<div class="dkp sb">
+    <div class="sb-bar"><div class="sb-nav"><button id="sbPrev" ${prev?"":"disabled"} aria-label="Previous trading day">◀</button><div class="lbl">${sbDow(r.sel)} ${sbMD(r.sel)}${r.sel===m.today?" (today)":""}</div><button id="sbNext" ${next?"":"disabled"} aria-label="Next trading day">▶</button></div>
+      <button class="sb-btn" id="sbToday">Today</button>
+      <div class="sb-seg" id="sbSeg">${[["day","Day"],["week","Week"],["all","All"]].map(([k,l])=>`<button data-r="${k}" class="${SB.range===k?"on":""}">${l}</button>`).join("")}</div>
+      <button class="sb-btn" id="sbRefresh" title="Reload the numbers">Refresh</button></div>
+    <div class="sb-strip">${strip}</div>
+    <div class="sb-verdict"><b>${esc(lab)}:</b> Josh + Baby J ${v(J,"had no trades")}. Winston ${SB.werr?"is unavailable right now":v(W,"had no trades").replace("are ","is ")}. ${lead?`<b>${lead[0]}</b> ${lead[2]} by ${sbM(lead[1])}.`:""}${scoring?` <span class="mut" style="font-size:14px">${scoring} trade${scoring===1?" is":"s are"} still being scored and ${scoring===1?"is":"are"} not in the totals yet.</span>`:""}${wopen?` <span class="mut" style="font-size:14px">Winston has ${wopen} trade${wopen===1?"":"s"} open; counted when closed.</span>`:""}</div>
+    <div class="sb-lanes">${sbLane("j","Josh + Baby J","Practice (paper). Dollars are estimates for 1 contract.",J)}${sbLane("w","Winston",SB.werr?"Unavailable: "+esc(SB.werr):"Practice (paper), own $4,000, real quotes in and out.",W)}</div>
+    <div class="sb-real"><div><div class="sb-k">Real money · ${esc(lab)}</div><div class="sb-rn ${RS.n?sbC(RS.net):""}">${RS.n?sbM(RS.net,true):"$0"}</div>${RS.n?`<div class="sb-note" style="margin:4px 0 0">${sbM(RS.won,true)} won · ${sbM(RS.lost)} lost</div>`:""}</div>
+      <div class="t"><b style="color:var(--ink)">${realTxt}</b> Real money (trades placed through Otto's cards and filled) is never added to the practice numbers above. Trades made outside Otto show on the Results page.</div></div>
+    <div class="sb-card"><h3>Progression: net by day</h3><div class="sb-leg"><span><i style="background:#5AA9FF"></i>Josh + Baby J</span><span><i style="background:#C58BFF"></i>Winston</span></div><div id="sbBars">${sbBars(m)}</div>
+      <h3 style="margin-top:16px">Progression: running total since the start</h3><div id="sbLines">${sbLines(m)}</div>
+      <div class="sb-note">Bars are each day's net (above the line = made money, below = lost). The lines add the days up, so you can see who is pulling ahead. Click a bar, a day above or a row below to jump to it. Winston's line starts on his first trade day.</div></div>
+    <div class="sb-card"><h3>Full score sheet · ${esc(lab)}</h3><table class="sb-t">${sbSheet(m,r.ks)}</table>
+      <div class="sb-note">The shaded cell is the better one for that row. Both sides trade 1 contract. Josh + Baby J dollars are an <b>estimate</b> (price move × delta, same as the Score detail page). Winston's use real quotes in and out. So compare the signs and the habits, not the pennies. Winston's test trades (E1/E2) are left out.</div></div>
+    <div class="sb-card"><h3>Day by day</h3><table class="sb-t">${sbDays(m,r.sel)}</table></div>
+    <div class="sb-card"><h3>Every trade · ${sbDow(r.sel)} ${sbMD(r.sel)}, newest first</h3>
+      <div class="sb-tabs" id="sbTabs"><button data-l="j" class="${SB.tab==="j"?"on":""}">Josh + Baby J</button><button data-l="w" class="${SB.tab==="w"?"on":""}">Winston</button></div>
+      <div id="sbList">${sbList(m,r.sel)}</div>
+      <div class="sb-note">A trade is a win if it made money and a loss if it lost money. Cards that were rejected or expired never opened and are in no total.</div></div>
+    <div class="sb-card"><h3>More detail</h3><div class="sb-note" style="margin:0 0 8px">The older pages are one click away (and still in the bar at the top):</div>
+      <div class="sb-tabs">${[["score","Score detail: hit rate, by source and setup, proof run"],["review","Weekly review"],["perf","Results: weekly P&L and big-loss days"],["coach","Coaches Corner: every coach post scored"]].map(([k,l])=>`<button data-go-old="${k}">${esc(l)}</button>`).join("")}</div></div></div>`;
+  pg.scrollTop=keep?sy:0;
+  const go=d=>{SB.day=d;sbDraw(true)};
+  pg.querySelectorAll("[data-d]").forEach(el=>el.addEventListener("click",()=>{if(el.classList.contains("sb-dayrow")){SB.range="day";SB.day=el.dataset.d;sbDraw(false)}else go(el.dataset.d)}));
+  const pv=$("#sbPrev"),nx=$("#sbNext");if(pv)pv.onclick=()=>{if(prev)go(prev)};if(nx)nx.onclick=()=>{if(next)go(next)};
+  $("#sbToday").onclick=()=>go(m.today);$("#sbRefresh").onclick=()=>dkScoreboard(true);
+  pg.querySelectorAll("#sbSeg [data-r]").forEach(b=>b.onclick=()=>{SB.range=b.dataset.r;sbDraw(true)});
+  pg.querySelectorAll("#sbTabs [data-l]").forEach(b=>b.onclick=()=>{SB.tab=b.dataset.l;sbDraw(true)});
+  pg.querySelectorAll("[data-go-old]").forEach(b=>b.onclick=()=>dkShow(b.dataset.goOld));
+}
+async function dkScoreboard(keep){
+  const pg=$("#dkPage");
+  if(!keep||!SB.j)pg.innerHTML=dkLoading("Adding up every trade…");
+  const [a,b]=await Promise.allSettled([dkApi("score"),winApi("state")]);
+  if(DK.view!=="scoreboard")return;
+  if(a.status!=="fulfilled"){pg.innerHTML=dkErr(a.reason);return}
+  SB.j=a.value;SB.w=b.status==="fulfilled"?b.value:null;SB.werr=b.status==="fulfilled"?null:String((b.reason&&b.reason.message)||b.reason).slice(0,120);
+  const m=sbModel();if(!SB.day||!m.days[SB.day])SB.day=m.today;
+  sbDraw(keep);
+}
 
 /* ================================================================ v3.31
    14 Oct 2026. Winston: a separate, paper-only trader on its own $4,000. Three views
@@ -4936,6 +5194,7 @@ window.addEventListener("hashchange",ncFromHash);window.addEventListener("load",
 var LAY_TABS=[...document.querySelectorAll("#dkTabs button[data-go]")].map(b=>b.dataset.go);
 var LAY_LABEL=Object.fromEntries([...document.querySelectorAll("#dkTabs button[data-go]")].map(b=>[b.dataset.go,b.lastChild.textContent.trim()]));
 var LAY_LOCK=new Set(["desk"]);
+var LAY_OLD={prep:"Prep"};   // v3.34: Prep became "Pre-market"; a saved layout that still holds the old default name takes the new one
 var LAY_CARDS={left:["night-charts","watcher","today","morning-read","watchlist","jason-s-homework","jason-s-levels-today"],
   right:["in-a-trade","robinhood","protected-trades","waiting-for-approval","jason-today","tradingview-alerts","jarvis-brain"]};
 var LAY=(()=>{try{return JSON.parse(localStorage.getItem("otto:layout")||"null")}catch(e){return null}})();
@@ -4944,7 +5203,7 @@ const layCur=()=>LAY_DRAFT||LAY||{};
 function layTabs(){
   if(!LAY_TABS)return [];
   const saved=layCur().tabs||[],seen=new Set(),out=[];
-  for(const t of saved)if(LAY_TABS.includes(t.k)&&!seen.has(t.k)){seen.add(t.k);out.push({k:t.k,l:(t.l||"").trim()||LAY_LABEL[t.k],hide:!!t.hide&&!LAY_LOCK.has(t.k)})}
+  for(const t of saved)if(LAY_TABS.includes(t.k)&&!seen.has(t.k)){seen.add(t.k);out.push({k:t.k,l:((t.l||"").trim()&&(t.l||"").trim()!==(LAY_OLD[t.k]||"\u0000"))?(t.l||"").trim():LAY_LABEL[t.k],hide:!!t.hide&&!LAY_LOCK.has(t.k)})}
   // v3.25: a tab added in a new build goes in at its default place (Charts right after Desk), not at the bottom
   for(const k of LAY_TABS)if(!seen.has(k)){const i=LAY_TABS.indexOf(k),prev=LAY_TABS.slice(0,i).reverse().find(p=>out.some(o=>o.k===p));
     out.splice(prev?out.findIndex(o=>o.k===prev)+1:0,0,{k,l:LAY_LABEL[k],hide:false});seen.add(k)}

@@ -2592,6 +2592,14 @@ async function scoreTick(budget = 6) {
   }
   return { ok: true, graded: n };
 }
+/* v3.34: every opening option card, compact, so the Scoreboard can total each day (paper = pnl_est, real = pnl from otto_trades). */
+export function scoreRows(ideas: any[], pnlBy: Record<string, number>) {
+  return (ideas || []).slice(0, 400).map((a: any) => ({
+    id: a.id, title: a.title, at: a.created_at, status: a.status, source: srcOf(a),
+    state: a.outcome?.state ?? null, est: a.outcome?.pnl_est ?? null, r: a.outcome?.r ?? null,
+    pnl: pnlBy[a.id] ?? null,
+  }));
+}
 async function scorecard() {
   const acts = await db("otto_actions?select=*&order=created_at.desc&limit=400");
   const ideas = acts.filter((a: any) => (a.calls || []).some((c: any) => c.tool === "place_option_order" &&
@@ -2632,6 +2640,7 @@ async function scorecard() {
     est: (() => { const s2 = scored(ideas).filter((a: any) => a.outcome.pnl_est != null);
       return { n: s2.length, total: s2.reduce((x: number, a: any) => x + Number(a.outcome.pnl_est), 0), per: s2.length ? Math.round(s2.reduce((x: number, a: any) => x + Number(a.outcome.pnl_est), 0) / s2.length) : null }; })(),
     proof: await (async () => { const st = await proofStart(); const today = marketClock().date; return { start: st, day: Math.max(0, Math.min(14, tradingDaysBetween(st, today))), of: 14 }; })(),
+    rows: scoreRows(ideas, pnlBy),
     recent: ideas.slice(0, 25).map((a: any) => ({ id: a.id, title: a.title, at: a.created_at, status: a.status, source: srcOf(a), trigger: a.plan?.trigger || null,
       setup: a.plan?.setup || null, verdict: a.banner?.verdict || null, outcome: a.outcome || null, pnl: pnlBy[a.id] ?? null })),
   };
