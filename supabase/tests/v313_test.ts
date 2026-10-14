@@ -1933,7 +1933,7 @@ const MSFT_DAY = () => [
   o26("e2", "2026-10-09T14:36:24Z", 527.5, "open", 4.00), o26("x2", "2026-10-09T14:46:44Z", 527.5, "close", 3.20)];
 function r26(iso = "2026-10-09T15:00:00Z", limits: any = {}) {
   reset(); setNow(iso); (M as any).clearCacheForTest();
-  T.otto_settings = [{ key: "limits", value: { live_coach_call: true, live_coach_level: true, live_jarvis: true, ...limits } }];   // v3.27: every source may go live here, so these tests still prove the kill-switch / size-cap paper path       // v3.26 defaults: size cap 30% ON, kill switch ON
+  T.otto_settings = [{ key: "limits", value: { live_coach_call: true, live_coach_level: true, live_jarvis: true, size_cap_pct: 30, ...limits } }];   // v3.27: every source may go live here, so these tests still prove the kill-switch / size-cap paper path       // v3.26 defaults: size cap 30% ON, kill switch ON
   T.otto_activity = []; T.otto_jason = [];
 }
 const port = (v: number, bp = v) => (tool: string) => tool === "get_portfolio" ? { data: { total_value: String(v), buying_power: { buying_power: String(bp) } } } : null;

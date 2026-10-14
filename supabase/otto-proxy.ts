@@ -2677,6 +2677,41 @@ function cronAllowed(req: Request) {
   const s = Deno.env.get("OTTO_CRON_SECRET") || "";
   return s.length >= 16 && req.headers.get("x-otto-cron") === s;
 }
+/* ===================================================================== v3.31 Winston market-data gateway
+   14 Oct 2026. Winston (the paper-only trader) runs as his own Edge Function and holds NO Robinhood or TradingView sign-in.
+   When he needs market data he asks this route. It is: cron-secret only; a hard allow-list of read-only MARKET-DATA tools;
+   and it refuses anything about accounts, positions, orders, P&L, alerts or watchlists, and anything that writes — even if a
+   tool name were ever added to the allow-list by mistake (the deny pattern is checked first). It never returns Josh + Baby J's data. */
+export const WINSTON_ALLOW: Record<string, Set<string>> = {
+  rh: new Set(["get_option_chains", "get_option_instruments", "get_option_quotes", "get_option_historicals",
+    "get_equity_quotes", "get_equity_historicals", "get_equity_technical_indicators", "get_earnings_calendar",
+    "get_index_quotes", "search"]),
+  tv: new Set(["mcp-tv-get-symbol-data", "mcp-tv-get-symbol-data-batch", "mcp-tv-get-ohlcv", "mcp-tv-get-news",
+    "mcp-tv-get-news-story", "mcp-tv-get-technicals-rating", "mcp-tv-get-earnings-calendar",
+    "mcp-tv-get-economic-calendar", "mcp-tv-get-screener-columns", "mcp-tv-run-screener", "mcp-tv-search-symbols"]),
+};
+export const WINSTON_DENY = /place|cancel|exercise|review_|create|update|delete|add_|remove|stop|restart|portfolio|position|order|pnl|account|alert|watchlist|trade_approval|tax|margin|upgrade/i;
+export function winstonGatewayCheck(service: unknown, tool: unknown, args: unknown): { ok: true } | { ok: false; error: string } {
+  const sv = String(service || ""), tl = String(tool || "");
+  if (!WINSTON_ALLOW[sv]) return { ok: false, error: "service not allowed" };
+  if (WINSTON_DENY.test(tl)) return { ok: false, error: "tool refused: " + tl };
+  if (!WINSTON_ALLOW[sv].has(tl)) return { ok: false, error: "tool not on the market-data allow-list: " + tl };
+  if (args != null && (typeof args !== "object" || Array.isArray(args))) return { ok: false, error: "args must be an object" };
+  if (args && Object.keys(args as object).some((k) => /account/i.test(k))) return { ok: false, error: "account arguments are not allowed" };
+  return { ok: true };
+}
+export async function winstonGateway(body: any) {
+  const chk = winstonGatewayCheck(body?.service, body?.tool, body?.args);
+  if (!chk.ok) return { status: 403, out: { ok: false, error: chk.error } };
+  try {
+    const res = await call(String(body.service), String(body.tool), body.args || {});
+    const j = mcpJson(res);
+    return { status: 200, out: { ok: true, data: j ?? mcpText(res).slice(0, 60000) } };
+  } catch (e) {
+    return { status: 502, out: { ok: false, error: String((e as Error).message || e).slice(0, 300) } };
+  }
+}
+
 function background(p: Promise<unknown>) {
   const er = (globalThis as any).EdgeRuntime;
   if (er?.waitUntil) er.waitUntil(p.catch((e) => console.error("background", e))); else p.catch((e) => console.error("background", e));
@@ -4429,7 +4464,7 @@ async function pushTest(b: any) {
 const LIMIT_DEFAULTS: any = { phase: 1, max_trade_loss: 100, weekly_loss: 150, max_trades_day: 2, monthly_goal_pct: 5, warn_pct: 20, big_day: 500,
   auto_close: true, review_min: 15, max_trade_pct: 10, weekly_pct: 20, daily_losses: 2,
   // v3.26 (Ifoma, 9 Oct): every guardrail is on/off + a number in Settings. Size cap and kill switch are new.
-  size_cap_on: true, size_cap_pct: 30, max_loss_on: true, daily_on: true, daily_x: 2, weekly_on: true, trades_on: true,
+  size_cap_on: true, size_cap_pct: 25, max_loss_on: true, daily_on: true, daily_x: 2, weekly_on: true, trades_on: true,
   kill_on: true, kill_daily: true, kill_weekly: true, kill_trades: true,
   // v3.27: which ideas may go LIVE (real money). Everything else is a PAPER card: shown, scored, never approvable.
   live_coach_call: true, live_coach_level: false, live_jarvis: false };
@@ -6520,6 +6555,12 @@ Deno.serve(async (req) => {
       if (isTradingDay(c.date) && c.min >= 965 && c.min <= 980 && c.min % 5 === 0) { try { await prepGradeTick(); } catch (e) { console.error("prep grade", e); } }   // v3.18
     })());
     return json({ ok: true, started: "watch", clock: c.status }, 202);
+  }
+  if (fn0 === "winston_data") {      // v3.31: read-only market data for Winston (cron secret only; allow-list in winstonGatewayCheck)
+    if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
+    if (req.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
+    const g = await winstonGateway(await req.json().catch(() => ({})));
+    return json(g.out, g.status);
   }
   if (fn0 === "cron_charts") {      // v3.25: every 10 min; works only in the night (8:30–10 PM) and 8:45 AM windows
     if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);

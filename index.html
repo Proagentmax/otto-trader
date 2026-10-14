@@ -869,6 +869,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
     <button data-go="review"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review</button>
     <button data-go="score"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Score</button>
     <button data-go="playbook"><svg viewBox="0 0 24 24"><path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/></svg>Playbook</button>
+    <button data-go="winston" title="Winston: a separate paper-only trader on its own $4,000 that collects data"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M9 16l3 2 3-2"/></svg>Winston</button>
     <button data-go="jason"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Calls</button>
     <button data-go="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
     <button data-go="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>Help</button>
@@ -2285,7 +2286,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.28.0";
+const BUILD="3.31.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3390,7 +3391,7 @@ async function dkOauthReturn(){
    4 Oct 2026, approved mockup otto-v3.1-mockup.html. The sentiment banner
    (Josh's intermarket sheet on live TradingView data, verdict only, no sizing),
    desktop Market / Journal / Review / Score / Jason pages inside the Desk shell. */
-const DK_VIEWS=["desk","charts","prep","market","perf","coach","journal","review","score","playbook","jason","more","help"];
+const DK_VIEWS=["desk","charts","prep","market","perf","coach","journal","review","score","playbook","jason","winston","more","help"];
 function dkShow(v){
   if(!DK_VIEWS.includes(v))v="desk";
   DK.view=v;LS.set("dkView",v);
@@ -3399,7 +3400,7 @@ function dkShow(v){
   if(v==="desk"){dkRenderMsgs(true);return}
   const pg=$("#dkPage");pg.scrollTop=0;
   if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see this page.</p></div>`;return}
-  ({charts:dkCharts,prep:dkPrep,market:dkMarket,perf:dkPerf,coach:dkCoach,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,more:dkMore,help:dkHelp})[v]();
+  ({charts:dkCharts,prep:dkPrep,market:dkMarket,perf:dkPerf,coach:dkCoach,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,winston:()=>dkWinston(),more:dkMore,help:dkHelp})[v]();
 }
 const dkLoading=t=>`<div class="dk-empty" style="margin:60px auto">${esc(t||"Loading…")}</div>`;
 const dkErr=e=>`<div class="dk-empty dk-err" style="margin:60px auto">${esc(String(e&&e.message||e))}</div>`;
@@ -3674,6 +3675,137 @@ async function dkScore(){
         <td><span class="dk-tag ${st(i.outcome)==="win"?"ok":st(i.outcome)==="loss"?"bad":""}">${esc(st(i.outcome))}${i.outcome&&i.outcome.r!=null?" "+R(+i.outcome.r):""}</span></td><td class="mono">${i.pnl!=null?dkMoney(+i.pnl):i.outcome&&i.outcome.pnl_est!=null?`<span class="mut">≈${dkMoney(+i.outcome.pnl_est)}</span>`:"—"}</td></tr>`).join("")}</table>`
       :`<div class="dk-empty" style="margin:30px auto">Starts empty on the day v3.1 goes live and fills itself as the Desk proposes trades.</div>`}</div>
   </div>`;
+}
+
+
+/* ================================================================ v3.31
+   14 Oct 2026. Winston: a separate, paper-only trader on its own $4,000. Three views
+   (Today / Report / Scoreboard) over the `winston` edge function. This tab only READS,
+   plus two switches: pause, and each rule's on/off. Winston never sees Josh + Baby J's
+   trades; this page may show both side by side because it runs in the browser. */
+var WIN={view:"today",j:null,day:null,busy:false,t:0};
+async function winApi(fn,body){
+  const t=await token(); if(!t)throw new Error("signed out");
+  const r=await fetch(SB_URL+"/functions/v1/winston?fn="+fn,{method:body?"POST":"GET",headers:{apikey:SB_ANON,authorization:"Bearer "+t,"content-type":"application/json"},body:body?JSON.stringify(body):undefined});
+  const j=await r.json().catch(()=>({ok:false,error:"HTTP "+r.status}));
+  if(!j.ok)throw new Error(j.error||("HTTP "+r.status));
+  return j;
+}
+const winM=n=>n==null||!isFinite(n)?"—":`<span class="${n>0?"up":n<0?"dn":"mut"}">${n<0?"−":n>0?"+":""}$${Math.abs(+n).toFixed(2)}</span>`;
+const winR=n=>n==null||!isFinite(n)?"—":`${n>=0?"+":"−"}${Math.abs(+n).toFixed(2)}R`;
+const winET=t=>{try{return new Date(t).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"})}catch(e){return ""}};
+const WIN_WHY={wrong_if:"wrong-if: 10-minute close through the level",target:"target touched",time:"time exit",flat_close:"flat by 3:50 PM",kill:"closed by the kill switch"};
+const winSrc=s=>String(s||"own").startsWith("coach:")?"coach post":"his own idea";
+function winTabs(){
+  return `<nav class="rtabs" aria-label="Winston sections">${[["today","Today"],["report","Report"],["score","Scoreboard"]].map(([k,l])=>`<button data-wv="${k}" class="${WIN.view===k?"on":""}">${l}</button>`).join("")}</nav>`;
+}
+function winHead(j){
+  const c=j.config||{},lk=j.limits&&j.limits.locked,mk=j.clock&&j.clock.status;
+  const st=!c.enabled?`<span class="dk-tag bad">PAUSED — no new trades</span>`:lk?`<span class="dk-tag bad">LOCKED — ${esc(lk.why)} (until ${esc(lk.until)})</span>`:`<span class="dk-tag ok">ON</span>`;
+  return `<div class="dkp-head"><h2>Winston</h2><span class="dk-tag">PAPER ONLY · own $${(+c.paper_balance||4000).toLocaleString()}</span> ${st}
+    <span class="mut" style="flex:1 1 280px">A separate trader that collects data. It never places a real order and never sees Josh + Baby J's trades. Market: ${esc(mk||"—")}.</span>
+    <button class="dk-btn ${c.enabled?"sec":"go"}" id="winPause">${c.enabled?"Pause Winston":"Resume Winston"}</button></div>`;
+}
+function winTradeRows(list,withDay){
+  if(!list.length)return `<div class="dk-empty" style="margin:24px auto">None yet.</div>`;
+  return `<div style="overflow:auto"><table class="dkt"><tr>${withDay?"<th>Day</th>":""}<th>Opened</th><th>Contract</th><th>From</th><th>Why in</th><th>In (ask)</th><th>Out (bid)</th><th>Why out</th><th>Real P&amp;L</th><th>At mid</th><th>R</th><th>Rules</th></tr>
+  ${list.map(t=>{const p=t.plan||{},open=t.status==="open";
+    return `<tr>${withDay?`<td>${esc(t.day)}</td>`:""}<td>${esc(winET(t.opened_at))}</td><td><b>${esc(t.label||t.ticker)}</b>${t.experiment?` <span class="dk-tag">${esc(t.experiment)} test</span>`:""}</td><td class="mut">${esc(winSrc(t.source))}</td>
+      <td class="mut" style="max-width:260px">${esc(p.thesis||"—")}<div style="font-size:11px">wrong if ${esc(p.wrong_if_level)} · target ${esc(p.target_level)}</div></td>
+      <td class="mono">${t.entry_ask!=null?(+t.entry_ask).toFixed(2):"—"}</td><td class="mono">${open?"open":t.exit_bid!=null?(+t.exit_bid).toFixed(2):"—"}</td>
+      <td class="mut">${open?"still open":esc(WIN_WHY[t.exit_reason]||t.exit_reason||"")}${(t.flags||[]).length?`<div style="font-size:11px;color:#ffc27a">${esc((t.flags||[]).join(", ").replace(/_/g," "))}</div>`:""}</td>
+      <td class="mono">${open?"—":winM(+t.pnl_realistic)}</td><td class="mono">${open?"—":winM(+t.pnl_mid)}</td><td class="mono">${open?"—":winR(t.r_multiple)}</td>
+      <td>${open?"":t.followed_rules===false?`<span class="dk-tag bad" title="${esc((t.broke||[]).join(" | "))}">broke ${(t.broke||[]).length}</span>`:`<span class="dk-tag ok">followed</span>`}</td></tr>`}).join("")}</table></div>`;
+}
+function winToday(j){
+  const td=j.today||{},rt=td.routine,se=td.sentiment,day=j.clock&&j.clock.day;
+  const trades=(j.trades||[]).filter(t=>t.day===day),ideas=(j.ideas||[]).filter(i=>i.day===day);
+  const lim=j.limits||{};
+  const idea=i=>`<div class="dk-row" style="align-items:flex-start"><span><b>${esc(i.ticker||"—")}</b> ${esc(i.side||"")} <span class="mut">· ${esc(winSrc(i.source))}</span><div class="mut" style="font-size:12px">${esc(i.reason||"")}${(i.rule_ids||[]).length?` · ${esc(i.rule_ids.join(", "))}`:""}</div></span><span class="dk-tag ${i.status==="taken"?"ok":i.status==="blocked"?"bad":""}">${esc(i.status)}</span></div>`;
+  return `${winHead(j)}
+    <div class="dkp-grid4">
+      <div class="dk-cardx dk-stat"><div class="n">$${(+j.equity).toFixed(2)}</div><div class="l">Paper equity · cash $${(+j.cash).toFixed(2)}</div></div>
+      <div class="dk-cardx dk-stat"><div class="n">${winM(j.day_pnl)}</div><div class="l">Today (real fills) · week ${winM(j.week_pnl)}</div></div>
+      <div class="dk-cardx dk-stat"><div class="n">${(j.open||[]).length}</div><div class="l">Open now (max ${esc((j.config||{}).max_open||1)}; flat by 3:50 PM)</div></div>
+      <div class="dk-cardx dk-stat"><div class="n">${lim.cap_usd!=null?"$"+Math.round(lim.cap_usd):"—"}</div><div class="l">Size cap · max loss ${lim.max_loss_usd!=null?"$"+Math.round(lim.max_loss_usd):"—"} per trade</div></div></div>
+    <div class="dkp-grid3">
+      <div class="dk-cardx"><div class="dk-h">Morning plan <b>8:45</b></div>${rt?`<div style="font-size:13px">${esc(rt.bias||"")}</div>${(rt.events||[]).length?`<div class="mut" style="font-size:12px;margin-top:6px">Events: ${esc(rt.events.join(" · "))}</div>`:""}${(rt.watch||[]).length?`<div class="mut" style="font-size:12px;margin-top:4px">Watching: ${esc(rt.watch.map(w=>w.ticker+" ("+w.why+")").join(" · "))}</div>`:""}${(rt.risks||[]).length?`<div class="mut" style="font-size:12px;margin-top:4px">Risks: ${esc(rt.risks.join(" · "))}</div>`:""}`:`<div class="mut">Not written yet today.</div>`}</div>
+      <div class="dk-cardx"><div class="dk-h">Pre-open read <b>9:15</b></div>${se?`<div style="font-size:13px"><b>${esc(se.tone||"")}</b> — ${esc(se.read||"")}</div>`:`<div class="mut">Not written yet today.</div>`}</div>
+      <div class="dk-cardx"><div class="dk-h">AI use today</div>${td.ai?`<div class="mono">${esc(td.ai.calls||0)} calls · ${esc(td.ai.input_tokens||0)} in / ${esc(td.ai.output_tokens||0)} out</div><div class="mut" style="font-size:12px">No daily ceiling; it only runs when something changed.</div>`:`<div class="mut">None yet.</div>`}</div></div>
+    <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Trades today</div>${winTradeRows(trades,false)}</div>
+    <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Ideas, taken and passed — with the reason <b>${ideas.length}</b></div>${ideas.length?ideas.slice(0,60).map(idea).join(""):`<div class="mut">No ideas looked at yet today.</div>`}</div>
+    <div class="dk-cardx"><div class="dk-h">Rulebook <b>switch rules on or off — paper only</b></div>
+      ${(j.rules||[]).map(r=>`<div class="dk-row" style="align-items:flex-start"><span><b>${esc(r.id)}</b> ${esc(r.title||"")} <span class="mut">· ${esc(r.source||"")}${r.book_ref?" "+esc(r.book_ref):""}</span><div class="mut" style="font-size:12px;max-width:760px">${esc(r.body||"")}</div></span>
+        <button class="dk-btn ${r.active?"go":"sec"}" data-wr="${esc(r.id)}" data-on="${r.active?1:0}">${r.active?"ON":"OFF"}</button></div>`).join("")}</div>`;
+}
+function winReport(j){
+  const days=(j.days||[]).filter(d=>d.report);
+  if(!WIN.day||!days.some(d=>d.day===WIN.day))WIN.day=days.length?days[0].day:null;
+  const d=days.find(x=>x.day===WIN.day),r=d&&d.report,st=j.stats||{};
+  const pick=days.length?`<span style="margin-left:auto"><select id="winDay" class="dk-btn sec">${days.map(x=>`<option value="${esc(x.day)}" ${x.day===WIN.day?"selected":""}>${esc(x.day)}</option>`).join("")}</select></span>`:"";
+  let body;
+  if(!r)body=`<div class="dk-empty" style="margin:40px auto">No report yet. Winston writes one after the close (about 4:10 PM ET) on every trading day.</div>`;
+  else{
+    const ds=r.day_stats||{},tk=r.taken||[],ps=r.passed||[];
+    body=`<div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">${esc(r.day)} — summary</div>${(r.summary||[]).map(s=>`<div style="font-size:13px;margin-bottom:3px">${esc(s)}</div>`).join("")}
+      <div class="dkp-grid4" style="margin-top:10px">
+        <div class="dk-stat"><div class="n">${winM(ds.pnl_realistic)}</div><div class="l">Real fills (ask in, bid out)</div></div>
+        <div class="dk-stat"><div class="n">${winM(ds.pnl_mid)}</div><div class="l">At mid</div></div>
+        <div class="dk-stat"><div class="n">${winM(ds.pnl_double)}</div><div class="l">If the spread cost were doubled</div></div>
+        <div class="dk-stat"><div class="n">$${(+r.balance).toFixed(2)}</div><div class="l">Balance (started $${(+r.start_balance).toFixed(2)})</div></div></div></div>
+      <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Taken <b>${tk.length}</b></div>
+        ${tk.length?`<div style="overflow:auto"><table class="dkt"><tr><th>Opened</th><th>Contract</th><th>From</th><th>Thesis</th><th>Out</th><th>Real</th><th>Mid</th><th>R</th><th>Rules</th></tr>${tk.map(t=>`<tr><td>${esc(winET(t.opened_at))}</td><td><b>${esc(t.label||"")}</b>${t.experiment?` <span class="dk-tag">${esc(t.experiment)} test</span>`:""}</td><td class="mut">${esc(winSrc(t.source))}</td><td class="mut" style="max-width:260px">${esc(t.thesis||"")}</td><td class="mut">${esc(WIN_WHY[t.exit_reason]||t.exit_reason||(t.status==="open"?"still open":""))}${(t.flags||[]).length?`<div style="font-size:11px;color:#ffc27a">${esc((t.flags||[]).join(", ").replace(/_/g," "))}</div>`:""}</td><td class="mono">${winM(+t.pnl_realistic)}</td><td class="mono">${winM(+t.pnl_mid)}</td><td class="mono">${winR(t.r)}</td><td>${t.followed_rules===false?`<span class="dk-tag bad" title="${esc((t.broke||[]).join(" | "))}">broke ${(t.broke||[]).length}</span>`:`<span class="dk-tag ok">followed</span>`}</td></tr>`).join("")}</table></div>`:`<div class="mut">No trades taken.</div>`}</div>
+      <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Passed or blocked, and why <b>${ps.length}</b></div>${ps.length?ps.map(p=>`<div class="dk-row" style="align-items:flex-start"><span><b>${esc(p.ticker||"—")}</b> ${esc(p.side||"")} <span class="mut">· ${esc(winSrc(p.source))}</span><div class="mut" style="font-size:12px">${esc(p.reason||"")}</div></span><span class="dk-tag ${p.status==="blocked"?"bad":""}">${esc(p.status)}</span></div>`).join(""):`<div class="mut">Nothing passed.</div>`}</div>`;
+  }
+  return `${winHead(j)}<div class="dkp-head" style="margin-top:-4px"><span class="mut">The end-of-day report: what was taken, what was passed and why, and the money three ways.</span>${pick}</div>${body}
+    <div class="dk-cardx"><div class="dk-h">All time <b>${st.trades||0} trades</b></div><div class="mut" style="font-size:12.5px">${esc(st.note||"")}</div></div>`;
+}
+async function winScore(j){
+  let cc=null,ccErr=null;try{cc=await dkApi("coach_corner",null,"&range=all")}catch(e){ccErr=e.message}
+  const st=j.stats||{},u=cc&&cc.us,c=cc&&cc.coach;
+  const curve=(j.curve||[]).filter(p=>p.end!=null);
+  let spark="";
+  if(curve.length>1){const v=curve.map(p=>+p.end),mn=Math.min(...v),mx=Math.max(...v),w=300,h=60,rg=(mx-mn)||1;
+    spark=`<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:420px;height:70px"><polyline fill="none" stroke="var(--blue)" stroke-width="2" points="${v.map((y,i)=>((i/(v.length-1))*w).toFixed(1)+","+(h-4-((y-mn)/rg)*(h-8)).toFixed(1)).join(" ")}"/></svg>`}
+  const row=(a,b,cc2)=>`<tr><td>${a}</td><td class="mono">${b}</td><td class="mono">${cc2}</td></tr>`;
+  return `${winHead(j)}
+    <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Winston vs Josh + Baby J <b>side by side</b></div>
+      <div style="overflow:auto"><table class="dkt"><tr><th></th><th>Winston (paper, own $4,000, 1 contract)</th><th>Josh + Baby J (real account)</th></tr>
+        ${row("Realized P&amp;L",winM(st.pnl_realistic),u?winM(u.pnl):"—")}
+        ${row("Wins – losses",`${st.wins||0}–${st.losses||0}`,u?`${u.wins}–${u.losses}`:"—")}
+        ${row("Trades counted",st.trades||0,u?(u.wins+u.losses):"—")}
+        ${row("Expectancy",winR(st.expectancy_r),"—")}
+        ${row("Profit factor",st.profit_factor==null?"—":st.profit_factor,"—")}
+        ${row("Worst day",st.worst_day==null?"—":winM(st.worst_day),"—")}
+        ${row("Longest losing streak",st.longest_losing_streak||0,"—")}
+        ${row("Broke his own rules",st.rule_breaks||0,"—")}
+        ${row("Spread cost paid",winM(-Math.abs(st.spread_cost||0)),"—")}
+      </table></div>
+      <div class="mut" style="font-size:12px;margin-top:8px">${ccErr?`Josh + Baby J numbers unavailable: ${esc(ccErr)}. `:""}Winston's numbers are paper at real quotes (ask in, bid out). They are not the same size or account as the real ones, so compare the habits and the sign, not the dollars. ${esc(st.note||"")}</div></div>
+    <div class="dkp-grid3">
+      <div class="dk-cardx"><div class="dk-h">Winston's balance curve</div>${spark||`<div class="mut">Fills in after the first reported day.</div>`}</div>
+      <div class="dk-cardx"><div class="dk-h">Money three ways</div><div class="dk-row"><span>Real fills</span><span class="mono">${winM(st.pnl_realistic)}</span></div><div class="dk-row"><span>At mid</span><span class="mono">${winM(st.pnl_mid)}</span></div><div class="dk-row"><span>Spread cost doubled</span><span class="mono">${winM(st.pnl_double)}</span></div></div>
+      <div class="dk-cardx"><div class="dk-h">Tests (kept out of the score)</div><div class="mono">${st.experiments||0} closed · ${winM(st.experiment_pnl_realistic)}</div><div class="mut" style="font-size:12px">E1/E2 stay OFF until you switch them on.</div></div></div>
+    <div class="dk-cardx" style="margin-top:12px"><div class="dk-h">Every Winston trade <b>${(j.trades||[]).length}</b></div>${winTradeRows((j.trades||[]).slice(0,120),true)}</div>`;
+}
+async function dkWinston(keep){
+  const pg=$("#dkPage");
+  if(!keep)pg.innerHTML=`<div class="dkp">${winTabs()}${dkLoading("Reading Winston's book…")}</div>`;
+  let j;try{j=await winApi("state");WIN.j=j}catch(e){if(DK.view==="winston")pg.innerHTML=`<div class="dkp">${winTabs()}${dkErr(e)}</div>`;return}
+  if(DK.view!=="winston")return;
+  const sy=pg.scrollTop;
+  let body=WIN.view==="report"?winReport(j):WIN.view==="score"?await winScore(j):winToday(j);
+  if(DK.view!=="winston")return;
+  pg.innerHTML=`<div class="dkp">${winTabs()}${body}</div>`;pg.scrollTop=keep?sy:0;
+  pg.querySelectorAll("[data-wv]").forEach(b=>b.onclick=()=>{WIN.view=b.dataset.wv;dkWinston()});
+  const sel=$("#winDay");if(sel)sel.onchange=()=>{WIN.day=sel.value;dkWinston(true)};
+  const pz=$("#winPause");if(pz)pz.onclick=async()=>{if(WIN.busy)return;WIN.busy=true;pz.disabled=true;
+    try{await winApi("config_set",{enabled:!(j.config&&j.config.enabled)})}catch(e){alert("Could not change it: "+e.message)}
+    WIN.busy=false;dkWinston(true)};
+  pg.querySelectorAll("[data-wr]").forEach(b=>b.onclick=async()=>{if(WIN.busy)return;WIN.busy=true;b.disabled=true;
+    try{await winApi("rule_set",{id:b.dataset.wr,active:b.dataset.on!=="1"})}catch(e){alert("Could not change the rule: "+e.message)}
+    WIN.busy=false;dkWinston(true)});
+  clearTimeout(WIN.t);WIN.t=setTimeout(()=>{if(DK.view==="winston"&&WIN.view==="today"&&document.visibilityState==="visible"&&!WIN.busy)dkWinston(true)},30e3);
 }
 
 
