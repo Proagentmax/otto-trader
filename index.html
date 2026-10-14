@@ -2322,7 +2322,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.33.0";
+const BUILD="3.33.1";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -2935,7 +2935,7 @@ function openDesk(){
   document.body.classList.add("dk-on");$("#dk").hidden=false;DK.open=true;
   $$(".dk-rail button").forEach(b=>b.classList.toggle("on",b.dataset.go==="desk"));
   $$(".nav button").forEach(x=>x.setAttribute("aria-selected",x.dataset.p==="desk"));
-  $("#dkWho").value=LS.get("deskWho","Ifoma");
+  $("#dkWho").value=LS.get("deskWho","Josh");
   dkRenderLeft();dkRenderRight();dkRenderStrip();dkRenderBanner();
   if(typeof ncLoad==="function")ncLoad(true);
   dkShow(innerWidth<=1099?"desk":(DK.opened?LS.get("dkView","desk"):(typeof layHome==="function"?layHome():"desk")));DK.opened=true;
@@ -3117,7 +3117,7 @@ function dkWatchBind(box){
     if(DK.wtFocus)setTimeout(()=>{inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length)},0)}
   const sc=box.querySelector("#wtScan");if(sc)sc.addEventListener("click",async()=>{sc.disabled=true;sc.textContent="Scanning…";try{await dkApi("watch_scan",{author:dkWho()});toast("Jarvis is scanning — proposals land here in ~1 min");setTimeout(dkWatchLoad,60e3)}catch(e){toast(String(e.message).slice(0,80))}sc.disabled=false;sc.textContent="🔎 Scan now"});
 }
-function dkWho(){return ($("#dkWho")&&$("#dkWho").value)||"Ifoma"}
+function dkWho(){return ($("#dkWho")&&$("#dkWho").value)||"Josh"}
 function dkRenderLeft(){
   const p=DK.panel||{},Q=dkQuotes();
   const cal=(DK.sent&&DK.sent.calendar)||[];
@@ -4799,7 +4799,7 @@ async function dkJasonScore(){
    talk them through with Jarvis, and "Use kept boxes today" puts them on the Watcher (near edge). Server: ?fn=charts_get,
    chart_now, chart_review, chart_use, chart_chat. Nothing here places an order. */
 const NC={data:null,cur:null,tf:"D",adj:{},msg:"",pollT:null,asking:false,busyKey:"",lastReady:-1};
-const ncWho=()=>(($("#dkWho")||{}).value||LS.get("deskWho","Ifoma")).trim()||"Ifoma";
+const ncWho=()=>(($("#dkWho")||{}).value||LS.get("deskWho","Josh")).trim()||"Ifoma";
 const ncDay=d=>{try{return new Date(d+"T12:00:00Z").toLocaleDateString("en-US",{weekday:"short",month:"numeric",day:"numeric",timeZone:"UTC"}).replace(",","")}catch(e){return d}};
 const ncF=v=>(+v).toFixed(2);
 async function ncLoad(quiet){
