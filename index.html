@@ -465,6 +465,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 /* v3.26: paper cards, where the idea came from, the kill-switch banner, Activity, Coaches Corner, the new Limits */
 .dk-act.st-paper{border:1.5px dashed #3a3f47;background:#111215;opacity:.9}.dk-act.st-paper .dk-act-h b{color:#b8bfc9;text-decoration:line-through;text-decoration-color:#646c78}
 .dk-paper{margin:6px 0 2px;font-size:13.5px;font-weight:600;color:#ffb08f}
+.stp-prac{background:#f0b429;color:#000}.dk-prac{margin:6px 0;padding:8px 10px;border:1px solid #5a4a14;background:#2a2410;border-radius:8px;font-size:12.5px;color:#f3dfa0}.dk-prac.ok{border-color:#1d5a3a;background:#10241a;color:#bfe9d0}.dk-act.st-paper_wait{border:1.5px solid #5a4a14}
 .stp{display:inline-block;font:800 11px var(--body);letter-spacing:.08em;padding:4px 9px;border-radius:6px;margin:0 8px 6px 0}.stp-live{background:var(--up);color:#000}.stp-paper{background:#3a3f47;color:#e6e9ed}
 .og{display:inline-block;font:700 10.5px var(--body);letter-spacing:.05em;padding:3px 8px;border-radius:999px;margin:0 0 6px;text-transform:uppercase}
 .og-coach_call{background:#16305c;color:#9cc3ff}.og-coach_level,.og-coach_post{background:#3a2a12;color:#ffc27a}.og-coach_against{background:#3a1608;color:#ff8a5c}.og-jarvis{background:var(--surface-3);color:#c7cdd6}
@@ -875,7 +876,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
 .sb-li .amt{font-size:24px;font-weight:800;text-align:right;min-width:92px;font-variant-numeric:tabular-nums}
 .sb-li .run{display:block;font-size:11.5px;color:var(--ink-3);font-weight:400}
 .sb-li.notaken{opacity:.75}
-.sb-nt{border-top:1px solid var(--rule);margin-top:8px;padding-top:8px}.sb-nt summary{cursor:pointer;color:var(--ink-2);font-size:13px}
+.sb-skip{background:#141a22;border:1px dashed #3a4556;border-radius:12px;padding:12px 14px;margin:12px 0}.sb-nt{border-top:1px solid var(--rule);margin-top:8px;padding-top:8px}.sb-nt summary{cursor:pointer;color:var(--ink-2);font-size:13px}
 .sb-t{border-collapse:collapse;width:100%;font-size:14.5px}
 .sb-t td,.sb-t th{padding:9px 10px;border-top:1px solid var(--rule);text-align:left}
 .sb-t th{color:var(--ink-2);font-weight:600;font-size:12.5px}.sb-t th.j{color:#5AA9FF}.sb-t th.w{color:#C58BFF}
@@ -2377,7 +2378,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.34.0";
+const BUILD="3.35.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3045,8 +3046,9 @@ async function dkLoadLog(){
     dkRenderMsgs(true);
   }catch(e){if(!DK.locked)toast("Desk: "+String(e.message).slice(0,90))}
 }
+const dkWait=a=>!!a&&(a.status==="pending"||a.status==="running"||a.status==="paper_wait");   // v3.35: a practice card waits for Josh like a live one
 async function dkPoll(){
-  const live=Object.values(DK.acts).filter(a=>a.status==="pending"||a.status==="running").map(a=>a.id);
+  const live=Object.values(DK.acts).filter(dkWait).map(a=>a.id);
   try{
     const j=await dkApi("desk_log",null,"&since="+DK.lastId+(live.length?"&acts="+live.join(","):""));
     let changed=false;
@@ -3071,7 +3073,7 @@ async function dkJasonLoad(){
   try{DK.jason=await dkApi("jason_today")}catch(e){DK.jason={error:e.message}}
   dkRenderLeft();dkRenderRight();
 }
-const JF_CARD={pending:"card waiting for Approve",running:"placing…",done:"taken",rejected:"passed",expired:"card expired",failed:"card failed",paper:"auto-rejected (paper)"};
+const JF_CARD={paper_wait:"practice card waiting for Josh",paper_taken:"practice trade taken",pending:"card waiting for Approve",running:"placing…",done:"taken",rejected:"passed",expired:"card expired",failed:"card failed",paper:"auto-rejected (paper)"};
 function dkJasonFeed(){
   const J=DK.jason;if(!J)return "";
   const rows=J.rows||[];
@@ -3217,7 +3219,7 @@ function dkRenderRight(){
       return `<div class="dk-row"><span>${esc(r.title)}</span><span class="dk-tag ${tg}">${esc(lb)}</span></div>`+
         (x.state==="armed"?`<div class="mut" style="font-size:11.5px;margin:-2px 0 6px">stop $${(+x.stop_option).toFixed(2)} ${x.stop_order_id?"✓":"✗"} · wrong if ${esc(x.wrong_if)} · TP1 ${esc(x.tp1)}</div>`:"")}).join("")+`</div>`;
   // Cards waiting
-  const pend=Object.values(DK.acts).filter(a=>a.status==="pending"||a.status==="running").sort((a,b)=>String(b.created_at).localeCompare(a.created_at));
+  const pend=Object.values(DK.acts).filter(dkWait).sort((a,b)=>String(b.created_at).localeCompare(a.created_at));
   // v3.10: "Cards to approve" — expired ones drop off; tap one to open it with Approve / Reject.
   const live=pend.filter(a=>a.status==="running"||dkLeft(a)>0);
   h+=`<div class="dk-cardx"><div class="dk-h">Cards to approve <b>${live.length}</b></div>`+
@@ -3253,15 +3255,19 @@ function dkCard(a){
   }
   if(r.flag)risk+=`<div class="dk-warnbox">⚠ This risks ${(r.pct*100).toFixed(0)}% of the account — over your 20% flag. The Otto Rules call ~40% in one trade "crazy" (Oct 1). You can still approve.</div>`;
   const res=(a.result||[]).map(x=>`<div class="${x.ok?"up":"dn"}" style="font-size:12px;margin-top:6px">${x.ok?"✓":"✗"} ${esc(x.tool)}</div><pre style="white-space:pre-wrap;font-size:11.5px;margin:2px 0 0;color:var(--ink-2)">${esc(String(x.text||"").slice(0,700))}</pre>`).join("");
-  const tag={pending:"near",running:"near",done:"ok",failed:"bad",paper:"bad"}[st]||"";
-  const label={pending:"needs your approval",running:"running…",done:"done",failed:"failed",rejected:"rejected",expired:"expired — ask again for fresh prices",paper:"paper · practice only"}[st]||st;
-  const stp=!(a.plan||a.exit)?"":st==="paper"?`<span class="stp stp-paper">PAPER · PRACTICE ONLY</span>`:`<span class="stp stp-live">LIVE · REAL MONEY</span>`;
+  const tag={pending:"near",running:"near",paper_wait:"near",paper_taken:"ok",done:"ok",failed:"bad",paper:"bad"}[st]||"";
+  const label={pending:"needs your approval",running:"running…",done:"done",failed:"failed",rejected:"rejected",expired:"expired — ask again for fresh prices",paper:"paper · practice only",paper_wait:"practice · needs Josh's approval",paper_taken:"practice trade taken"}[st]||st;
+  const stp=!(a.plan||a.exit)?"":st==="paper_wait"||st==="paper_taken"?`<span class="stp stp-prac">PRACTICE · NO REAL MONEY</span>`:st==="paper"?`<span class="stp stp-paper">PAPER · PRACTICE ONLY</span>`:`<span class="stp stp-live">LIVE · REAL MONEY</span>`;
   const og=a.plan&&a.plan.origin?`<div class="og og-${esc(a.plan.origin)}">${esc(OG_LABEL[a.plan.origin]||a.plan.origin)}</div>`:"";
   const pc=st==="paper"?(a.checks||[]).find(x=>x.paper):null;
+  const prx=st==="paper_wait"?(a.checks||[]).find(x=>x.practice):null;
+  const pf=st==="paper_taken"&&a.plan&&a.plan.paper_fill?a.plan.paper_fill:null;
   const who=a.decided_by?` <span class="mut" style="font-size:11px">· ${esc(a.decided_by.split("@")[0])} ${dkTime(a.decided_at)}</span>`:"";
   return `<div class="dk-act st-${esc(st)}" data-act="${esc(a.id)}">
     ${stp}${og}<div class="dk-act-h"><b>${esc(a.title)}</b><span><span class="dk-tag ${tag}">${esc(label)}</span>${who}</span></div>
     ${pc?`<div class="dk-paper">${esc(String(pc.text).replace(/^AUTO-REJECTED · /,""))}</div><div class="mut" style="font-size:12px">Shown and scored in Score and Coaches Corner. It can't be approved${/size cap/i.test(pc.text)?' — <a href="#" data-openlim="1">change the cap in Settings</a>':""}.</div>`:""}
+    ${prx?`<div class="dk-prac">${esc(prx.text)}<br><span class="mut">If you approve, the pretend fill is the option's asking price at the moment you tap. Nothing is sent to Robinhood. It only counts in the score if you approve it.</span></div>`:""}
+    ${pf?`<div class="dk-prac ok">Josh approved it${pf.at?" at "+dkTime(pf.at):""}. Pretend fill ${pf.ask!=null?"<b>$"+(+pf.ask).toFixed(2)+"</b> (ask)":"at the card's price"}. Scored from that moment; exits are the card's own rules (wrong-if, TP1, 3:50 PM). ${pf.note?esc(pf.note):""}</div>`:""}
     ${dkGuard(a)}
     ${a.summary?`<pre class="dk-sum">${esc(a.summary)}</pre>`:""}
     ${risk}
@@ -3270,7 +3276,7 @@ function dkCard(a){
     <div class="dk-calls">${calls}</div>
     ${a.review?`<details><summary>Robinhood's own review</summary><pre>${esc(a.review)}</pre></details>`:""}
     ${res}
-    <div class="dk-btns">${st==="pending"?`<button class="dk-btn go" data-ok="1">${a.exit?"Approve entry + exits":`Approve &amp; ${(a.calls||[]).some(c=>/^place_/.test(c.tool))?"place":"run"}`}</button><button class="dk-btn sec" data-no="1">Reject</button>`:""}</div>
+    <div class="dk-btns">${st==="paper_wait"?`<button class="dk-btn go" data-ok="1">Approve practice trade</button><button class="dk-btn sec" data-no="1">Reject</button>`:st==="pending"?`<button class="dk-btn go" data-ok="1">${a.exit?"Approve entry + exits":`Approve &amp; ${(a.calls||[]).some(c=>/^place_/.test(c.tool))?"place":"run"}`}</button><button class="dk-btn sec" data-no="1">Reject</button>`:""}</div>
   </div>`;
 }
 function dkRenderMsgs(stick){
@@ -3313,12 +3319,12 @@ async function dkCardClick(e){
   const ok=e.target.closest("[data-ok]"),no=e.target.closest("[data-no]");
   if(!ok&&!no)return;
   const order=(a.calls||[]).some(c=>/^place_/.test(c.tool));
-  if(ok&&order&&!confirm(`Place this with real money?\n\n${a.title}${a.risk&&a.risk.flag?"\n\n⚠ Over your 20% flag.":""}`))return;
+  if(ok&&order&&a.status!=="paper_wait"&&!confirm(`Place this with real money?\n\n${a.title}${a.risk&&a.risk.flag?"\n\n⚠ Over your 20% flag.":""}`))return;
   card.querySelectorAll("button").forEach(b=>b.disabled=true);
   try{
     const j=await dkApi("act",{id:a.id,decision:ok?"approve":"reject"});
     DK.acts[a.id]=j.action;
-    toast(j.action.status==="done"?"Done":j.action.status==="failed"?"It failed — see the card":j.action.status);
+    toast(j.action.status==="paper_taken"?"Practice trade taken (no real money)":j.action.status==="done"?"Done":j.action.status==="failed"?"It failed — see the card":j.action.status);
   }catch(err){toast(String(err.message).slice(0,100))}
   dkRenderMsgs();dkRenderRight();dkPoll();dkPanel(true);sgRender();
 }
@@ -3550,7 +3556,7 @@ function dkRenderBanner(){
 const EX_STATE={planned:["near","exits set on fill"],waiting_fill:["near","waiting for the fill"],armed:["ok","protected"],closed:["","closed"],dead:["bad","never filled — no exits"]};
 function dkExit(a){
   const x=a.exit;if(!x)return "";
-  const [tag,lab]=EX_STATE[x.state]||["",x.state];
+  const [tag,lab]=(a.status==="paper_wait"||a.status==="paper_taken")?["near","practice: scored by these rules"]:(EX_STATE[x.state]||["",x.state]);
   const loss=((x.fill_price||x.entry_limit)-x.stop_option)*100*(x.qty||1);
   const tk=String(x.tv_symbol||"").split(":").pop();
   const al=x.alerts||{};
@@ -3808,17 +3814,23 @@ const sbC=v=>v==null?"mut":v>0?"up":v<0?"dn":"mut";
 const sbTitle=t=>String(t||"").replace(/^\s*(PAPER|LIVE)(\s*[·-]\s*[A-Z]+)?\s*[—-]\s*/i,"").trim();
 function sbModel(){
   const days={},slot=d=>days[d]||(days[d]={J:[],W:[],R:[],X:[]});
-  ((SB.j&&SB.j.rows)||[]).forEach(r=>{
+  const jr=(SB.j&&SB.j.rows)||[];
+  // v3.35: from the first day a practice card exists, only practice trades Josh APPROVED (paper_taken) count for Josh + Baby J.
+  // Days before that keep the old rule (every scored `paper` card counted), so history does not change.
+  const cut=jr.filter(r=>r.status==="paper_wait"||r.status==="paper_taken").map(r=>sbEt(r.at)).filter(Boolean).sort()[0]||"9999-99-99";
+  jr.forEach(r=>{
     const d=sbEt(r.at);if(!d)return;
-    if(r.status==="paper")slot(d).J.push({r,usd:sbN(r.est)});                 // usd null = not scored yet
+    if(r.status==="paper_taken")slot(d).J.push({r,usd:sbN(r.est)});            // approved practice trade; usd null = not scored yet
+    else if(r.status==="paper"&&d<cut)slot(d).J.push({r,usd:sbN(r.est)});      // old rule, before the cutover day
     else if(r.status==="done")slot(d).R.push({r,usd:sbN(r.pnl)});             // real money
-    else if(r.status==="rejected"||r.status==="expired")slot(d).X.push({r,usd:sbN(r.est)});   // never opened: never counted
+    else if(r.status==="rejected"||r.status==="expired"||r.status==="paper")slot(d).X.push({r,usd:sbN(r.est)});   // never opened: never counted
+    else if(r.status==="paper_wait"&&Date.now()-Date.parse(r.at)>25*60e3)slot(d).X.push({r,usd:sbN(r.est)});     // nobody answered
   });
   ((SB.w&&SB.w.trades)||[]).forEach(t=>{if(t.experiment)return;const d=t.day||sbEt(t.opened_at);if(!d)return;
     slot(d).W.push({t,open:t.status==="open",usd:t.status==="open"?null:sbN(t.pnl_realistic)})});
   const today=(SB.w&&SB.w.clock&&SB.w.clock.day)||sbEt(Date.now());
   slot(today);
-  return {days,keys:Object.keys(days).sort(),today};
+  return {days,keys:Object.keys(days).sort(),today,cut};
 }
 const sbVals=(m,d,k)=>m.days[d][k].filter(x=>x.usd!=null).map(x=>x.usd);
 function sbStats(a){
@@ -3835,6 +3847,13 @@ const sbGather=(m,ks,k)=>ks.flatMap(d=>sbVals(m,d,k));
 const sbDayNet=(m,d,k)=>{const a=sbVals(m,d,k);return a.length?sbStats(a).net:null};
 function sbLabel(m,r){return SB.range==="day"?sbMD(r.sel)+(r.sel===m.today?" (today)":""):SB.range==="week"?"Week of "+sbMD(r.ks[0]):"All days to "+sbMD(r.sel)}
 
+/* v3.35: ideas Josh did not take (rejected / expired / auto-rejected). Not in any total; shown only as "what if", from Otto's own estimate. Only from the cutover day on. */
+function sbSkipped(m,r){
+  const ks=r.ks.filter(d=>d>=m.cut),x=ks.flatMap(d=>m.days[d].X).filter(o=>o.usd!=null);
+  if(!ks.length||!x.length)return "";
+  const net=x.reduce((s,o)=>s+o.usd,0),n=ks.reduce((s,d)=>s+m.days[d].X.length,0);
+  return `<div class="sb-skip"><b>Ideas not taken</b> <span class="sb-chip x">not in any total</span><div class="sb-note" style="margin:4px 0 0">${n} idea${n===1?"":"s"} Josh rejected, nobody answered, or the safety rules blocked; ${x.length} scored. If every scored one had been taken, Otto's estimate says <b class="${sbC(net)}">${sbM(net,true)}</b>. ${net<0?`Not taking them saved about <b class="up">${sbM(-net)}</b>.`:net>0?`Not taking them cost about <b class="dn">${sbM(net)}</b> of gains.`:""} Open "Not taken" in the list below for each one.</div></div>`;
+}
 function sbLane(k,title,sub,t,extra){
   if(!t.n)return `<div class="sb-lane ${k}"><h2>${title}</h2><div class="sub">${sub}</div><div class="sb-net mut">—</div><div class="sb-netl">No trades counted</div>${extra||""}</div>`;
   return `<div class="sb-lane ${k}"><h2>${title}</h2><div class="sub">${sub}</div>
@@ -3905,8 +3924,8 @@ function sbList(m,d){
       return `<div class="sb-li">${chip(o,lab)}<div class="t"><b>${esc(sbTitle(x.r.title))}</b><span>${esc(winET(x.r.at))} · ${esc(x.r.source||"desk")}${real?" · <b style='color:var(--warn)'>REAL MONEY</b>":""}</span></div>
         <div class="amt ${sbC(u)}">${u==null?"—":sbM(u,true)}${u!=null&&!real?`<span class="run">running ${sbM(run,true)}</span>`:""}</div></div>`}).reverse();
     html=items.join("")||`<div class="sb-note">No Josh + Baby J trades on this day.</div>`;
-    if(day.X.length)html+=`<details class="sb-nt"><summary>Not taken (${day.X.length}): rejected or expired cards, never opened, not in any total</summary>${day.X.slice().sort((a,b)=>String(b.r.at).localeCompare(String(a.r.at))).map(x=>
-      `<div class="sb-li notaken">${chip("x","NOT TAKEN")}<div class="t"><b>${esc(sbTitle(x.r.title))}</b><span>${esc(winET(x.r.at))} · ${esc(x.r.source||"desk")} · ${esc(x.r.status)}</span></div><div class="amt mut" style="text-decoration:line-through;font-size:16px">${x.usd==null?"":sbM(x.usd)}</div></div>`).join("")}</details>`;
+    if(day.X.length)html+=`<details class="sb-nt"><summary>Not taken (${day.X.length}): rejected, expired or auto-rejected cards, never opened, not in any total</summary>${day.X.slice().sort((a,b)=>String(b.r.at).localeCompare(String(a.r.at))).map(x=>
+      `<div class="sb-li notaken">${chip("x","NOT TAKEN")}<div class="t"><b>${esc(sbTitle(x.r.title))}</b><span>${esc(winET(x.r.at))} · ${esc(x.r.source||"desk")} · ${esc(x.r.status==="paper_wait"?"not answered":x.r.status==="paper"?"auto-rejected":x.r.status)}</span></div><div class="amt mut" style="text-decoration:line-through;font-size:16px">${x.usd==null?"":sbM(x.usd)}</div></div>`).join("")}</details>`;
   }else{
     let run=0;
     const rows=day.W.slice().sort((a,b)=>String(a.t.opened_at).localeCompare(String(b.t.opened_at)));
@@ -3937,7 +3956,8 @@ function sbDraw(keep){
       <button class="sb-btn" id="sbRefresh" title="Reload the numbers">Refresh</button></div>
     <div class="sb-strip">${strip}</div>
     <div class="sb-verdict"><b>${esc(lab)}:</b> Josh + Baby J ${v(J,"had no trades")}. Winston ${SB.werr?"is unavailable right now":v(W,"had no trades").replace("are ","is ")}. ${lead?`<b>${lead[0]}</b> ${lead[2]} by ${sbM(lead[1])}.`:""}${scoring?` <span class="mut" style="font-size:14px">${scoring} trade${scoring===1?" is":"s are"} still being scored and ${scoring===1?"is":"are"} not in the totals yet.</span>`:""}${wopen?` <span class="mut" style="font-size:14px">Winston has ${wopen} trade${wopen===1?"":"s"} open; counted when closed.</span>`:""}</div>
-    <div class="sb-lanes">${sbLane("j","Josh + Baby J","Practice (paper). Dollars are estimates for 1 contract.",J)}${sbLane("w","Winston",SB.werr?"Unavailable: "+esc(SB.werr):"Practice (paper), own $4,000, real quotes in and out.",W)}</div>
+    <div class="sb-lanes">${sbLane("j","Josh + Baby J","Practice trades Josh approved. Dollars are estimates for 1 contract.",J)}${sbLane("w","Winston",SB.werr?"Unavailable: "+esc(SB.werr):"Practice (paper), own $4,000, real quotes in and out.",W)}</div>
+    ${sbSkipped(m,r)}
     <div class="sb-real"><div><div class="sb-k">Real money · ${esc(lab)}</div><div class="sb-rn ${RS.n?sbC(RS.net):""}">${RS.n?sbM(RS.net,true):"$0"}</div>${RS.n?`<div class="sb-note" style="margin:4px 0 0">${sbM(RS.won,true)} won · ${sbM(RS.lost)} lost</div>`:""}</div>
       <div class="t"><b style="color:var(--ink)">${realTxt}</b> Real money (trades placed through Otto's cards and filled) is never added to the practice numbers above. Trades made outside Otto show on the Results page.</div></div>
     <div class="sb-card"><h3>Progression: net by day</h3><div class="sb-leg"><span><i style="background:#5AA9FF"></i>Josh + Baby J</span><span><i style="background:#C58BFF"></i>Winston</span></div><div id="sbBars">${sbBars(m)}</div>
@@ -4705,7 +4725,7 @@ function sgBadge(){
   const el=$("#sgBadge");if(!el)return;el.hidden=!n;el.textContent=n+" call"+(n===1?"":"s");
 }
 const SG_ST={reading:"Reading the post…",jarvis:"Jarvis is building the card…",chatter:"",nothing:"",caught_up:"Caught up after a gap — saved to the log, too old for a card",error:"Error"};
-const SG_CARD={pending:"waiting for Approve",running:"placing…",done:"taken",rejected:"passed",expired:"expired",failed:"failed",paper:"auto-rejected (paper)"};
+const SG_CARD={paper_wait:"practice: waiting for Josh",paper_taken:"practice trade taken",pending:"waiting for Approve",running:"placing…",done:"taken",rejected:"passed",expired:"expired",failed:"failed",paper:"auto-rejected (paper)"};
 function sgRender(stick){
   const box=$("#sgFeed");if(!box)return;
   if(DK.locked){box.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see Otto Signals.</p></div>`;return}
@@ -4732,7 +4752,7 @@ function sgRender(stick){
     else if(st)h+=`<div class="sg-cardline ${b.status==="error"?"dk-err":"mut"}">${esc(st)}${b.status==="error"&&b.error?": "+esc(b.error):""}</div>`;
     for(const c of cards){
       const a=DK.acts[c.id];
-      h+=a&&(a.status==="pending"||a.status==="running")?dkCard(a)
+      h+=dkWait(a)?dkCard(a)
         :`<div class="sg-cardline">🃏 ${esc(c.title||"card")} — <b>${esc(SG_CARD[(a&&a.status)||c.status]||c.status)}</b></div>`;
     }
     h+=sgThread(b);
@@ -4796,7 +4816,7 @@ function alRender(stick){
     }else{
       const c=String(r.content||""),m=/^For: (.*)\n/.exec(c),body=m?c.slice(m[0].length):c,a=r.action_id&&DK.acts[r.action_id];
       h+=`<div class="al-it"><div class="al-ic">🤖</div><div><div class="sg-read" style="margin-top:0"><span class="k">Jarvis${m?" on "+esc(m[1]):""} · ${dkTime(r.created_at)}</span><div class="md">${md(body)}</div></div>`+
-        (a?(a.status==="pending"||a.status==="running"?dkCard(a):`<div class="sg-cardline">🃏 ${esc(a.title||"card")} — <b>${esc(SG_CARD[a.status]||a.status)}</b></div>`):"")+`</div></div>`;
+        (a?(dkWait(a)?dkCard(a):`<div class="sg-cardline">🃏 ${esc(a.title||"card")} — <b>${esc(SG_CARD[a.status]||a.status)}</b></div>`):"")+`</div></div>`;
     }
   }
   box.innerHTML=h;
@@ -4867,7 +4887,7 @@ function dkLeft(a){const ttl=((DK.panel&&DK.panel.card_ttl_min)||20)*60e3;return
 function dkOpenCard(id){
   const a=DK.acts[id];if(!a)return toast("That card isn't loaded yet — try again in a moment");
   $("#dlgCardBody").innerHTML=dkCard(a);
-  $("#dlgCardLeft").textContent=a.status==="pending"?`expires in ${dkLeft(a)} min`:a.status;
+  $("#dlgCardLeft").textContent=(a.status==="pending"||a.status==="paper_wait")?`expires in ${dkLeft(a)} min`:a.status;
   if(!$("#dlgCard").open)$("#dlgCard").showModal();
 }
 $("#dlgCardBody").addEventListener("click",async e=>{await dkCardClick(e);const card=$("#dlgCardBody [data-act]");if(card&&DK.acts[card.dataset.act])dkOpenCard(card.dataset.act)});
@@ -4974,7 +4994,7 @@ function sgThread(b){
   const chat=b.chat||[],open=SG.open[b.id]||chat.length||SG.busy[b.id];
   if(!open)return `<button class="sg-askbtn" data-sgopen="${b.id}">💬 Ask Jarvis about this signal</button>`;
   const line=m=>m.role==="assistant"
-    ?`<div class="sg-a"><div class="md">${md(m.content)}</div>${(m.cards||[]).map(c=>{const a=DK.acts[c.id];return a&&(a.status==="pending"||a.status==="running")?`<div class="sg-cardline">🃏 ${esc(c.title)} — <b style="color:var(--warn)">waiting</b> <button class="sg-open" data-opencard="${esc(c.id)}">Open card</button></div>`:`<div class="sg-cardline">🃏 ${esc(c.title)} — <b>${esc(SG_CARD[(a&&a.status)||c.status]||c.status)}</b></div>`}).join("")}</div>`
+    ?`<div class="sg-a"><div class="md">${md(m.content)}</div>${(m.cards||[]).map(c=>{const a=DK.acts[c.id];return dkWait(a)?`<div class="sg-cardline">🃏 ${esc(c.title)} — <b style="color:var(--warn)">waiting</b> <button class="sg-open" data-opencard="${esc(c.id)}">Open card</button></div>`:`<div class="sg-cardline">🃏 ${esc(c.title)} — <b>${esc(SG_CARD[(a&&a.status)||c.status]||c.status)}</b></div>`}).join("")}</div>`
     :`<div class="sg-q"><b>${esc(m.author||"You")}:</b> ${esc(m.content)}</div>`;
   return `<div class="sg-thread"><div class="sg-th">Ask Jarvis about this signal <span>${chat.length} message${chat.length===1?"":"s"}</span></div>${chat.map(line).join("")}`+
     (SG.busy[b.id]?`<div class="sg-a mut">Jarvis is working on it…</div>`:"")+

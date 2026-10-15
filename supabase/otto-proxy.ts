@@ -1124,7 +1124,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     const recent = await db("otto_actions?select=id,title,status,plan,exit,created_at&order=created_at.desc&limit=40").catch(() => []);
     const dup = (recent || []).find((r: any) => r.plan && String(r.plan.tv_symbol || "").split(":").pop()?.toUpperCase() === tk &&
       r.plan.direction === plan.direction && Date.now() - Date.parse(r.created_at) < 15 * 60e3 &&
-      (["pending", "running"].includes(r.status) || (r.status === "done" && ["waiting_fill", "armed"].includes(r.exit?.state))));
+      (["pending", "running", "paper_wait"].includes(r.status) || (r.status === "done" && ["waiting_fill", "armed"].includes(r.exit?.state))));
     if (dup) throw new Error(`A ${tk} ${plan.direction === "down" ? "puts" : "calls"} card is already up: "${dup.title}" (${dup.status === "done" ? "filled, trade open" : dup.status}). Don't make a second one — point them to that card.`);
     // v3.22: levels more than 10% from the live price go back once, then no card.
     await levelGate(plan);
@@ -1206,6 +1206,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
   };
   // v3.26: the kill switch and the size cap turn the card into a PAPER card (shown, scored, never approvable).
   let paper: string | null = null;
+  let practice = false;     // v3.35: a "not switched on for LIVE" idea waits for Josh's Approve / Reject as a practice card
   if (opening) {
     const ls = await lockState().catch(() => null);
     if (ls?.locked) paper = `Kill switch on — ${ls.text}. Signals keep listening; this idea is scored as a paper card.`;
@@ -1230,7 +1231,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     const og27 = String(plan?.origin || "jarvis");
     const key27 = og27 === "coach_call" ? "live_coach_call" : og27 === "coach_level" || og27 === "coach_post" ? "live_coach_level" : "live_jarvis";
     const allowed27 = key27 === "live_coach_call" ? LIM[key27] !== false : LIM[key27] === true;
-    if (!allowed27) paper = `PAPER · ${ORIGIN_LABEL[og27] || og27} is not switched on to go LIVE (Settings, Limits & goals, Which ideas can go LIVE). Practice only: scored, never sent to Robinhood.`;
+    if (!allowed27) { paper = `PRACTICE · ${ORIGIN_LABEL[og27] || og27} is not switched on to go LIVE (Settings, Limits & goals, Which ideas can go LIVE). Josh can Approve or Reject it as a practice trade: nothing is ever sent to Robinhood.`; practice = true; }
     else if (og27 === "coach_call" && originRow?.late) paper = "PAPER · the coach's post came after the move (marked late). Never chase a missed price. Practice only: scored, never sent to Robinhood.";
   }
   let banner: any = null, checks: any[] = [];
@@ -1248,18 +1249,25 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     else if (og === "coach_against") checks.unshift({ ok: false, guard: true, text: `Against the coach's direction (he said ${originRow?.direction || "the other way"})` });
     if (originRow?.words) { const u = unclearTicker(tk26, originRow.words); if (u) checks.unshift({ ok: false, guard: true, text: u }); }
     try { const dm = await withTimeout(dayMoveCheck(tk26, plan?.direction), 5000, "day move"); if (dm) checks.push(dm); } catch { /* */ }
-    if (paper) checks.unshift({ ok: false, guard: true, paper: true, text: "AUTO-REJECTED · " + paper });
+    if (paper && practice) checks.unshift({ ok: null, practice: true, text: paper });
+    else if (paper) checks.unshift({ ok: false, guard: true, paper: true, text: "AUTO-REJECTED · " + paper });
     // v3.24 (A8): already through its wrong-if → red line on the card (it's still built; Approve still places it).
     if (exit) { const st = await staleEntry({ exit, plan }).catch(() => null); if (st) checks.unshift({ ok: false, guard: true, stale: true, text: st }); }
   }
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
     title: (opening ? stampTitle(unname(input.title || "Action"), !!paper) : unname(input.title || "Action")).slice(0, 140),
     summary: unname(input.summary || "").slice(0, 4000),
-    calls: out, risk, review: review.join("\n\n---\n\n"), status: paper ? "paper" : "pending", created_by: who,
+    calls: out, risk, review: review.join("\n\n---\n\n"), status: practice ? "paper_wait" : paper ? "paper" : "pending", created_by: who,
     plan: plan ? { ...plan, setup: String(plan.setup).toLowerCase().slice(0, 40) } : null, banner, checks,
     ...(exit ? { exit: { ...exit, state: "planned", log: [] } } : {}),
   }) });
   if (rows?.[0]?.status === "pending" && who !== "signals" && who !== "alert" && who !== "watcher") await markPinged([rows[0].id]), await notify("card", `🃏 Card waiting: ${String(rows[0].title).slice(0, 80)}`, "Tap to open the Desk and Approve or Reject (cards expire in 20 minutes).");
+  if (rows?.[0]?.status === "paper_wait") {
+    await markPinged([rows[0].id]);
+    await logDesk("system", "Otto", `📝 Practice card: ${rows[0].title} — waiting for Josh to Approve or Reject (20 minutes). Practice only: nothing is sent to Robinhood.`, rows[0].id);
+    await activity("card", `Practice card (waiting for Josh): ${rows[0].title}`, who === "otto" ? "ticket" : who);
+    if (who !== "signals" && who !== "alert" && who !== "watcher") await notify("card", `📝 Practice card waiting: ${String(rows[0].title).slice(0, 70)}`, "Josh: tap to open the Desk and Approve or Reject (practice only, expires in 20 minutes).");
+  }
   if (rows?.[0]?.status === "paper") {
     await markPinged([rows[0].id]);
     await logDesk("system", "Otto", `📄 Paper card: ${rows[0].title} — ${paper} It's shown and scored; it can't be approved.`, rows[0].id);
@@ -1280,11 +1288,47 @@ function publicAction(a: any) {
            plan: a.plan || null, banner: a.banner || null, checks: a.checks || [], order_id: a.order_id || null, outcome: a.outcome || null, exit: a.exit || null };
 }
 
+/* v3.35: a PRACTICE card (status paper_wait) is approved or rejected like a live one, but this function only writes to our own
+   database. It has no call() to Robinhood for orders: the only Robinhood reads are a quote. The fill is the option's live ask
+   at the tap; the idea is then graded from that moment (evalIdea). Approve never fails on a missing quote: it falls back to the card's price. */
+export async function practiceOn(a: any, decision: string, who: string) {
+  const id = a.id, now = new Date().toISOString();
+  const left = (patch: any) => db("otto_actions?id=eq." + id + "&status=eq.paper_wait", { method: "PATCH", body: JSON.stringify(patch) });
+  if (decision !== "approve") {
+    const r = await left({ status: "rejected", decided_by: who, decided_at: now });
+    if (r?.[0]) await activity("card", `Rejected (practice): ${a.title}`, who.split("@")[0]);
+    return publicAction(r?.[0] || a);
+  }
+  if (Date.now() - Date.parse(a.created_at) > ACTION_TTL_MS) {
+    const r = await left({ status: "expired", decided_by: who, decided_at: now });
+    return publicAction(r?.[0] || a);
+  }
+  // Read the fill first so a slow quote can't leave a half-approved card; a failed read falls back to the card's own numbers.
+  const leg = (a.calls || []).flatMap((c: any) => c.args?.legs || []).find((l: any) => l.position_effect === "open");
+  const tk = String(a.plan?.tv_symbol || "").split(":").pop()?.toUpperCase() || "";
+  let ask: number | null = null, delta: number | null = null, under: number | null = null, note = "";
+  try {
+    const q = (mcpJson(await withTimeout(call("rh", "get_option_quotes", { instrument_ids: [leg?.option_id] }), 5000, "practice quote"))?.data?.results || [])[0]?.quote || null;
+    if (q && Number(q.ask_price) > 0) { ask = Number(q.ask_price); if (q.delta != null && isFinite(Number(q.delta))) delta = Math.abs(Number(q.delta)); }
+  } catch { /* fall back below */ }
+  try { const px = tk ? (await withTimeout(rhPrices([tk]), 5000, "practice price"))[tk] : null; if (px > 0) under = px; } catch { /* */ }
+  if (ask == null) { ask = Number(a.exit?.entry_limit) > 0 ? Number(a.exit.entry_limit) : null; note += "No live option quote: used the card's price. "; }
+  if (under == null) { under = Number(a.plan?.entry_underlying) > 0 ? Number(a.plan.entry_underlying) : null; note += "No live stock price: used the card's entry price. "; }
+  const fill = { ask, delta, underlying: under, at: now, by: who, note: note.trim() || null };
+  const plan = { ...(a.plan || {}), paper_fill: fill };
+  const r = await left({ status: "paper_taken", decided_by: who, decided_at: now, plan, outcome: null });
+  if (!r?.[0]) return publicAction((await db("otto_actions?id=eq." + id + "&select=*"))[0] || a);
+  await activity("card", `Approved (practice): ${a.title}. Pretend fill ${ask != null ? "$" + ask.toFixed(2) : "unknown"} by ${who.split("@")[0]}`, who.split("@")[0]);
+  await logDesk("system", "Otto", `✅ Practice trade taken: ${a.title}. Pretend fill ${ask != null ? "$" + ask.toFixed(2) + " (ask)" : "at the card's price"}, approved by ${who}. ${note}Nothing was sent to Robinhood. It is scored from this moment.`, id);
+  return publicAction(r[0]);
+}
+
 async function actOn(id: string, decision: string, who: string) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("bad id");
   const rows = await db("otto_actions?id=eq." + id + "&select=*");
   const a = rows && rows[0];
   if (!a) throw new Error("no such card");
+  if (a.status === "paper_wait") return practiceOn(a, decision, who);   // v3.35: never reaches the Robinhood code below
   if (a.status !== "pending") return publicAction(a);
   const now = new Date().toISOString();
   if (decision !== "approve") {
@@ -1500,10 +1544,10 @@ async function panel() {
     const fq = await settle(fetchQuotes());
     if (fq.ok) out.fallback_quotes = fq.v.quotes;
   }
-  const pend = await settle(db("otto_actions?status=in.(pending,running)&order=created_at.desc&limit=20&select=*"));
+  const pend = await settle(db("otto_actions?status=in.(pending,running,paper_wait)&order=created_at.desc&limit=20&select=*"));
   // v3.10: a pending card past its 20 minutes can't be approved — mark it expired so it stops showing as waiting.
-  const stale = pend.ok ? pend.v.filter((a: any) => a.status === "pending" && Date.now() - Date.parse(a.created_at) > ACTION_TTL_MS) : [];
-  if (stale.length) background(db("otto_actions?status=eq.pending&id=in.(" + stale.map((a: any) => a.id).join(",") + ")", { method: "PATCH",
+  const stale = pend.ok ? pend.v.filter((a: any) => (a.status === "pending" || a.status === "paper_wait") && Date.now() - Date.parse(a.created_at) > ACTION_TTL_MS) : [];
+  if (stale.length) background(db("otto_actions?status=in.(pending,paper_wait)&id=in.(" + stale.map((a: any) => a.id).join(",") + ")", { method: "PATCH",
     headers: { prefer: "return=minimal" }, body: JSON.stringify({ status: "expired", decided_by: "otto (20 min)", decided_at: new Date().toISOString() }) }));
   out.pending = pend.ok ? pend.v.filter((a: any) => !stale.includes(a)).slice(0, 10).map(publicAction) : [];
   out.card_ttl_min = ACTION_TTL_MS / 60000;
@@ -1790,7 +1834,9 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
           cards.push(card.id);
           if (o.oneStep) { cardRead = unname(String(input.read || "")); if (o.onCard && card.status !== "paper") await o.onCard(card.id).catch(() => {}); }
           send({ t: "action", v: card });
-          content = card.status === "paper"
+          content = card.status === "paper_wait"
+            ? `PRACTICE CARD ${card.id} is on screen, waiting for Josh to Approve or Reject (20 minutes). It is practice only: nothing goes to Robinhood and it only counts in the team's score if Josh approves. Say so in one line; do not tell them it was auto-rejected.`
+            : card.status === "paper"
             ? `PAPER CARD ${card.id} — auto-rejected, it can't be approved: ${String((card.checks || []).find((c: any) => c.paper)?.text || "").slice(0, 300)}. It is still scored. Tell them in one line; don't propose it again or a different contract for it.`
             : `Card ${card.id} is on screen, status pending. Nothing has run. ` +
             `Risk: ${JSON.stringify(card.risk)}. Rule check: ${JSON.stringify(card.checks || [])}. Robinhood review: ${(card.review || "n/a").slice(0, 1500)}`;
@@ -2564,7 +2610,8 @@ async function evalIdea(a: any) {
   const tp1 = Number(p.tp1), wrong = Number(p.stop);
   const tk = String(p.tv_symbol || "").split(":").pop();
   if (!tk || !isFinite(tp1) || !isFinite(wrong) || !p.direction) return { state: "unscored" };
-  const created = Date.parse(a.created_at);
+  const pf = a.status === "paper_taken" ? p.paper_fill : null;       // v3.35: a taken practice trade is graded from Josh's tap
+  const created = pf?.at ? Date.parse(pf.at) : Date.parse(a.created_at);
   if (Date.now() - created < 5 * 60e3) return { state: "pending" };
   const day = etParts(new Date(created)).date;
   const start = new Date(created - 10 * 60e3).toISOString(), end = nyIso(day, "4:00 PM") || undefined;
@@ -2572,8 +2619,8 @@ async function evalIdea(a: any) {
   try { bars = (await rhBars([tk], "5minute", start, end && Date.parse(end) < Date.now() ? end : undefined))[tk.toUpperCase()] || []; }
   catch { return { state: "pending" }; }
   const dm = /Delta (\d?\.\d+)/.exec((a.checks || []).map((c: any) => c.text).join(" "));
-  const g: any = gradeIdea({ created, direction: p.direction === "down" ? "down" : "up", tp1, wrong, entry: Number(p.entry_underlying) || null,
-    delta: dm ? Number(dm[1]) : null, premium: Number(ex.entry_limit) || (a.risk?.cost ? a.risk.cost / 100 : null), tf: Number(p.wrong_tf || ex.wrong_tf) || 15 }, bars);
+  const g: any = gradeIdea({ created, direction: p.direction === "down" ? "down" : "up", tp1, wrong, entry: Number(pf?.underlying) || Number(p.entry_underlying) || null,
+    delta: Number(pf?.delta) || (dm ? Number(dm[1]) : null), premium: Number(pf?.ask) || Number(ex.entry_limit) || (a.risk?.cost ? a.risk.cost / 100 : null), tf: Number(p.wrong_tf || ex.wrong_tf) || 15 }, bars);
   return g.state === "open" ? { state: "pending" } : { ...g, at: g.at ? Math.round(g.at / 1000) : undefined };
 }
 // v3.14: grade a few open ideas every 5 minutes from the cron, so the Scoreboard is current without opening it.
@@ -2597,7 +2644,7 @@ export function scoreRows(ideas: any[], pnlBy: Record<string, number>) {
   return (ideas || []).slice(0, 400).map((a: any) => ({
     id: a.id, title: a.title, at: a.created_at, status: a.status, source: srcOf(a),
     state: a.outcome?.state ?? null, est: a.outcome?.pnl_est ?? null, r: a.outcome?.r ?? null,
-    pnl: pnlBy[a.id] ?? null,
+    pnl: pnlBy[a.id] ?? null, by: a.decided_by ?? null,
   }));
 }
 async function scorecard() {
@@ -2629,7 +2676,7 @@ async function scorecard() {
     return Object.entries(g).map(([k, l]) => ({ key: k, ...agg(l) })).sort((a, b) => b.n - a.n);
   };
   const taken = ideas.filter((a: any) => a.status === "done");
-  const passed = ideas.filter((a: any) => ["rejected", "expired", "paper"].includes(a.status));
+  const passed = ideas.filter((a: any) => ["rejected", "expired", "paper", "paper_wait"].includes(a.status));
   return {
     ok: true,
     since: ideas.length ? ideas[ideas.length - 1].created_at : null,
@@ -3907,7 +3954,7 @@ export async function signalJarvis(bid: number) {
     if (acts.length) await markPinged(acts.map((a: any) => a.id));
     for (const a of acts.filter((x: any) => !pinged.has(x.id) && x.status !== "paper")) {
       const row = all.find((r: any) => r.action_id === a.id);
-      await notify("signal", `🃏 Card ready: ${row?.ticker || ""} ${row?.direction ? row.direction.toUpperCase() : ""}`.trim(),
+      await notify("signal", `${a.status === "paper_wait" ? "📝 Practice card" : "🃏 Card"} ready: ${row?.ticker || ""} ${row?.direction ? row.direction.toUpperCase() : ""}`.trim(),
         `${String(a.title || "").slice(0, 100)} — from ${SIG_LABEL}: "${String(row?.words || "").slice(0, 70)}". Tap to Approve or Reject (expires in 20 min).`, "./#signals");
     }
     // v3.16: a call with no card is never silent again (6 Oct MU: status "done", nobody told).
@@ -6572,7 +6619,7 @@ export async function coachCorner(range = "today") {
     const did = cards.map((a: any) => {
       const d = a.plan?.direction === "down" ? "down" : "up";
       const filled = a.status === "done" && a.exit && !["planned", "waiting_fill", "dead"].includes(a.exit.state);
-      const we = a.status === "paper" ? "auto-rejected" : a.status === "done" ? (filled ? "took it" : "approved, never filled (cancelled)") : a.status === "failed" ? "failed to place" : a.status === "rejected" ? "passed" : a.status === "expired" ? "passed (expired)" : a.status;
+      const we = a.status === "paper" ? "auto-rejected" : a.status === "paper_taken" ? "took it (practice)" : a.status === "paper_wait" ? "practice card, not answered" : a.status === "done" ? (filled ? "took it" : "approved, never filled (cancelled)") : a.status === "failed" ? "failed to place" : a.status === "rejected" ? "passed" : a.status === "expired" ? "passed (expired)" : a.status;
       return { id: a.id, title: a.title, status: a.status, direction: d, origin: a.plan?.origin || null, wrong_side: !!cd && cd !== d, we, pnl: pnlBy[a.id] ?? null };
     });
     out.push({ id: r.id, day: r.day, at: r.posted_at, label: r.posted_label, ticker: r.ticker, kind: r.kind, direction: r.direction || null, words: r.words,
@@ -7389,6 +7436,7 @@ export function spliceRecap(jarvis: string, block: string): string {
   return parts.join("").trim();
 }
 export const actOnForTest = actOn;
+export const evalIdeaForTest = evalIdea;
 
 /* ============================================================ v3.23 (8 Oct 2026) — Signal speed
    Decisions (Ifoma, 8 Oct; claude/otto-v323-speed.md): Jarvis makes a Signal card in ONE forced step with everything

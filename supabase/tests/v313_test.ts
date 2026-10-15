@@ -1459,7 +1459,7 @@ Deno.test("v3.30 item 1: proposeAction refuses a card for a blocked ticker from 
 Deno.test("v3.30 item 2: the server sets LIVE / PAPER at the front of an opening card's title; what Jarvis wrote there is replaced (META 12 Oct 14:06)", async () => {
   reset(); (M as any).clearCacheForTest(); T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false } }];   // only the coach's call may go live
   const paper: any = await M.proposeAction({ ...spyCard(), title: "LIVE — Buy 1 SPY 781C 10/9 @ $3.50" }, "watcher");
-  assert(paper.status === "paper" && paper.title === "PAPER — Buy 1 SPY 781C 10/9 @ $3.50", "paper card: " + paper.title);
+  assert(paper.status === "paper_wait" && paper.title === "PAPER — Buy 1 SPY 781C 10/9 @ $3.50", "practice card: " + paper.status + " " + paper.title);   // v3.35
   T.otto_actions = []; (M as any).clearCacheForTest();
   T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false, live_coach_call: true, live_coach_level: true, live_jarvis: true } }];
   const live: any = await M.proposeAction({ ...spyCard(), title: "paper: Buy 1 SPY 781C 10/9 @ $3.50" }, "watcher");
@@ -2184,8 +2184,8 @@ Deno.test("v3.26 Coaches Corner: MSFT 532.40 scored both ways; ABBV exits at his
 Deno.test("v3.27: a source that is not switched on to go LIVE becomes a PAPER card (never approvable); the manual ticket is unaffected", async () => {
   reset(); (M as any).clearCacheForTest(); T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false } }];   // defaults: only the coach's call may go live
   const c: any = await M.proposeAction(spyCard(), "watcher");
-  assert(c.status === "paper", "jarvis/watcher idea is paper by default: " + c.status);
-  assert(c.checks.some((x: any) => x.paper && /PAPER/.test(x.text) && /never sent to Robinhood/.test(x.text)), JSON.stringify(c.checks));
+  assert(c.status === "paper_wait", "jarvis/watcher idea is a practice card by default (v3.35: waits for Josh): " + c.status);
+  assert(c.checks.some((x: any) => x.practice && !x.paper && /PRACTICE/.test(x.text) && /nothing is ever sent to Robinhood/.test(x.text)), JSON.stringify(c.checks));
   T.otto_actions = []; (M as any).clearCacheForTest();
   T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false, live_coach_call: true, live_coach_level: true, live_jarvis: true } }];
   const d: any = await M.proposeAction(spyCard(), "watcher");
@@ -2323,4 +2323,85 @@ Deno.test("v3.33 Close Now: if the sell fails after the stop was cancelled, the 
   });
   const r2: any = await M.closeByButton({ option_id: OPT, author: "Josh" }, "x");
   assert(!r2.ok && !/no stop order/.test(r2.error), "no false alarm when a stop is still on: " + r2.error);
+});
+
+
+/* =============================== v3.35 PRACTICE CARDS NEED JOSH'S APPROVE (Ifoma, 15 Oct 2026) =============================== */
+const practiceHook = (ask: string | null) => (tool: string, args: any) => {
+  if (tool === "get_option_quotes") return ask ? { data: { results: [{ quote: { ask_price: ask, bid_price: "3.40", delta: "0.31" } }] } } : { data: { results: [] } };
+  if (tool === "get_equity_quotes") return { data: { results: [{ quote: { symbol: "SPY", last_trade_price: "780.25" } }] } };
+  return null;
+};
+async function practiceCard(who = "watcher") {
+  reset(); (M as any).clearCacheForTest(); setNow("2026-10-06T15:51:00Z");
+  T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false } }];
+  const c: any = await M.proposeAction(spyCard(), who);
+  const uid = "35353535-3535-4535-8535-353535353535"; T.otto_actions[0].id = uid; c.id = uid;   // the server wants a UUID
+  return c;
+}
+Deno.test("v3.35: Josh approves a practice card: pretend fill = the live ask at the tap, nothing goes to Robinhood, the idea is re-scored from the tap", async () => {
+  const c = await practiceCard();
+  assert(c.status === "paper_wait" && c.title.startsWith("PAPER — "), "waits for Josh: " + c.status);
+  T.otto_actions[0].outcome = { state: "loss", pnl_est: -90 };   // graded while it waited: must be cleared by the tap
+  callHook = practiceHook("3.60"); (M as any).clearCacheForTest(); setNow("2026-10-06T15:58:00Z");
+  const r: any = await M.actOnForTest(c.id, "approve", "josh@x");
+  assert(r.status === "paper_taken" && r.decided_by === "josh@x", "taken: " + r.status);
+  const pf = r.plan.paper_fill;
+  assert(pf.ask === 3.6 && pf.delta === 0.31 && pf.underlying === 780.25 && pf.by === "josh@x" && pf.at, JSON.stringify(pf));
+  assert(r.outcome === null, "old grade cleared so it is scored from the tap");
+  assert(!calls.some((x) => /^place_|cancel_/.test(x.tool)) && orders.length === 0, "no order tool touched: " + calls.map((x) => x.tool).join(","));
+  assert(/Practice trade taken/.test(deskText()) && /Nothing was sent to Robinhood/.test(deskText()), deskText());
+  const again: any = await M.actOnForTest(c.id, "approve", "josh@x");
+  assert(again.status === "paper_taken", "a second tap does nothing more");
+});
+Deno.test("v3.35: Reject a practice card = rejected; a card past 20 minutes cannot be approved (expired); no order either way", async () => {
+  const c = await practiceCard();
+  const r: any = await M.actOnForTest(c.id, "reject", "josh@x");
+  assert(r.status === "rejected" && r.decided_by === "josh@x", r.status);
+  const d = await practiceCard();
+  T.otto_actions[0].created_at = new RealDate(NOW - 21 * 60e3).toISOString();
+  const e: any = await M.actOnForTest(d.id, "approve", "josh@x");
+  assert(e.status === "expired", "late approve: " + e.status);
+  assert(!calls.some((x) => /^place_/.test(x.tool)) && orders.length === 0, "no order");
+});
+Deno.test("v3.35: no quote at the tap = Approve still works, fills at the card's price and says so", async () => {
+  const c = await practiceCard();
+  callHook = practiceHook(null);
+  const r: any = await M.actOnForTest(c.id, "approve", "josh@x");
+  assert(r.status === "paper_taken", r.status);
+  assert(r.plan.paper_fill.ask === 3.5 && /card's price/.test(r.plan.paper_fill.note || ""), JSON.stringify(r.plan.paper_fill));
+});
+Deno.test("v3.35: safety paper cards (kill switch, size cap, late coach call) stay auto-rejected and cannot be approved; a switched-on source is still a LIVE pending card", async () => {
+  reset(); (M as any).clearCacheForTest(); setNow("2026-10-06T15:51:00Z");
+  T.otto_settings = [{ key: "limits", value: { size_cap_on: true, size_cap_pct: 5, kill_on: false, live_jarvis: true } }];
+  const c: any = await M.proposeAction(spyCard(), "watcher");
+  assert(c.status === "paper" && c.checks[0].paper && /AUTO-REJECTED/.test(c.checks[0].text), "size cap: " + c.status);
+  T.otto_actions[0].id = "36363636-3636-4636-8636-363636363636";
+  const r: any = await M.actOnForTest("36363636-3636-4636-8636-363636363636", "approve", "josh@x");
+  assert(r.status === "paper" && !calls.some((x) => /^place_/.test(x.tool)), "cannot be approved");
+  reset(); (M as any).clearCacheForTest(); setNow("2026-10-06T15:51:00Z");
+  T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false, live_jarvis: true } }];
+  const l: any = await M.proposeAction(spyCard(), "watcher");
+  assert(l.status === "pending" && l.title.startsWith("LIVE — "), "live path unchanged: " + l.status);
+});
+Deno.test("v3.35: a waiting practice card blocks a duplicate on the same ticker + direction; the practice ping goes out", async () => {
+  const c = await practiceCard("ottotrader@vinecreativestudio.com");
+  assert(pings.some((p) => p.kind === "card" && /Practice card waiting/.test(p.title)), "ping: " + JSON.stringify(pings));
+  let msg = ""; try { await M.proposeAction(spyCard(), "watcher"); } catch (e) { msg = (e as Error).message; }
+  assert(/card is already up/.test(msg), "duplicate refused: " + msg);
+  assert(T.otto_actions.length === 1, "only one card");
+});
+Deno.test("v3.35: the practice trade is graded from Josh's tap (not from when Jarvis made the card), on the tap's entry price and ask", async () => {
+  const c = await practiceCard();
+  callHook = practiceHook("3.60"); (M as any).clearCacheForTest(); setNow("2026-10-06T15:58:00Z");
+  await M.actOnForTest(c.id, "approve", "josh@x");
+  const row = T.otto_actions[0];
+  // 5-minute bars: a spike to the target BEFORE the tap (15:55 UTC), then a drop through the stop AFTER the tap (16:00, 16:05)
+  const bar = (iso: string, o: number, h: number, l: number, cl: number) => ({ begins_at: iso, open_price: String(o), high_price: String(h), low_price: String(l), close_price: String(cl) });
+  callHook = (tool: string) => tool === "get_equity_historicals" ? { data: { results: [{ symbol: "SPY", interval: "5minute", bars: [
+    bar("2026-10-06T15:50:00Z", 780, 785, 779.8, 784), bar("2026-10-06T16:00:00Z", 780.2, 780.4, 777.9, 778.0), bar("2026-10-06T16:05:00Z", 778.0, 778.2, 777.5, 777.8) ] }] } } : null;
+  setNow("2026-10-06T16:20:00Z");
+  const o: any = await M.evalIdeaForTest(row);
+  assert(o.state === "loss" && o.entry === 780.25, "graded after the tap, not a win from the earlier spike: " + JSON.stringify(o));
+  assert(o.pnl_est < 0 && o.pnl_est >= -360, "loss capped at the paid ask $3.60 x 100: " + o.pnl_est);
 });
