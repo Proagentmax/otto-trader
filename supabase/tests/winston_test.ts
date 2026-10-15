@@ -546,3 +546,175 @@ Deno.test("replay 15: the app's live route needs the Otto email, writes nothing,
   const k: any = await (await call("live", good)).json(); eq(k.live[0].est_pnl, null, "no bid = no estimate (never a guess)");
   const st: any = await (await call("state", good)).json(); assert(st.heartbeat && st.heartbeat.at, "state carries the heartbeat: " + JSON.stringify(st.heartbeat));
 });
+
+/* ================================ v3.36 (16 Oct 2026): data mode + the coach's 15 Oct rules ================================ */
+Deno.test("v3.36 picker: loose tier only in data mode; volume<OI and delta outside .20-.50 become stamps, not walls", () => {
+  const row = (o: Partial<any>) => ({ id: "x", exp: "2026-10-16", strike: 200, type: "call", bid: 2.4, ask: 2.5, delta: .35, vol: 100, oi: 400, label: "L", ...o });
+  eq(X.pickContract([row({ id: "d" })], 1000, 4000).row, null, "strict: volume below OI still passes the idea");
+  const p = X.pickContract([row({ id: "d" })], 1000, 4000, true);
+  eq(p.row?.id, "d", "data mode: the loose tier takes it");
+  eq(p.by, "loose", "tier name");
+  eq(p.flags, ["picker:volume_not_above_oi"], "stamped, not blocked");
+  const q = X.pickContract([row({ id: "e", delta: .18, vol: 900 })], 1000, 4000, true);
+  eq(q.flags, ["picker:delta_outside_20_50"], "delta .18 is loose-tier only and stamped");
+  eq(X.pickContract([row({ id: "f", delta: .10, vol: 900 })], 1000, 4000, true).row, null, "delta .10 is outside even the loose tier");
+  eq(X.pickContract([row({ id: "g", bid: 0 })], 1000, 4000, true).row, null, "no bid: still no trade in data mode");
+  eq(X.pickContract([row({ id: "h", ask: 12, bid: 11.8 })], 1000, 4000, true).row, null, "over the size cap: still no trade in data mode (W2)");
+  eq(X.pickContract([row({ id: "i", vol: 900 })], 1000, 4000, true).by, "band", "a proper band contract still wins the loose tier");
+});
+Deno.test("v3.36 gates: soft gates stamp in data mode and block in strict mode; hard gates always block", () => {
+  const rules = (on: string[]) => ["W1", "W2", "W3", "W12", "W13", "W14", "W15", "W20", "W21", "W23"].map((id) => ({ id, kind: "x", source: "x", title: id, body: "", active: on.includes(id), params: id === "W12" ? { max_spread_pct: 5 } : {} }));
+  const base: any = { rules: rules(["W1", "W2", "W3", "W12", "W15", "W20", "W21", "W23"]), d: { wrong_if_level: 198, target_level: 204 }, cap: 1000, maxLoss: 400, planned_loss: 70, cost: 250, cash: 4000, stop_option: 1.8, ask: 2.5,
+    openCount: 0, maxOpen: 3, tickerTakenToday: true, sameTickerOpen: true, spreadPct: 30, quoteAgeSec: 3, blackout: null, coachCall: false, etMin: 620, lastEntryMin: 930, ownFromMin: 600, coachFromMin: 571,
+    dataMode: true, reentryBeyondExit: "re-entry above the last exit", atCoachLevel: "within $0.5 of 770", indexDisagree: "SPY above VWAP", thesisWrong: "says below VWAP but price is above", coachResultAfter: "post 207 says sold" };
+  const hits = X.runGatesAll(base);
+  eq(hits.map((h: any) => h.rule).sort(), ["W12", "W15", "W20", "W21", "W23", "W3", "fact", "fact"].sort(), "every soft gate fires");
+  assert(hits.every((h: any) => h.soft), "all soft in data mode");
+  assert(X.runGates(base) === null, "data mode: nothing blocks");
+  assert(X.runGates({ ...base, dataMode: false })?.rule === "W3", "strict mode: the first soft gate blocks");
+  assert(X.runGates({ ...base, planned_loss: 500 })?.rule === "W2", "W2 is hard even in data mode");
+  assert(X.runGates({ ...base, openCount: 3 })?.rule === "max_open", "max_open is hard even in data mode");
+  assert(X.runGates({ ...base, cost: 4100 })?.rule === "cash" || X.runGates({ ...base, cost: 4100 })?.rule === "W2", "cash is hard");
+  assert(X.runGates({ ...base, etMin: 580 })?.rule === "time", "time window is hard");
+  const off: any = { ...base, rules: rules(["W1", "W2"]), dataMode: false };
+  eq(X.runGatesAll(off).map((h: any) => h.rule), ["fact", "fact"], "rules OFF never fire; the fact checks are not rules and always stamp");
+  assert(X.runGates(off)?.rule === "fact", "strict mode: a wrong fact in the thesis blocks (data mode only stamps it)");
+});
+Deno.test("v3.36 W20 re-entry: a closed trade today on the same ticker+side, and the new entry is past its exit = chasing", () => {
+  const closed = [{ ticker: "SPY", side: "call", exit_under: 768.9 }];
+  assert(X.reentryBeyondExit("call", 770.22, closed, "SPY")?.includes("above the last exit"), "SPY 770.22 after an exit at 768.9");
+  eq(X.reentryBeyondExit("call", 767.5, closed, "SPY"), null, "price came back below the exit: allowed");
+  eq(X.reentryBeyondExit("put", 760, closed, "SPY"), null, "other side: not a re-entry");
+  eq(X.reentryBeyondExit("call", 999, closed, "QQQ"), null, "other ticker");
+  eq(X.reentryBeyondExit("call", 999, [{ ticker: "SPY", side: "call", exit_under: null }], "SPY"), null, "no exit price recorded (older trades): nothing to compare");
+  assert(X.reentryBeyondExit("put", 719, [{ ticker: "QQQ", side: "put", exit_under: 720.5 }], "QQQ")?.includes("below the last exit"), "puts mirror");
+});
+Deno.test("v3.36 W21 sell-to: a coach level within $0.50 that is not the trade's own direction blocks a long at the coach's sale point", () => {
+  const posts = [{ ticker: "SPY", kind: "level", level: 770, direction: null }, { ticker: "SPY", kind: "level", level: 768, direction: "long" }, { ticker: "SPY", kind: "note", level: 764 }];
+  assert(X.atCoachLevel("call", 770.22, posts, "SPY")?.includes("770"), "buying at 770 = his sell-to");
+  eq(X.atCoachLevel("call", 768.1, posts, "SPY"), null, "768 was his 'above X' long line: same direction, allowed");
+  eq(X.atCoachLevel("call", 771.5, posts, "SPY"), null, "more than $0.50 away");
+  eq(X.atCoachLevel("call", 764.1, posts, "SPY"), null, "a note is not a level post");
+  assert(X.atCoachLevel("put", 770.3, posts, "SPY"), "a direction-less coach level is not an entry for either side: don't initiate within $0.50 of it");
+  assert(X.atCoachLevel("put", 768.2, posts, "SPY"), "a put at his 'long above 768' line is shorting where he buys: fires");
+});
+Deno.test("v3.36 W23 index read + disagreement", () => {
+  const b = (t: number, c: number) => ({ t, o: c - 0.2, h: c + 0.3, l: c - 0.5, c, v: 100 });
+  const now = Date.UTC(2026, 9, 15, 16, 30);
+  const up = [b(now - 50 * 60e3, 766), b(now - 40 * 60e3, 767), b(now - 30 * 60e3, 768), b(now - 20 * 60e3, 769)];
+  const idx = X.indexRead(up, now);
+  assert(idx && idx.above_vwap && idx.rising && !idx.falling, "SPY rising above VWAP");
+  assert(X.indexDisagree("put", idx)?.includes("fights the index"), "QQQ short vs a rising SPY");
+  eq(X.indexDisagree("call", idx), null, "long agrees");
+  const down = [b(now - 50 * 60e3, 769), b(now - 40 * 60e3, 768), b(now - 30 * 60e3, 767), b(now - 20 * 60e3, 766)];
+  const idx2 = X.indexRead(down, now);
+  assert(idx2 && !idx2.above_vwap && idx2.falling, "SPY falling below VWAP");
+  assert(X.indexDisagree("call", idx2), "long vs a falling SPY");
+  eq(X.indexRead(up.slice(0, 2), now), null, "fewer than 3 completed bars: no read");
+  eq(X.indexDisagree("put", null), null, "no read: no gate");
+});
+Deno.test("v3.36 fact checks: thesis vs VWAP, and a 'result' post after the cited post", () => {
+  assert(X.thesisVwapWrong("QQQ is below VWAP (720.91 area) and rolling over", 723.7, 720.91)?.includes("above VWAP"), "15 Oct QQQ: said below, was above");
+  eq(X.thesisVwapWrong("QQQ is below VWAP and rolling over", 719, 720.91), null, "true statement");
+  assert(X.thesisVwapWrong("reclaimed VWAP, momentum up", 215, 215.84), "said above, was below");
+  eq(X.thesisVwapWrong("no vwap talk here", 100, 101), null, "nothing to check");
+  eq(X.thesisVwapWrong("below VWAP", 100, null), null, "no vwap known: no check");
+  const posts = [{ id: 206, ticker: "SPY", kind: "level", words: "SEE HOW SPY PLAYED THE BOUNCE RIGHT UP TO 768 AND NOW WE STOP" },
+    { id: 207, ticker: "SPY", kind: "result", words: "PERFECT PLAY TO SELL THEM INTO STRENGTH. SOME I KEPT" }, { id: 208, ticker: "SPY", kind: "note", words: "AND PLAY THE BOUNCE ON SPY" }];
+  assert(X.coachResultAfter(206, "SPY", posts)?.includes("207"), "a sale after #206 is his exit");
+  eq(X.coachResultAfter(208, "SPY", posts), null, "nothing after #208");
+  eq(X.coachResultAfter(206, "QQQ", posts), null, "other ticker");
+});
+Deno.test("v3.36 W22 coach exit: indecision bar then no new high = out; a strong bar then a new high = stay", () => {
+  const t0 = Date.UTC(2026, 9, 15, 15, 0), m = 60e3, now = t0 + 60 * m;
+  const bar = (i: number, o: number, h: number, l: number, c: number) => ({ t: t0 + i * 10 * m, o, h, l, c, v: 1 });
+  const doji = [bar(0, 770, 771, 769, 770.9), bar(1, 770.9, 771.4, 770.4, 770.95), bar(2, 770.9, 771.3, 770.2, 770.5)];   // bar 1 indecision, bar 2 h 771.3 < 771.4
+  const hit = X.coachExit({ dir: "up" }, doji, t0 - 1, now);
+  assert(hit && hit.t === doji[2].t, "exit on the failed bar");
+  const strong = [bar(0, 770, 771, 769, 770.9), bar(1, 770.9, 772, 770.8, 771.9), bar(2, 771.9, 772.5, 771.5, 772.3)];
+  eq(X.coachExit({ dir: "up" }, strong, t0 - 1, now), null, "no indecision: no exit");
+  const newHigh = [bar(0, 770, 771, 769, 770.9), bar(1, 770.9, 771.4, 770.4, 770.95), bar(2, 770.9, 771.9, 770.6, 771.8)];
+  eq(X.coachExit({ dir: "up" }, newHigh, t0 - 1, now), null, "indecision then a NEW high: stay");
+  eq(X.coachExit({ dir: "up" }, doji, t0 + 25 * m, now), null, "bars before the entry are ignored");
+  const short = [bar(0, 724, 724.5, 723, 723.2), bar(1, 723.2, 723.6, 722.9, 723.25), bar(2, 723.2, 723.8, 723.0, 723.5)];   // bar 1 indecision, bar 2 l 723.0 > 722.9
+  assert(X.coachExit({ dir: "down" }, short, t0 - 1, now), "puts: indecision then no new low = out");
+});
+Deno.test("v3.36 excursion (MFE / MAE) in price and in R", () => {
+  const t0 = Date.UTC(2026, 9, 15, 15, 0), m = 60e3, now = t0 + 40 * m;
+  const bars = [{ t: t0, o: 770, h: 771.2, l: 769.4, c: 770.5, v: 1 }, { t: t0 + 10 * m, o: 770.5, h: 772.0, l: 770.3, c: 771.5, v: 1 }, { t: t0 + 20 * m, o: 771.5, h: 771.8, l: 769.0, c: 769.5, v: 1 }];
+  const e = X.excursion({ dir: "up", delta: 0.35, planned_loss: 70 }, bars, t0 - 1, 770.22, now)!;
+  eq(e.mfe_under, 1.78, "high 772.0 - entry 770.22");
+  eq(e.mae_under, 1.22, "entry - low 769.0");
+  eq(e.mfe_r, 0.89, "1.78 * 0.35 * 100 / 70");
+  eq(e.bars, 3, "three completed bars");
+  eq(X.excursion({ dir: "up" }, [], t0, 770, now), null, "no bars: nothing");
+  eq(X.excursion({ dir: "up", delta: 0.35 }, bars, t0 - 1, 770.22, now)?.mfe_r, null, "no planned loss: no R");
+});
+Deno.test("v3.36 limits override: Winston can drop his daily stop while the live limits row keeps it", () => {
+  const live = { daily_on: true, daily_losses: 2, weekly_pct: 20 };
+  eq(X.applyLimits(live, null).daily_on, true, "no override");
+  const o = X.applyLimits(live, { daily_on: false });
+  eq(o.daily_on, false, "daily off for Winston");
+  eq(o.weekly_pct, 20, "weekly untouched");
+  eq(X.applyLimits(live, { daily_on: "nope" as any }).daily_on, true, "a truthy string still means on (booleans are coerced)");
+  const e = { equity: 4030, cash: 4030, day_pnl: 30, day_losses: 2, week_pnl: 30, week_start_equity: 4000 };
+  assert(X.limitsState(X.applyLimits(live, null), e).locked?.why.includes("daily stop"), "15 Oct: two losses on a +$30 day locked him");
+  eq(X.limitsState(X.applyLimits(live, { daily_on: false }), e).locked, null, "data mode: no lock on a loss count");
+  assert(X.limitsState(X.applyLimits(live, { daily_on: false }), { ...e, week_pnl: -900 }).locked?.why.includes("weekly"), "the weekly kill switch still locks");
+});
+Deno.test("replay 7 (v3.36): the 15 Oct SPY chase in DATA MODE opens WITH stamps (W20 re-entry, W21 sell-to, result post, loose picker); in STRICT mode it is blocked; the coach exit fires", async () => {
+  // Data mode: config merged like SQL 024 does; W20-W23 active; the live limits row still says daily_losses 2.
+  seed(); setNow("2026-10-15T15:11:00Z");                                                        // Thu 15 Oct, 11:11 AM ET
+  TABLES.winston_settings[0].value = { enabled: true, paper_balance: 4000, mode: "data", max_open: 3, min_time_exit_min: 120, limits_override: { daily_on: false } };
+  for (const id of ["W20", "W21", "W22", "W23"]) TABLES.winston_rules.push({ id, sort: 170, kind: "gate", source: "coach 2026-10-15", title: id, body: id, active: true, params: {} });
+  W.spot = { SPY: 770.22, QQQ: 724, NVDA: 217 }; W.prev = { SPY: 769.6, QQQ: 729, NVDA: 221 }; W.calls.length = 0; W.ai.n = 0;
+  W.opts = { c773: { strike: 773, bid: 1.56, ask: 1.57, delta: 0.35, vol: 100, oi: 4000 } };                // volume BELOW open interest: strict picker says no
+  W.bars = { SPY: [barRow("2026-10-15T14:40:00Z", 768.5, 769.2, 768.3, 768.84), barRow("2026-10-15T14:50:00Z", 768.8, 769.9, 768.6, 769.7), barRow("2026-10-15T15:00:00Z", 769.7, 770.5, 769.5, 770.29)] };
+  // two earlier SPY call trades closed today, the last one out at 768.9; two losses on the day (-29, -32) so the LIVE daily stop would have locked him
+  TABLES.winston_trades.push({ id: 101, day: "2026-10-15", status: "closed", ticker: "SPY", side: "call", pnl_realistic: -29, entry_ask: 1.57, qty: 1, closed_at: "2026-10-15T14:50:00Z", exit_under: 768.9, flags: [], broke: [] });
+  TABLES.winston_trades.push({ id: 102, day: "2026-10-15", status: "closed", ticker: "QQQ", side: "put", pnl_realistic: -32, entry_ask: 2.46, qty: 1, closed_at: "2026-10-15T15:00:00Z", exit_under: 724, flags: [], broke: [] });
+  TABLES.otto_jason.push({ id: 200, day: "2026-10-15", posted_label: "9:00 AM", kind: "level", ticker: "SPY", direction: null, level: 770, words: "SPY MUST GET BACK ABOVE AND MAINTAIN 768 FIRST THEN 770", late: false });
+  TABLES.otto_jason.push({ id: 207, day: "2026-10-15", posted_label: "10:27 AM", kind: "result", ticker: "SPY", direction: null, level: 768, words: "PERFECT PLAY TO SELL THEM INTO STRENGTH. SOME I KEPT", late: false });
+  TABLES.otto_jason.push({ id: 208, day: "2026-10-15", posted_label: "10:27 AM", kind: "note", ticker: "SPY", direction: "long", level: null, words: "AND PLAY THE BOUNCE ON SPY", late: false });
+  aiScript = () => ({ decisions: [{ ticker: "SPY", side: "call", source: "coach:200", thesis: "Coach post 208 calls to play the bounce; SPY above VWAP and continuing higher", wrong_if_level: 768.3, target_level: 773, time_exit_min: 95,
+    cites: [{ type: "coach_post", ref: "200" }] }], passes: [] });
+  const r = await X.tick();
+  assert(!r.locked, "data mode: two losses do not lock him (limits_override daily_on false): " + JSON.stringify(r));
+  const t = TABLES.winston_trades.find((x) => x.status === "open");
+  assert(t, "the trade opened in data mode: " + JSON.stringify(r.results));
+  eq(t.plan.picked_by, "loose", "picked by the loose tier (volume < OI)");
+  eq(t.plan.time_exit_min, 120, "the AI asked for 95 minutes; the floor is 120");
+  eq(t.plan.mode, "data", "plan says data mode");
+  const st = t.plan.stamps.map((s: string) => s.split(":")[0]).sort();
+  eq(st, ["W20", "W21", "fact", "picker"].sort(), "stamped: re-entry above 768.9, within $0.50 of the coach's 770, the result post after #200, and the picker: " + JSON.stringify(t.plan.stamps));
+  assert(t.flags.includes("stamp:W20") && t.flags.includes("stamp:picker"), "stamps also on the trade flags for the report: " + JSON.stringify(t.flags));
+  assert(/stamped: /.test(TABLES.winston_ideas.find((i) => i.status === "taken").reason), "the idea row says it was stamped");
+  // the coach exit (W22): an indecision bar then no new high after the entry closes it before the 120-minute time stop
+  setNow("2026-10-15T15:41:00Z");
+  W.bars.SPY.push(barRow("2026-10-15T15:10:00Z", 770.3, 771.0, 769.9, 770.9), barRow("2026-10-15T15:20:00Z", 770.9, 771.4, 770.4, 770.95), barRow("2026-10-15T15:30:00Z", 770.9, 771.3, 770.2, 770.5));
+  W.opts.c773.bid = 1.6; W.opts.c773.ask = 1.62; aiScript = null;
+  await X.tick();
+  const c = TABLES.winston_trades.find((x) => x.id === t.id);
+  eq(c.exit_reason, "coach_exit", "indecision then no new high -> out (not a time exit)");
+  eq(c.exit_under, 770.5, "exit price on the underlying is recorded now (W20 needs it)");
+  assert(c.plan.excursion && c.plan.excursion.mfe_under === 1.18 && c.plan.excursion.mae_under === 0.02 && c.plan.excursion.bars === 2, "MFE 771.4-770.22, MAE 770.22-770.2 (the 11:10 bar began before the entry and is skipped): " + JSON.stringify(c.plan.excursion));
+  assert(c.flags.includes("W22_indecision_then_no_new_high"), "exit flagged");
+  // STRICT mode, same tape: the picker alone passes the idea (volume < OI), nothing opens
+  seed(); setNow("2026-10-15T15:11:00Z");
+  for (const id of ["W20", "W21", "W22", "W23"]) TABLES.winston_rules.push({ id, sort: 170, kind: "gate", source: "coach 2026-10-15", title: id, body: id, active: true, params: {} });
+  W.spot = { SPY: 770.22, QQQ: 724, NVDA: 217 }; W.prev = { SPY: 769.6, QQQ: 729, NVDA: 221 }; W.ai.n = 0;
+  W.opts = { c773: { strike: 773, bid: 1.56, ask: 1.57, delta: 0.35, vol: 100, oi: 4000 } };
+  W.bars = { SPY: [barRow("2026-10-15T14:40:00Z", 768.5, 769.2, 768.3, 768.84), barRow("2026-10-15T14:50:00Z", 768.8, 769.9, 768.6, 769.7), barRow("2026-10-15T15:00:00Z", 769.7, 770.5, 769.5, 770.29)] };
+  TABLES.otto_jason.push({ id: 200, day: "2026-10-15", posted_label: "9:00 AM", kind: "level", ticker: "SPY", direction: null, level: 770, words: "SPY 768 THEN 770", late: false });
+  aiScript = () => ({ decisions: [{ ticker: "SPY", side: "call", source: "coach:200", thesis: "bounce", wrong_if_level: 768.3, target_level: 773, cites: [{ type: "coach_post", ref: "200" }] }], passes: [] });
+  await X.tick();
+  eq(TABLES.winston_trades.length, 0, "strict: no trade");
+  assert(/No contract/.test(TABLES.winston_ideas[0].reason), "strict: the picker passed it: " + TABLES.winston_ideas[0].reason);
+  // STRICT mode with a liquid contract: W21 (at the coach's 770) blocks instead of stamping
+  W.opts.c773.vol = 9000; TABLES.winston_ideas.length = 0; W.ai.n = 0; setNow("2026-10-15T15:21:00Z"); W.spot.SPY = 770.3;
+  TABLES.otto_jason.push({ id: 209, day: "2026-10-15", posted_label: "11:20 AM", kind: "note", ticker: null, words: "watching", late: false });   // a new post wakes the AI
+  await X.tick();
+  eq(W.ai.n, 1, "the new post woke him");
+  eq(TABLES.winston_trades.length, 0, "strict: still no trade");
+  assert(/^W21:/.test(TABLES.winston_ideas[0].reason), "strict: blocked by W21 at the sell-to: " + TABLES.winston_ideas[0].reason);
+});

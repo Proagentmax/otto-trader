@@ -1244,6 +1244,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     // v3.26: where the idea came from; an unclear ticker; against the day's move.
     const tk26 = String(plan?.tv_symbol || "").split(":").pop() || "";
     const og = plan?.origin;
+    if (typeof plan?.weak === "string" && plan.weak.trim()) checks.unshift({ ok: false, guard: true, text: "Jarvis's read: " + unname(plan.weak).trim().slice(0, 240) });   // v3.36: a weak setup still gets a card
     if (og === "coach_call") checks.unshift({ ok: true, text: "The coach's own call and direction" });
     else if (og === "coach_level" || og === "coach_post") checks.unshift({ ok: null, text: `Direction picked by Jarvis — the coach gave a ${og === "coach_level" ? "level" : "ticker"}, not a direction` });
     else if (og === "coach_against") checks.unshift({ ok: false, guard: true, text: `Against the coach's direction (he said ${originRow?.direction || "the other way"})` });
@@ -1614,6 +1615,9 @@ Every guardrail is a warning, never a block — they can still approve. The coac
 FETCH, DON'T ASSUME
 Every price, position, and buying-power figure you state comes from a tool call in this conversation. Levels from a call are dated marks, never current prices — say the call date when you use one. If a connector isn't connected, say so in one line (Settings → Connections) and do what you can without it.
 
+WHEN JOSH PUSHES BACK (v3.36)
+If Josh says you should have carded or entered something, re-check the facts, then answer with what the Otto Rules say — do not apologize your way into agreeing with a chase. A 10-minute confirmation that closes well past the level means the entry is the RETEST of that level, not the close; say that plainly and offer to watch for it. Own a real miss (silence, a card you should have built) in one line; never invent one to be agreeable.
+
 SAY WHEN THE OTTO RULES DON'T COVER SOMETHING
 The calls have never taught a stop rule for these option trades beyond the entry-candle exit, never given a 2026 options sizing number, and never given a full exit plan beyond TP1/TP2/runners. When one of those decides the trade, give your best answer and label it as yours.
 
@@ -1623,6 +1627,7 @@ THE OTTO RULES (2026 stock options) — summary; search_jason for exact wording 
 - Entries: shorts at resistance, cover at support; longs the mirror ("where I'm covering, you're trying to enter", 1 Oct). Mark zones before the move. In this rate environment play rejections more than bounces. Daily double top or below a big unrecovered gap → scalps only. Never chase a missed fill. Not the first 30 minutes.
 - Contract: delta 30–40, volume > open interest; at the money by default, up to two strikes out only if at the screen. After Wednesday don't buy this Friday's; use next week's while learning. Check theta as % of premium before swinging.
 - Managing: TP at the first marked level, keep a runner, stop the runner if it doesn't come. Exit if price closes back through the open of the entry candle; on short-dated options the first red candle is the exit. Watch the chart, not the P&L. Weekly goals, not daily.
+- 15 Oct 2026 call: "You lost your money because of bad entry, not bounces." Let price come to you — never chase, not even for a scalp. When price retests a broken level and the 10-minute candle FAILS there, that is where you ADD, not where you get out (confirmation = the candle close). Exit = an indecision candle followed by a candle with no new high; take the whole position off, re-enter only after support holds. Small account: no overnight, only risk profit. SPY range since July (dated 15 Oct marks): 764 buy zone, 778 sell zone, 775 gap line; between them is chop — nothing after the daily move. Sell into strength in the first 15 minutes; mark the candle-formation top even when price is far from it.
 - Older frames (April 2024 options: 20% max, 2/5/10 contracts, spreads 60+ days; Aug 2026 ES futures: one contract) — never mix in without saying where they came from.
 
 CHARTS
@@ -5135,8 +5140,9 @@ ${pre}
 ${r.ticker} level ${Number(r.level)} (${r.source === "signal" ? "a Signal level" : r.source === "scanner" ? "a level the scanner found" : "a level added on the Desk"}${r.note ? ": " + r.note : ""}).${r.source === "signal" ? (r.coach_dir ? ` The coach's direction: ${String(r.coach_dir).toUpperCase()}.` : " The coach gave this level with NO direction — the side comes from this close. Check it's with the day's move and the banner before you card it.") : ""}
 Trigger: ${TRIG_LABEL[f.trigger]} on the ${d === "up" ? "calls" : "puts"} side, on the ${f.tf}-minute bar that closed at ${etLabel(f.close_at)} ET — O ${b.o} H ${b.h} L ${b.l} C ${b.c}.${f.crossings >= 4 ? ` The 5-minute closes have crossed this level ${f.crossings} times today: treat it as chop unless the read is clear.` : ""}
 Is this a real ${d === "up" ? "call" : "put"} setup RIGHT NOW under the Otto Rules and the House Rules? The contract list above is live (server-fetched); check the banner and any binary event.
-- Real → call propose_action ONCE: one opening option card. Title starts with "SCALP · " when it's a quick trade. plan.setup "${SETUP_FOR[f.trigger + "|" + d] || "other"}", plan.direction "${d}", plan.signal_level ${r.source === "signal"}, TP1 at the next level, plan.stop (wrong-if) just beyond ${Number(r.level)}, stop_option sized for their max loss. If the best contract is over buying power or the max, make the cheaper ALT too, as usual. Guardrails flag, never block.
-- Not real → no card.
+- Call propose_action ONCE, every time (v3.36, Ifoma: flag, never block — the people decide, not you): one opening option card. Title starts with "SCALP · " when it's a quick trade. plan.setup "${SETUP_FOR[f.trigger + "|" + d] || "other"}", plan.direction "${d}", plan.signal_level ${r.source === "signal"}, TP1 at the next level, plan.stop (wrong-if) just beyond ${Number(r.level)}, stop_option sized for their max loss. If the best contract is over buying power or the max, make the cheaper ALT too, as usual. Guardrails flag, never block.
+- If your read says it's weak (too little room to TP1 for the premium, a Choppy banner, the confirmation bar already ran well past the level, a binary event), STILL build the card and put the reason in plan.weak as one plain sentence — it shows as a red line on the card. When the bar already ran: say so, and say the coach's answer: wait for the retest of ${Number(r.level)} that holds; that is the entry, not the chase.
+- The only time there is no card: the level's direction contradicts the close (e.g. a rejection fired but the close is on the wrong side). Then say exactly why in the READ.
 Work quietly. Finish with a line that is exactly READ: and then 2 short plain sentences: what happened at the level and why you made the card — or why not.
 (Robinhood tools only in this run.)`;
   let res = { said: "", cards: [] as string[] }, err = "";

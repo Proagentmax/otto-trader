@@ -115,14 +115,19 @@ export function etToUtcMs(date: string, min: number): number {
 
 /* ------------------------------------------------------------------ config, limits, rules */
 
+// v3.36 (16 Oct 2026) DATA MODE (Ifoma 15 Oct: "make him relaxed, not reckless, so we see where the holes are"). mode "data": the soft
+// gates (W3 same ticker, W12-W15, W20-W23) STAMP the trade instead of blocking it, the contract picker has a loose third tier, the time
+// exit has a floor, and limits_override lets Winston drop the live daily stop without touching Josh's limits. mode "strict" = v3.31 behaviour.
 export const CONFIG_DEFAULTS: any = { enabled: true, paper_balance: 4000, own_idea_from_min: 600, coach_idea_from_min: 571,
-  last_entry_min: 930, default_time_exit_min: 180, flat_min: 950, max_open: 1,
+  last_entry_min: 930, default_time_exit_min: 180, flat_min: 950, max_open: 1, mode: "strict", min_time_exit_min: 0, limits_override: {},
   universe: ["SPY", "QQQ", "NVDA", "TSLA", "AAPL", "MSFT", "META", "AMZN", "GOOGL", "AMD", "PLTR", "MU"] };
+export const isDataMode = (cfg: any) => String(cfg?.mode || "strict") === "data";
 export async function getConfig() {
   const r = await db("winston_settings?key=eq.config&select=value").catch(() => null);
   const v = r?.[0]?.value || {};
   const c = { ...CONFIG_DEFAULTS, ...v };
   c.paper_balance = num(c.paper_balance) > 0 ? num(c.paper_balance) : 4000;
+  c.limits_override = c.limits_override && typeof c.limits_override === "object" ? c.limits_override : {};
   c.universe = (Array.isArray(c.universe) ? c.universe : CONFIG_DEFAULTS.universe).map((s: any) => String(s).toUpperCase().replace(/[^A-Z.]/g, "")).filter(Boolean).slice(0, 20);
   return c;
 }
@@ -131,14 +136,20 @@ export async function getConfig() {
 export const LIMIT_DEFAULTS: any = { size_cap_on: true, size_cap_pct: 25, max_loss_on: true, max_trade_pct: 10, daily_on: true, daily_losses: 2,
   daily_x: 2, weekly_on: true, weekly_pct: 20, kill_on: true, kill_daily: true, kill_weekly: true };
 const LIMIT_KEYS = Object.keys(LIMIT_DEFAULTS);
-export async function getLimits() {
+export async function getLimits(override: any = null) {
   const r = await db("otto_settings?key=eq.limits&select=value").catch(() => null);
   const v = r?.[0]?.value || {};
+  return applyLimits(v, override);
+}
+// Pure: the live limits row, then Winston's own override on top (v3.36; e.g. { daily_on: false } so his daily stop is off while Josh's stays on).
+export function applyLimits(v: any, override: any = null) {
   const out: any = { ...LIMIT_DEFAULTS };
-  for (const k of LIMIT_KEYS) {
-    if (v[k] === undefined || v[k] === null) continue;
-    if (typeof LIMIT_DEFAULTS[k] === "boolean") out[k] = !!v[k];
-    else if (Number.isFinite(Number(v[k]))) out[k] = Number(v[k]);
+  for (const src of [v || {}, override || {}]) {
+    for (const k of LIMIT_KEYS) {
+      if (src[k] === undefined || src[k] === null) continue;
+      if (typeof LIMIT_DEFAULTS[k] === "boolean") out[k] = !!src[k];
+      else if (Number.isFinite(Number(src[k]))) out[k] = Number(src[k]);
+    }
   }
   return out;
 }
@@ -224,15 +235,26 @@ export function intrabarTarget(plan: { dir: "up" | "down"; target_level: number 
 export type Row = { id: string; exp: string; strike: number; type: string; bid: number; ask: number; delta: number; vol: number; oi: number; label: string };
 // Otto's own contract rule: delta .30–.40 and volume above open interest; the one that fits the cap. Never shrink the stop to fit (W2): if
 // nothing fits the size cap and the cash, the idea is passed.
-export function pickContract(rows: Row[], capUsd: number, cashUsd: number) {
+export function pickContract(rows: Row[], capUsd: number, cashUsd: number, loose = false) {
   const ok = rows.filter((r) => r.bid > 0 && r.ask >= r.bid && r.ask * 100 <= capUsd && r.ask * 100 <= cashUsd);
-  if (!ok.length) return { row: null as Row | null, by: "none", why: rows.length ? "nothing fits the size cap / cash (cap $" + Math.round(Math.min(capUsd, cashUsd)) + ")" : "no tradable contracts" };
+  if (!ok.length) return { row: null as Row | null, by: "none", why: rows.length ? "nothing fits the size cap / cash (cap $" + Math.round(Math.min(capUsd, cashUsd)) + ")" : "no tradable contracts", flags: [] as string[] };
   const dist = (r: Row) => Math.abs(Math.abs(r.delta) - 0.35);
   const band = ok.filter((r) => Math.abs(r.delta) >= 0.30 && Math.abs(r.delta) <= 0.40 && r.vol > r.oi).sort((a, b) => dist(a) - dist(b) || b.vol - a.vol);
-  if (band.length) return { row: band[0], by: "band", why: "" };
+  if (band.length) return { row: band[0], by: "band", why: "", flags: [] as string[] };
   const near = ok.filter((r) => Math.abs(r.delta) >= 0.20 && Math.abs(r.delta) <= 0.50 && r.vol > r.oi).sort((a, b) => dist(a) - dist(b) || b.vol - a.vol);
-  if (near.length) return { row: near[0], by: "near", why: "" };
-  return { row: null, by: "none", why: "no contract with delta .20-.50 and volume above open interest fits" };
+  if (near.length) return { row: near[0], by: "near", why: "", flags: [] as string[] };
+  // v3.36 data mode: a third, loose tier. Delta .15-.60 with a two-sided quote; volume vs open interest becomes a STAMP, not a wall.
+  // 15 Oct: 6 of 9 passed ideas (incl. the coach's DHI call) died on "volume > OI" — the gate is now scored instead of trusted.
+  if (loose) {
+    const wide = ok.filter((r) => Math.abs(r.delta) >= 0.15 && Math.abs(r.delta) <= 0.60).sort((a, b) => dist(a) - dist(b) || b.vol - a.vol);
+    if (wide.length) {
+      const r = wide[0], flags: string[] = [];
+      if (!(r.vol > r.oi)) flags.push("picker:volume_not_above_oi");
+      if (Math.abs(r.delta) < 0.20 || Math.abs(r.delta) > 0.50) flags.push("picker:delta_outside_20_50");
+      return { row: r, by: "loose", why: "", flags };
+    }
+  }
+  return { row: null, by: "none", why: loose ? "no contract with delta .15-.60 and a two-sided quote fits" : "no contract with delta .20-.50 and volume above open interest fits", flags: [] as string[] };
 }
 
 /* ------------------------------------------------------------------ plan checks + gates (pure) */
@@ -276,35 +298,126 @@ export function limitsState(L: any, e: Equity) {
 
 export type GateCtx = { rules: Rule[]; d: Decision; cap: number; maxLoss: number; planned_loss: number; cost: number; cash: number; stop_option: number; ask: number;
   openCount: number; maxOpen: number; tickerTakenToday: boolean; sameTickerOpen: boolean; spreadPct: number; quoteAgeSec: number | null; blackout: string | null;
-  coachCall: boolean; etMin: number; lastEntryMin: number; ownFromMin: number; coachFromMin: number };
-// Returns the first reason to pass (with the rule id), or null when every active gate passes.
-export function runGates(c: GateCtx): { rule: string; why: string } | null {
-  const R = c.rules;
+  coachCall: boolean; etMin: number; lastEntryMin: number; ownFromMin: number; coachFromMin: number;
+  // v3.36 — the coach's 15 Oct rules and the data-mode switch. All optional so the v3.31 callers and tests still work.
+  dataMode?: boolean; reentryBeyondExit?: string | null; atCoachLevel?: string | null; indexDisagree?: string | null; thesisWrong?: string | null; coachResultAfter?: string | null };
+export type GateHit = { rule: string; why: string; soft: boolean };
+// HARD gates always block: the plan itself (W1), risk and size (W2), cash, the max open count and the time windows.
+// SOFT gates (W3, W12-W15, W20-W23) block in strict mode; in data mode they STAMP the trade (flags) so the report can score each gate.
+const SOFT = new Set(["W3", "W12", "W13", "W14", "W15", "W20", "W21", "W22", "W23", "fact"]);
+export function runGatesAll(c: GateCtx): GateHit[] {
+  const R = c.rules, hits: GateHit[] = [];
+  const hit = (rule: string, why: string) => hits.push({ rule, why, soft: !!c.dataMode && SOFT.has(rule) });
   if (ruleOn(R, "W1")) {
     const d = c.d;
-    if (!(d.wrong_if_level > 0) || !(d.target_level > 0) || !(c.stop_option > 0) || !(c.cost > 0) || !(c.ask > 0)) return { rule: "W1", why: "plan is missing a stop, target, size or price" };
+    if (!(d.wrong_if_level > 0) || !(d.target_level > 0) || !(c.stop_option > 0) || !(c.cost > 0) || !(c.ask > 0)) hit("W1", "plan is missing a stop, target, size or price");
   }
   if (ruleOn(R, "W2")) {
-    if (c.stop_option >= c.ask) return { rule: "W2", why: "stop is not below the entry" };
-    if (c.planned_loss > c.maxLoss) return { rule: "W2", why: `planned loss $${c.planned_loss} is over the max loss per trade $${c.maxLoss} — skipped, not shrunk` };
-    if (c.cost > c.cap) return { rule: "W2", why: `cost $${c.cost} is over the size cap $${c.cap}` };
+    if (c.stop_option >= c.ask) hit("W2", "stop is not below the entry");
+    if (c.planned_loss > c.maxLoss) hit("W2", `planned loss $${c.planned_loss} is over the max loss per trade $${c.maxLoss} — skipped, not shrunk`);
+    if (c.cost > c.cap) hit("W2", `cost $${c.cost} is over the size cap $${c.cap}`);
   }
-  if (c.cost > c.cash) return { rule: "cash", why: `cost $${c.cost} is more than the paper cash $${round2(c.cash)}` };
-  if (ruleOn(R, "W3") && c.sameTickerOpen) return { rule: "W3", why: "already in this ticker (no adding, no averaging)" };
-  if (c.openCount >= c.maxOpen) return { rule: "max_open", why: `already holding ${c.openCount} position${c.openCount === 1 ? "" : "s"} (max ${c.maxOpen})` };
-  if (c.etMin > c.lastEntryMin) return { rule: "time", why: "too late in the day for a new entry" };
-  if (c.etMin < (c.coachCall ? c.coachFromMin : c.ownFromMin)) return { rule: "time", why: c.coachCall ? "before the coach-idea window opens" : "own ideas wait until 10:00 (no entry just because the market opened)" };
+  if (c.cost > c.cash) hit("cash", `cost $${c.cost} is more than the paper cash $${round2(c.cash)}`);
+  if (ruleOn(R, "W3") && c.sameTickerOpen) hit("W3", "already in this ticker (no adding, no averaging)");
+  if (c.openCount >= c.maxOpen) hit("max_open", `already holding ${c.openCount} position${c.openCount === 1 ? "" : "s"} (max ${c.maxOpen})`);
+  if (c.etMin > c.lastEntryMin) hit("time", "too late in the day for a new entry");
+  if (c.etMin < (c.coachCall ? c.coachFromMin : c.ownFromMin)) hit("time", c.coachCall ? "before the coach-idea window opens" : "own ideas wait until 10:00 (no entry just because the market opened)");
   if (ruleOn(R, "W12")) {
     const mx = ruleParams(R, "W12").max_spread_pct;
-    if (mx != null && c.spreadPct > mx) return { rule: "W12", why: `spread ${c.spreadPct.toFixed(1)}% is wider than ${mx}%` };
+    if (mx != null && c.spreadPct > mx) hit("W12", `spread ${c.spreadPct.toFixed(1)}% is wider than ${mx}%`);
   }
   if (ruleOn(R, "W13")) {
     const mx = ruleParams(R, "W13").max_age_sec ?? 15;
-    if (c.quoteAgeSec == null || c.quoteAgeSec > mx) return { rule: "W13", why: c.quoteAgeSec == null ? "quote has no timestamp" : `quote is ${Math.round(c.quoteAgeSec)}s old` };
+    if (c.quoteAgeSec == null || c.quoteAgeSec > mx) hit("W13", c.quoteAgeSec == null ? "quote has no timestamp" : `quote is ${Math.round(c.quoteAgeSec)}s old`);
   }
-  if (ruleOn(R, "W14") && c.blackout && !c.coachCall) return { rule: "W14", why: "event blackout: " + c.blackout };
-  if (ruleOn(R, "W15") && c.tickerTakenToday) return { rule: "W15", why: "one idea per ticker per day — already traded today" };
+  if (ruleOn(R, "W14") && c.blackout && !c.coachCall) hit("W14", "event blackout: " + c.blackout);
+  if (ruleOn(R, "W15") && c.tickerTakenToday) hit("W15", "one idea per ticker per day — already traded today");
+  // v3.36 — the coach, 15 Oct 2026
+  if (ruleOn(R, "W20") && c.reentryBeyondExit) hit("W20", c.reentryBeyondExit);           // let price come to you: no re-entry chasing past the last exit
+  if (ruleOn(R, "W21") && c.atCoachLevel) hit("W21", c.atCoachLevel);                     // don't buy at the sell-to
+  if (ruleOn(R, "W23") && c.indexDisagree) hit("W23", c.indexDisagree);                   // index agreement
+  if (c.thesisWrong) hit("fact", c.thesisWrong);                                            // the thesis contradicts the quote (price vs VWAP)
+  if (c.coachResultAfter) hit("fact", c.coachResultAfter);                                 // the coach already sold / trimmed after the cited post
+  return hits;
+}
+// Returns the first HARD reason to pass (with the rule id), or null when nothing blocks. Soft stamps come from runGatesAll.
+export function runGates(c: GateCtx): { rule: string; why: string } | null {
+  const h = runGatesAll(c).find((x) => !x.soft);
+  return h ? { rule: h.rule, why: h.why } : null;
+}
+
+/* ------------------------------------------------------------------ v3.36: the coach's 15 Oct reads (pure) */
+
+// W20 "Let price come to you": a closed trade today on the same ticker+side, and the new entry is further along in the trade's direction
+// than where that trade got out (call: higher; put: lower). 15 Oct: SPY 767.26 → 768.53 → 770.22, three buys in 40 minutes.
+export function reentryBeyondExit(side: "call" | "put", spot: number, closedToday: { ticker: string; side: string; exit_under: number | null }[], ticker: string): string | null {
+  const same = closedToday.filter((t) => String(t.ticker).toUpperCase() === ticker && t.side === side && num(t.exit_under) > 0);
+  if (!same.length) return null;
+  const last = same[same.length - 1];
+  const beyond = side === "call" ? spot > num(last.exit_under) : spot < num(last.exit_under);
+  return beyond ? `re-entry ${side === "call" ? "above" : "below"} the last exit on ${ticker} (${num(last.exit_under)}) — chasing, not letting price come to you` : null;
+}
+// W21 "Don't buy at the sell-to": a coach level post today for this ticker within $0.50 of the entry price, on the side where it is a target, not an entry.
+// A call entered at a level the coach named is buying where he sells (SPY 770 on 15 Oct). Direction-less or opposite-direction level posts count; a level
+// with the SAME direction as the trade (his "above X" buy line) does not.
+export function atCoachLevel(side: "call" | "put", spot: number, posts: { ticker?: string; kind?: string; level?: any; direction?: string | null }[], ticker: string, band = 0.5): string | null {
+  for (const p of posts) {
+    if (p.kind !== "level" || String(p.ticker || "").toUpperCase() !== ticker || !(num(p.level) > 0)) continue;
+    const same = (side === "call" && p.direction === "long") || (side === "put" && p.direction === "short");
+    if (same) continue;
+    if (Math.abs(spot - num(p.level)) <= band) return `entry at ${spot} is within $${band} of the coach's ${num(p.level)} level — that is where he sells to, not where he buys`;
+  }
   return null;
+}
+// W23 index agreement: SPY above its VWAP with rising closes says no shorts in index names; below and falling says no longs.
+export type IndexRead = { above_vwap: boolean; rising: boolean; falling: boolean; vwap: number; last: number } | null;
+export function indexRead(spyBars: Bar[], now = nowMs()): IndexRead {
+  const d = completedBars(spyBars, 10, now);
+  if (d.length < 3) return null;
+  const c = d.slice(-3).map((b) => b.c), vwap = vwapOf(d), last = c[2];
+  return { above_vwap: last > vwap, rising: c[0] < c[1] && c[1] < c[2], falling: c[0] > c[1] && c[1] > c[2], vwap: round2(vwap), last };
+}
+export function indexDisagree(side: "call" | "put", idx: IndexRead): string | null {
+  if (!idx) return null;
+  if (side === "put" && idx.above_vwap && idx.rising) return `SPY is above its VWAP (${idx.vwap}) and making higher closes — a short fights the index`;
+  if (side === "call" && !idx.above_vwap && idx.falling) return `SPY is below its VWAP (${idx.vwap}) and making lower closes — a long fights the index`;
+  return null;
+}
+// Fact check: a thesis that says "below VWAP" while price is above it (or the reverse) is a wrong fact (NVDA/QQQ 15 Oct: "below VWAP (720.91)" at 723.7).
+export function thesisVwapWrong(thesis: string, spot: number, vwap: number | null | undefined): string | null {
+  if (!(num(vwap) > 0) || !(spot > 0)) return null;
+  const t = String(thesis || "");
+  if (/\b(below|under|beneath)\s+(the\s+)?(session\s+)?vwap/i.test(t) && spot > num(vwap)) return `thesis says below VWAP but price ${spot} is above VWAP ${round2(num(vwap))}`;
+  if (/\b(above|over|reclaimed)\s+(the\s+)?(session\s+)?vwap/i.test(t) && spot < num(vwap)) return `thesis says above VWAP but price ${spot} is below VWAP ${round2(num(vwap))}`;
+  return null;
+}
+// A `result` post after the cited post, same ticker, saying he sold / trimmed / stopped: the idea is his EXIT, not a fresh entry (SPY #206/#207/#208, 15 Oct).
+export function coachResultAfter(citedId: number, ticker: string, posts: { id: any; ticker?: string; kind?: string; words?: string }[]): string | null {
+  for (const p of posts) {
+    if (num(p.id) <= citedId || p.kind !== "result" || String(p.ticker || "").toUpperCase() !== ticker) continue;
+    if (/\b(sold|sell|selling|trim|trimmed|took profit|taking profit|stopped|closed out)\b/i.test(String(p.words || ""))) return `coach post ${p.id} after the cited one says he sold/trimmed ${ticker} — that was his exit, not a new entry`;
+  }
+  return null;
+}
+// W22 the coach's exit: an indecision bar (body ≤ 25% of its range) followed by a bar that fails to make a new high (longs) / new low (shorts), on completed
+// 10-minute bars after the entry. Returns the bar that fails, or null. "Indecision followed by a lower high — easy sell" (15 Oct, 30:30-31:40).
+export function coachExit(plan: { dir: "up" | "down" }, bars: Bar[], enteredAtMs: number, now = nowMs()): Bar | null {
+  const d = completedBars(bars, 10, now).filter((b) => b.t >= enteredAtMs).sort((a, b) => a.t - b.t);
+  for (let i = 0; i + 1 < d.length; i++) {
+    const a = d[i], b = d[i + 1], range = a.h - a.l;
+    if (!(range > 0) || Math.abs(a.c - a.o) > 0.25 * range) continue;
+    if (plan.dir === "up" ? b.h <= a.h : b.l >= a.l) return b;
+  }
+  return null;
+}
+// MFE / MAE: how far the underlying went for and against the trade (completed bars after entry), in price and in R via the plan's delta and planned loss.
+export function excursion(plan: { dir: "up" | "down"; delta?: number; planned_loss?: number }, bars: Bar[], enteredAtMs: number, entryUnder: number, now = nowMs()) {
+  const d = completedBars(bars, 10, now).filter((b) => b.t >= enteredAtMs);
+  if (!d.length || !(entryUnder > 0)) return null;
+  const hi = Math.max(...d.map((b) => b.h)), lo = Math.min(...d.map((b) => b.l));
+  const mfe = round2(plan.dir === "up" ? hi - entryUnder : entryUnder - lo), mae = round2(plan.dir === "up" ? entryUnder - lo : hi - entryUnder);
+  const perR = num(plan.planned_loss) > 0 && num(plan.delta) ? Math.abs(num(plan.delta)) * 100 / num(plan.planned_loss) : 0;
+  return { mfe_under: mfe, mae_under: mae, mfe_r: perR ? round2(mfe * perR) : null, mae_r: perR ? round2(mae * perR) : null, bars: d.length };
 }
 
 /* ------------------------------------------------------------------ audit + stats (pure) */
@@ -536,7 +649,8 @@ async function recordIdea(day: string, d: Partial<Decision> & { ticker?: string;
   return r?.[0]?.id ?? null;
 }
 
-type Ctx = { cfg: any; L: any; rules: Rule[]; day: string; min: number; eq: Awaited<ReturnType<typeof equityState>>; lim: ReturnType<typeof limitsState> };
+type Ctx = { cfg: any; L: any; rules: Rule[]; day: string; min: number; eq: Awaited<ReturnType<typeof equityState>>; lim: ReturnType<typeof limitsState>;
+  posts?: any[]; index?: IndexRead; vwaps?: Record<string, number> };   // v3.36: today's coach posts, the SPY read and each focus ticker's VWAP
 
 // Turn one decision into a paper trade, or a passed/blocked idea with the reason. Never throws past this point.
 export async function tryOpen(ctx: Ctx, d: Decision, spot: number, coachCall: boolean, blackout: string | null = null): Promise<{ opened: boolean; why: string; tradeId?: number }> {
@@ -545,11 +659,12 @@ export async function tryOpen(ctx: Ctx, d: Decision, spot: number, coachCall: bo
   const bad = planProblem(d, spot);
   if (bad) { await recordIdea(day, d, "passed", "Plan rejected: " + bad); return { opened: false, why: bad }; }
   if (d.experiment && !(/^E\d+$/.test(String(d.experiment)) && ruleOn(rules, d.experiment))) { await recordIdea(day, d, "passed", `Experiment ${d.experiment} is not switched on`); return { opened: false, why: "experiment off" }; }
-  const dayTrades = (await db(`winston_trades?day=eq.${day}&select=ticker,status`)) || [];
+  const dayTrades = (await db(`winston_trades?day=eq.${day}&select=ticker,side,status,exit_under`)) || [];
   const openNow = eq.open.length;
+  const dataMode = isDataMode(cfg);
   let rows: Row[];
   try { rows = await optionRows(d.ticker, d.side, spot, day); } catch (e) { const m = "Could not read the option chain: " + String((e as Error).message).slice(0, 120); await recordIdea(day, d, "blocked", m); return { opened: false, why: m }; }
-  const pick = pickContract(rows, lim.capUsd, eq.cash);
+  const pick = pickContract(rows, lim.capUsd, eq.cash, dataMode);
   if (!pick.row) { const m = "No contract: " + pick.why; await recordIdea(day, d, "passed", m, null); return { opened: false, why: m }; }
   const row = pick.row;
   // Fresh quote right before the fill (W10): the price he pays is the ask NOW, not the one from the chain scan.
@@ -558,18 +673,29 @@ export async function tryOpen(ctx: Ctx, d: Decision, spot: number, coachCall: bo
   if (!ef.ok) { await recordIdea(day, d, "blocked", "No fill: " + ef.why); return { opened: false, why: ef.why }; }
   const cost = round2(ef.fill * 100);
   const risk = riskEstimate(ef.fill, q!.delta || row.delta, spot, d.wrong_if_level);
-  const gate = runGates({ rules, d, cap: lim.capUsd, maxLoss: lim.maxLossUsd, planned_loss: risk.planned_loss, cost, cash: eq.cash, stop_option: risk.stop_option, ask: ef.fill,
+  // v3.36: the coach's 15 Oct reads. In data mode they stamp; in strict mode they block (when the rule is on).
+  const closedToday = dayTrades.filter((t: any) => t.status === "closed");
+  const citedId = d.source.startsWith("coach:") ? num(d.source.slice(6)) : 0;
+  const hits = runGatesAll({ rules, d, cap: lim.capUsd, maxLoss: lim.maxLossUsd, planned_loss: risk.planned_loss, cost, cash: eq.cash, stop_option: risk.stop_option, ask: ef.fill,
     openCount: openNow, maxOpen: num(cfg.max_open) || 1, tickerTakenToday: dayTrades.some((t: any) => String(t.ticker).toUpperCase() === d.ticker),
     sameTickerOpen: eq.open.some((t: any) => String(t.ticker || "").toUpperCase() === d.ticker) || false,
     spreadPct: ef.mid > 0 ? (ef.ask - ef.bid) / ef.mid * 100 : 999, quoteAgeSec: q!.at ? (nowMs() - q!.at) / 1000 : null, blackout, coachCall,
-    etMin: min, lastEntryMin: num(cfg.last_entry_min), ownFromMin: num(cfg.own_idea_from_min), coachFromMin: num(cfg.coach_idea_from_min) });
+    etMin: min, lastEntryMin: num(cfg.last_entry_min), ownFromMin: num(cfg.own_idea_from_min), coachFromMin: num(cfg.coach_idea_from_min),
+    dataMode, reentryBeyondExit: reentryBeyondExit(d.side, spot, closedToday, d.ticker), atCoachLevel: atCoachLevel(d.side, spot, ctx.posts || [], d.ticker),
+    indexDisagree: d.ticker === "SPY" && d.side === "call" ? null : indexDisagree(d.side, ctx.index ?? null),
+    thesisWrong: thesisVwapWrong(d.thesis, spot, ctx.vwaps?.[d.ticker]), coachResultAfter: citedId ? coachResultAfter(citedId, d.ticker, ctx.posts || []) : null });
+  const gate = hits.find((h) => !h.soft);
   if (gate) { await recordIdea(day, d, "blocked", `${gate.rule}: ${gate.why}`); return { opened: false, why: gate.rule + ": " + gate.why }; }
-  const plan = { dir: d.side === "call" ? "up" : "down", wrong_if_level: d.wrong_if_level, target_level: d.target_level, time_exit_min: d.time_exit_min || num(cfg.default_time_exit_min) || 180,
+  const stamps = [...pick.flags, ...hits.filter((h) => h.soft).map((h) => `${h.rule}: ${h.why}`)];
+  const timeExit = Math.max(d.time_exit_min || num(cfg.default_time_exit_min) || 180, num(cfg.min_time_exit_min) || 0);
+  const plan = { dir: d.side === "call" ? "up" : "down", wrong_if_level: d.wrong_if_level, target_level: d.target_level, time_exit_min: timeExit,
     stop_option: risk.stop_option, planned_loss: risk.planned_loss, thesis: String(d.thesis || "").slice(0, 400), picked_by: pick.by, delta: q!.delta || row.delta,
-    contract: { exp: row.exp, strike: row.strike }, last_mark: { bid: ef.bid, ask: ef.ask, under: spot, at: new Date(nowMs()).toISOString() } };
-  const ideaId = await recordIdea(day, d, "taken", d.thesis || "taken", plan);
+    contract: { exp: row.exp, strike: row.strike }, last_mark: { bid: ef.bid, ask: ef.ask, under: spot, at: new Date(nowMs()).toISOString() },
+    mode: dataMode ? "data" : "strict", stamps, index: ctx.index ?? null, vwap_at_entry: ctx.vwaps?.[d.ticker] ?? null };
+  const ideaId = await recordIdea(day, d, "taken", (stamps.length ? "[stamped: " + stamps.map((s) => s.split(":")[0]).join(", ") + "] " : "") + (d.thesis || "taken"), plan);
   const t = await db("winston_trades", { method: "POST", body: JSON.stringify({ day, opened_at: new Date(nowMs()).toISOString(), status: "open", ticker: d.ticker, side: d.side, option_id: row.id, label: row.label, qty: 1,
-    source: d.source || "own", idea_id: ideaId, experiment: d.experiment || null, plan, entry_bid: ef.bid, entry_ask: ef.ask, entry_mid: round2(ef.mid * 1000) / 1000, entry_fill: ef.fill, entry_under: spot }) });
+    source: d.source || "own", idea_id: ideaId, experiment: d.experiment || null, plan, entry_bid: ef.bid, entry_ask: ef.ask, entry_mid: round2(ef.mid * 1000) / 1000, entry_fill: ef.fill, entry_under: spot,
+    flags: stamps.map((s) => "stamp:" + s.split(":")[0].replace(/\s+/g, "_")) }) });
   const id = t?.[0]?.id;
   if (ideaId && id) await db(`winston_ideas?id=eq.${ideaId}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ trade_id: id }) });
   await wlog("open", { id, label: row.label, fill: ef.fill, source: d.source });
@@ -578,7 +704,7 @@ export async function tryOpen(ctx: Ctx, d: Decision, spot: number, coachCall: bo
   return { opened: true, why: "opened", tradeId: id };
 }
 
-export async function closeTrade(t: any, reason: string, flags: string[] = []) {
+export async function closeTrade(t: any, reason: string, flags: string[] = [], bars: Bar[] | null = null) {
   let q: Q | null = null;
   try { q = await freshOptionQuote(t.option_id); } catch { /* use the last mark below */ }
   let ex = exitFill(q);
@@ -590,8 +716,12 @@ export async function closeTrade(t: any, reason: string, flags: string[] = []) {
   const money = tradeMoney({ entry_ask: num(t.entry_ask), entry_mid: num(t.entry_mid), exit_bid: ex.bid, exit_mid: ex.mid, qty: t.qty || 1 }, num(t.plan?.planned_loss));
   const closedAt = new Date(nowMs());
   const audit = auditTrade({ ...t, exit_reason: reason }, etParts(closedAt).min, num(t.plan?.flat_min) || 950);
+  // v3.36: how far the underlying went for / against the trade (MFE / MAE), kept in the plan so the report can say whether a time-exit ever reached +1R.
+  const exc = bars ? excursion({ dir: t.plan?.dir, delta: t.plan?.delta, planned_loss: t.plan?.planned_loss }, bars, Date.parse(t.opened_at), num(t.entry_under), nowMs()) : null;
+  const under = bars && bars.length ? bars[bars.length - 1].c : num(t.plan?.last_mark?.under) || null;
   const patch = { status: "closed", closed_at: closedAt.toISOString(), exit_bid: ex.bid, exit_ask: ex.ask, exit_mid: round2(ex.mid * 1000) / 1000, exit_fill: ex.fill, exit_reason: reason,
-    ...money, followed_rules: audit.followed, broke: audit.broke, flags: [...new Set([...(t.flags || []), ...flags])] };
+    exit_under: under, ...money, followed_rules: audit.followed, broke: audit.broke, flags: [...new Set([...(t.flags || []), ...flags])],
+    plan: { ...(t.plan || {}), excursion: exc } };
   await db(`winston_trades?id=eq.${t.id}&status=eq.open`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify(patch) });
   await wlog("close", { id: t.id, reason, pnl: money.pnl_realistic, flags: patch.flags });
   return { ...t, ...patch };
@@ -602,6 +732,8 @@ export async function closeTrade(t: any, reason: string, flags: string[] = []) {
 export async function manageOpen(cfg: any, day: string, min: number, closeMin: number, opt: { intrabar?: boolean } = {}): Promise<{ closed: number }> {
   const open: any[] = (await db("winston_trades?status=eq.open&select=*&order=id.asc")) || [];
   if (!open.length) return { closed: 0 };
+  let rules: Rule[] = []; try { rules = await getRules(); } catch { /* no rules = no coach exit */ }
+  const w22 = ruleOn(rules, "W22");
   const flatMin = Math.min(num(cfg.flat_min) || 950, closeMin - 10);
   let closed = 0;
   let bars: Record<string, Bar[]> = {};
@@ -611,11 +743,13 @@ export async function manageOpen(cfg: any, day: string, min: number, closeMin: n
     const entered = Date.parse(t.opened_at);
     const ev = bars[String(t.ticker).toUpperCase()] ? evalBars({ dir: t.plan.dir, wrong_if_level: num(t.plan.wrong_if_level), target_level: num(t.plan.target_level) }, bars[String(t.ticker).toUpperCase()], entered) : null;
     let reason: string | null = null, flags: string[] = [];
+    const tb = bars[String(t.ticker).toUpperCase()] || null;
     if (ev) { reason = ev.reason; flags = ev.flags; }
-    else if (opt.intrabar && bars[String(t.ticker).toUpperCase()] && intrabarTarget({ dir: t.plan.dir, target_level: num(t.plan.target_level) }, bars[String(t.ticker).toUpperCase()], entered)) { reason = "target"; flags = ["intrabar_touch"]; }
+    else if (opt.intrabar && tb && intrabarTarget({ dir: t.plan.dir, target_level: num(t.plan.target_level) }, tb, entered)) { reason = "target"; flags = ["intrabar_touch"]; }
     else if (min >= flatMin || t.day !== day) reason = "flat_close";
+    else if (w22 && tb && coachExit({ dir: t.plan.dir }, tb, entered)) { reason = "coach_exit"; flags = ["W22_indecision_then_no_new_high"]; }   // v3.36
     else if (nowMs() >= entered + num(t.plan.time_exit_min || 180) * 60e3) reason = "time";
-    if (reason) { await closeTrade(t, reason, flags); closed++; continue; }
+    if (reason) { await closeTrade(t, reason, flags, tb); closed++; continue; }
     try {                                                    // still open: remember the latest mark for the app
       const q = await freshOptionQuote(t.option_id);
       const under = (bars[String(t.ticker).toUpperCase()] || []).slice(-1)[0]?.c;
@@ -654,16 +788,17 @@ export async function tick(opts: { force?: boolean } = {}): Promise<any> {
     await db("winston_days?on_conflict=day", { method: "POST", headers: { prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ day, start_balance: cfg.paper_balance }) });
     const mgd = await manageOpen(cfg, day, c.min, c.closeMin);                      // 1. exits first, always (even when paused or locked)
     if (!cfg.enabled) return { ok: true, paused: true, closed: mgd.closed };
-    const L = await getLimits(), rules = await getRules();
+    const L = await getLimits(cfg.limits_override), rules = await getRules();
     const eq = await equityState(cfg, day);
     const lim = limitsState(L, eq);
     if (lim.locked) { await db(`winston_days?day=eq.${day}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ kill: { locked: true, ...lim.locked, at: new Date(nowMs()).toISOString() } }) }); }
-    const ctx: Ctx = { cfg, L, rules, day, min: c.min, eq, lim };
+    const ctx: Ctx = { cfg, L, rules, day, min: c.min, eq, lim, posts: [], index: null, vwaps: {} };
 
     // 2. what changed since the last look?
     const st = (await getSetting("tick_state")) || {};
     const lastDay = st.day === day;
     const posts = await coachPostsToday(day);
+    ctx.posts = posts;
     const lastId = lastDay ? num(st.last_jason_id) : 0;
     const newPosts = posts.filter((p) => num(p.id) > lastId);
     const universe = [...new Set<string>([...posts.map((p) => String(p.ticker || "").toUpperCase()).filter(Boolean), ...cfg.universe])].slice(0, 24);
@@ -687,9 +822,11 @@ export async function tick(opts: { force?: boolean } = {}): Promise<any> {
     // 4. snapshot for the AI
     const focus = [...new Set<string>([...actionable.map((p) => String(p.ticker).toUpperCase()), ...movers, ...cfg.universe.slice(0, 6)])].filter((s) => quotes[s]).slice(0, 10);
     let bars: Record<string, Bar[]> = {};
-    try { bars = await bars10(focus, day); } catch { /* the AI is told there are no bars */ }
+    try { bars = await bars10([...new Set(["SPY", ...focus])], day); } catch { /* the AI is told there are no bars */ }
     const nowT = nowMs();
     const snapshot = focus.map((s) => ({ ticker: s, price: quotes[s].spot, prev_close: quotes[s].prev, day: barsSummary(bars[s] || [], nowT) }));
+    ctx.index = indexRead(bars.SPY || [], nowT);                                                       // v3.36 W23
+    ctx.vwaps = Object.fromEntries(snapshot.map((x) => [x.ticker, num(x.day?.vwap)]).filter(([, v]) => num(v) > 0));   // v3.36 fact check
     const dayRow = ((await db(`winston_days?day=eq.${day}&select=routine,sentiment`)) || [])[0] || {};
     const todays = (await db(`winston_ideas?day=eq.${day}&select=ticker,side,status,reason,source&order=id.asc&limit=60`)) || [];
     const brain = await brainExcerpt();
@@ -701,6 +838,8 @@ BRAIN (the coach's calls, summarised):\n${brain || "unavailable"}
 TODAY'S ROUTINE NOTES: ${JSON.stringify(dayRow.routine || null).slice(0, 2500)}\nSENTIMENT: ${JSON.stringify(dayRow.sentiment || null).slice(0, 1200)}
 ALREADY DECIDED TODAY: ${JSON.stringify(todays).slice(0, 3000)}
 CHART SNAPSHOT (10-minute bars, ET times; each bar is [time, open, high, low, close]): ${JSON.stringify(snapshot)}
+SPY READ (W23): ${ctx.index ? `last ${ctx.index.last} vs VWAP ${ctx.index.vwap} — ${ctx.index.above_vwap ? "above" : "below"} VWAP, closes ${ctx.index.rising ? "rising" : ctx.index.falling ? "falling" : "mixed"}` : "unavailable"}
+READ THE COACH'S POST KINDS: a "result" post (sold, trimmed, took profit, stopped) is his EXIT on that name, not a fresh entry — a tail like "and play the bounce" after a sale is not a new buy unless he gives a new level. A "level" post names where he SELLS TO or buys from; do not enter a call within $0.50 of a level he sells into (W21). Let price come to you (W20): no re-entry on a name above where the last trade got out.
 Decide now. Act on NEW coach posts (take or pass, with a reason) and on any idea of your own that the chart and brain support.`;
     let out: any, usage = { input: 0, output: 0 };
     try { const r = await aiJson(SYSTEM, user, DECIDE_TOOL); out = r.out; usage = r.usage; } catch (e) { await wlog("ai_error", { msg: String((e as Error).message).slice(0, 200) }); return { ok: false, error: "AI: " + String((e as Error).message).slice(0, 120), closed: mgd.closed }; }
@@ -846,15 +985,24 @@ export async function buildReport(day: string, cfg: any) {
   const taken = today.map((t) => ({ id: t.id, label: t.label, source: t.source, experiment: t.experiment, status: t.status, opened_at: t.opened_at, closed_at: t.closed_at,
     entry: { bid: t.entry_bid, ask: t.entry_ask, fill: t.entry_fill }, exit: { bid: t.exit_bid, ask: t.exit_ask, fill: t.exit_fill }, exit_reason: t.exit_reason,
     pnl_realistic: t.pnl_realistic, pnl_mid: t.pnl_mid, spread_cost: t.spread_cost, pnl_double: t.pnl_double, r: t.r_multiple, followed_rules: t.followed_rules, broke: t.broke, flags: t.flags,
-    thesis: t.plan?.thesis, wrong_if: t.plan?.wrong_if_level, target: t.plan?.target_level }));
+    thesis: t.plan?.thesis, wrong_if: t.plan?.wrong_if_level, target: t.plan?.target_level, stamps: t.plan?.stamps || [], excursion: t.plan?.excursion || null, mode: t.plan?.mode || "strict" }));
   const passed = ideas.filter((i) => i.status !== "taken").map((i) => ({ ticker: i.ticker, side: i.side, source: i.source, status: i.status, reason: i.reason, rule_ids: i.rule_ids }));
+  // v3.36: what stopped him, counted; and what the soft gates stamped on the trades he did take (so each gate can be scored over time).
+  const passedBy: Record<string, number> = {};
+  for (const p of passed) { const k = String(p.reason || "").replace(/\d+(\.\d+)?/g, "#").slice(0, 70); passedBy[k] = (passedBy[k] || 0) + 1; }
+  const stampStats: Record<string, { n: number; pnl: number; wins: number }> = {};
+  for (const t of today) for (const f of (t.flags || []).filter((x: string) => String(x).startsWith("stamp:"))) {
+    const st = stampStats[f] || (stampStats[f] = { n: 0, pnl: 0, wins: 0 }); st.n++; st.pnl = round2(st.pnl + num(t.pnl_realistic)); if (num(t.pnl_realistic) > 0) st.wins++;
+  }
   const lines: string[] = [];
   lines.push(`${taken.length} trade${taken.length === 1 ? "" : "s"} taken, ${passed.length} idea${passed.length === 1 ? "" : "s"} passed or blocked.`);
   lines.push(`Today: ${dayStats.pnl_realistic >= 0 ? "+" : "-"}$${Math.abs(dayStats.pnl_realistic)} at real fills (ask in, bid out); $${dayStats.pnl_mid} at mid; $${dayStats.pnl_double} if the spread cost were doubled.`);
   const stillOpen = today.filter((t) => t.status === "open").length;
   if (stillOpen) lines.push(`WARNING: ${stillOpen} trade(s) still open at the report. They should have been flat by 3:50 PM.`);
   const report = { day, built_at: new Date(nowMs()).toISOString(), summary: lines, taken, passed, day_stats: dayStats, all_time: stats, balance: eqAll.equity, start_balance: row.start_balance ?? cfg.paper_balance,
-    ai: row.ai || null, routine_done: !!row.routine, sentiment_done: !!row.sentiment, kill: row.kill || null, coach_posts_seen: ideas.filter((i) => String(i.source).startsWith("coach:")).length };
+    ai: row.ai || null, routine_done: !!row.routine, sentiment_done: !!row.sentiment, kill: row.kill || null, coach_posts_seen: ideas.filter((i) => String(i.source).startsWith("coach:")).length,
+    passed_by_reason: passedBy, stamp_stats: stampStats, mode: isDataMode(cfg) ? "data" : "strict",
+    balance_note: "balance = paper start + every closed trade since day one (all days), not today's P&L alone" };
   await db("winston_days?on_conflict=day", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ day, report, end_balance: eqAll.equity, updated_at: new Date(nowMs()).toISOString() }) });
   return report;
 }
