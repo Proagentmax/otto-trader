@@ -472,6 +472,12 @@ Deno.test("replay 10: the app's route needs the Otto email; state returns everyt
   eq((await call("rule_set", good, { id: "NOPE", active: true })).status, 500, "unknown rule refused");
   await call("config_set", good, { enabled: false }); eq(TABLES.winston_settings.find((s) => s.key === "config").value.enabled, false, "paused");
   eq((await call("config_set", good, { enabled: "yes" })).status, 500, "must be a boolean");
+  // v3.38: the mode switch (data <-> strict) from the Winston tab, no deploy; other config keys kept; bad values refused
+  const m1: any = await (await call("config_set", good, { mode: "strict" })).json();
+  eq([m1.ok, m1.mode, TABLES.winston_settings.find((s) => s.key === "config").value.mode, TABLES.winston_settings.find((s) => s.key === "config").value.enabled], [true, "strict", "strict", false], "switched to strict, enabled untouched");
+  await call("config_set", good, { mode: "data" }); eq(TABLES.winston_settings.find((s) => s.key === "config").value.mode, "data", "and back to data");
+  assert(TABLES.winston_log.some((l) => l.kind === "mode" && l.data?.mode === "data"), "mode change logged");
+  eq((await call("config_set", good, { mode: "loose" })).status, 500, "unknown mode refused");
   // cron routes need the secret
   Deno.env.set("OTTO_CRON_SECRET", "0123456789abcdef-secret");
   eq((await X.handle(new Request("https://x/functions/v1/winston?fn=tick", { method: "POST" }))).status, 401, "cron without the secret");

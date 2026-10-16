@@ -1057,8 +1057,14 @@ export async function setRule(body: any) {
   return { ok: true };
 }
 export async function setEnabled(body: any) {
-  if (typeof body?.enabled !== "boolean") throw new Error("enabled must be true or false");
   const cfg = await getConfig();
+  // v3.38: the same route also flips data / strict mode from the tab (Ifoma approved the mockup's "Switch to strict" button).
+  if (body?.mode === "data" || body?.mode === "strict") {
+    await putSetting("config", { ...cfg, mode: body.mode });
+    await wlog("mode", { mode: body.mode });
+    return { ok: true, mode: body.mode, enabled: cfg.enabled };
+  }
+  if (typeof body?.enabled !== "boolean") throw new Error("enabled must be true or false");
   await putSetting("config", { ...cfg, enabled: body.enabled });
   await wlog("enabled", { enabled: body.enabled });
   return { ok: true, enabled: body.enabled };

@@ -2664,7 +2664,7 @@ async function weeklyReview(apiKey: string, who = "Jarvis") {
    Desk Friday after the weekly review and kept in otto_settings.coach_log; ?fn=coach_log returns it any time (&build=1 rebuilds). */
 export type LogItem = { day: string; who: string; source: string; ticker: string; contract: string; side: string; entry: number | null; exit: number | null; pnl: number | null;
   entry_time: string; exit_time: string; level: number | null; vwap: number | null; why: string; overnight: string; note?: string };
-export function coachLogText(weekStart: string, weekEnd: string, items: LogItem[], extra: { account_start?: number | null; ranges?: string } = {}): string {
+export function coachLogText(weekStart: string, weekEnd: string, items: LogItem[], extra: { account_start?: number | null; ranges?: string; working?: string } = {}): string {
   const L: string[] = [];
   const money = (n: number | null) => n == null ? "n/a" : `${n >= 0 ? "+" : "-"}$${Math.abs(n).toFixed(0)}`;
   const total = items.reduce((s, t) => s + (t.pnl || 0), 0), scored = items.filter((t) => t.pnl != null);
@@ -2685,6 +2685,7 @@ export function coachLogText(weekStart: string, weekEnd: string, items: LogItem[
     L.push("");
   }
   if (!items.length) L.push("No trades this week.", "");
+  if (extra.working) L.push(`Working on (from this week's pop quizzes): ${extra.working}`, "");
   L.push("Every trade was day-only unless marked. Levels are the coach's or the Watcher's marks for that day; VWAP is the session VWAP at the entry time (5-minute bars).");
   return L.join("\n");
 }
@@ -2739,10 +2740,61 @@ export async function coachLog(build = false): Promise<{ week_start: string; wee
   items.sort((a, b) => a.day.localeCompare(b.day) || a.entry_time.localeCompare(b.entry_time));
   let ranges = "";
   try { const w: any[] = (await db(`otto_watch?select=ticker,level,day&day=gte.${ws}&day=lte.${we}&order=day.asc&limit=60`).catch(() => [])) || []; ranges = w.slice(0, 20).map((x) => `${x.ticker} ${x.level} (${x.day.slice(5)})`).join(", "); } catch { /* */ }
-  const text = coachLogText(ws, we, items, { ranges });
+  let working = "";
+  try { const qh: any[] = ((await setting("quiz_history"))?.rows || []).filter((r: any) => r.day >= ws && r.day <= we).slice(0, 5);
+    const weak = qh.map((r: any) => r.weakest).filter(Boolean); if (weak.length) { const c: Record<string, number> = {}; for (const w of weak) c[w] = (c[w] || 0) + 1; working = Object.entries(c).sort((a, b) => b[1] - a[1])[0][0]; } } catch { /* */ }
+  const text = coachLogText(ws, we, items, { ranges, working });
   const out = { week_start: ws, week_end: we, text, built_at: new Date().toISOString(), n: items.length };
   await putSetting("coach_log", out, "Otto").catch(() => {});
   return out;
+}
+
+/* ------------------------------------------------------------ v3.38: Pop Quiz (approved mockup v338-mockup.html, 16 Oct 2026)
+   Josh picks a chart and answers the five questions the coach asks on every pop quiz. Jarvis grades each answer ONLY from the brain
+   (call date + MM:SS next to every grade), gives a score out of 5 and two things to fix. History in otto_settings.quiz_history (last 60). */
+export const QUIZ_QUESTIONS = [
+  { id: "picture", q: "What's the big picture on the weekly and daily?", coach: "Go to the weekly first. What do you see up there?", search: "weekly daily double top zoom out structure gap" },
+  { id: "sell_to", q: "Where do you SELL TO? (the target)", coach: "That's the part where we sell to.", search: "sell to target wick first batch runners TP1 next level" },
+  { id: "add_exit", q: "Where do you ADD, and where do you get OUT?", coach: "When it retests and fails, that's where you add.", search: "retest fail add exit indecision doji lower high entry candle open" },
+  { id: "confirm", q: "Which candle confirms the entry, and what's your entry price?", coach: "You wouldn't know if it failed until the end of that candle.", search: "confirmation candle close 10-minute retest let price come chase" },
+  { id: "regime", q: "Trend or chop today — and do you hold overnight?", coach: "If the opening price is below previous close… chop zone.", search: "chop zone range overnight previous close open gap line small account risk profit" },
+];
+export function quizScore(grades: { grade: string }[]) {
+  return Math.round(grades.reduce((s, g) => s + (g.grade === "ok" ? 1 : g.grade === "half" ? 0.5 : 0), 0) * 10) / 10;
+}
+export async function quizGrade(body: any, who: string, apiKey: string) {
+  const ticker = String(body?.ticker || "").toUpperCase().replace(/[^A-Z.]/g, "").slice(0, 8);
+  const answers: Record<string, string> = {};
+  for (const q of QUIZ_QUESTIONS) answers[q.id] = String(body?.answers?.[q.id] || "").trim().slice(0, 600);
+  if (!ticker) throw new Error("pick a ticker");
+  if (!Object.values(answers).some(Boolean)) throw new Error("answer at least one question");
+  const calls = await loadBrain();
+  const cs = chunksOf(calls);
+  const seen = new Set<string>(); const hits: Chunk[] = [];
+  for (const q of QUIZ_QUESTIONS) for (const h of search(cs, q.search + " " + answers[q.id].slice(0, 80), 5)) { const k = h.d + h.at + h.s.slice(0, 40); if (!seen.has(k)) { seen.add(k); hits.push(h); } }
+  const sys = `You are Jarvis grading Josh's pop-quiz answers on ${ticker} against the Otto Rules (the coaching-call material below). Grade ONLY from that material: "ok" when the answer matches what the calls teach, "half" when it is partly right or missing the key part, "no" when it contradicts the calls or is the fear/chasing habit the calls warn about. If the calls never covered a question, say so in the note and grade "half". Every note cites (call date, MM:SS) from the material — never invent a citation or a rule. Plain words, two sentences max per note, talk to Josh directly. Respond with JSON only: {"grades":[{"id":"picture","grade":"ok|half|no","note":"...","source":"call date, MM:SS"}, ... one per question in order], "fixes":["...","..."]} — fixes = the two most important things to fix before the next call, one sentence each.\n\nOTTO RULES (always on):\n${alwaysOn(calls)}\n\nMATERIAL:\n${hits.slice(0, 24).map(fmt).join("\n\n")}` + NAME_RULE;
+  const user = QUIZ_QUESTIONS.map((q, i) => `Q${i + 1} [${q.id}] ${q.q}\nJosh: ${answers[q.id] || "(no answer)"}`).join("\n\n");
+  const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: MODEL, max_tokens: 1800, system: sys, messages: [{ role: "user", content: user }] }) });
+  const j = await r.json();
+  const txt = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
+  let out: any = null;
+  try { out = JSON.parse(txt.slice(txt.indexOf("{"), txt.lastIndexOf("}") + 1)); } catch { throw new Error("Jarvis did not return a grade — try again"); }
+  const grades = QUIZ_QUESTIONS.map((q) => { const g = (out?.grades || []).find((x: any) => x.id === q.id) || {}; const grade = ["ok", "half", "no"].includes(g.grade) ? g.grade : "half";
+    return { id: q.id, grade, note: unname(String(g.note || (answers[q.id] ? "" : "No answer given."))).slice(0, 500), source: unname(String(g.source || "")).slice(0, 80) }; });
+  const fixes = (Array.isArray(out?.fixes) ? out.fixes : []).slice(0, 2).map((f: any) => unname(String(f)).slice(0, 300));
+  const score = quizScore(grades);
+  const weakest = [...grades].sort((a, b) => ({ no: 0, half: 1, ok: 2 } as any)[a.grade] - ({ no: 0, half: 1, ok: 2 } as any)[b.grade])[0];
+  const by = String(body?.by || who.split("@")[0]).replace(/[^\w .-]/g, "").slice(0, 40) || who.split("@")[0];   // the "At the desk" picker (Josh / Ifoma)
+  const row = { at: new Date().toISOString(), day: etParts().date, by, ticker, score, max: QUIZ_QUESTIONS.length, answers, grades, fixes, weakest: weakest ? QUIZ_QUESTIONS.find((q) => q.id === weakest.id)?.q : null };
+  const hist: any[] = ((await setting("quiz_history").catch(() => null))?.rows || []);
+  await putSetting("quiz_history", { rows: [row, ...hist].slice(0, 60) }, who).catch(() => {});
+  await activity("change", `Pop quiz: ${ticker} ${score}/${QUIZ_QUESTIONS.length}${fixes[0] ? " — fix: " + fixes[0] : ""}`, by).catch(() => {});
+  return { ok: true, ...row };
+}
+export async function quizList() {
+  const rows: any[] = ((await setting("quiz_history").catch(() => null))?.rows || []);
+  return { ok: true, questions: QUIZ_QUESTIONS.map((q) => ({ id: q.id, q: q.q, coach: q.coach })), rows: rows.slice(0, 20).map((r) => ({ at: r.at, day: r.day, by: r.by, ticker: r.ticker, score: r.score, max: r.max, weakest: r.weakest, fixes: r.fixes })) };
 }
 
 /* ------------------------------------------------------------ scorecard
@@ -5432,7 +5484,9 @@ THE APP (Otto Trader, desktop-first; phones get a stacked layout)
 - Score: every opening card is tracked, taken or not, and graded on the underlying: did price reach TP1 before the "wrong if" price (5-minute bars; if one bar touches both it counts as a loss). R = result measured in units of the planned risk (+2R = made twice what you risked). Passed ideas are hypothetical.
 - 8:45 morning read: every weekday at 8:45 ET Jarvis posts a read on the Desk automatically.
 - Settings: sign in with the Otto email (6-digit code or paste the sign-in link), connect/disconnect TradingView and Robinhood (Robinhood: paste the "This site can't be reached" localhost address back into Otto once), Limits & goals, the older bias thresholds.
-- "the call" = the coaching call with Jason; the day changes week to week. The 👁 Watcher card (Desk, left column) lists today's price levels; the server checks them every minute 9:30–4:00 ET on 5- and 10-minute closes for a break-and-close, a pullback-and-hold or a rejection, and Jarvis builds a card (one ping) when it's a real setup. Signal levels are added automatically; add your own by typing 'NVDA 242 up' in the card or telling Jarvis 'watch NVDA 242'; the 9:20 scanner proposes levels on SPY, QQQ and the Mag-7 that you tap Add on. Levels clear at the close. The Score tab is the 2-week proof run: every card graded win / loss / flat on the same day, by source and trigger. House Rules (Settings) are standing instructions Jarvis follows; guardrails (Settings → Limits) flag with a red banner and never block.`;
+- "the call" = the coaching call with Jason; the day changes week to week. The 👁 Watcher card (Desk, left column) lists today's price levels; the server checks them every minute 9:30–4:00 ET on 5- and 10-minute closes for a break-and-close, a pullback-and-hold or a rejection, and Jarvis builds a card (one ping) when it's a real setup. Signal levels are added automatically; add your own by typing 'NVDA 242 up' in the card or telling Jarvis 'watch NVDA 242'; the 9:20 scanner proposes levels on SPY, QQQ and the Mag-7 that you tap Add on. Levels clear at the close. The Score tab is the 2-week proof run: every card graded win / loss / flat on the same day, by source and trigger. House Rules (Settings) are standing instructions Jarvis follows; guardrails (Settings → Limits) flag with a red banner and never block.
+- Winston tab: a separate paper-only trader on his own $4,000 that never places a real order. Today / Report / Scoreboard. DATA MODE badge = the soft rules (W3, W12–W15, W20–W23, fact checks) STAMP a trade instead of blocking it, so each rule can be scored; "Switch to strict" makes them block again. Stamps show under each trade (hover for the reason); "Went for him / against him" = how far the stock moved in his favour and against him while he was in (MFE / MAE). "Gates this week" scores every stamp; the Report's "What stopped him" counts the passed ideas by reason.
+- Quiz tab (Pop Quiz): Josh picks a ticker and answers the five questions the coach asks on every pop quiz (big picture, sell-to, add/exit, confirming candle + entry, trend-or-chop + overnight). "Grade my answers" = one Jarvis call that grades each answer only from the coaching calls (call date + MM:SS next to every grade), a score out of 5 and two things to fix. Past quizzes show the trend; the weakest question goes into the Friday trade log as "working on".`;
 
 /* ===================================================================== v3.15
    7 Oct 2026 — Ifoma's decisions (mockup otto-v3.15-mockup-b.html, "ok go"):
@@ -6985,7 +7039,7 @@ Deno.serve(async (req) => {
          "playbook_get", "feedback_add", "feedback_list", "daily_now",
          "prep_get", "prep_submit", "prep_reply", "prep_watch", "prep_img", "score_extra", "check_cancel", "prep_lock",
          "charts_get", "chart_now", "chart_review", "chart_use", "chart_chat",
-         "activity_get", "coach_corner", "coach_report", "lock_state", "trade_live", "close_now", "coach_log"].includes(fn)) {
+         "activity_get", "coach_corner", "coach_report", "lock_state", "trade_live", "close_now", "coach_log", "quiz_grade", "quiz_list"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -7000,6 +7054,8 @@ Deno.serve(async (req) => {
       if (fn === "panel") return json(await panel());
       if (fn === "trade_live") return json(await tradeLive());
       if (fn === "coach_log") return json({ ok: true, ...(await coachLog(new URL(req.url).searchParams.get("build") === "1")) });   // v3.37
+      if (fn === "quiz_list") return json(await quizList());                                                                          // v3.38
+      if (fn === "quiz_grade") { const k = Deno.env.get("ANTHROPIC_KEY"); if (!k) return json({ ok: false, error: "ANTHROPIC_KEY secret is not set" }, 500); return json(await quizGrade(body, who, k)); }
       if (fn === "close_now") return json(await closeByButton(body, who));
       // ---- v3.1
       if (fn === "sentiment") return json(await sentimentNow(new URL(req.url).searchParams.get("force") === "1"));

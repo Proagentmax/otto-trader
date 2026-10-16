@@ -397,6 +397,18 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .win-score{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}.win-sc{background:var(--s1);border:1px solid var(--rule);border-radius:12px;padding:12px;text-align:center}.win-sc .n{font-size:28px;font-weight:700}
 .win-li{display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--rule)}.win-li:last-child{border:0}.win-t{flex:1}
 .win-chip{font-weight:700;font-size:12px;border-radius:7px;padding:4px 9px;min-width:58px;text-align:center;background:var(--surface-3,#222)}.win-chip.w{background:#0d2a10;color:var(--up)}.win-chip.l{background:#2e150c;color:var(--down,#ff5a2e)}.win-chip.o{background:#2a230c;color:#ffc27a}
+/* v3.38 (approved mockup v338-mockup.html): mode badge, stamps, MFE/MAE, gate + exit bars; the Pop Quiz tab */
+.win-mode{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--rule);color:var(--ink-2)}.win-mode.data{color:#ffb547;border-color:#7a5212;background:#2a1f08}
+.win-stamps{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.win-st{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid #5a4a15;background:#2a2410;color:#f0d890;cursor:help}.win-st.fact{border-color:#6a2a12;background:#2e140a;color:#ffb39a}
+.win-exc{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);margin-top:4px}.win-exc b{color:var(--ink)}
+.win-gate{display:grid;grid-template-columns:1fr 60px 76px 90px;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--rule);font-size:13px}.win-gate:first-of-type{border-top:0}.win-gate .bar{height:8px;border-radius:4px;background:var(--surface-3,#222);position:relative;overflow:hidden}.win-gate .bar i{position:absolute;left:0;top:0;bottom:0;background:#ffb547}
+.win-rbar{display:flex;align-items:center;gap:10px;font-size:13px;padding:5px 0}.win-rbar .b{height:10px;border-radius:5px;background:#3a4049;flex:none}.win-rbar .b.warn{background:#7a5212}.win-rbar .k{min-width:40px;text-align:right;font-family:var(--mono);color:var(--ink-2)}
+.qz-pick{display:flex;gap:8px;flex-wrap:wrap}.qz-pick button{background:var(--surface-2,#1d2026);border:1px solid var(--rule);color:var(--ink-2);padding:7px 12px;border-radius:8px;font:inherit;cursor:pointer}.qz-pick button.on{border-color:var(--up);color:var(--ink);background:#0d2a12}.qz-pick input{width:110px;background:var(--bg);border:1px solid var(--rule);color:var(--ink);border-radius:8px;padding:7px 10px;font:inherit;text-transform:uppercase}
+.qz-q{background:var(--surface-2,#1d2026);border-radius:10px;padding:12px 14px;margin-bottom:10px}.qz-q .qq{font-weight:700;margin-bottom:6px}.qz-q .coach{font-size:12px;color:var(--ink-3);margin-bottom:8px}
+.qz-q textarea{width:100%;background:var(--bg);border:1px solid var(--rule);color:var(--ink);border-radius:8px;padding:9px 11px;font:inherit;font-size:14px;min-height:60px;resize:vertical;box-sizing:border-box}
+.qz-grade{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;margin-top:8px;font-size:13px}.qz-grade.ok{background:#0d3a12;color:#cdebd0}.qz-grade.half{background:#2a2410;color:#f0d890}.qz-grade.no{background:#4a1a0d;color:#ffd0c0}
+.qz-grade .g{font-family:var(--mono);font-weight:700;flex:none}.qz-grade .src{display:block;font-size:11.5px;opacity:.8;margin-top:4px}
+.qz-score{font-size:30px;font-weight:700}.qz-hist{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--rule);font-size:13px}.qz-hist .mono{white-space:nowrap}.qz-hist:first-of-type{border-top:0}
 .win-hb{display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--s1);margin:12px 0 0}
 .win-hb i{width:9px;height:9px;border-radius:50%;background:var(--up);flex:none;animation:winp 1.6s infinite}.win-hb.bad{border-color:var(--down,#ff5a2e);color:var(--down,#ff5a2e)}.win-hb.bad i{background:var(--down,#ff5a2e);animation:none}.win-hb.off i{background:var(--ink-3);animation:none}
 .win-est{font-size:10.5px;border:1px dashed #ffc27a;color:#ffc27a;border-radius:6px;padding:1px 6px;margin-left:6px;font-weight:600}
@@ -957,6 +969,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
     <button data-go="playbook"><svg viewBox="0 0 24 24"><path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/></svg>Playbook</button>
     <button data-go="winston" title="Winston: a separate paper-only trader on its own $4,000 that collects data"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M9 16l3 2 3-2"/></svg>Winston</button>
     <button data-go="jason"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Calls</button>
+    <button data-go="quiz" title="Pop Quiz: the coach's five questions, graded from the calls"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Quiz</button>
     <button data-go="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
     <button data-go="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>Help</button>
     <button data-go="classic" title="The phone layout: Week, Coach, Journal, Market"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Classic</button>
@@ -2378,7 +2391,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.35.0";
+const BUILD="3.38.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3488,7 +3501,7 @@ async function dkOauthReturn(){
    4 Oct 2026, approved mockup otto-v3.1-mockup.html. The sentiment banner
    (Josh's intermarket sheet on live TradingView data, verdict only, no sizing),
    desktop Market / Journal / Review / Score / Jason pages inside the Desk shell. */
-const DK_VIEWS=["desk","scoreboard","charts","prep","market","perf","coach","journal","review","score","playbook","jason","winston","more","help"];
+const DK_VIEWS=["desk","scoreboard","charts","prep","market","perf","coach","journal","review","score","playbook","jason","winston","quiz","more","help"];
 function dkShow(v){
   if(!DK_VIEWS.includes(v))v="desk";
   DK.view=v;LS.set("dkView",v);
@@ -3497,7 +3510,7 @@ function dkShow(v){
   if(v==="desk"){dkRenderMsgs(true);return}
   const pg=$("#dkPage");pg.scrollTop=0;
   if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see this page.</p></div>`;return}
-  ({scoreboard:dkScoreboard,charts:dkCharts,prep:dkPrep,market:dkMarket,perf:dkPerf,coach:dkCoach,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,winston:()=>dkWinston(),more:dkMore,help:dkHelp})[v]();
+  ({scoreboard:dkScoreboard,charts:dkCharts,prep:dkPrep,market:dkMarket,perf:dkPerf,coach:dkCoach,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,winston:()=>dkWinston(),quiz:dkQuiz,more:dkMore,help:dkHelp})[v]();
   dkSubBar();
 }
 const dkLoading=t=>`<div class="dk-empty" style="margin:60px auto">${esc(t||"Loading…")}</div>`;
@@ -4008,7 +4021,43 @@ async function winApi(fn,body){
 const winM=n=>n==null||!isFinite(n)?"—":`<span class="${n>0?"up":n<0?"dn":"mut"}">${n<0?"−":n>0?"+":""}$${Math.abs(+n).toFixed(2)}</span>`;
 const winR=n=>n==null||!isFinite(n)?"—":`${n>=0?"+":"−"}${Math.abs(+n).toFixed(2)}R`;
 const winET=t=>{try{return new Date(t).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"})}catch(e){return ""}};
-const WIN_WHY={wrong_if:"wrong-if: 10-minute close through the level",target:"target touched",time:"time exit",flat_close:"flat by 3:50 PM",kill:"closed by the kill switch"};
+const WIN_WHY={wrong_if:"wrong-if: 10-minute close through the level",target:"target touched",time:"time exit",flat_close:"flat by 3:50 PM",kill:"closed by the kill switch",coach_exit:"coach exit: indecision then no new high"};
+/* v3.38: stamps = gates that would have BLOCKED the trade in strict mode (plan.stamps "W20: why" / "fact: why" / "picker:volume_not_above_oi"; flags "stamp:W20"). */
+const WIN_STAMP_LABEL={W3:"W3 already in this ticker",W12:"W12 spread too wide",W13:"W13 quote too old",W14:"W14 event blackout",W15:"W15 one per ticker per day",W20:"W20 re-entry past last exit",W21:"W21 at the coach's sell-to",W22:"W22 coach exit",W23:"W23 index disagrees"};
+function winStampKey(s){s=String(s||"");const id=s.split(":")[0].trim(),why=s.slice(s.indexOf(":")+1).trim();
+  if(id==="picker")return /volume/i.test(why)?"picker: volume below OI":/delta/i.test(why)?"picker: delta outside .20–.50":"picker: "+why.replace(/_/g," ");
+  if(id==="fact")return /vwap/i.test(why)?"fact: thesis contradicts VWAP":"fact: coach had already sold";
+  return WIN_STAMP_LABEL[id]||id}
+function winStampList(t){const p=t.plan||{};let st=Array.isArray(p.stamps)?p.stamps:Array.isArray(t.stamps)?t.stamps:[];
+  if(!st.length)st=(t.flags||[]).filter(f=>String(f).startsWith("stamp:")).map(f=>String(f).slice(6).replace(/_/g," "));return st}
+function winStamps(t){const st=winStampList(t);if(!st.length)return "";
+  return `<div class="win-stamps">${st.map(s=>`<span class="win-st ${/^fact/.test(String(s))?"fact":""}" title="${esc(s)}">${esc(winStampKey(s))}</span>`).join("")}</div>`}
+function winExc(t){const e=(t.plan||{}).excursion||t.excursion;if(!e||e.mfe_under==null||e.mae_under==null)return "";
+  const r=v=>v==null||!isFinite(+v)?"":` (${(+v).toFixed(1)}R)`;
+  return `<div class="win-exc">Went for him <b>+$${Math.abs(+e.mfe_under).toFixed(2)}</b>${r(e.mfe_r)} · against him <b>−$${Math.abs(+e.mae_under).toFixed(2)}</b>${e.mae_r!=null&&isFinite(+e.mae_r)?` (−${Math.abs(+e.mae_r).toFixed(1)}R)`:""}${e.mfe_r!=null&&+e.mfe_r<1?" · never reached +1R":""}<span class="mut"> · on the stock, 10-minute bars</span></div>`}
+const winWeekOf=d=>{const p=String(d||"").split("-").map(Number);if(p.length<3||!p[2])return "";const t=new Date(Date.UTC(p[0],p[1]-1,p[2]));t.setUTCDate(t.getUTCDate()-((t.getUTCDay()+6)%7));return t.toISOString().slice(0,10)};
+function winGatesBox(j){
+  const day=j.clock&&j.clock.day,wk=winWeekOf(day);
+  const closed=(j.trades||[]).filter(t=>t.status==="closed"&&winWeekOf(t.day)===wk&&!t.experiment);
+  const g={};let clean={n:0,pnl:0,wins:0};
+  closed.forEach(t=>{const st=[...new Set(winStampList(t).map(winStampKey))],p=+t.pnl_realistic||0;
+    if(!st.length){clean.n++;clean.pnl+=p;if(p>0)clean.wins++;return}
+    st.forEach(k=>{const r=g[k]||(g[k]={n:0,pnl:0,wins:0});r.n++;r.pnl+=p;if(p>0)r.wins++})});
+  const money=v=>`<span class="mono ${v>0?"up":v<0?"dn":""}">${v<0?"−":v>0?"+":""}$${Math.abs(v).toFixed(0)}</span>`;
+  const row=(k,r,c)=>`<div class="win-gate"><span${c?' class="mut"':""}>${esc(k)}</span><span class="mono">${r.n}</span>${r.n?money(r.pnl):`<span class="mono mut">—</span>`}<div class="bar">${r.n?`<i style="width:${Math.round(100*r.wins/r.n)}%"></i>`:""}</div></div>`;
+  const keys=Object.keys(g).sort((a,b)=>g[b].n-g[a].n);
+  const ex={};closed.forEach(t=>{const k=t.exit_reason||"other";ex[k]=(ex[k]||0)+1});
+  const exRows=[["target","Target"],["coach_exit","Coach exit"],["wrong_if","Wrong-if"],["time","Time"],["flat_close","3:50 flat"],["kill","Kill switch"]].filter(([k])=>k!=="kill"||ex.kill);
+  const mx=Math.max(1,...exRows.map(([k])=>ex[k]||0));
+  return `<div class="dkp-grid3" style="margin:12px 0">
+    <div class="dk-cardx" style="grid-column:span 2"><div class="dk-h">Gates this week <b>which stamps go with losers · ${closed.length} closed trade${closed.length===1?"":"s"}</b></div>
+      <div class="win-gate" style="color:var(--ink-3);font-size:11.5px;border:0"><span>Stamp</span><span>Trades</span><span>Net</span><span>Win rate</span></div>
+      ${keys.map(k=>row(k,g[k])).join("")}${row("No stamps (clean)",clean,true)}
+      <div class="mut" style="font-size:12px;margin-top:8px">A stamp = a gate that would have BLOCKED the trade in strict mode. After 30 trades a stamp with a win rate well under the clean trades becomes a block again; the Friday review reads this box.</div></div>
+    <div class="dk-cardx"><div class="dk-h">Exits this week</div>
+      ${exRows.map(([k,l])=>`<div class="win-rbar"><span style="min-width:90px">${l}</span><span class="b ${k==="time"?"warn":""}" style="width:${Math.round(50*(ex[k]||0)/mx)}%"></span><span class="k">${ex[k]||0}</span></div>`).join("")}
+      <div class="mut" style="font-size:12px;margin-top:6px">Coach exit = indecision candle then no new high (W22). Time exits are the ones to watch.</div></div></div>`;
+}
 const winSrc=s=>String(s||"own").startsWith("coach:")?"coach post":"his own idea";
 function winTabs(){
   return `<nav class="rtabs" aria-label="Winston sections">${[["today","Today"],["report","Report"],["score","Scoreboard"]].map(([k,l])=>`<button data-wv="${k}" class="${WIN.view===k?"on":""}">${l}</button>`).join("")}</nav>`;
@@ -4016,18 +4065,22 @@ function winTabs(){
 function winHead(j){
   const c=j.config||{},lk=j.limits&&j.limits.locked,mk=j.clock&&j.clock.status;
   const st=!c.enabled?`<span class="dk-tag bad">PAUSED — no new trades</span>`:lk?`<span class="dk-tag bad">LOCKED — ${esc(lk.why)} (until ${esc(lk.until)})</span>`:`<span class="dk-tag ok">ON</span>`;
-  return `<div class="dkp-head"><h2>Winston</h2><span class="dk-tag">PAPER ONLY · own $${(+c.paper_balance||4000).toLocaleString()}</span> ${st}
+  const data=c.mode==="data",lo=c.limits_override||{};
+  const mode=data?`<span class="win-mode data" title="Soft gates (W3, W12–W15, W20–W23, fact checks) stamp the trade instead of blocking it. Hard gates (plan, max loss, cash, max open, time windows) still block.">DATA MODE</span><span class="mut" style="font-size:12px">soft gates stamp instead of block · ${+c.max_open||1} position${(+c.max_open||1)===1?"":"s"} · daily stop ${lo.daily_on===false?"off":"on"} · weekly kill switch on</span>`
+    :`<span class="win-mode" title="Every gate blocks.">STRICT</span>`;
+  return `<div class="dkp-head"><h2>Winston</h2><span class="dk-tag">PAPER ONLY · own $${(+c.paper_balance||4000).toLocaleString()}</span> ${st} ${mode}
     <span class="mut" style="flex:1 1 280px">A separate trader that collects data. It never places a real order and never sees Josh + Baby J's trades. Market: ${esc(mk||"—")}.</span>
+    <button class="dk-btn sec" id="winMode" data-mode="${data?"strict":"data"}">${data?"Switch to strict":"Switch to data mode"}</button>
     <button class="dk-btn ${c.enabled?"sec":"go"}" id="winPause">${c.enabled?"Pause Winston":"Resume Winston"}</button></div>`;
 }
 function winTradeRows(list,withDay){
   if(!list.length)return `<div class="dk-empty" style="margin:24px auto">None yet.</div>`;
   return `<div style="overflow:auto"><table class="dkt"><tr>${withDay?"<th>Day</th>":""}<th>Opened</th><th>Contract</th><th>From</th><th>Why in</th><th>In (ask)</th><th>Out (bid)</th><th>Why out</th><th>Real P&amp;L</th><th>At mid</th><th>R</th><th>Rules</th></tr>
   ${list.map(t=>{const p=t.plan||{},open=t.status==="open";
-    return `<tr>${withDay?`<td>${esc(t.day)}</td>`:""}<td>${esc(winET(t.opened_at))}</td><td><b>${esc(t.label||t.ticker)}</b>${t.experiment?` <span class="dk-tag">${esc(t.experiment)} test</span>`:""}</td><td class="mut">${esc(winSrc(t.source))}</td>
+    return `<tr>${withDay?`<td>${esc(t.day)}</td>`:""}<td>${esc(winET(t.opened_at))}</td><td><b>${esc(t.label||t.ticker)}</b>${t.experiment?` <span class="dk-tag">${esc(t.experiment)} test</span>`:""}${winStamps(t)}</td><td class="mut">${esc(winSrc(t.source))}</td>
       <td class="mut" style="max-width:260px">${esc(p.thesis||"—")}<div style="font-size:11px">wrong if ${esc(p.wrong_if_level)} · target ${esc(p.target_level)}</div></td>
       <td class="mono">${t.entry_ask!=null?(+t.entry_ask).toFixed(2):"—"}</td><td class="mono">${open?"open":t.exit_bid!=null?(+t.exit_bid).toFixed(2):"—"}</td>
-      <td class="mut">${open?"still open":esc(WIN_WHY[t.exit_reason]||t.exit_reason||"")}${(t.flags||[]).length?`<div style="font-size:11px;color:#ffc27a">${esc((t.flags||[]).join(", ").replace(/_/g," "))}</div>`:""}</td>
+      <td class="mut">${open?"still open":esc(WIN_WHY[t.exit_reason]||t.exit_reason||"")}${(t.flags||[]).filter(f=>!String(f).startsWith("stamp:")).length?`<div style="font-size:11px;color:#ffc27a">${esc((t.flags||[]).filter(f=>!String(f).startsWith("stamp:")).join(", ").replace(/_/g," "))}</div>`:""}</td>
       <td class="mono">${open?"—":winM(+t.pnl_realistic)}</td><td class="mono">${open?"—":winM(+t.pnl_mid)}</td><td class="mono">${open?"—":winR(t.r_multiple)}</td>
       <td>${open?"":t.followed_rules===false?`<span class="dk-tag bad" title="${esc((t.broke||[]).join(" | "))}">broke ${(t.broke||[]).length}</span>`:`<span class="dk-tag ok">followed</span>`}</td></tr>`}).join("")}</table></div>`;
 }
@@ -4092,13 +4145,14 @@ function winToday(j){
   const cls=v=>v>0?"up":v<0?"dn":"";
   const line=t=>{const o=t.status==="open",w=+t.pnl_realistic>0,l=+t.pnl_realistic<0;
     return `<div class="win-li"><span class="win-chip ${o?"o":w?"w":l?"l":""}">${o?"OPEN":w?"WIN":l?"LOSS":"FLAT"}</span>
-      <div class="win-t"><b>${esc(t.label||t.ticker)}</b>${t.experiment?` <span class="dk-tag">${esc(t.experiment)} test</span>`:""} <span class="mut">${o?"in at $"+(+t.entry_ask).toFixed(2)+" · "+esc(winET(t.opened_at)):esc(winET(t.opened_at))+" → "+esc(winET(t.closed_at))+" · "+esc(WIN_WHY[t.exit_reason]||t.exit_reason||"")}</span></div>
+      <div class="win-t"><b>${esc(t.label||t.ticker)}</b>${t.experiment?` <span class="dk-tag">${esc(t.experiment)} test</span>`:""} <span class="mut">${o?"in at $"+(+t.entry_ask).toFixed(2)+" · "+esc(winET(t.opened_at)):esc(winET(t.opened_at))+" → "+esc(winET(t.closed_at))+" · "+esc(WIN_WHY[t.exit_reason]||t.exit_reason||"")}${String(t.source||"").startsWith("coach:")?" · coach post #"+esc(String(t.source).slice(6)):""}</span>${winStamps(t)}${o?"":winExc(t)}</div>
       ${o?`<span style="text-align:right;font-size:13px">${(()=>{const t2=t,p2=t2.plan||{},lv2=liveMap[t2.id]||null,lm2=p2.last_mark||{},b2=lv2&&lv2.bid!=null?winN(lv2.bid):winN(lm2.bid),e2=winN(t2.entry_ask),est2=lv2&&lv2.est_pnl!=null?winN(lv2.est_pnl):(b2!=null&&e2!=null?(b2-e2)*100*(t2.qty||1):null);return (est2==null?"":`<b class="${est2>0?"up":est2<0?"dn":""}">${est2<0?"−":est2>0?"+":""}$${Math.abs(est2).toFixed(0)} est.</b><br>`)+`<span class="mut">holding · exit ${t2.side==="put"?"over":"under"} ${esc(p2.wrong_if_level)} · profit at ${esc(p2.target_level)}</span>`})()}</span>`:`<b class="${l?"dn":w?"up":""}">${money(+t.pnl_realistic)}</b>`}</div>`};
   const idea=i=>`<div class="dk-row" style="align-items:flex-start"><span><b>${esc(i.ticker||"—")}</b> ${esc(i.side||"")} <span class="mut">· ${esc(winSrc(i.source))}</span><div class="mut" style="font-size:12px">${esc(i.reason||"")}${(i.rule_ids||[]).length?` · ${esc(i.rule_ids.join(", "))}`:""}</div></span><span class="dk-tag ${i.status==="taken"?"ok":i.status==="blocked"?"bad":""}">${esc(i.status)}</span></div>`;
   return `${winHead(j)}${winHeart(j)}${banner}
     <div class="win-score">${sc(wins,"Wins today","up")}${sc(losses,"Losses today","dn")}${sc(money(dow),"Today",cls(dow))}${sc(money(wk),"This week",cls(wk))}</div>
     <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Today's trades <b>newest first</b></div>${trades.length?trades.slice().sort((a,b)=>String(b.opened_at).localeCompare(String(a.opened_at))).map(line).join(""):`<div class="mut" style="padding:8px 0">No trades yet today.</div>`}</div>
-    <div class="mut" style="font-size:12.5px;margin:0 0 12px">Paper balance $${(+j.equity).toFixed(2)} · cash $${(+j.cash).toFixed(2)} · size cap ${lim.cap_usd!=null?"$"+Math.round(lim.cap_usd):"—"} · max loss ${lim.max_loss_usd!=null?"$"+Math.round(lim.max_loss_usd):"—"} per trade · win/loss uses real fills (bought at the ask, sold at the bid)</div>
+    <div class="mut" style="font-size:12.5px;margin:0 0 12px">Paper balance $${(+j.equity).toFixed(2)} · cash $${(+j.cash).toFixed(2)} · size cap ${lim.cap_usd!=null?"$"+Math.round(lim.cap_usd):"—"} · max loss ${lim.max_loss_usd!=null?"$"+Math.round(lim.max_loss_usd):"—"} per trade · win/loss uses real fills (bought at the ask, sold at the bid)${trades.some(t=>winStampList(t).length)?" · hover a stamp for the full reason":""}</div>
+    ${winGatesBox(j)}
     <div class="dkp-grid3">
       <div class="dk-cardx"><div class="dk-h">Morning plan <b>8:45</b></div>${rt?`<div style="font-size:13px">${esc(rt.bias||"")}</div>${(rt.events||[]).length?`<div class="mut" style="font-size:12px;margin-top:6px">Events: ${esc(rt.events.join(" · "))}</div>`:""}${(rt.watch||[]).length?`<div class="mut" style="font-size:12px;margin-top:4px">Watching: ${esc(rt.watch.map(w=>w.ticker+" ("+w.why+")").join(" · "))}</div>`:""}${(rt.risks||[]).length?`<div class="mut" style="font-size:12px;margin-top:4px">Risks: ${esc(rt.risks.join(" · "))}</div>`:""}`:`<div class="mut">Not written yet today.</div>`}</div>
       <div class="dk-cardx"><div class="dk-h">Pre-open read <b>9:15</b></div>${se?`<div style="font-size:13px"><b>${esc(se.tone||"")}</b> — ${esc(se.read||"")}</div>`:`<div class="mut">Not written yet today.</div>`}</div>
@@ -4107,6 +4161,14 @@ function winToday(j){
     <div class="dk-cardx"><div class="dk-h">Rulebook <b>switch rules on or off — paper only</b></div>
       ${(j.rules||[]).map(r=>`<div class="dk-row" style="align-items:flex-start"><span><b>${esc(r.id)}</b> ${esc(r.title||"")} <span class="mut">· ${esc(r.source||"")}${r.book_ref?" "+esc(r.book_ref):""}</span><div class="mut" style="font-size:12px;max-width:760px">${esc(r.body||"")}</div></span>
         <button class="dk-btn ${r.active?"go":"sec"}" data-wr="${esc(r.id)}" data-on="${r.active?1:0}">${r.active?"ON":"OFF"}</button></div>`).join("")}</div>`;
+}
+function winStopped(r){
+  const by=r.passed_by_reason||{},keys=Object.keys(by).sort((a,b)=>by[b]-by[a]).slice(0,12);
+  if(!keys.length)return "";
+  const mx=Math.max(1,...keys.map(k=>by[k]));
+  return `<div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">What stopped him <b>passed ideas by reason${r.mode?" · "+esc(r.mode)+" mode":""}</b></div>
+    ${keys.map(k=>`<div class="win-rbar"><span style="min-width:min(300px,55%);font-size:12.5px">${esc(k)}</span><span class="b ${/picker|contract|volume|delta/i.test(k)?"warn":""}" style="width:${Math.round(40*by[k]/mx)}%"></span><span class="k">${by[k]}</span></div>`).join("")}
+    <div class="mut" style="font-size:12px;margin-top:6px">Numbers are replaced by # so the same reason groups together. In data mode the soft gates stamp instead, so this box should be mostly "plan rejected" and the hard limits.</div></div>`;
 }
 function winReport(j){
   const days=(j.days||[]).filter(d=>d.report);
@@ -4124,8 +4186,9 @@ function winReport(j){
         <div class="dk-stat"><div class="n">${winM(ds.pnl_double)}</div><div class="l">If the spread cost were doubled</div></div>
         <div class="dk-stat"><div class="n">$${(+r.balance).toFixed(2)}</div><div class="l">Balance (started $${(+r.start_balance).toFixed(2)})</div></div></div></div>
       <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Taken <b>${tk.length}</b></div>
-        ${tk.length?`<div style="overflow:auto"><table class="dkt"><tr><th>Opened</th><th>Contract</th><th>From</th><th>Thesis</th><th>Out</th><th>Real</th><th>Mid</th><th>R</th><th>Rules</th></tr>${tk.map(t=>`<tr><td>${esc(winET(t.opened_at))}</td><td><b>${esc(t.label||"")}</b>${t.experiment?` <span class="dk-tag">${esc(t.experiment)} test</span>`:""}</td><td class="mut">${esc(winSrc(t.source))}</td><td class="mut" style="max-width:260px">${esc(t.thesis||"")}</td><td class="mut">${esc(WIN_WHY[t.exit_reason]||t.exit_reason||(t.status==="open"?"still open":""))}${(t.flags||[]).length?`<div style="font-size:11px;color:#ffc27a">${esc((t.flags||[]).join(", ").replace(/_/g," "))}</div>`:""}</td><td class="mono">${winM(+t.pnl_realistic)}</td><td class="mono">${winM(+t.pnl_mid)}</td><td class="mono">${winR(t.r)}</td><td>${t.followed_rules===false?`<span class="dk-tag bad" title="${esc((t.broke||[]).join(" | "))}">broke ${(t.broke||[]).length}</span>`:`<span class="dk-tag ok">followed</span>`}</td></tr>`).join("")}</table></div>`:`<div class="mut">No trades taken.</div>`}</div>
-      <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Passed or blocked, and why <b>${ps.length}</b></div>${ps.length?ps.map(p=>`<div class="dk-row" style="align-items:flex-start"><span><b>${esc(p.ticker||"—")}</b> ${esc(p.side||"")} <span class="mut">· ${esc(winSrc(p.source))}</span><div class="mut" style="font-size:12px">${esc(p.reason||"")}</div></span><span class="dk-tag ${p.status==="blocked"?"bad":""}">${esc(p.status)}</span></div>`).join(""):`<div class="mut">Nothing passed.</div>`}</div>`;
+        ${tk.length?`<div style="overflow:auto"><table class="dkt"><tr><th>Opened</th><th>Contract</th><th>From</th><th>Thesis</th><th>Out</th><th>Real</th><th>Mid</th><th>R</th><th>Rules</th></tr>${tk.map(t=>`<tr><td>${esc(winET(t.opened_at))}</td><td><b>${esc(t.label||"")}</b>${t.experiment?` <span class="dk-tag">${esc(t.experiment)} test</span>`:""}${winStamps(t)}${winExc(t)}</td><td class="mut">${esc(winSrc(t.source))}</td><td class="mut" style="max-width:260px">${esc(t.thesis||"")}</td><td class="mut">${esc(WIN_WHY[t.exit_reason]||t.exit_reason||(t.status==="open"?"still open":""))}${(t.flags||[]).filter(f=>!String(f).startsWith("stamp:")).length?`<div style="font-size:11px;color:#ffc27a">${esc((t.flags||[]).filter(f=>!String(f).startsWith("stamp:")).join(", ").replace(/_/g," "))}</div>`:""}</td><td class="mono">${winM(+t.pnl_realistic)}</td><td class="mono">${winM(+t.pnl_mid)}</td><td class="mono">${winR(t.r)}</td><td>${t.followed_rules===false?`<span class="dk-tag bad" title="${esc((t.broke||[]).join(" | "))}">broke ${(t.broke||[]).length}</span>`:`<span class="dk-tag ok">followed</span>`}</td></tr>`).join("")}</table></div>`:`<div class="mut">No trades taken.</div>`}</div>
+      <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Passed or blocked, and why <b>${ps.length}</b></div>${ps.length?ps.map(p=>`<div class="dk-row" style="align-items:flex-start"><span><b>${esc(p.ticker||"—")}</b> ${esc(p.side||"")} <span class="mut">· ${esc(winSrc(p.source))}</span><div class="mut" style="font-size:12px">${esc(p.reason||"")}</div></span><span class="dk-tag ${p.status==="blocked"?"bad":""}">${esc(p.status)}</span></div>`).join(""):`<div class="mut">Nothing passed.</div>`}</div>
+      ${winStopped(r)}`;
   }
   return `${winHead(j)}<div class="dkp-head" style="margin-top:-4px"><span class="mut">The end-of-day report: what was taken, what was passed and why, and the money three ways.</span>${pick}</div>${body}
     <div class="dk-cardx"><div class="dk-h">All time <b>${st.trades||0} trades</b></div><div class="mut" style="font-size:12.5px">${esc(st.note||"")}</div></div>`;
@@ -4175,12 +4238,69 @@ async function dkWinston(keep){
   const pz=$("#winPause");if(pz)pz.onclick=async()=>{if(WIN.busy)return;WIN.busy=true;pz.disabled=true;
     try{await winApi("config_set",{enabled:!(j.config&&j.config.enabled)})}catch(e){alert("Could not change it: "+e.message)}
     WIN.busy=false;dkWinston(true)};
+  const md=$("#winMode");if(md)md.onclick=async()=>{if(WIN.busy)return;WIN.busy=true;md.disabled=true;   // v3.38: data <-> strict, no deploy
+    try{await winApi("config_set",{mode:md.dataset.mode});toast(md.dataset.mode==="data"?"Data mode: soft gates stamp instead of block":"Strict mode: every gate blocks again")}catch(e){alert("Could not change the mode: "+e.message)}
+    WIN.busy=false;dkWinston(true)};
   pg.querySelectorAll("[data-wr]").forEach(b=>b.onclick=async()=>{if(WIN.busy)return;WIN.busy=true;b.disabled=true;
     try{await winApi("rule_set",{id:b.dataset.wr,active:b.dataset.on!=="1"})}catch(e){alert("Could not change the rule: "+e.message)}
     WIN.busy=false;dkWinston(true)});
   clearTimeout(WIN.t);WIN.t=setTimeout(()=>{if(DK.view==="winston"&&WIN.view==="today"&&document.visibilityState==="visible"&&!WIN.busy)dkWinston(true)},((j.open||[]).length?20e3:30e3));
 }
 
+
+/* ================================================================ v3.38
+   16 Oct 2026, approved mockup v338-mockup.html ("this is good"). The Pop Quiz tab:
+   Josh picks a chart, answers the coach's five questions, and one Jarvis call grades
+   each answer ONLY from the calls (call date + MM:SS), with a score out of 5 and two
+   things to fix. History lives in otto_settings.quiz_history (server); drafts in LS. */
+var QZ={ticker:"",qs:[],rows:[],last:null,busy:false};
+const QZ_DEFAULT=["SPY","QQQ","AMZN","GOOGL","MSFT","NVDA"];
+function qzPicks(){const seen=new Set(),out=[];[...QZ.rows.map(r=>r.ticker),...QZ_DEFAULT].forEach(t=>{t=String(t||"").toUpperCase();if(t&&!seen.has(t)){seen.add(t);out.push(t)}});
+  if(QZ.ticker&&!seen.has(QZ.ticker))out.unshift(QZ.ticker);return out.slice(0,6)}
+function qzDraft(){return LS.get("qzDraft",{})}
+function qzSaveDraft(){const d=qzDraft();d[QZ.ticker]=Object.fromEntries(QZ.qs.map(q=>[q.id,($("#qz_"+q.id)||{}).value||""]));LS.set("qzDraft",d)}
+async function dkQuiz(){
+  const pg=$("#dkPage");pg.innerHTML=dkLoading("Loading the Pop Quiz…");
+  let j;try{j=await dkApi("quiz_list")}catch(e){pg.innerHTML=dkErr(e);return}
+  if(DK.view!=="quiz")return;
+  QZ.qs=j.questions||[];QZ.rows=j.rows||[];
+  if(!QZ.ticker)QZ.ticker=LS.get("qzTicker","")||(QZ.rows[0]&&QZ.rows[0].ticker)||"SPY";
+  qzRender();
+}
+function qzRender(){
+  const pg=$("#dkPage");if(DK.view!=="quiz")return;
+  const draft=(qzDraft()[QZ.ticker])||{},last=QZ.last&&QZ.last.ticker===QZ.ticker?QZ.last:null;
+  const gradeOf=id=>last&&(last.grades||[]).find(g=>g.id===id);
+  const gl={ok:"✓",half:"~",no:"✗"};
+  const qs=QZ.qs.map((q,i)=>{const g=gradeOf(q.id);
+    return `<div class="qz-q"><div class="qq">${i+1}. ${esc(q.q)}</div><div class="coach">The coach asks: "${esc(q.coach||"")}"</div>
+      <textarea id="qz_${esc(q.id)}" placeholder="Your answer, in your own words — numbers where you have them">${esc(draft[q.id]||"")}</textarea>
+      ${g?`<div class="qz-grade ${esc(g.grade)}"><span class="g">${gl[g.grade]||"~"}</span><span>${esc(g.note||"")}${g.source?`<span class="src">${esc(g.source)}</span>`:""}</span></div>`:""}</div>`}).join("");
+  const hist=QZ.rows.slice(0,10).map(r=>`<div class="qz-hist"><span>${esc(dkDate(r.at).split(" ")[0])} · <b>${esc(r.ticker)}</b> <span class="mut">${esc(r.by||"")}${r.weakest?" · weakest: "+esc(r.weakest):""}</span></span><span class="mono">${esc(String(r.score))} / ${esc(String(r.max||5))}</span></div>`).join("");
+  pg.innerHTML=`<div class="dkp">
+    <div class="dkp-head"><h2>Pop Quiz</h2><span class="mut" style="font-size:12.5px">The coach's questions, before the call. Jarvis grades you against what the coach actually said — dated.</span></div>
+    <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">1 · Pick the chart <b>recent picks first</b></div>
+      <div class="qz-pick">${qzPicks().map(t=>`<button data-qt="${esc(t)}" class="${t===QZ.ticker?"on":""}">${esc(t)}</button>`).join("")}<input id="qzOther" placeholder="+ other" maxlength="8"></div>
+      <div class="mut" style="font-size:12.5px;margin-top:8px">Walk it the way the coach makes you: weekly → daily → 4-hour → 1-hour → 10-minute. It is about the plan, not the price.</div></div>
+    <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">2 · The questions <b>${esc(QZ.ticker)} · answer in your own words</b></div>${qs}
+      <div style="display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap"><button class="dk-btn go" id="qzGo" ${QZ.busy?"disabled":""}>${QZ.busy?"Grading…":"Grade my answers"}</button><span class="mut" style="font-size:12.5px">One Jarvis call. Grades only from the calls; a question the coach never answered says so.</span><span id="qzMsg" class="dk-err" style="font-size:12.5px"></span></div></div>
+    ${last?`<div class="dkp-grid3" style="margin-bottom:12px" id="qzScore"><div class="dk-cardx"><div class="dk-h">Score</div><div class="qz-score">${esc(String(last.score))} <span class="mut" style="font-size:14px;font-weight:400">/ ${esc(String(last.max||5))}</span></div><div class="mut" style="font-size:12.5px">${esc(last.ticker)} · ${esc(dkDate(last.at))}</div></div>
+      <div class="dk-cardx" style="grid-column:span 2"><div class="dk-h">Two things to fix before the call</div>${(last.fixes||[]).length?(last.fixes||[]).map((f,i)=>`<div style="font-size:13px;margin-bottom:6px"><b>${i+1}.</b> ${esc(f)}</div>`).join(""):`<div class="mut">Nothing to fix — nice.</div>`}</div></div>`:""}
+    <div class="dk-cardx"><div class="dk-h">Past quizzes <b>trend</b></div>${hist||`<div class="mut">No quiz yet. The first one is the baseline.</div>`}
+      <div class="mut" style="font-size:12px;margin-top:6px">The weakest question over this week's quizzes goes into the Friday trade log as "working on".</div></div></div>`;
+  pg.querySelectorAll("[data-qt]").forEach(b=>b.onclick=()=>{qzSaveDraft();QZ.ticker=b.dataset.qt;LS.set("qzTicker",QZ.ticker);qzRender()});
+  const ot=$("#qzOther");if(ot)ot.onkeydown=e=>{if(e.key==="Enter"){const t=ot.value.toUpperCase().replace(/[^A-Z.]/g,"").slice(0,8);if(!t)return;qzSaveDraft();QZ.ticker=t;LS.set("qzTicker",t);qzRender()}};
+  pg.querySelectorAll(".qz-q textarea").forEach(ta=>ta.oninput=()=>qzSaveDraft());
+  const go=$("#qzGo");if(go)go.onclick=async()=>{if(QZ.busy)return;qzSaveDraft();
+    const answers=Object.fromEntries(QZ.qs.map(q=>[q.id,($("#qz_"+q.id)||{}).value||""]));
+    if(!Object.values(answers).some(v=>String(v).trim())){$("#qzMsg").textContent="Answer at least one question first.";return}
+    QZ.busy=true;go.disabled=true;go.textContent="Grading…";$("#qzMsg").textContent="";
+    try{const r=await dkApi("quiz_grade",{ticker:QZ.ticker,answers,by:($("#dkWho")&&$("#dkWho").value)||""});QZ.last=r;
+      QZ.rows=[{at:r.at,day:r.day,by:r.by,ticker:r.ticker,score:r.score,max:r.max,weakest:r.weakest,fixes:r.fixes},...QZ.rows].slice(0,20);
+      toast(`Graded: ${r.score} / ${r.max}`)}
+    catch(e){$("#qzMsg").textContent=String(e.message).slice(0,200)}
+    QZ.busy=false;if(DK.view==="quiz"){qzRender();const sc=$("#qzScore");if(sc)sc.scrollIntoView({block:"start",behavior:"smooth"})}};
+}
 
 /* ================================================================ v3.15
    7 Oct 2026, approved mockup otto-v3.15-mockup-b.html ("ok go"). The Playbook
