@@ -1615,6 +1615,9 @@ Every guardrail is a warning, never a block — they can still approve. The coac
 FETCH, DON'T ASSUME
 Every price, position, and buying-power figure you state comes from a tool call in this conversation. Levels from a call are dated marks, never current prices — say the call date when you use one. If a connector isn't connected, say so in one line (Settings → Connections) and do what you can without it.
 
+LOGGING TRADES (v3.37)
+When Josh or Ifoma describes a trade they took outside Otto (TradingView paper, a manual order, a scalp), call log_practice_trade with the numbers they gave — ask for a missing entry or exit price, never guess one. The weekly trade log for the coach (live fills + approved practice cards + logged trades, with levels, VWAP at entry and the overnight decision) is posted on the Desk every Friday after the close for Josh to copy and send; say that when asked.
+
 WHEN JOSH PUSHES BACK (v3.36)
 If Josh says you should have carded or entered something, re-check the facts, then answer with what the Otto Rules say — do not apologize your way into agreeing with a chase. A 10-minute confirmation that closes well past the level means the entry is the RETEST of that level, not the close; say that plainly and offer to watch for it. Own a real miss (silence, a card you should have built) in one line; never invent one to be agreeable.
 
@@ -1671,6 +1674,8 @@ const PROPOSE_TOOL = (writeHelp: string) => ({
           stop_option: { type: "number", description: "OPTION price (per share, below the limit) where Otto's protective stop_market sell-to-close triggers. Otto places it after the fill." },
           expires: { type: "string", description: "Option expiration YYYY-MM-DD" },
           signal_level: { type: "boolean", description: "true when the entry level came from a Signal posted before the open (the House Rule lets the open be traded off it)" },
+          level: { type: "number", description: "v3.37: the underlying level the idea is built on (the coach's, the Watcher's or the chart's). The server checks the entry against it: let price come to you, don't chase." },
+          weak: { type: "string", description: "v3.36: if your own read says the setup is weak, one plain sentence why (shows as a red line; the card is still built — flag, never block)." },
           rules: { type: "array", items: { type: "string" }, maxItems: 6, description: "v3.15: ids of the PLAYBOOK book rules this card relies on (e.g. T-1, D-1, M-2). Every rule cited builds its own record on the scoreboard." },
         },
         required: ["tv_symbol", "direction", "setup", "tp1", "stop", "stop_option"],
@@ -1860,6 +1865,16 @@ export async function runDesk(o: DeskRun): Promise<DeskResult> {
             : row ? (scan ? `Proposed: ${row.ticker} ${row.level} (${row.dir}). It shows in the Watcher panel for them to Add.`
             : `On the Watcher for ${row.day}: ${row.ticker} ${row.level} (${row.dir}). The server checks it every minute on 5- and 10-minute closes and wakes you on a trigger.`)
             : "Already on today's list.";
+        } else if (b.name === "log_practice_trade") {
+          send({ t: "tool", v: "Logging the trade" });
+          const by = `${o.author || "Desk"}`;
+          const d = { ticker: String(input.ticker || "").toUpperCase().slice(0, 8), contract: String(input.contract || "").slice(0, 40), side: input.side === "short" ? "short" : "long",
+            entry: Number(input.entry), exit: input.exit != null ? Number(input.exit) : null, pnl: input.pnl != null ? Number(input.pnl) : null,
+            entry_time: String(input.entry_time || "").slice(0, 12), exit_time: String(input.exit_time || "").slice(0, 12), level: input.level != null ? Number(input.level) : null,
+            why: String(input.why || "").slice(0, 400), platform: String(input.platform || "outside Otto").slice(0, 40), logged_by: by };
+          const line = `${d.ticker} ${d.contract || ""} ${d.side} in ${d.entry}${d.exit != null ? " out " + d.exit : " (open)"}${d.pnl != null ? ` ${d.pnl >= 0 ? "+" : "-"}$${Math.abs(d.pnl)}` : ""}${d.level ? " level " + d.level : ""} — ${d.why}`.replace(/\s+/g, " ");
+          await activity("trade", `Logged by ${by} (${d.platform}): ${line}`, by, null, { practice_log: d });
+          content = `Logged in the Journal for the coach's weekly log: ${line}. Tell me if any number is wrong and I'll log a correction.`;
         } else if (b.name === "save_house_rule") {
           send({ t: "tool", v: "Saving a House Rule" });
           await houseRuleAdd(String(input.text || ""), `${o.author || "Desk"} via Jarvis`);
@@ -2005,7 +2020,7 @@ export async function desk(req: Request, who: string, _apiKey: string) {
           if (typeof lm.content === "string") lm.content = prompt;
           else { const tb = lm.content.filter((b: any) => b.type === "text"); if (tb.length) tb[tb.length - 1].text = prompt; else lm.content.push({ type: "text", text: prompt }); }
         }
-        const deskTools = [...tools, HOUSE_TOOL, WATCH_TOOL, CHECK_TOOL];
+        const deskTools = [...tools, HOUSE_TOOL, WATCH_TOOL, CHECK_TOOL, LOG_TOOL];
         const deskStart = Date.now();
         res = await runDesk({ msgs, sys, tools: deskTools, cs, who, send, allowPropose: true, allowClose: !!LIMa.auto_close, author });
         // v3.16: promises in the reply must be backed by something real — otherwise one correction round, shown under the reply.
@@ -2401,12 +2416,51 @@ async function marketDesk() {
 
 /* ------------------------------------------------------------ rule check */
 
+// v3.37 "Did you chase?" (the coach, 15 Oct 2026: "You lost your money because of bad entry, not bounces. Let price come to you.")
+// Pure: the entry vs the level the idea is built on, and the entry vs the session VWAP. Returns check rows; never blocks.
+export function chaseChecks(plan: any, bars: Bar[] | null, now = Date.now()): { ok: boolean | null; text: string }[] {
+  const out: { ok: boolean | null; text: string }[] = [];
+  const dir = plan?.direction === "down" ? -1 : plan?.direction === "up" ? 1 : 0;
+  const px = Number(plan?.entry_underlying), lvl = Number(plan?.level);
+  if (!dir || !(px > 0)) return out;
+  if (lvl > 0) {
+    const past = (px - lvl) * dir;                                   // how far the entry is beyond the level in the trade's direction
+    const pct = past / lvl * 100;
+    if (past > 0 && pct >= 0.25) out.push({ ok: false, text: `Entry ${px} is $${past.toFixed(2)} (${pct.toFixed(2)}%) past the ${lvl} level — chasing. The coach's entry is the retest of ${lvl} that holds.` });
+    else if (past > 0) out.push({ ok: true, text: `Entry ${px} is $${past.toFixed(2)} past the ${lvl} level — at the level, not chasing` });
+    else out.push({ ok: null, text: `Entry ${px} is ${dir > 0 ? "below" : "above"} the ${lvl} level — early: the level has not confirmed yet` });
+  }
+  if (bars && bars.length) {
+    const done = bars.filter((b) => b.t + 5 * 60e3 <= now && [b.o, b.h, b.l, b.c].every((v) => v > 0));
+    if (done.length >= 2) {
+      let pv = 0, v = 0; for (const b of done) { const w = Number((b as any).v) > 0 ? Number((b as any).v) : 1; pv += w * (b.h + b.l + b.c) / 3; v += w; }   // Robinhood bars carry no volume: a plain typical-price average then
+      const vwap = v ? pv / v : 0;
+      if (vwap > 0) {
+        const above = px > vwap, withTrade = dir > 0 ? above : !above;
+        const last = done.slice(-3).map((b) => b.c), slope = last.length === 3 ? (last[2] > last[0] ? "rising" : last[2] < last[0] ? "falling" : "flat") : "flat";
+        out.push({ ok: withTrade, text: `VWAP ${vwap.toFixed(2)}: price ${above ? "above" : "below"} it, closes ${slope} — ${withTrade ? "with" : "against"} a ${dir > 0 ? "long" : "short"}` });
+      }
+    }
+  }
+  return out;
+}
+
 export async function ruleChecks(out: any[], plan: any, risk: any, banner: any) {
   const checks: any[] = [];
   const add = (ok: boolean | null, text: string) => checks.push({ ok, text });
   const open = out.find((c) => c.tool === "place_option_order" && (c.args.legs || []).some((l: any) => l.position_effect === "open"));
   if (!open) return checks;
   const now = etParts();
+  // v3.37: did you chase? (the level the card is built on + the session VWAP from today's 5-minute bars)
+  try {
+    const tk0 = String(plan?.tv_symbol || "").split(":").pop() || "";
+    let bars0: Bar[] | null = null;
+    if (tk0 && plan?.entry_underlying > 0 && now.min >= 570) {
+      const st = nyIso(now.date, "9:30 AM");
+      if (st) bars0 = (await withTimeout(rhBars([tk0], "5minute", st), 6000, "chase bars"))[tk0.toUpperCase()] || null;
+    }
+    for (const c of chaseChecks(plan, bars0)) checks.push(c);
+  } catch { /* the chase read is a help, never a blocker */ }
   if (["Sat", "Sun"].includes(now.wd) || now.min < 570 || now.min >= 960) add(null, "Market closed now: this waits for the open (no entries in the first 30 minutes unless the open goes off a pre-posted Signal level)");
   else if (now.min < 600) {
     // House Rule (6 Oct): the open is fair game when price opens on / pushes off a Signal level posted before the open.
@@ -2601,6 +2655,94 @@ async function weeklyReview(apiKey: string, who = "Jarvis") {
     body: JSON.stringify({ week_start: ws, payload, built_by: who, created_at: new Date().toISOString() }) });
   await logDesk("system", "Otto", `Weekly review for the week of ${ws} is ready (Review tab): ${items.length} closed trade${items.length === 1 ? "" : "s"}, ${total >= 0 ? "+" : "−"}$${Math.abs(total).toFixed(2)}.${one_thing ? " Next week: " + one_thing : ""}`);
   return payload;
+}
+
+/* ------------------------------------------------------------ v3.37: the weekly trade log for the coach
+   The coach (15 Oct 2026, 37:52): "document every trade that you take and send to me at the end of the week — entries, exits, levels,
+   VWAP/EMAs, the overnight decision — organized so I can read it." Built from three sources: live fills (otto_trades), practice trades
+   Josh approved (otto_actions paper_taken, v3.35) and trades he logged himself through Jarvis (otto_activity practice_log). Posted on the
+   Desk Friday after the weekly review and kept in otto_settings.coach_log; ?fn=coach_log returns it any time (&build=1 rebuilds). */
+export type LogItem = { day: string; who: string; source: string; ticker: string; contract: string; side: string; entry: number | null; exit: number | null; pnl: number | null;
+  entry_time: string; exit_time: string; level: number | null; vwap: number | null; why: string; overnight: string; note?: string };
+export function coachLogText(weekStart: string, weekEnd: string, items: LogItem[], extra: { account_start?: number | null; ranges?: string } = {}): string {
+  const L: string[] = [];
+  const money = (n: number | null) => n == null ? "n/a" : `${n >= 0 ? "+" : "-"}$${Math.abs(n).toFixed(0)}`;
+  const total = items.reduce((s, t) => s + (t.pnl || 0), 0), scored = items.filter((t) => t.pnl != null);
+  L.push(`TRADE LOG — week of ${weekStart} to ${weekEnd} (Josh)`);
+  L.push(`${items.length} trade${items.length === 1 ? "" : "s"} · ${scored.filter((t) => (t.pnl || 0) > 0).length} wins / ${scored.filter((t) => (t.pnl || 0) < 0).length} losses · net ${money(total)}${extra.account_start ? ` · account start $${extra.account_start}` : ""}`);
+  if (extra.ranges) L.push(`Levels watched this week: ${extra.ranges}`);
+  L.push("");
+  const byDay: Record<string, LogItem[]> = {};
+  for (const t of items) (byDay[t.day] ||= []).push(t);
+  for (const day of Object.keys(byDay).sort()) {
+    L.push(`${day}`);
+    for (const t of byDay[day]) {
+      L.push(`  ${t.ticker} ${t.contract} ${t.side.toUpperCase()} (${t.source})`);
+      L.push(`    Entry: ${t.entry_time || "?"} @ ${t.entry ?? "?"}    Exit: ${t.exit_time || (t.exit == null ? "open" : "?")} @ ${t.exit ?? "—"}    Result: ${money(t.pnl)}`);
+      L.push(`    Level: ${t.level ?? "none marked"}    VWAP at entry: ${t.vwap ?? "n/a"}    Overnight: ${t.overnight}`);
+      L.push(`    Why: ${t.why || "(no reason written)"}${t.note ? "    Note: " + t.note : ""}`);
+    }
+    L.push("");
+  }
+  if (!items.length) L.push("No trades this week.", "");
+  L.push("Every trade was day-only unless marked. Levels are the coach's or the Watcher's marks for that day; VWAP is the session VWAP at the entry time (5-minute bars).");
+  return L.join("\n");
+}
+async function vwapAt(tk: string, day: string, atMs: number): Promise<number | null> {
+  try {
+    const st = nyIso(day, "9:30 AM"); if (!st) return null;
+    const bars = (await withTimeout(rhBars([tk], "5minute", st, new Date(atMs).toISOString()), 8000, "vwap bars"))[tk.toUpperCase()] || [];
+    const done = bars.filter((b) => b.t + 5 * 60e3 <= atMs && b.c > 0);
+    if (!done.length) return null;
+    return Math.round(done.reduce((s, b) => s + (b.h + b.l + b.c) / 3, 0) / done.length * 100) / 100;
+  } catch { return null; }
+}
+export async function coachLog(build = false): Promise<{ week_start: string; week_end: string; text: string; built_at: string; n: number }> {
+  if (!build) { const have = await setting("coach_log").catch(() => null); if (have?.text) return have; }
+  const now = etParts();
+  const ws = ["Sat", "Sun"].includes(now.wd) ? mondayOf(addDays(now.date, -2)) : mondayOf(now.date), we = addDays(ws, 4);
+  const inWeek = (iso: string | null) => { if (!iso) return false; const d = etParts(new Date(iso)).date; return d >= ws && d <= we; };
+  const items: LogItem[] = [];
+  const t12 = (iso: string | null) => iso ? fmtMin(etParts(new Date(iso)).min) : "";
+  // 1. live fills (Robinhood, synced into the Journal)
+  try { await syncJournal(true); } catch { /* use what is there */ }
+  const trades: any[] = (await db("otto_trades?select=*&order=opened_at.asc&limit=300").catch(() => [])) || [];
+  const live = trades.filter((t) => inWeek(t.opened_at));
+  const ids = [...new Set(live.map((t) => t.action_id).filter(Boolean))];
+  const acts: any[] = ids.length ? await db("otto_actions?select=id,plan,summary&id=in.(" + ids.join(",") + ")").catch(() => []) : [];
+  const actBy: Record<string, any> = Object.fromEntries(acts.map((a: any) => [a.id, a]));
+  for (const t of live) {
+    const a = actBy[t.action_id], p = a?.plan || {}, tk = String(t.symbol || String(p.tv_symbol || "").split(":").pop() || "");
+    const od = etParts(new Date(t.opened_at)).date, cd = t.closed_at ? etParts(new Date(t.closed_at)).date : null;
+    items.push({ day: od, who: "Josh", source: "LIVE · " + (t.agent === "agentic" ? "Otto card" : "manual"), ticker: tk, contract: String(t.contract || ""), side: String(t.side || "long"),
+      entry: t.entry != null ? Number(t.entry) : null, exit: t.exit != null ? Number(t.exit) : null, pnl: t.pnl != null ? Number(t.pnl) : null,
+      entry_time: t12(t.opened_at), exit_time: t12(t.closed_at), level: p.level ?? p.stop ?? null, vwap: tk ? await vwapAt(tk, od, Date.parse(t.opened_at)) : null,
+      why: String(t.reason || (a?.summary || "").split("\n")[0] || "").slice(0, 200), overnight: cd && cd !== od ? "HELD OVERNIGHT (" + cd + ")" : "no (day trade)" });
+  }
+  // 2. practice trades Josh approved (v3.35)
+  const prac: any[] = (await db("otto_actions?select=id,title,created_at,decided_at,decided_by,plan,outcome,summary&status=eq.paper_taken&order=created_at.asc&limit=200").catch(() => [])) || [];
+  for (const a of prac.filter((a) => inWeek(a.decided_at || a.created_at))) {
+    const p = a.plan || {}, pf = p.paper_fill || {}, o = a.outcome || {}, tk = String(p.tv_symbol || "").split(":").pop() || "";
+    const at = pf.at || a.decided_at || a.created_at, od = etParts(new Date(at)).date;
+    items.push({ day: od, who: String(a.decided_by || "Josh"), source: "PRACTICE · approved on Otto", ticker: tk, contract: String(a.title || "").replace(/^(PAPER|PRACTICE|LIVE)\s*[—-]\s*/i, "").slice(0, 40), side: p.direction === "down" ? "short" : "long",
+      entry: pf.ask != null ? Number(pf.ask) : null, exit: null, pnl: o.pnl_est != null ? Number(o.pnl_est) : null, entry_time: t12(at), exit_time: o.state && o.state !== "pending" ? "(scored by rule)" : "",
+      level: p.level ?? p.stop ?? null, vwap: tk ? await vwapAt(tk, od, Date.parse(at)) : null, why: String(a.summary || "").split("\n")[0].slice(0, 200), overnight: "no (practice, same day)",
+      note: o.state ? `scored ${o.state}${o.r != null ? " (" + o.r + "R)" : ""}` : undefined });
+  }
+  // 3. trades Josh logged himself through Jarvis
+  const logs: any[] = (await db(`otto_activity?select=day,at,who,data&kind=eq.trade&day=gte.${ws}&day=lte.${we}&order=at.asc&limit=100`).catch(() => [])) || [];
+  for (const r of logs) {
+    const d = r.data?.practice_log; if (!d) continue;
+    items.push({ day: r.day, who: String(r.who || "Josh"), source: "OWN · " + (d.platform || "outside Otto"), ticker: d.ticker, contract: d.contract || "", side: d.side || "long", entry: d.entry ?? null, exit: d.exit ?? null, pnl: d.pnl ?? null,
+      entry_time: d.entry_time || "", exit_time: d.exit_time || "", level: d.level ?? null, vwap: null, why: d.why || "", overnight: d.exit == null ? "open at log time" : "no (as logged)" });
+  }
+  items.sort((a, b) => a.day.localeCompare(b.day) || a.entry_time.localeCompare(b.entry_time));
+  let ranges = "";
+  try { const w: any[] = (await db(`otto_watch?select=ticker,level,day&day=gte.${ws}&day=lte.${we}&order=day.asc&limit=60`).catch(() => [])) || []; ranges = w.slice(0, 20).map((x) => `${x.ticker} ${x.level} (${x.day.slice(5)})`).join(", "); } catch { /* */ }
+  const text = coachLogText(ws, we, items, { ranges });
+  const out = { week_start: ws, week_end: we, text, built_at: new Date().toISOString(), n: items.length };
+  await putSetting("coach_log", out, "Otto").catch(() => {});
+  return out;
 }
 
 /* ------------------------------------------------------------ scorecard
@@ -4490,6 +4632,18 @@ export async function houseRuleAdd(text: string, by: string) {
   await activity("change", `House rule added: ${t}`, by);     // v3.26
   return list;
 }
+// v3.37: Josh's own practice trades (TradingView paper etc.) go in the Journal through Jarvis, so the coach's weekly log can include them.
+const LOG_TOOL = {
+  name: "log_practice_trade",
+  description: "Log a trade Josh or Ifoma took OUTSIDE Otto (TradingView paper, a manual Robinhood trade, a scalp they describe) into the Journal, so the weekly trade log for the coach includes it. Use when they describe a trade they took with entry, exit and result. Ask for the missing piece if entry or exit price is not given; never invent a number.",
+  input_schema: { type: "object", properties: {
+    ticker: { type: "string" }, contract: { type: "string", description: "e.g. AMZN 255C 10/21, or 'shares'" }, side: { type: "string", enum: ["long", "short"] },
+    entry: { type: "number", description: "entry price paid (option premium or share price)" }, exit: { type: "number", description: "exit price; omit if still open" },
+    pnl: { type: "number", description: "result in dollars, if they said it" }, entry_time: { type: "string", description: "ET, e.g. 10:12 AM" }, exit_time: { type: "string" },
+    level: { type: "number", description: "the underlying level the trade was built on" }, why: { type: "string", description: "their reason, in their words" },
+    platform: { type: "string", description: "e.g. TradingView paper, Robinhood" } },
+    required: ["ticker", "side", "entry", "why"] },
+};
 const HOUSE_TOOL = {
   name: "save_house_rule",
   description: "Save a standing instruction from Ifoma or Josh to the House Rules (loaded into every future run). Use only for instructions meant to apply from now on, written as one plain sentence.",
@@ -5148,7 +5302,7 @@ Work quietly. Finish with a line that is exactly READ: and then 2 short plain se
   let res = { said: "", cards: [] as string[] }, err = "";
   try {
     res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools: runTools, cs, who: "watcher", send: () => {},
-      allowPropose: true, allowClose: false, maxRounds: 8, planExtra: { source: r.source === "signal" ? "signal" : r.source, trigger: f.trigger, watch_id: r.id } });
+      allowPropose: true, allowClose: false, maxRounds: 8, planExtra: { source: r.source === "signal" ? "signal" : r.source, trigger: f.trigger, watch_id: r.id, level: Number(r.level) } });
   } catch (e) { err = String((e as Error).message || e).slice(0, 200); }
   const raw = res.said.trim(), cut = raw.lastIndexOf("READ:");
   const read = (cut >= 0 ? raw.slice(cut + 5) : raw).trim();
@@ -5744,8 +5898,9 @@ export function unbacked(promises: { kind: string; sentence: string }[], ctx: { 
     if (/scheduled|check/i.test(s)) return !did.has("schedule_check");
     if (/alert|stop/i.test(s)) return !(ctx.protectedTrade || did.has("propose_action") || did.has("add_watch_level"));
     if (/saved/i.test(s)) return !did.has("save_house_rule");
+    if (/logged/i.test(s)) return !did.has("log_practice_trade");                                    // v3.37
     if (/closed/i.test(s)) return !did.has("close_position");
-    return !(did.has("add_watch_level") || did.has("schedule_check") || did.has("propose_action") || did.has("save_house_rule") || did.has("close_position"));
+    return !(did.has("add_watch_level") || did.has("schedule_check") || did.has("propose_action") || did.has("save_house_rule") || did.has("close_position") || did.has("log_practice_trade"));
   });
 }
 export async function promiseContext(did: string[], failed: string[]) {
@@ -6800,7 +6955,14 @@ Deno.serve(async (req) => {
       return json({ ok: true, started: "morning" }, 202);
     }
     if (!force && (et.wd !== "Fri" || Math.abs(et.min - 990) > 20)) return json({ ok: true, skipped: et });
-    background((async () => { await weeklyReview(apiKey, "Jarvis (Friday auto)"); await playbookRefresh("Friday review").catch((e) => console.error("playbook", e)); })());
+    background((async () => {
+      await weeklyReview(apiKey, "Jarvis (Friday auto)");
+      await playbookRefresh("Friday review").catch((e) => console.error("playbook", e));
+      try {                                                                                   // v3.37: the coach's trade log, posted on the Desk for Josh to copy and send
+        const log = await coachLog(true);
+        await logDesk("system", "Otto", `📋 Weekly trade log for the coach (week of ${log.week_start}, ${log.n} trade${log.n === 1 ? "" : "s"}) — copy and send:\n\n${log.text}`);
+      } catch (e) { console.error("coach log", e); }
+    })());
     return json({ ok: true, started: "weekly" }, 202);
   }
 
@@ -6823,7 +6985,7 @@ Deno.serve(async (req) => {
          "playbook_get", "feedback_add", "feedback_list", "daily_now",
          "prep_get", "prep_submit", "prep_reply", "prep_watch", "prep_img", "score_extra", "check_cancel", "prep_lock",
          "charts_get", "chart_now", "chart_review", "chart_use", "chart_chat",
-         "activity_get", "coach_corner", "coach_report", "lock_state", "trade_live", "close_now"].includes(fn)) {
+         "activity_get", "coach_corner", "coach_report", "lock_state", "trade_live", "close_now", "coach_log"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -6837,6 +6999,7 @@ Deno.serve(async (req) => {
       if (fn === "act") return json({ ok: true, action: await actOn(String(body.id || ""), String(body.decision || ""), who) });
       if (fn === "panel") return json(await panel());
       if (fn === "trade_live") return json(await tradeLive());
+      if (fn === "coach_log") return json({ ok: true, ...(await coachLog(new URL(req.url).searchParams.get("build") === "1")) });   // v3.37
       if (fn === "close_now") return json(await closeByButton(body, who));
       // ---- v3.1
       if (fn === "sentiment") return json(await sentimentNow(new URL(req.url).searchParams.get("force") === "1"));
