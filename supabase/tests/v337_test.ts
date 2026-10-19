@@ -1,6 +1,11 @@
 // v3.37 (16 Oct 2026): the "did you chase?" check, the coach's weekly trade log, and the log_practice_trade tool.
 // Nothing touches the network: Supabase and Robinhood are faked; the Deno.serve handler is captured for the fn=coach_log route.
 // Run: deno test -A --no-check supabase/tests/v337_test.ts
+// v3.40: pin the clock to Fri 16 Oct 2026, 5 PM ET. The coach-log week is computed from the real clock (Mon-Fri = this week),
+// so with the real date these fixtures (12-16 Oct) only passed on a weekend and blocked the deploy every Monday to Friday.
+const RealDate = Date; const PINNED_NOW = RealDate.parse("2026-10-16T21:00:00Z");
+class FakeDate extends RealDate { constructor(...a: any[]) { if (a.length) super(...(a as [any])); else super(PINNED_NOW); } static now() { return PINNED_NOW; } }
+(globalThis as any).Date = FakeDate;
 let ROWS: Record<string, any[]> = {};
 const writes: { m: string; path: string; body: any }[] = [];
 const tableOf = (path: string) => path.split("?")[0];

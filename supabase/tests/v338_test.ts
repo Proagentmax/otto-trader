@@ -1,6 +1,11 @@
 // v3.38 (16 Oct 2026): the Pop Quiz (quiz_list / quiz_grade routes) and the "Working on" line in the coach's weekly log.
 // Nothing touches the network: Supabase and Claude are faked; the Deno.serve handler is captured for the routes.
 // Run: deno test -A --no-check supabase/tests/v338_test.ts
+// v3.40: pin the clock to Fri 16 Oct 2026, 5 PM ET. The coach-log week is computed from the real clock (Mon-Fri = this week),
+// so with the real date these fixtures (12-16 Oct) only passed on a weekend and blocked the deploy every Monday to Friday.
+const RealDate = Date; const PINNED_NOW = RealDate.parse("2026-10-16T21:00:00Z");
+class FakeDate extends RealDate { constructor(...a: any[]) { if (a.length) super(...(a as [any])); else super(PINNED_NOW); } static now() { return PINNED_NOW; } }
+(globalThis as any).Date = FakeDate;
 const SETTINGS: Record<string, any> = {};
 let ACTIVITY: any[] = [];
 let CLAUDE_REPLY: any = null; let CLAUDE_CALLS: any[] = [];

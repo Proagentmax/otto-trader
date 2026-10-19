@@ -501,22 +501,44 @@ async function addAiCost(day: string, usage: { input: number; output: number }) 
   await db("winston_days?on_conflict=day", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ day, ai, updated_at: nowDate().toISOString() }) });
 }
 
-let BRAIN_TXT: string | null = null;
+// v3.40 brain reader. Three fixes in one place:
+//  1. Newest calls first, whatever order they were stored in. The seed arrays are newest first, so slice(-4) used to take the four OLDEST calls.
+//  2. THIS WEEK'S CALLOUTS: the `levels` of any call dated within the last 7 days (they expire by themselves; every line carries its date).
+//  3. The `rules` lines are the coach's standing best practices (the Playbook). They are advisory, carry their id when they have one,
+//     and 20 per call get through at up to 420 characters each (it was 14 at 260).
+const BRAIN_SKIP = /^(at|scope|source|file|id|for|status|channel|repeat|tag|on)$/;
+const brainLine = (o: any) => Object.entries(o || {}).filter(([k, v]) => typeof v === "string" && !BRAIN_SKIP.test(k)).map(([, v]) => v as string).join(" \u2014 ").replace(/\s+/g, " ").trim();
+export function buildBrainText(calls: any[], now: number): string {
+  const sorted = (Array.isArray(calls) ? calls : []).filter((c) => c && typeof c === "object")
+    .sort((a, b) => String(b?.call?.date || "").localeCompare(String(a?.call?.date || "")));
+  const week: string[] = [];
+  for (const c of sorted) {
+    const d = String(c?.call?.date || ""), t = Date.parse(d + "T12:00:00Z");
+    if (!isFinite(t) || now - t > 7 * 86400000 || t - now > 86400000) continue;
+    for (const o of (c.levels || []).slice(0, 60)) { const s = brainLine(o); if (s) week.push(`[callout ${d}${o?.at ? " " + o.at : ""}] ${s.slice(0, 260)}`); }
+  }
+  const lines: string[] = [];
+  for (const c of sorted.slice(0, 4)) {
+    const d = c?.call?.date || "undated";
+    for (const k of ["rules", "setups", "insights"]) for (const o of (c[k] || []).slice(0, k === "rules" ? 20 : 14)) {
+      const t = brainLine(o);
+      if (t) lines.push(`[call ${d}, ${k}${o?.id ? " " + o.id : ""}] ${t.slice(0, k === "rules" ? 420 : 260)}`);
+    }
+  }
+  const parts: string[] = [];
+  if (week.length) parts.push("THIS WEEK'S COACH CALLOUTS (dated marks and views from his newest sessions; they go stale when the week ends; never treat one as a live price):\n" + week.join("\n").slice(0, 7500));
+  if (lines.length) parts.push("RULES, SETUPS AND INSIGHTS FROM HIS LATEST CALLS (the 'rules' lines are his standing best practices: ADVISORY, they inform your judgment and never override the HARD RULES or your rule list; when you lean on one, cite it as a brain line with its id if it has one):\n" + lines.join("\n").slice(0, 10000));
+  return parts.join("\n\n");
+}
+let BRAIN_TXT: string | null = null, BRAIN_AT = 0;
+export function resetBrainCache() { BRAIN_TXT = null; BRAIN_AT = 0; }
 export async function brainExcerpt(): Promise<string> {
-  if (BRAIN_TXT != null) return BRAIN_TXT;
+  if (BRAIN_TXT != null && nowMs() - BRAIN_AT < 600000) return BRAIN_TXT;      // refresh every 10 minutes so a new seed is picked up
   try {
     const r = await db("brain_versions?select=payload&order=version.desc&limit=1");
-    const calls: any[] = r?.[0]?.payload || [];
-    const lines: string[] = [];
-    for (const c of calls.slice(-4)) {
-      const d = c?.call?.date || "undated";
-      for (const k of ["rules", "setups", "insights"]) for (const o of (c[k] || []).slice(0, 14)) {
-        const t = Object.entries(o).filter(([kk, v]) => typeof v === "string" && !/^(at|scope|source|file|id|for|status|channel|repeat)$/.test(kk)).map(([, v]) => v).join(" — ");
-        if (t) lines.push(`[call ${d}, ${k}] ${String(t).replace(/\s+/g, " ").slice(0, 260)}`);
-      }
-    }
-    BRAIN_TXT = lines.join("\n").slice(0, 9000);
+    BRAIN_TXT = buildBrainText(r?.[0]?.payload || [], nowMs());
   } catch { BRAIN_TXT = ""; }
+  BRAIN_AT = nowMs();
   return BRAIN_TXT;
 }
 
