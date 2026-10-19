@@ -478,6 +478,13 @@ Deno.test("replay 10: the app's route needs the Otto email; state returns everyt
   await call("config_set", good, { mode: "data" }); eq(TABLES.winston_settings.find((s) => s.key === "config").value.mode, "data", "and back to data");
   assert(TABLES.winston_log.some((l) => l.kind === "mode" && l.data?.mode === "data"), "mode change logged");
   eq((await call("config_set", good, { mode: "loose" })).status, 500, "unknown mode refused");
+  // v3.39: max_open 1..4 from the tab (Ifoma, 18 Oct: open Winston up for data); mode and enabled untouched; out of range refused
+  const mo: any = await (await call("config_set", good, { max_open: 4 })).json();
+  const cfgNow = TABLES.winston_settings.find((s) => s.key === "config").value;
+  eq([mo.ok, mo.max_open, cfgNow.max_open, cfgNow.mode, cfgNow.enabled], [true, 4, 4, "data", false], "max_open 4 saved, the rest kept");
+  eq((await call("config_set", good, { max_open: 5 })).status, 500, "5 refused");
+  eq((await call("config_set", good, { max_open: 0 })).status, 500, "0 refused");
+  assert(TABLES.winston_log.some((l) => l.kind === "config" && l.data?.max_open === 4), "max_open change logged");
   // cron routes need the secret
   Deno.env.set("OTTO_CRON_SECRET", "0123456789abcdef-secret");
   eq((await X.handle(new Request("https://x/functions/v1/winston?fn=tick", { method: "POST" }))).status, 401, "cron without the secret");

@@ -1064,6 +1064,14 @@ export async function setEnabled(body: any) {
     await wlog("mode", { mode: body.mode });
     return { ok: true, mode: body.mode, enabled: cfg.enabled };
   }
+  // v3.39 (Ifoma, 18 Oct): open Winston up for data — max_open 1..4 from the tab / a Desk call. Everything else stays.
+  if (body?.max_open != null) {
+    const n = Math.round(Number(body.max_open));
+    if (!(n >= 1 && n <= 4)) throw new Error("max_open must be 1 to 4");
+    await putSetting("config", { ...cfg, max_open: n });
+    await wlog("config", { max_open: n });
+    return { ok: true, max_open: n, enabled: cfg.enabled };
+  }
   if (typeof body?.enabled !== "boolean") throw new Error("enabled must be true or false");
   await putSetting("config", { ...cfg, enabled: body.enabled });
   await wlog("enabled", { enabled: body.enabled });

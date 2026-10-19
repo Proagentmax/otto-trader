@@ -1081,7 +1081,18 @@ function costOf(tool: string, a: any): { cost: number | null; note: string } {
 // Jarvis wrote "LIVE —" on a PAPER card (META 12 Oct 14:06). Whatever he wrote there is stripped first.
 const STAMP_RE = /^\s*(?:LIVE|PAPER)\s*(?:[—–:·|-]+\s*)?/i;
 export const bareTitle = (t: any): string => String(t ?? "").replace(STAMP_RE, "").replace(/^Buy\s+/i, "");
-export const stampTitle = (t: any, paper: boolean): string => (paper ? "PAPER — " : "LIVE — ") + String(t ?? "").replace(STAMP_RE, "").trim();
+const INNER_STAMP_RE = /\s*(?:[—–:·|-]\s*)?\b(?:LIVE|PAPER)\b\s*(?:[—–:·|-]\s*)?/gi;
+// v3.39: Jarvis also writes the word inside the title ("SCALP · PAPER · CRWV 69C" went out LIVE on 16 Oct). The server's word is the only one.
+export const stampTitle = (t: any, paper: boolean): string => (paper ? "PAPER — " : "LIVE — ") + String(t ?? "").replace(STAMP_RE, "").replace(INNER_STAMP_RE, " · ").replace(/^(?:\s*·\s*)+|(?:\s*·\s*)+$/g, "").replace(/(?:\s*·\s*){2,}/g, " · ").trim();
+// v3.39: Jarvis's Desk line says the card's REAL status. "Card is up as PAPER" on a LIVE card is a false statement (16 Oct CRWV).
+export function statusWords(text: string, acts: { title?: string; status?: string }[]): string {
+  if (!acts.length) return text;
+  const live = acts.some((a) => /^LIVE\b/i.test(String(a.title || "")) && a.status !== "paper" && a.status !== "paper_wait");
+  const paper = acts.every((a) => /^PAPER\b/i.test(String(a.title || "")) || a.status === "paper" || a.status === "paper_wait");
+  if (live && !paper) return text.replace(/\b(as|is|goes out as|built as|up as)\s+(a\s+)?(paper|practice)(\s+card|\s+trade|\s+only)?\b/gi, "$1 $2LIVE$4").replace(/\bPAPER\b/g, "LIVE") + "\n⚠ This card is LIVE — approving it sends a real order.";
+  if (paper && !live) return text.replace(/\bLIVE\b/g, "PAPER");
+  return text;
+}
 // v3.30 (item 1): the NO CARD message for a coach level with no direction.
 const noCardLevel = (row: any): string => {
   const lv = Number(row?.level) > 0 ? Number(row.level) : levelsFromWords(row?.words || "")[0]?.level;
@@ -1355,6 +1366,35 @@ async function actOn(id: string, decision: string, who: string) {
     await logDesk("system", "Otto", `${a.title}: nothing to close — ${gone}. Nothing was sent to Robinhood (approved by ${who}).`, id);
     return publicAction(r?.[0] || a);
   }
+  // v3.39: the one rule (blocking this week, switch `vwap_block` in limits): no long while the stock and SPY are under VWAP.
+  if (a.exit?.state === "planned" && (a.plan?.direction === "up" || a.exit?.direction === "up")) {
+    try {
+      const L = await getLimits();
+      if (L.vwap_block !== false) {
+        const tk = String(a.plan?.tv_symbol || a.plan?.ticker || "").split(":").pop() || "";
+        const nowP = etParts(), st = nyIso(nowP.date, "9:30 AM");
+        if (tk && st && nowP.min >= 580) {
+          const bars = await withTimeout(rhBars([tk, "SPY"], "5minute", st), 6000, "vwap bars");
+          const why = vwapBlock(1, tk.toUpperCase(), bars[tk.toUpperCase()] || null, bars["SPY"] || null);
+          if (why) {
+            const checks = [{ ok: false, guard: true, block: true, text: why }, ...(a.checks || [])];
+            const r = await db("otto_actions?id=eq." + id, { method: "PATCH",
+              body: JSON.stringify({ status: "rejected", decided_by: "Otto (VWAP rule)", decided_at: now, checks, plan: { ...(a.plan || {}), blocked: "vwap" } }) });
+            await logDesk("system", "Otto", `⛔ ${a.title}: NOT sent. ${why}. Approved by ${who.split("@")[0]}; the rule decided.`, id);
+            await activity("card", `Blocked by the VWAP rule: ${a.title}`, who.split("@")[0]);
+            return publicAction(r?.[0] || a);
+          }
+        }
+      }
+    } catch { /* no data = no block */ }
+  }
+  // v3.39: Baby J is the senior. Approving a card he flagged weak / a chase is logged as an override — one line, no argument, kept score.
+  if (a.plan?.weak || (a.checks || []).some((c: any) => c.ok === false && /chas/i.test(String(c.text)))) {
+    const said = a.plan?.weak ? String(a.plan.weak).slice(0, 160) : String(((a.checks || []).find((c: any) => c.ok === false && /chas/i.test(String(c.text))) || {}).text || "").slice(0, 160);
+    await db("otto_actions?id=eq." + id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ plan: { ...(a.plan || {}), override: true, override_read: said } }) }).catch(() => {});
+    await logDesk("assistant", "Jarvis", `Noted. I called this one weak — "${said}". Logging it as an override by ${who.split("@")[0]}. The scoreboard keeps count.`, id);
+    await activity("card", `Override: ${who.split("@")[0]} approved a card Baby J flagged — ${a.title}`, who.split("@")[0]);
+  }
   // v3.24 (A8): re-check the live price at Approve. Stale = red line + Desk note, and the order still goes in.
   if (a.exit?.state === "planned") {
     const st = await withTimeout(staleEntry(a), 4000, "stale check").catch(() => null);
@@ -1407,6 +1447,7 @@ async function actOn(id: string, decision: string, who: string) {
 
 async function logDesk(role: string, author: string, content: string, action_id: string | null = null) {
   if (role === "assistant") { try { content = (await factCheck(content)).text; } catch { /* fail open */ } }   // v3.22
+  if (role === "assistant") { try { content = numberCheck(content); } catch { /* fail open */ } }   // v3.39: above/below vs the numbers
   try {
     await db("otto_desk", { method: "POST", headers: { prefer: "return=minimal" },
       body: JSON.stringify({ role, author: author.slice(0, 40), content: (role === "user" ? content : unname(content)).slice(0, 20000), action_id }) });
@@ -2416,6 +2457,40 @@ async function marketDesk() {
 
 /* ------------------------------------------------------------ rule check */
 
+// v3.39: Jarvis never says something false. Every "X is above / below Y" in a position check is checked against the two numbers in
+// the sentence; a wrong one gets a server correction under the text (16 Oct: "stock is at 64.67, well below the wrong-if of 64.30").
+export function numberCheck(text: string): string {
+  const bad: string[] = [];
+  const re = /\$?(\d{1,5}(?:\.\d{1,4})?)\b(?:(?!\d)[^.\n]){0,60}?\b(well |far |just |slightly |still )?(above|below|over|under)\b(?:(?!\d)[^.\n]){0,60}?\$?(\d{1,5}(?:\.\d{1,4})?)\b/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const a = Number(m[1]), b = Number(m[4]), w = m[3].toLowerCase();
+    if (!(a > 0) || !(b > 0) || a === b) continue;
+    if (Math.abs(Math.log10(a / b)) > 0.7) continue;                           // different things (a price vs a % or a $ P&L)
+    const saysAbove = w === "above" || w === "over";
+    if ((saysAbove && a < b) || (!saysAbove && a > b)) bad.push(`${m[1]} is ${a > b ? "ABOVE" : "BELOW"} ${m[4]}, not ${w} it`);
+  }
+  return bad.length ? text + "\n\n⚠ Fact check (server): " + [...new Set(bad)].join("; ") + ". Read the numbers, not the words." : text;
+}
+
+// v3.39 (Ifoma, 18 Oct): one rule for Josh this week, BLOCKING — no long while the stock AND SPY are below VWAP. Pure.
+export function vwapOf(bars: Bar[] | null, now = Date.now()): number | null {
+  if (!bars || !bars.length) return null;
+  const done = bars.filter((b) => b.t + 5 * 60e3 <= now && [b.o, b.h, b.l, b.c].every((v) => v > 0));
+  if (done.length < 2) return null;
+  let pv = 0, v = 0; for (const b of done) { const w = Number((b as any).v) > 0 ? Number((b as any).v) : 1; pv += w * (b.h + b.l + b.c) / 3; v += w; }
+  return v ? pv / v : null;
+}
+export function vwapBlock(dir: number, tk: string, tkBars: Bar[] | null, spyBars: Bar[] | null, now = Date.now()): string | null {
+  if (dir <= 0) return null;                                                  // longs only (Winston's W23 is the mirror for shorts)
+  const tv = vwapOf(tkBars, now), sv = vwapOf(spyBars, now);
+  const last = (bars: Bar[] | null) => { const d = (bars || []).filter((b) => b.t + 5 * 60e3 <= now && b.c > 0); return d.length ? d[d.length - 1].c : null; };
+  const tp = last(tkBars), sp = last(spyBars);
+  if (tv == null || sv == null || tp == null || sp == null) return null;      // no data = no block (flag-never-block stays the default)
+  if (tp < tv && sp < sv) return `${tk} ${tp.toFixed(2)} is below its VWAP ${tv.toFixed(2)} and SPY ${sp.toFixed(2)} is below its VWAP ${sv.toFixed(2)} — no longs while both are under VWAP (this week's one rule)`;
+  return null;
+}
+
 // v3.37 "Did you chase?" (the coach, 15 Oct 2026: "You lost your money because of bad entry, not bounces. Let price come to you.")
 // Pure: the entry vs the level the idea is built on, and the entry vs the session VWAP. Returns check rows; never blocks.
 export function chaseChecks(plan: any, bars: Bar[] | null, now = Date.now()): { ok: boolean | null; text: string }[] {
@@ -2579,15 +2654,17 @@ async function syncJournal(force = false) {
     return { id: t.id, account: t.account, symbol: t.symbol, contract: t.contract, option_id: t.option_id, side: t.side,
       qty: t.qty, entry: +entry.toFixed(4), exit: exit == null ? null : +exit.toFixed(4), pnl: pnl == null ? null : +pnl.toFixed(2),
       opened_at: t.opened_at, closed_at: status === "open" ? null : t.closed_at, status, open_order_id: t.open_order_id,
-      agent: t.agent, updated_at: new Date().toISOString() };
+      agent: t.agent, updated_at: new Date().toISOString(), action_id: null as string | null };
   });
   if (!rows.length) return;
   // link to the Desk card that placed it
   try {
     const acts = await db("otto_actions?select=id,order_id&order_id=not.is.null&order=created_at.desc&limit=300");
     const byOrder: Record<string, string> = Object.fromEntries(acts.map((a: any) => [a.order_id, a.id]));
-    rows.forEach((r: any) => { if (byOrder[r.open_order_id]) r.action_id = byOrder[r.open_order_id]; });
-  } catch { /* */ }
+    rows.forEach((r: any) => { r.action_id = byOrder[r.open_order_id] || null; });
+  } catch { /* unlinked rows keep action_id null */ }
+  // v3.39: PostgREST rejects a batch whose rows have different key sets (PGRST102 "All object keys must match") —
+  // from ~5 Oct every sync failed because only card-linked rows had action_id. Now every row is born with the key.
   for (let i = 0; i < rows.length; i += 200) {
     await db("otto_trades?on_conflict=id", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify(rows.slice(i, i + 200)) });
@@ -4846,6 +4923,7 @@ const LIMIT_DEFAULTS: any = { phase: 1, max_trade_loss: 100, weekly_loss: 150, m
   // v3.26 (Ifoma, 9 Oct): every guardrail is on/off + a number in Settings. Size cap and kill switch are new.
   size_cap_on: true, size_cap_pct: 25, max_loss_on: true, daily_on: true, daily_x: 2, weekly_on: true, trades_on: true,
   kill_on: true, kill_daily: true, kill_weekly: true, kill_trades: true,
+  vwap_block: true,   // v3.39 (18 Oct, one-week trial): block a long when the stock and SPY are both under VWAP
   // v3.27: which ideas may go LIVE (real money). Everything else is a PAPER card: shown, scored, never approvable.
   live_coach_call: true, live_coach_level: false, live_jarvis: false };
 async function agenticValue(): Promise<number | null> {
@@ -5362,7 +5440,7 @@ Work quietly. Finish with a line that is exactly READ: and then 2 short plain se
   await db("otto_watch?id=eq." + r.id, { method: "PATCH", headers: { prefer: "return=minimal" },
     body: JSON.stringify({ fired: { ...(r.fired || {}), [d]: { ...f, read: read || err || "no read", cards: res.cards, error: err || null } } }) }).catch(() => {});
   await logDesk("assistant", "Jarvis · watcher", `For: 👁 ${r.ticker} ${Number(r.level)} ${d === "up" ? "▲" : "▼"} ${TRIG_LABEL[f.trigger]}\n` +
-    (err ? `No card — Jarvis hit an error checking it: ${err}` : (read || (acts.length ? "Card's up." : "No setup — no card."))), acts[0]?.id || null);
+    (err ? `No card — Jarvis hit an error checking it: ${err}` : statusWords(read || (acts.length ? "Card's up." : "No setup — no card."), acts)), acts[0]?.id || null);
   if (acts.length && acts.some((a: any) => a.status !== "paper")) {
     await markPinged(acts.map((a: any) => a.id));
     await notify("card", `🃏 ${r.ticker} card ready — ${TRIG_LABEL[f.trigger]} at ${Number(r.level)}`,
@@ -8455,3 +8533,4 @@ export async function chartNow(b: any, who: string) {
   }
   return chartMany([tk], day, by, "manual");
 }
+export const __test_actOn = actOn;   // v3.39 tests
