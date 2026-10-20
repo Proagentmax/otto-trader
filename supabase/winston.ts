@@ -384,11 +384,19 @@ export function indexDisagree(side: "call" | "put", idx: IndexRead): string | nu
   return null;
 }
 // Fact check: a thesis that says "below VWAP" while price is above it (or the reverse) is a wrong fact (NVDA/QQQ 15 Oct: "below VWAP (720.91)" at 723.7).
-export function thesisVwapWrong(thesis: string, spot: number, vwap: number | null | undefined): string | null {
+// v3.41: the claim must be about THIS ticker. A thesis that says "TSLA is above VWAP … SPY is below VWAP" was stamped as a
+// wrong fact on TSLA (19 Oct, the day's only winner) because the whole text was searched. Now each sentence/clause is read on its
+// own: a clause that names another ticker (SPY, QQQ, another symbol) is skipped; a clause with no ticker is taken to be about ours.
+export function thesisVwapWrong(thesis: string, spot: number, vwap: number | null | undefined, ticker = ""): string | null {
   if (!(num(vwap) > 0) || !(spot > 0)) return null;
-  const t = String(thesis || "");
-  if (/\b(below|under|beneath)\s+(the\s+)?(session\s+)?vwap/i.test(t) && spot > num(vwap)) return `thesis says below VWAP but price ${spot} is above VWAP ${round2(num(vwap))}`;
-  if (/\b(above|over|reclaimed)\s+(the\s+)?(session\s+)?vwap/i.test(t) && spot < num(vwap)) return `thesis says above VWAP but price ${spot} is below VWAP ${round2(num(vwap))}`;
+  const me = String(ticker || "").toUpperCase();
+  const clauses = String(thesis || "").split(/(?<=[.;!?])\s+|\s+[—–]\s+|\s+(?:while|whereas|but|and|;)\s+(?=[A-Z]{2,5}\b)/).map((c) => c.trim()).filter(Boolean);
+  for (const c of clauses) {
+    const names = (c.match(/\b[A-Z]{2,5}\b/g) || []).filter((w) => !["VWAP", "ORB", "EMA", "SMA", "RSI", "TP", "HOD", "LOD", "ET", "AM", "PM", "OI", "IV", "ATR", "OB", "NY", "CBC"].includes(w));
+    if (names.length && me && !names.includes(me)) continue;            // about another name (SPY, QQQ, …) — not our fact
+    if (/\b(below|under|beneath)\s+(the\s+)?(session\s+|day\s+)?vwap/i.test(c) && spot > num(vwap)) return `thesis says below VWAP but price ${spot} is above VWAP ${round2(num(vwap))}`;
+    if (/\b(above|over|reclaimed)\s+(the\s+)?(session\s+|day\s+)?vwap/i.test(c) && spot < num(vwap)) return `thesis says above VWAP but price ${spot} is below VWAP ${round2(num(vwap))}`;
+  }
   return null;
 }
 // A `result` post after the cited post, same ticker, saying he sold / trimmed / stopped: the idea is his EXIT, not a fresh entry (SPY #206/#207/#208, 15 Oct).
@@ -705,7 +713,7 @@ export async function tryOpen(ctx: Ctx, d: Decision, spot: number, coachCall: bo
     etMin: min, lastEntryMin: num(cfg.last_entry_min), ownFromMin: num(cfg.own_idea_from_min), coachFromMin: num(cfg.coach_idea_from_min),
     dataMode, reentryBeyondExit: reentryBeyondExit(d.side, spot, closedToday, d.ticker), atCoachLevel: atCoachLevel(d.side, spot, ctx.posts || [], d.ticker),
     indexDisagree: d.ticker === "SPY" && d.side === "call" ? null : indexDisagree(d.side, ctx.index ?? null),
-    thesisWrong: thesisVwapWrong(d.thesis, spot, ctx.vwaps?.[d.ticker]), coachResultAfter: citedId ? coachResultAfter(citedId, d.ticker, ctx.posts || []) : null });
+    thesisWrong: thesisVwapWrong(d.thesis, spot, ctx.vwaps?.[d.ticker], d.ticker), coachResultAfter: citedId ? coachResultAfter(citedId, d.ticker, ctx.posts || []) : null });
   const gate = hits.find((h) => !h.soft);
   if (gate) { await recordIdea(day, d, "blocked", `${gate.rule}: ${gate.why}`); return { opened: false, why: gate.rule + ": " + gate.why }; }
   const stamps = [...pick.flags, ...hits.filter((h) => h.soft).map((h) => `${h.rule}: ${h.why}`)];

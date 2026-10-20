@@ -39,7 +39,7 @@ await import("../otto-proxy.ts");
 const b64 = (o: any) => btoa(JSON.stringify(o)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
 const jwt = (claims: any) => b64({ alg: "none" }) + "." + b64(claims) + ".x";
 const GOOD = jwt({ role: "authenticated", sub: "u1", email: "ottotrader@vinecreativestudio.com" });
-const act = (id: string, decision: string, token = GOOD) => HANDLER(new Request("https://x.test/functions/v1/otto-proxy?fn=act", { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" }, body: JSON.stringify({ id, decision }) }));
+const act = (id: string, decision: string, token = GOOD) => HANDLER(new Request("https://x.test/functions/v1/otto-proxy?fn=act", { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" }, body: JSON.stringify({ id, decision, why: { setup: "test setup in words", why_now: "test why now line", kills: "test kill line 123" }, why_not: "test why not line" }) }));
 function assert(c: unknown, msg: string) { if (!c) throw new Error("ASSERT: " + msg); }
 
 Deno.test("v3.35 route fn=act: Approve on a practice card = paper_taken at the live ask; only quotes are read, no order tool, one DB write path", async () => {

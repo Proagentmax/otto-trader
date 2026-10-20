@@ -2024,14 +2024,17 @@ Deno.test("v3.26 size cap: the 9:41 MSFT 522.5P ($525 = 45% of $1,166) — cheap
   r26("2026-10-09T13:41:00Z");
   fit = fakeChain("MSFT", 527.37, 2.5, 30, 1166.28);
   callHook = (tool: string, args: any) => tool === "get_portfolio" ? { data: { total_value: "1166.28", buying_power: { buying_power: "5000" } } } : fit(tool, args);
+  // v3.41: nothing fits under the LIVE cap → a PRACTICE card on the $4,000 practice book (Josh answers it), not an auto-reject
   const c: any = await M.proposeAction(optCard("MSFT", "MSFT-2026-10-16-put-522.5", 5.25, "down", 4.2, 520, 532.4), "desk");
-  assert(c.status === "paper" && /AUTO-REJECTED · Costs \$525 = 45% of the account\. Your size cap is 30% \(\$349\)/.test(c.checks[0].text), JSON.stringify(c.checks[0]));
-  assert(/📄 Paper card/.test(deskText()) && T.otto_activity.some((a: any) => a.kind === "card" && /Paper card/.test(a.text)), "Desk + Activity");
+  assert(c.status === "paper_wait" && c.checks[0].practice && /PRACTICE · Over the size cap for LIVE: costs \$525 = 45% of the Agentic account, the cap is 30% \(\$349\)/.test(c.checks[0].text) && /\$4,000 practice book/.test(c.checks[0].text), JSON.stringify(c.checks[0]));
+  assert(c.plan.practice === true, "plan.practice stamped");
+  assert(/📝 Practice card/.test(deskText()) && T.otto_activity.some((a: any) => a.kind === "card" && /Practice card/.test(a.text)), "Desk + Activity");
   // 3. Ifoma's own ticket over the cap → paper, never bounced
   r26("2026-10-09T13:41:00Z");
   callHook = (tool: string, args: any) => tool === "get_portfolio" ? { data: { total_value: "1166.28", buying_power: { buying_power: "1166.28" } } } : fakeChain("MSFT", 527.37, 2.5, 5.25, 1166.28)(tool, args);
   const t: any = await M.proposeAction(optCard("MSFT", "MSFT-2026-10-16-put-522.5", 5.25, "down", 4.2, 520, 532.4), "ottotrader@x", { manual: true });
   assert(t.status === "paper" && !/looked for a cheaper/.test(t.checks[0].text), "ticket papered: " + t.checks[0].text);
+  assert(/📄 Auto-rejected — Costs \$525 = 45% of the account\. Your size cap is 30% \(\$349\)\. Shown and scored\./.test(deskText()), "v3.41 wording names the one reason: " + deskText().slice(-300));
   // cap off → pending, the old 20% flag only
   r26("2026-10-09T13:41:00Z", { size_cap_on: false });
   callHook = (tool: string, args: any) => tool === "get_portfolio" ? { data: { total_value: "1166.28", buying_power: { buying_power: "1166.28" } } } : fakeChain("MSFT", 527.37, 2.5, 5.25, 1166.28)(tool, args);
@@ -2374,11 +2377,12 @@ Deno.test("v3.35: no quote at the tap = Approve still works, fills at the card's
 Deno.test("v3.35: safety paper cards (kill switch, size cap, late coach call) stay auto-rejected and cannot be approved; a switched-on source is still a LIVE pending card", async () => {
   reset(); (M as any).clearCacheForTest(); setNow("2026-10-06T15:51:00Z");
   T.otto_settings = [{ key: "limits", value: { size_cap_on: true, size_cap_pct: 5, kill_on: false, live_jarvis: true } }];
+  // v3.41: the size cap no longer makes an unapprovable card — it becomes a practice card (the kill switch still does; see the v3.26 lock tests)
   const c: any = await M.proposeAction(spyCard(), "watcher");
-  assert(c.status === "paper" && c.checks[0].paper && /AUTO-REJECTED/.test(c.checks[0].text), "size cap: " + c.status);
+  assert(c.status === "paper_wait" && c.checks[0].practice && /Over the size cap for LIVE/.test(c.checks[0].text), "size cap → practice: " + c.status + " " + JSON.stringify(c.checks[0]));
   T.otto_actions[0].id = "36363636-3636-4636-8636-363636363636";
   const r: any = await M.actOnForTest("36363636-3636-4636-8636-363636363636", "approve", "josh@x");
-  assert(r.status === "paper" && !calls.some((x) => /^place_/.test(x.tool)), "cannot be approved");
+  assert(r.status === "paper_taken" && !calls.some((x) => /^place_/.test(x.tool)), "Josh can take it on paper, nothing to Robinhood: " + r.status);
   reset(); (M as any).clearCacheForTest(); setNow("2026-10-06T15:51:00Z");
   T.otto_settings = [{ key: "limits", value: { size_cap_on: false, kill_on: false, live_jarvis: true } }];
   const l: any = await M.proposeAction(spyCard(), "watcher");

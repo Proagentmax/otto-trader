@@ -632,6 +632,11 @@ Deno.test("v3.36 fact checks: thesis vs VWAP, and a 'result' post after the cite
   assert(X.thesisVwapWrong("reclaimed VWAP, momentum up", 215, 215.84), "said above, was below");
   eq(X.thesisVwapWrong("no vwap talk here", 100, 101), null, "nothing to check");
   eq(X.thesisVwapWrong("below VWAP", 100, null), null, "no vwap known: no check");
+  // v3.41: the 19 Oct false positive — the "below VWAP" was about SPY, the trade was TSLA (above its VWAP, 361.70 vs 359.73)
+  eq(X.thesisVwapWrong("TSLA is above VWAP (last close 361.925 vs VWAP 359.73), with three rising 10-min closes. SPY is below VWAP with falling closes, so W23 index-agreement must be checked.", 361.695, 359.73, "TSLA"), null, "SPY clause is not a TSLA fact");
+  assert(X.thesisVwapWrong("TSLA is below VWAP and SPY is above VWAP", 361.7, 359.73, "TSLA")?.includes("above VWAP"), "the TSLA clause is still checked");
+  assert(X.thesisVwapWrong("price is below VWAP, rolling over", 723.7, 720.91, "QQQ")?.includes("above VWAP"), "no ticker in the clause = about ours");
+  eq(X.thesisVwapWrong("QQQ is below VWAP and rolling over", 719, 720.91, "QQQ"), null, "true statement with the ticker");
   const posts = [{ id: 206, ticker: "SPY", kind: "level", words: "SEE HOW SPY PLAYED THE BOUNCE RIGHT UP TO 768 AND NOW WE STOP" },
     { id: 207, ticker: "SPY", kind: "result", words: "PERFECT PLAY TO SELL THEM INTO STRENGTH. SOME I KEPT" }, { id: 208, ticker: "SPY", kind: "note", words: "AND PLAY THE BOUNCE ON SPY" }];
   assert(X.coachResultAfter(206, "SPY", posts)?.includes("207"), "a sale after #206 is his exit");

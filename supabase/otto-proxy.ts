@@ -1215,14 +1215,32 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     cost: costKnown ? cost : null, account_value, buying_power, pct, warn_pct: LIM.warn_pct,
     flag: pct !== null && pct > LIM.warn_pct / 100, notes, account: out.some((c) => c.service === "rh") ? mask(await agenticAccount().catch(() => "????")) : null,
   };
-  // v3.26: the kill switch and the size cap turn the card into a PAPER card (shown, scored, never approvable).
+  // v3.26: the kill switch turns the card into a PAPER card (shown, scored, never approvable).
+  // v3.41: the order is kill switch → LIVE eligibility (v3.27) → size cap. A practice idea never meets the live cap: it is
+  //        checked against the practice book's own cap and only flagged. A live-eligible idea over the live cap is OFFERED
+  //        AS A PRACTICE CARD on the $4,000 practice book instead of being auto-rejected (Ifoma, 20 Oct).
   let paper: string | null = null;
   let practice = false;     // v3.35: a "not switched on for LIVE" idea waits for Josh's Approve / Reject as a practice card
   if (opening) {
     const ls = await lockState().catch(() => null);
     if (ls?.locked) paper = `Kill switch on — ${ls.text}. Signals keep listening; this idea is scored as a paper card.`;
+    // v3.27: only the sources switched on in Settings may go LIVE; every other idea is a PRACTICE card Josh answers.
+    // The manual Order ticket is Ifoma/Josh's own explicit order and is not affected.
+    if (!paper && !opts.manual) {
+      const og27 = String(plan?.origin || "jarvis");
+      const key27 = og27 === "coach_call" ? "live_coach_call" : og27 === "coach_level" || og27 === "coach_post" ? "live_coach_level" : "live_jarvis";
+      const allowed27 = key27 === "live_coach_call" ? LIM[key27] !== false : LIM[key27] === true;
+      if (!allowed27) { paper = `PRACTICE · ${ORIGIN_LABEL[og27] || og27} is not switched on to go LIVE (Settings, Limits & goals, Which ideas can go LIVE). Josh can Approve or Reject it as a practice trade: nothing is ever sent to Robinhood.`; practice = true; }
+      else if (og27 === "coach_call" && originRow?.late) paper = "PAPER · the coach's post came after the move (marked late). Never chase a missed price. Practice only: scored, never sent to Robinhood.";
+    }
     const capPct = Number(LIM.size_cap_pct) || 0;
-    if (!paper && LIM.size_cap_on !== false && capPct > 0 && pct != null && account_value && pct > capPct / 100 + 1e-9) {
+    const capOn = LIM.size_cap_on !== false && capPct > 0 && costKnown;
+    if (capOn && practice) {
+      // practice: the live account's size has nothing to do with it — flag against the practice book, never block
+      const book = await practiceBook().catch(() => PRACTICE_BOOK_DEFAULT);
+      const pcap = Math.floor(book.start * capPct / 100);
+      if (cost > pcap + 1e-9) sizeChecks.push({ ok: false, guard: true, text: `Over the practice cap: costs $${Math.round(cost)}, the practice cap is ${capPct}% of the $${book.start.toLocaleString("en-US")} practice book ($${pcap}). Still offered — practice only, nothing goes to Robinhood.` });
+    } else if (capOn && !paper && pct != null && account_value && pct > capPct / 100 + 1e-9) {
       const capUsd = Math.floor(account_value * capPct / 100);
       if (!opts.manual && exit) {
         const sym = String(plan?.tv_symbol || "").split(":").pop() || "";
@@ -1231,19 +1249,14 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
         if (f && f.option_id !== exit.option_id)
           throw new Error(`Over the size cap: this contract costs $${Math.round(cost)} = ${Math.round(pct * 100)}% of the account; the cap is ${capPct}% ($${capUsd}). ◆ ${f.label} fits under it (option_id ${f.option_id}, ask $${f.ask.toFixed(2)}, ≈$${f.cost}, δ ${Math.abs(f.delta).toFixed(2)}). Propose again with that contract (re-size stop_option for it).`);
       }
-      paper = `Costs $${Math.round(cost)} = ${Math.round(pct * 100)}% of the account. Your size cap is ${capPct}% ($${capUsd}).` +
-        (opts.manual ? "" : " Otto looked for a cheaper contract for the same idea (delta .15 or higher) — none fit under the cap.");
+      if (opts.manual) {
+        paper = `Costs $${Math.round(cost)} = ${Math.round(pct * 100)}% of the account. Your size cap is ${capPct}% ($${capUsd}).`;
+      } else {
+        const book = await practiceBook().catch(() => PRACTICE_BOOK_DEFAULT);
+        paper = `PRACTICE · Over the size cap for LIVE: costs $${Math.round(cost)} = ${Math.round(pct * 100)}% of the Agentic account, the cap is ${capPct}% ($${capUsd}); no cheaper contract (delta .15 or higher) fit under it. Offered on the $${book.start.toLocaleString("en-US")} practice book instead: Josh can Approve or Reject it as a practice trade; nothing is sent to Robinhood.`;
+        practice = true;
+      }
     }
-  }
-  // v3.27 (third push: the deploy gate caught stale tests twice; no logic change here).
-  // v3.27: only the sources switched on in Settings may go LIVE; every other idea is a PAPER card (shown, scored, never approvable).
-  // The manual Order ticket is Ifoma/Josh's own explicit order and is not affected.
-  if (opening && !paper && !opts.manual) {
-    const og27 = String(plan?.origin || "jarvis");
-    const key27 = og27 === "coach_call" ? "live_coach_call" : og27 === "coach_level" || og27 === "coach_post" ? "live_coach_level" : "live_jarvis";
-    const allowed27 = key27 === "live_coach_call" ? LIM[key27] !== false : LIM[key27] === true;
-    if (!allowed27) { paper = `PRACTICE · ${ORIGIN_LABEL[og27] || og27} is not switched on to go LIVE (Settings, Limits & goals, Which ideas can go LIVE). Josh can Approve or Reject it as a practice trade: nothing is ever sent to Robinhood.`; practice = true; }
-    else if (og27 === "coach_call" && originRow?.late) paper = "PAPER · the coach's post came after the move (marked late). Never chase a missed price. Practice only: scored, never sent to Robinhood.";
   }
   let banner: any = null, checks: any[] = [];
   if (opening) {
@@ -1270,7 +1283,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     title: (opening ? stampTitle(unname(input.title || "Action"), !!paper) : unname(input.title || "Action")).slice(0, 140),
     summary: unname(input.summary || "").slice(0, 4000),
     calls: out, risk, review: review.join("\n\n---\n\n"), status: practice ? "paper_wait" : paper ? "paper" : "pending", created_by: who,
-    plan: plan ? { ...plan, setup: String(plan.setup).toLowerCase().slice(0, 40) } : null, banner, checks,
+    plan: plan ? { ...plan, setup: String(plan.setup).toLowerCase().slice(0, 40), ...(practice ? { practice: true } : {}) } : (practice ? { practice: true } : null), banner, checks,
     ...(exit ? { exit: { ...exit, state: "planned", log: [] } } : {}),
   }) });
   if (rows?.[0]?.status === "pending" && who !== "signals" && who !== "alert" && who !== "watcher") await markPinged([rows[0].id]), await notify("card", `🃏 Card waiting: ${String(rows[0].title).slice(0, 80)}`, "Tap to open the Desk and Approve or Reject (cards expire in 20 minutes).");
@@ -1282,7 +1295,8 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
   }
   if (rows?.[0]?.status === "paper") {
     await markPinged([rows[0].id]);
-    await logDesk("system", "Otto", `📄 Paper card: ${rows[0].title} — ${paper} It's shown and scored; it can't be approved.`, rows[0].id);
+    // v3.41: name the one real reason (the kill switch, a late coach post, or a manual ticket over the cap) — nothing broader.
+    await logDesk("system", "Otto", `📄 Auto-rejected — ${String(paper).replace(/^PAPER · /, "")} Shown and scored.`, rows[0].id);
     await activity("card", `Paper card (auto-rejected): ${rows[0].title} — ${paper}`, who === "otto" ? "ticket" : who);
   }
   return publicAction(rows[0]);
@@ -1300,17 +1314,34 @@ function publicAction(a: any) {
            plan: a.plan || null, banner: a.banner || null, checks: a.checks || [], order_id: a.order_id || null, outcome: a.outcome || null, exit: a.exit || null };
 }
 
+/* v3.41: the WHY GATE. Approve needs three lines (the setup in Josh's words, why now, what kills it); Reject needs one.
+   Blocking by decision (Ifoma, 18 Oct): no why, no trade — the server refuses, the app never gets to a half-state.
+   Returns the cleaned record to store on plan.josh_why / plan.josh_reject_why. Otto's own decisions (expiry, the VWAP rule) never pass through here. */
+export const WHY_MIN = 10;
+export function whyGate(why: any, kind: "approve" | "reject"): any {
+  const clean = (v: unknown) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, 400);
+  if (kind === "reject") {
+    const t = clean(typeof why === "string" ? why : why?.why_not ?? why?.text);
+    if (t.length < WHY_MIN) throw new Error(`Why gate: say why not (at least ${WHY_MIN} characters) — the report card reads it.`);
+    return { why_not: t, at: new Date().toISOString() };
+  }
+  const setup = clean(why?.setup), now = clean(why?.why_now), kills = clean(why?.kills);
+  const miss = [["setup", setup], ["why now", now], ["what kills it", kills]].filter(([, v]) => (v as string).length < WHY_MIN).map(([k]) => k);
+  if (miss.length) throw new Error(`Why gate: fill in ${miss.join(", ")} (at least ${WHY_MIN} characters each) before this trade counts.`);
+  return { setup, why_now: now, kills, at: new Date().toISOString() };
+}
 /* v3.35: a PRACTICE card (status paper_wait) is approved or rejected like a live one, but this function only writes to our own
    database. It has no call() to Robinhood for orders: the only Robinhood reads are a quote. The fill is the option's live ask
    at the tap; the idea is then graded from that moment (evalIdea). Approve never fails on a missing quote: it falls back to the card's price. */
-export async function practiceOn(a: any, decision: string, who: string) {
+export async function practiceOn(a: any, decision: string, who: string, why: any = null) {
   const id = a.id, now = new Date().toISOString();
   const left = (patch: any) => db("otto_actions?id=eq." + id + "&status=eq.paper_wait", { method: "PATCH", body: JSON.stringify(patch) });
   if (decision !== "approve") {
-    const r = await left({ status: "rejected", decided_by: who, decided_at: now });
+    const r = await left({ status: "rejected", decided_by: who, decided_at: now, plan: { ...(a.plan || {}), josh_reject_why: whyGate(why, "reject") } });
     if (r?.[0]) await activity("card", `Rejected (practice): ${a.title}`, who.split("@")[0]);
     return publicAction(r?.[0] || a);
   }
+  const why_ok = whyGate(why, "approve");     // v3.41: blocking — no why, no practice trade (throws before anything is written)
   if (Date.now() - Date.parse(a.created_at) > ACTION_TTL_MS) {
     const r = await left({ status: "expired", decided_by: who, decided_at: now });
     return publicAction(r?.[0] || a);
@@ -1327,25 +1358,28 @@ export async function practiceOn(a: any, decision: string, who: string) {
   if (ask == null) { ask = Number(a.exit?.entry_limit) > 0 ? Number(a.exit.entry_limit) : null; note += "No live option quote: used the card's price. "; }
   if (under == null) { under = Number(a.plan?.entry_underlying) > 0 ? Number(a.plan.entry_underlying) : null; note += "No live stock price: used the card's entry price. "; }
   const fill = { ask, delta, underlying: under, at: now, by: who, note: note.trim() || null };
-  const plan = { ...(a.plan || {}), paper_fill: fill };
+  // v3.41: the v3.39 override tag applies to practice approvals too (the practice book's "Overrode Baby J" line reads it)
+  const weakRead = a.plan?.weak ? String(a.plan.weak).slice(0, 160) : String(((a.checks || []).find((c: any) => c.ok === false && /chas/i.test(String(c.text))) || {}).text || "").slice(0, 160);
+  const plan = { ...(a.plan || {}), paper_fill: fill, josh_why: why_ok, ...(weakRead ? { override: true, override_read: weakRead } : {}) };
   const r = await left({ status: "paper_taken", decided_by: who, decided_at: now, plan, outcome: null });
   if (!r?.[0]) return publicAction((await db("otto_actions?id=eq." + id + "&select=*"))[0] || a);
   await activity("card", `Approved (practice): ${a.title}. Pretend fill ${ask != null ? "$" + ask.toFixed(2) : "unknown"} by ${who.split("@")[0]}`, who.split("@")[0]);
-  await logDesk("system", "Otto", `✅ Practice trade taken: ${a.title}. Pretend fill ${ask != null ? "$" + ask.toFixed(2) + " (ask)" : "at the card's price"}, approved by ${who}. ${note}Nothing was sent to Robinhood. It is scored from this moment.`, id);
+  await logDesk("system", "Otto", `✅ Practice trade taken: ${a.title}. Pretend fill ${ask != null ? "$" + ask.toFixed(2) + " (ask)" : "at the card's price"}, approved by ${who}. Why: "${why_ok.setup.slice(0, 120)}" · Kills it: ${why_ok.kills.slice(0, 80)}. ${note}Nothing was sent to Robinhood. It is scored from this moment on the practice book.`, id);
+  if (weakRead) await logDesk("assistant", "Jarvis", `Noted. I called this one weak — "${weakRead}". Logging it as an override by ${who.split("@")[0]}. The scoreboard keeps count.`, id);
   return publicAction(r[0]);
 }
 
-async function actOn(id: string, decision: string, who: string) {
+async function actOn(id: string, decision: string, who: string, why: any = null) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("bad id");
   const rows = await db("otto_actions?id=eq." + id + "&select=*");
   const a = rows && rows[0];
   if (!a) throw new Error("no such card");
-  if (a.status === "paper_wait") return practiceOn(a, decision, who);   // v3.35: never reaches the Robinhood code below
+  if (a.status === "paper_wait") return practiceOn(a, decision, who, why);   // v3.35: never reaches the Robinhood code below
   if (a.status !== "pending") return publicAction(a);
   const now = new Date().toISOString();
   if (decision !== "approve") {
     const r = await db("otto_actions?id=eq." + id + "&status=eq.pending", { method: "PATCH",
-      body: JSON.stringify({ status: "rejected", decided_by: who, decided_at: now }) });
+      body: JSON.stringify({ status: "rejected", decided_by: who, decided_at: now, plan: { ...(a.plan || {}), josh_reject_why: whyGate(why, "reject") } }) });
     if (r?.[0]) await activity("card", `Rejected: ${a.title}`, who.split("@")[0]);
     return publicAction(r[0] || a);
   }
@@ -1354,9 +1388,13 @@ async function actOn(id: string, decision: string, who: string) {
       body: JSON.stringify({ status: "expired", decided_by: who, decided_at: now }) });
     return publicAction(r[0] || a);
   }
+  // v3.41: the why gate — an OPENING card is not placed without Josh's three lines (a close/stop card needs none).
+  const opening41 = (a.calls || []).some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open"));
+  const why41 = opening41 ? whyGate(why, "approve") : null;
   // Claim it atomically so a double click (or both laptops) can't run it twice.
   const claimed = await db("otto_actions?id=eq." + id + "&status=eq.pending", { method: "PATCH",
-    body: JSON.stringify({ status: "running", decided_by: who, decided_at: now }) });
+    body: JSON.stringify({ status: "running", decided_by: who, decided_at: now, ...(why41 ? { plan: { ...(a.plan || {}), josh_why: why41 } } : {}) }) });
+  if (why41 && claimed?.[0]) a.plan = { ...(a.plan || {}), josh_why: why41 };   // later PATCHes in this function spread a.plan
   if (!claimed || !claimed.length) return publicAction((await db("otto_actions?id=eq." + id + "&select=*"))[0]);
   // v3.24 (C10b): a close / stop card whose position is already gone is not sent.
   const gone = await nothingToClose(a.calls || []);
@@ -1616,6 +1654,7 @@ A PROTECTED TRADE'S STOP. On a trade Otto protects, a pending sell-to-close (pen
 FILLS, POSITIONS AND P&L — ROBINHOOD ONLY (v3.24, Ifoma 8 Oct). Say a trade filled, is open, hit TP1, was stopped, or made/lost $X ONLY from the "TRADES TODAY FROM ROBINHOOD" part of the context line or a Robinhood call you made in this turn (get_option_orders / get_option_positions). An order that isn't there as bought did NOT fill — say "not filled". The entry is the fill price, never the card's limit. The daily stop counts losing round trips from that line. The server checks every reply against Robinhood and corrects anything that doesn't match.
 v3.26 RULES (Ifoma, 9 Oct, after the −$230 MSFT day):
 - KILL SWITCH: when the context line says LOCKED, every opening card you propose becomes a paper card (scored, can't be approved). Say so plainly; never suggest a way around it.
+- HONEST CARD STATUS (v3.41): the ONLY card that cannot be approved is a kill-switch (or marked-late) paper card. A PRACTICE card always waits for Josh's Approve or Reject, including one over the live size cap (it trades on the $4,000 practice book). Never say "paper cards can't be approved" or "by design"; name the one real reason on the card, nothing broader.
 - SIZE CAP: an opening card over the size cap in the context line comes back to you with a cheaper contract that fits — use it; if none fits it becomes a paper card. Don't argue the cap.
 - THE COACH'S DIRECTION: follow the direction the coach gives. When he gives a level with no direction, don't pick a side from the word "resistance" or "support" — wait for the Watcher's touch + close. Before calling any entry "good", check: did price TOUCH the level, did the trigger candle close the way the plan said, is it with the day's move and the banner. If any is no, say so.
 - CHANGING A WRONG-IF: add the new level with add_watch_level on the losing side of the open trade — that moves the server rule. Never move a wrong-if inside the trade's own level without saying a test of the level will stop it out.
@@ -1987,7 +2026,7 @@ async function deskSetup(opt: { fast?: boolean } = {}) {
   const jctx = await jasonContext().catch(() => "");
   const ls26 = await withTimeout(lockState(), 6000, "lock state").catch(() => null);
   const lock26 = ls26?.locked ? `🔒 LOCKED by the kill switch: ${ls26.text}. Any opening card you propose becomes a paper card. ` : "";
-  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} ${lock26}Their guardrails (Phase ${LIM.phase}; they flag — the size cap and the kill switch turn a card into a paper card): ${LIM.size_cap_on !== false && Number(LIM.size_cap_pct) > 0 ? `SIZE CAP ${LIM.size_cap_pct}% of the account${LIM.size_cap_usd ? ` ($${LIM.size_cap_usd})` : ""} per trade, ` : "size cap off, "}max loss per trade at the stop ${LIM.max_trade_loss > 0 ? `$${LIM.max_trade_loss}${LIM.pct_mode && LIM.max_trade_pct > 0 ? ` (${LIM.max_trade_pct}% of the $${Math.round(LIM.account_value)} Agentic account)` : ""}` : "off"}, weekly loss limit $${LIM.weekly_loss}${LIM.pct_mode && LIM.weekly_pct > 0 ? ` (${LIM.weekly_pct}%)` : ""}, daily stop after ${LIM.daily_losses || "—"} losing trades or 2× the max loss, ${LIM.max_trades_day} trades/day, size flag over ${LIM.warn_pct}% of the account. Size ideas inside these when a contract allows it (set stop_option so the loss at the stop fits); when nothing fits, still make the card — it gets the red flag — and say so in one line.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.${jctx}]`;
+  const ctxLine = `[Desk context — ${now} ET. TradingView: ${status.tv}. Robinhood: ${status.rh}. ${bn} ${lock26}Their guardrails (Phase ${LIM.phase}; they flag — only the kill switch turns a card into an unapprovable paper card; an idea over the size cap is offered as a PRACTICE card on the $4,000 practice book that Josh must Approve or Reject): ${LIM.size_cap_on !== false && Number(LIM.size_cap_pct) > 0 ? `SIZE CAP ${LIM.size_cap_pct}% of the account${LIM.size_cap_usd ? ` ($${LIM.size_cap_usd})` : ""} per trade, ` : "size cap off, "}max loss per trade at the stop ${LIM.max_trade_loss > 0 ? `$${LIM.max_trade_loss}${LIM.pct_mode && LIM.max_trade_pct > 0 ? ` (${LIM.max_trade_pct}% of the $${Math.round(LIM.account_value)} Agentic account)` : ""}` : "off"}, weekly loss limit $${LIM.weekly_loss}${LIM.pct_mode && LIM.weekly_pct > 0 ? ` (${LIM.weekly_pct}%)` : ""}, daily stop after ${LIM.daily_losses || "—"} losing trades or 2× the max loss, ${LIM.max_trades_day} trades/day, size flag over ${LIM.warn_pct}% of the account. Size ideas inside these when a contract allows it (set stop_option so the loss at the stop fits); when nothing fits, still make the card — it gets the red flag — and say so in one line.${protLine} Auto-close: ${LIM.auto_close ? "ON (close_position works 9:30–4:00 ET)" : "OFF (closes go on a card)"}.${jctx}]`;
 
   // v3.16: the exact list of what runs on its own, so Jarvis can only point at real things.
   const running = await runningNow().catch(() => "");
@@ -2826,6 +2865,90 @@ export async function coachLog(build = false): Promise<{ week_start: string; wee
   return out;
 }
 
+/* ------------------------------------------------------------ v3.41: the FRIDAY REPORT CARD (decided 18 Oct, mockup v341-why-gate.html panel 4)
+   Posted on the Desk right after the 4:30 coach log. Built from Robinhood fills (otto_trades), every card Josh was asked to answer
+   this week (otto_actions), the why fields, and the coach's posts — never from Jarvis's chat text. One Anthropic call writes the
+   "one rule for next week" and two lines of comment from those numbers; if it fails, the rule is the standing one.
+   Grade (Ifoma to confirm): 40% answered ÷ offered, 30% whys that name a level AND a kill, 30% last week's rule followed. */
+export const REPORT_RULE_DEFAULT = "Answer every card — Approve or Reject with your why. Silence is the only wrong answer.";
+export function letterGrade(parts: { answered: number; offered: number; good_whys: number; whys: number; rule_followed: boolean | null }) {
+  const a = parts.offered ? parts.answered / parts.offered : 1;
+  const w = parts.whys ? parts.good_whys / parts.whys : (parts.offered ? 0 : 1);
+  const r = parts.rule_followed == null ? 0.5 : parts.rule_followed ? 1 : 0;
+  const score = Math.round((0.4 * a + 0.3 * w + 0.3 * r) * 100);
+  const letter = score >= 93 ? "A" : score >= 87 ? "A−" : score >= 80 ? "B+" : score >= 73 ? "B" : score >= 67 ? "B−" : score >= 60 ? "C+" : score >= 50 ? "C" : score >= 40 ? "D" : "F";
+  return { score, letter };
+}
+/* a why is "good" when it names a price level and a kill (both carry a number or a named level word) */
+export function goodWhy(w: any): boolean {
+  if (!w) return false;
+  const num = (t: unknown) => /\d/.test(String(t || "")) || /\b(vwap|orb|gap|level|support|resistance|wrong-if|stop)\b/i.test(String(t || ""));
+  if (w.why_not) return num(w.why_not) || String(w.why_not).length >= 25;
+  return num(w.setup) && num(w.kills);
+}
+export async function reportCard(apiKey: string, build = false): Promise<any> {
+  if (!build) { const have = await setting("report_card_last").catch(() => null); if (have?.text) return have; }
+  const now = etParts();
+  const ws = ["Sat", "Sun"].includes(now.wd) ? mondayOf(addDays(now.date, -2)) : mondayOf(now.date), we = addDays(ws, 4);
+  const inWeek = (iso: string | null) => { if (!iso) return false; const d = etParts(new Date(iso)).date; return d >= ws && d <= we; };
+  const prev = await setting("report_card_last").catch(() => null);
+  const lastRule = String(prev?.rule || REPORT_RULE_DEFAULT);
+  const book = await practiceBook().catch(() => PRACTICE_BOOK_DEFAULT);
+  const acts: any[] = (await db("otto_actions?select=*&created_at=gte." + ws + "T00:00:00Z&order=created_at.asc&limit=400").catch(() => [])) || [];
+  const cards = acts.filter((a) => inWeek(a.created_at) && isPracticeCard(a) && (!book.since || Date.parse(a.created_at) >= Date.parse(book.since)));
+  const st = practiceStats(cards, { start: book.start, since: book.since || ws + "T00:00:00Z" });
+  const whyRows = cards.filter((a) => a.plan?.josh_why || a.plan?.josh_reject_why).map((a) => a.plan.josh_why || a.plan.josh_reject_why);
+  const good = whyRows.filter(goodWhy).length;
+  // live trades (Robinhood, synced)
+  try { await syncJournal(true); } catch { /* use what is there */ }
+  const trades: any[] = ((await db("otto_trades?select=*&order=opened_at.asc&limit=300").catch(() => [])) || []).filter((t: any) => inWeek(t.opened_at));
+  const livePnl = Math.round(trades.reduce((s, t) => s + (t.pnl != null ? Number(t.pnl) : 0), 0));
+  const liveActs = acts.filter((a) => a.status === "done" && (a.calls || []).some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open")));
+  const ov = acts.filter((a) => a.plan?.override && (a.status === "done" || a.status === "paper_taken"));
+  // the coach's calls this week vs what was taken
+  const posts: any[] = (await db(`otto_jason?select=id,day,ticker,direction,kind&day=gte.${ws}&day=lte.${we}&order=id.asc&limit=200`).catch(() => [])) || [];
+  const calls = posts.filter((p) => p.kind === "call" && p.direction && p.ticker);
+  const tookCoach = acts.filter((a) => (a.plan?.origin === "coach_call") && (a.status === "done" || a.status === "paper_taken")).length;
+  // last week's rule followed? the model judges from the numbers; a plain default is used when the call fails
+  const facts = { week: `${ws} to ${we}`, practice_book: st, live: { trades: trades.length, pnl: livePnl, cards_taken: liveActs.length },
+    overrides: ov.map((a) => ({ title: String(a.title).slice(0, 60), read: String(a.plan.override_read || "").slice(0, 120), result: a.outcome?.state || null })),
+    whys: whyRows.slice(0, 12).map((w) => w.why_not ? { why_not: w.why_not } : { setup: w.setup, why_now: w.why_now, kills: w.kills }),
+    exits: cards.concat(liveActs).map((a) => a.plan?.josh_exit_why?.text).filter(Boolean).slice(0, 8),
+    coach: { calls_with_direction: calls.length, taken_from_coach: tookCoach, tickers: [...new Set(calls.map((c) => c.ticker))].slice(0, 10) },
+    last_week_rule: lastRule };
+  let rule = REPORT_RULE_DEFAULT, comment = "", followed: boolean | null = null;
+  if (apiKey) {
+    try {
+      const sys = `You are Jarvis writing Josh's Friday report card from the numbers below — only from them. Talk to Josh directly, plain words, no praise padding, fair and direct. Respond with JSON only: {"followed": true|false|null, "comment": "two sentences on what the numbers say about this week", "rule": "ONE rule for next week, one sentence, specific and checkable from Otto's data"}. "followed" = did he follow last week's rule, judged from the numbers (null if the numbers can't say). Never name the coach.` + NAME_RULE;
+      const r = await withTimeout(fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: MODEL, max_tokens: 500, system: sys, messages: [{ role: "user", content: JSON.stringify(facts) }] }) }), 40_000, "report card");
+      const j = await r.json();
+      const txt = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
+      const out = JSON.parse(txt.slice(txt.indexOf("{"), txt.lastIndexOf("}") + 1));
+      if (typeof out.rule === "string" && out.rule.trim().length > 12) rule = unname(out.rule.trim()).slice(0, 220);
+      if (typeof out.comment === "string") comment = unname(out.comment.trim()).slice(0, 500);
+      if (typeof out.followed === "boolean") followed = out.followed;
+    } catch (e) { console.error("report card model", e); }
+  }
+  const g = letterGrade({ answered: st.answered, offered: st.offered, good_whys: good, whys: whyRows.length, rule_followed: followed });
+  const money = (n: number) => (n < 0 ? "−$" : "+$") + Math.abs(Math.round(n)).toLocaleString("en-US");
+  const lines = [
+    `📋 Report card — week of ${ws} · Josh + Baby J`,
+    `Grade: ${g.letter} (${g.score}/100)`,
+    `Last week's rule: ${lastRule} — ${followed == null ? "can't tell from the numbers" : followed ? "followed ✓" : "not followed ✗"}`,
+    `Cards: ${st.offered} offered, ${st.answered} answered (${st.taken} taken, ${st.rejected} rejected), ${st.expired} expired${st.expired ? " — expired counts against you" : ""}.`,
+    `Live (Robinhood): ${trades.length} trade${trades.length === 1 ? "" : "s"}, ${money(livePnl)}. Practice book: $${book.start.toLocaleString("en-US")} → $${st.balance.toLocaleString("en-US")}${st.scoring ? ` (${st.scoring} still scoring)` : ""}.`,
+    `Overrode Baby J: ${ov.length}${ov.length ? " — " + ov.map((a) => `${String(a.title).replace(/^(PAPER|PRACTICE|LIVE)\s*[—-]\s*/i, "").slice(0, 28)} (${a.outcome?.state || "open"})`).join(", ") : ""}.`,
+    `Coach posted ${calls.length} call${calls.length === 1 ? "" : "s"} with a direction${calls.length ? ` (${facts.coach.tickers.join(", ")})` : ""}; you took ${tookCoach}.`,
+    `Your whys: ${whyRows.length} written, ${good} named a level and a kill.${whyRows.length ? "" : " None — the gate is on now, so next week this line fills in."}`,
+    comment ? `Read: ${comment}` : "",
+    `One rule for next week: ${rule}`,
+  ].filter(Boolean);
+  const out = { week_start: ws, week_end: we, grade: g.letter, score: g.score, rule, last_rule: lastRule, followed, comment, stats: st, live: { n: trades.length, pnl: livePnl }, overrides: ov.length, text: lines.join("\n"), built_at: new Date().toISOString() };
+  await putSetting("report_card_last", out, "Otto").catch(() => {});
+  return out;
+}
+
 /* ------------------------------------------------------------ v3.38: Pop Quiz (approved mockup v338-mockup.html, 16 Oct 2026)
    Josh picks a chart and answers the five questions the coach asks on every pop quiz. Jarvis grades each answer ONLY from the brain
    (call date + MM:SS next to every grade), gives a score out of 5 and two things to fix. History in otto_settings.quiz_history (last 60). */
@@ -2921,6 +3044,10 @@ export function scoreRows(ideas: any[], pnlBy: Record<string, number>) {
     id: a.id, title: a.title, at: a.created_at, status: a.status, source: srcOf(a),
     state: a.outcome?.state ?? null, est: a.outcome?.pnl_est ?? null, r: a.outcome?.r ?? null,
     pnl: pnlBy[a.id] ?? null, by: a.decided_by ?? null,
+    // v3.41: the practice book, overrides and Josh's whys ride along for the Scoreboard and the report card
+    practice: isPracticeCard(a), override: !!a.plan?.override, override_read: a.plan?.override_read ?? null,
+    why: a.plan?.josh_why ? { setup: a.plan.josh_why.setup, why_now: a.plan.josh_why.why_now, kills: a.plan.josh_why.kills } : null,
+    why_not: a.plan?.josh_reject_why?.why_not ?? null, exit_why: a.plan?.josh_exit_why?.text ?? null,
   }));
 }
 async function scorecard() {
@@ -2964,6 +3091,7 @@ async function scorecard() {
       return { n: s2.length, total: s2.reduce((x: number, a: any) => x + Number(a.outcome.pnl_est), 0), per: s2.length ? Math.round(s2.reduce((x: number, a: any) => x + Number(a.outcome.pnl_est), 0) / s2.length) : null }; })(),
     proof: await (async () => { const st = await proofStart(); const today = marketClock().date; return { start: st, day: Math.max(0, Math.min(14, tradingDaysBetween(st, today))), of: 14 }; })(),
     rows: scoreRows(ideas, pnlBy),
+    practice: practiceStats(ideas, await practiceBook().catch(() => PRACTICE_BOOK_DEFAULT)),     // v3.41
     recent: ideas.slice(0, 25).map((a: any) => ({ id: a.id, title: a.title, at: a.created_at, status: a.status, source: srcOf(a), trigger: a.plan?.trigger || null,
       setup: a.plan?.setup || null, verdict: a.banner?.verdict || null, outcome: a.outcome || null, pnl: pnlBy[a.id] ?? null })),
   };
@@ -2995,7 +3123,8 @@ async function morningRead(apiKey: string) {
     legs: sent.legs.map((l: any) => ({ leg: l.label, pct: l.pct == null ? null : +l.pct.toFixed(2), live: l.live })),
     fired: sent.rows.filter((r: any) => r.fired).map((r: any) => `row ${r.row}: ${r.label}`),
     calendar_today: sent.calendar.map((e: any) => `${etLabel(e.date)} ${e.title} (importance ${e.importance})`) };
-  const prompt = `[Automatic 8:45 morning read — no one typed this. ${sent.et} ET.]
+  const lastRule41 = String((await setting("report_card_last").catch(() => null))?.rule || "").trim();   // v3.41: the report card's rule leads the week
+  const prompt = `[Automatic 8:45 morning read — no one typed this. ${sent.et} ET.]${lastRule41 ? `\nLINE ONE of your read must be exactly: "This week's rule: ${lastRule41}"` : ""}
 The live sentiment banner (Josh's intermarket sheet on TradingView data) says: ${JSON.stringify(lite)}
 What's moving (web research just now): ${news.slice(0, 2500) || "unavailable"}
 
@@ -4624,6 +4753,34 @@ export async function closeByButton(body: any, who: string) {
   } finally { CLOSING.delete(optId); }
 }
 
+/* v3.41: the line after Close Now — "why out?" — stored on the close card closeByButton made (plan.josh_exit_why) and,
+   when the entry card can be found through the option id, on that card too so the Scoreboard shows it on the trade's own line.
+   Asked AFTER the fill; never blocks the sell. One line, at least WHY_MIN characters. */
+export async function whyOut(body: any, who: string) {
+  const text = String(body?.text ?? "").replace(/\s+/g, " ").trim().slice(0, 400);
+  if (text.length < WHY_MIN) return { ok: false, error: `Say why you got out (at least ${WHY_MIN} characters).` };
+  const id = String(body?.id || "").trim(), optId = String(body?.option_id || "").trim();
+  const rec = { text, at: new Date().toISOString(), by: who.split("@")[0] };
+  const patched: string[] = [];
+  const stamp = async (cardId: string) => {
+    if (!/^[0-9a-f-]{36}$/i.test(cardId)) return;
+    const a = (await db("otto_actions?id=eq." + cardId + "&select=id,plan").catch(() => []))?.[0];
+    if (!a) return;
+    await db("otto_actions?id=eq." + cardId, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ plan: { ...(a.plan || {}), josh_exit_why: rec } }) });
+    patched.push(cardId);
+  };
+  if (id) await stamp(id);
+  if (optId) {
+    // the entry card: the newest armed/done opening card on this option
+    const rows = await db("otto_actions?select=id,plan,exit&exit->>option_id=eq." + encodeURIComponent(optId) + "&order=created_at.desc&limit=3").catch(() => []);
+    const ent = (rows || []).find((r: any) => r.id !== id);
+    if (ent) await stamp(ent.id);
+  }
+  if (!patched.length) return { ok: false, error: "No card found for that trade." };
+  await activity("card", `Why out (${rec.by}): ${text}`, rec.by).catch(() => {});
+  return { ok: true, cards: patched, why: rec };
+}
+
 // Scheduled / triggered check of everything open in the Agentic account.
 export async function ruleSweep() {
   const armed = await db("otto_actions?select=id,title,exit,decided_at,created_at&exit->>state=eq.armed&limit=20").catch(() => []);
@@ -4782,6 +4939,37 @@ const HOUSE_TOOL = {
 async function setting(key: string): Promise<any> {
   const r = await db("otto_settings?key=eq." + key + "&select=value");
   return r?.[0]?.value ?? null;
+}
+/* v3.41: Josh + Baby J's PRACTICE BOOK — $4,000 paper, like Winston's, counted from the night v3.41 shipped (SQL 025 writes
+   `since`). Practice cards are sized against it (flag only) and scored on it. Nothing here touches the Agentic account. */
+export const PRACTICE_BOOK_DEFAULT = { start: 4000, since: null as string | null };
+export async function practiceBook(): Promise<{ start: number; since: string | null }> {
+  const v = await setting("practice_book").catch(() => null);
+  const start = Number(v?.start);
+  return { start: isFinite(start) && start > 0 ? start : PRACTICE_BOOK_DEFAULT.start, since: typeof v?.since === "string" && v.since ? v.since : null };
+}
+/* Is this card one Josh was asked to answer? (v3.35 practice cards; v3.41 also the over-cap ones.) */
+export function isPracticeCard(a: any): boolean {
+  return !!(a?.plan?.practice || a?.status === "paper_wait" || a?.status === "paper_taken" || (a?.checks || []).some((c: any) => c && c.practice));
+}
+/* v3.41: the practice book's numbers for the Scoreboard and the Friday report card. `since` null = the book has not started. */
+export function practiceStats(acts: any[], book: { start: number; since: string | null }) {
+  const since = book.since ? Date.parse(book.since) : Infinity;
+  const cards = (acts || []).filter((a: any) => isPracticeCard(a) && Date.parse(a.created_at) >= since);
+  const taken = cards.filter((a: any) => a.status === "paper_taken");
+  const answered = cards.filter((a: any) => a.status === "paper_taken" || a.status === "rejected");
+  const expired = cards.filter((a: any) => a.status === "expired");
+  const est = (a: any) => (a.outcome && ["win", "loss", "scratch"].includes(a.outcome.state) && a.outcome.pnl_est != null) ? Number(a.outcome.pnl_est) : 0;
+  const ov = cards.filter((a: any) => a.plan?.override && a.status === "paper_taken");
+  const ovScored = ov.filter((a: any) => a.outcome && ["win", "loss"].includes(a.outcome.state));
+  const whys = answered.filter((a: any) => a.plan?.josh_why || a.plan?.josh_reject_why);
+  return {
+    start: book.start, since: book.since, balance: Math.round((book.start + taken.reduce((s: number, a: any) => s + est(a), 0)) * 100) / 100,
+    offered: cards.length, answered: answered.length, taken: taken.length, rejected: answered.length - taken.length, expired: expired.length,
+    whys: whys.length, scoring: taken.filter((a: any) => !a.outcome || !["win", "loss", "scratch", "unscored"].includes(a.outcome.state)).length,
+    overrides: { n: ov.length, wins: ovScored.filter((a: any) => a.outcome.state === "win").length, losses: ovScored.filter((a: any) => a.outcome.state === "loss").length,
+      est: Math.round(ov.reduce((s: number, a: any) => s + est(a), 0)) },
+  };
 }
 async function putSetting(key: string, value: any, by = "otto") {
   await db("otto_settings?on_conflict=key", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
@@ -7094,6 +7282,11 @@ Deno.serve(async (req) => {
         const log = await coachLog(true);
         await logDesk("system", "Otto", `📋 Weekly trade log for the coach (week of ${log.week_start}, ${log.n} trade${log.n === 1 ? "" : "s"}) — copy and send:\n\n${log.text}`);
       } catch (e) { console.error("coach log", e); }
+      try {                                                                                   // v3.41: the Friday report card, right after the coach log
+        const rc = await reportCard(apiKey, true);
+        await logDesk("system", "Otto", rc.text);
+        await notify("card", `📋 Report card: ${rc.grade}`, `Week of ${rc.week_start}. One rule for next week: ${rc.rule}`).catch(() => {});
+      } catch (e) { console.error("report card", e); }
     })());
     return json({ ok: true, started: "weekly" }, 202);
   }
@@ -7111,7 +7304,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, email: claims.email || null, anonymous: !!claims.is_anonymous, desk: !!deskUser(claims) });
     }
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
-         "sentiment", "market_desk", "journal", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "watch_get", "watch_set", "watch_scan", "performance", "help", "jason_today", "jason_sweep", "jason_score",
+         "sentiment", "market_desk", "journal", "why_out", "report_card", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "watch_get", "watch_set", "watch_scan", "performance", "help", "jason_today", "jason_sweep", "jason_score",
          "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set",
          "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear", "selftest_now",
          "playbook_get", "feedback_add", "feedback_list", "daily_now",
@@ -7128,10 +7321,12 @@ Deno.serve(async (req) => {
         if (!apiKey) return json({ ok: false, error: "ANTHROPIC_KEY secret is not set" }, 500);
         return await desk(req, who, apiKey);
       }
-      if (fn === "act") return json({ ok: true, action: await actOn(String(body.id || ""), String(body.decision || ""), who) });
+      if (fn === "act") return json({ ok: true, action: await actOn(String(body.id || ""), String(body.decision || ""), who, body.decision === "approve" ? body.why : (body.why_not ?? body.why)) });
+      if (fn === "why_out") return json(await whyOut(body, who));                                   // v3.41: the line after Close Now
       if (fn === "panel") return json(await panel());
       if (fn === "trade_live") return json(await tradeLive());
-      if (fn === "coach_log") return json({ ok: true, ...(await coachLog(new URL(req.url).searchParams.get("build") === "1")) });   // v3.37
+      if (fn === "coach_log") return json({ ok: true, ...(await coachLog(new URL(req.url).searchParams.get("build") === "1")) });
+      if (fn === "report_card") return json({ ok: true, ...(await reportCard(Deno.env.get("ANTHROPIC_KEY") || "", new URL(req.url).searchParams.get("build") === "1")) });   // v3.41   // v3.37
       if (fn === "quiz_list") return json(await quizList());                                                                          // v3.38
       if (fn === "quiz_grade") { const k = Deno.env.get("ANTHROPIC_KEY"); if (!k) return json({ ok: false, error: "ANTHROPIC_KEY secret is not set" }, 500); return json(await quizGrade(body, who, k)); }
       if (fn === "close_now") return json(await closeByButton(body, who));
@@ -7738,7 +7933,10 @@ export function spliceRecap(jarvis: string, block: string): string {
   parts.splice(i >= 0 ? i + 1 : 0, 0, block.trim() + "\n\n");
   return parts.join("").trim();
 }
-export const actOnForTest = actOn;
+// Tests from before v3.41 approve without a why; the gate itself is tested in v341_test.ts. A test passes its own why to exercise it.
+export const TEST_WHY = { setup: "test setup in words", why_now: "test why now line", kills: "test kill line 123" };
+export const actOnForTest = (id: string, decision: string, who: string, why: any = undefined) =>
+  actOn(id, decision, who, why === undefined ? (decision === "approve" ? TEST_WHY : "test why not line") : why);
 export const evalIdeaForTest = evalIdea;
 
 /* ============================================================ v3.23 (8 Oct 2026) — Signal speed
