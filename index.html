@@ -911,9 +911,10 @@ svg.nc-svg{width:100%;height:auto;display:block}
   .dk-rail .dk-tabs{display:contents}
   .dk-rail button,.dk-rail .dk-tabs button{display:none;width:auto;flex:1 1 0;min-height:56px;font-size:11.5px;border-radius:12px}
   .dk-rail button svg{width:22px;height:22px;margin-bottom:3px}
-  .dk-rail .dk-tabs button[data-go="desk"],.dk-rail .dk-tabs button[data-go="scoreboard"],.dk-rail .dk-tabs button[data-go="prep"],.dk-rail button[data-go="settings"]{display:grid}
+  /* v3.41.1 (20 Oct): Winston joins the phone strip so Ifoma can see when he is in a trade from his phone */
+  .dk-rail .dk-tabs button[data-go="desk"],.dk-rail .dk-tabs button[data-go="scoreboard"],.dk-rail .dk-tabs button[data-go="prep"],.dk-rail .dk-tabs button[data-go="winston"],.dk-rail button[data-go="settings"]{display:grid}
   .dk-rail .dk-tabs button[hidden]{display:none!important}
-  .dk-rail .dk-tabs button[data-go="desk"]{order:1}.dk-rail .dk-tabs button[data-go="scoreboard"]{order:2}.dk-rail .dk-tabs button[data-go="prep"]{order:3}.dk-rail button[data-go="settings"]{order:5}
+  .dk-rail .dk-tabs button[data-go="desk"]{order:1}.dk-rail .dk-tabs button[data-go="scoreboard"]{order:2}.dk-rail .dk-tabs button[data-go="prep"]{order:3}.dk-rail .dk-tabs button[data-go="winston"]{order:4}.dk-rail button[data-go="settings"]{order:5}
   /* the phone strip sits at the top now */
   .dk-strip{order:-5;position:sticky;top:0;z-index:20;padding:10px 14px}
   .dk-banner{order:-4}
@@ -2405,7 +2406,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.41.0";
+const BUILD="3.41.1";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
