@@ -420,6 +420,7 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 /* v3.33 Close Now (approved mockup close-now-mockup, Option B) */
 .tr-card{border-color:#1d5a22!important;background:#0c1d0e!important}
 .tr-row{display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;min-height:48px;padding:2px 0}
+.tr-prac{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.06em;padding:1px 6px;border-radius:6px;background:rgba(139,123,255,.18);color:#a99dff;margin-right:6px}.tr-pracbn{background:rgba(139,123,255,.1);border:1px solid rgba(139,123,255,.35);border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:10px}
 .tr-row small{display:block;font-size:12px;color:var(--ink-2);font-weight:400}
 .tr-row:focus-visible{outline:2px solid #fff;outline-offset:2px;border-radius:8px}
 .tr-cn{width:100%;min-height:52px;border:0;border-radius:12px;background:var(--down);color:#fff;font-weight:700;font-size:17px;margin-top:8px;cursor:pointer}
@@ -2406,7 +2407,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.42.0";
+const BUILD="3.43.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3995,9 +3996,9 @@ function sbList(m,d){
     const rows=day.J.concat(day.R).slice().sort((a,b)=>String(a.r.at).localeCompare(String(b.r.at)));let run=0;
     const items=rows.map(x=>{const real=x.r.status==="done",u=x.usd;if(u!=null)run+=(real?0:u);
       const o=u==null?"o":u>0?"w":u<0?"l":"f",lab=u==null?(real?"OPEN":"SCORING"):u>0?"WIN":u<0?"LOSS":"FLAT";
-      const w=x.r.why,wl=w?`Why: ${esc(w.setup||"")}${w.kills?" · Kills: "+esc(w.kills):""}`:"",xl=x.r.exit_why?` · Out: ${esc(x.r.exit_why)}`:"";
+      const w=x.r.why,wl=w?`Why: ${esc(w.setup||"")}${w.kills?" · Kills: "+esc(w.kills):""}`:"",xl=x.r.exit_why?` · Out: ${esc(x.r.exit_why)}`:"",hc=x.r.hand_close?` · <b>${esc(typeof x.r.hand_close==="string"?x.r.hand_close:"Josh")} closed it</b>${x.r.rule_state?` · what-if if the rules had run it: ${esc(String(x.r.rule_state).toUpperCase())}${x.r.rule_est!=null?" "+sbM(sbN(x.r.rule_est),true):""}`:" · what-if: still scoring"}`:"";
       return `<div class="sb-li" style="flex-wrap:wrap">${chip(o,lab)}<div class="t"><b>${esc(sbTitle(x.r.title))}</b>${x.r.override?`<span class="sb-ov" title="${esc(x.r.override_read||"")}">Overrode Baby J</span>`:""}<span>${esc(winET(x.r.at))} · ${esc(x.r.source||"desk")}${real?" · <b style='color:var(--warn)'>REAL MONEY</b>":""}</span></div>
-        <div class="amt ${sbC(u)}">${u==null?"—":sbM(u,true)}${u!=null&&!real?`<span class="run">running ${sbM(run,true)}</span>`:""}</div>${wl||xl?`<div class="sb-why">${wl}${xl}</div>`:x.r.practice?`<div class="sb-why mut">No why recorded (before the why gate).</div>`:""}</div>`}).reverse();
+        <div class="amt ${sbC(u)}">${u==null?"—":sbM(u,true)}${u!=null&&!real?`<span class="run">running ${sbM(run,true)}</span>`:""}</div>${wl||xl||hc?`<div class="sb-why">${wl}${xl}${hc}</div>`:x.r.practice?`<div class="sb-why mut">No why recorded (before the why gate).</div>`:""}</div>`}).reverse();
     html=items.join("")||`<div class="sb-note">No Josh + Baby J trades on this day.</div>`;
     if(day.X.length)html+=`<details class="sb-nt"><summary>Not taken (${day.X.length}): rejected, expired or auto-rejected cards, never opened, not in any total</summary>${day.X.slice().sort((a,b)=>String(b.r.at).localeCompare(String(a.r.at))).map(x=>
       `<div class="sb-li notaken" style="flex-wrap:wrap">${chip("x","NOT TAKEN")}<div class="t"><b>${esc(sbTitle(x.r.title))}</b>${x.r.status==="expired"&&x.r.practice?`<span class="sb-ov">no answer</span>`:""}<span>${esc(winET(x.r.at))} · ${esc(x.r.source||"desk")} · ${esc(x.r.status==="paper_wait"?"not answered":x.r.status==="paper"?"auto-rejected":x.r.status)}</span></div><div class="amt mut" style="text-decoration:line-through;font-size:16px">${x.usd==null?"":sbM(x.usd)}</div>${x.r.why_not?`<div class="sb-why">Why not: ${esc(x.r.why_not)}</div>`:x.r.status==="expired"&&x.r.practice?`<div class="sb-why">No why — counts as unanswered on Friday.</div>`:""}</div>`).join("")}</details>`;
@@ -5082,23 +5083,26 @@ const trN=v=>{const n=+v;return v!=null&&v!==""&&isFinite(n)?n:null};
 const trMoney=v=>v==null?"—":(v<0?"−":v>0?"+":"")+"$"+Math.abs(v).toFixed(0);
 const trCls=v=>v>0?"up":v<0?"dn":"";
 function trCur(){return(DK.tl&&DK.tl.trades)||[]}
+/* v3.43: is a practice trade Josh took today still open? (taken, not scored by rule, not closed by hand) */
+function dkPracOpen(){return Object.values(DK.acts||{}).some(a=>a&&a.status==="paper_taken"&&a.plan&&a.plan.paper_fill&&Date.now()-Date.parse(a.plan.paper_fill.at)<8*3600e3&&!(a.outcome&&(a.outcome.practice_close||["win","loss","scratch","unscored"].includes(a.outcome.state))))}
 async function dkTradeLoad(){
   if(DK.locked)return;
   const ops=DK.panel&&DK.panel.agentic&&DK.panel.agentic.options;
-  if(Array.isArray(ops)&&!ops.some(o=>+o.quantity>0)){DK.tl={ok:true,trades:[],at:new Date().toISOString(),rth:true};dkRenderRight();trRefreshDialog();return}   // nothing open: no extra call
+  if(Array.isArray(ops)&&!ops.some(o=>+o.quantity>0)&&!dkPracOpen()){DK.tl={ok:true,trades:[],at:new Date().toISOString(),rth:true};dkRenderRight();trRefreshDialog();return}   // nothing open: no extra call
   try{DK.tl=await dkApi("trade_live")}catch(e){DK.tl={ok:false,error:e.message,trades:trCur(),rth:DK.tl?DK.tl.rth:true}}
   dkRenderRight();trRefreshDialog();
 }
 function trBtn(t,big){
   const c=DK.cn[t.option_id]||{step:"idle"},cl=big?" big":"",o=esc(t.option_id),n=t.qty||1;
-  if(DK.tl&&DK.tl.rth===false)return `<button class="tr-cn${cl}" disabled>CLOSE NOW</button><div class="tr-msg bad"><b>Market is closed.</b> Close Now works 9:30 AM to 4:00 PM ET. The trade stays open until 9:30 tomorrow, or close it in Robinhood.</div>`;
-  if(c.step==="confirm")return `<div class="tr-two${big?" big":""}"><button class="tr-yes" data-cn="yes" data-opt="${o}">Yes, sell ${n} contract${n>1?"s":""} now</button><button class="tr-no" data-cn="no" data-opt="${o}">Cancel</button></div><div class="mut" style="font-size:12px;margin-top:4px">Goes back in 5 seconds if you do nothing.${t.bid!=null?` Sell price now about $${t.bid.toFixed(2)}.`:""}</div>`;
-  if(c.step==="selling")return `<button class="tr-cn${cl}" disabled>Selling…</button><div class="mut" style="font-size:12px;margin-top:4px">Stop cancelled. Sell order sent to Robinhood. Waiting for the fill.</div>`;
+  if(DK.tl&&DK.tl.rth===false)return `<button class="tr-cn${cl}" disabled>CLOSE NOW</button><div class="tr-msg bad"><b>Market is closed.</b> Close Now works 9:30 AM to 4:00 PM ET. ${t.practice?"The practice trade stays open until it is scored at the close.":"The trade stays open until 9:30 tomorrow, or close it in Robinhood."}</div>`;
+  if(c.step==="confirm")return `<div class="tr-two${big?" big":""}"><button class="tr-yes" data-cn="yes" data-opt="${o}">Yes, sell ${n} contract${n>1?"s":""} now</button><button class="tr-no" data-cn="no" data-opt="${o}">Cancel</button></div><div class="mut" style="font-size:12px;margin-top:4px">Goes back in 5 seconds if you do nothing.${t.bid!=null?` Sell price now about $${t.bid.toFixed(2)}.`:""}${t.practice?" Practice: nothing goes to Robinhood.":""}</div>`;
+  if(c.step==="selling")return `<button class="tr-cn${cl}" disabled>Selling…</button><div class="mut" style="font-size:12px;margin-top:4px">${t.practice?"Reading the live sell price…":"Stop cancelled. Sell order sent to Robinhood. Waiting for the fill."}</div>`;
   const err=c.step==="err"?`<div class="tr-msg bad"><b>Not closed.</b> ${esc(c.msg||"")}</div>`:"";
-  return err+`<button class="tr-cn${cl}" data-cn="start" data-opt="${o}">CLOSE NOW</button>`+(big&&!err?`<div class="mut" style="font-size:12px;margin-top:4px">Sells your ${n} contract${n>1?"s":""} at market. Tap once, then confirm.</div>`:"");
+  return err+`<button class="tr-cn${cl}" data-cn="start" data-opt="${o}">CLOSE NOW</button>`+(big&&!err?`<div class="mut" style="font-size:12px;margin-top:4px">${t.practice?`Sells your ${n} practice contract at the live sell price. Nothing goes to Robinhood. Tap once, then confirm.`:`Sells your ${n} contract${n>1?"s":""} at market. Tap once, then confirm.`}</div>`:"");
 }
 function trDone(d){
   const r=d.r||{},f=r.fill_px;
+  if(r.practice)return `<div class="tr-msg ok"><b>Closed (practice).</b> Sold 1 ${esc(d.label)} at <b>$${f!=null?f.toFixed(2):"?"}</b> (the live sell price at your tap). Practice result <b class="${trCls(r.pnl)}">${trMoney(r.pnl)}</b>. Written to the Desk and the Activity log as "Closed by ${esc(r.by||"you")} (Close Now, practice)". Nothing was sent to Robinhood.</div>`;
   const txt=r.state==="filled"&&f!=null?`Sold ${r.qty||1} ${esc(d.label)} at <b>$${f.toFixed(2)}</b>.${r.pnl!=null?` Real result <b class="${trCls(r.pnl)}">${trMoney(r.pnl)}</b> (fill from Robinhood).`:""}`
     :`Sell order sent for ${esc(d.label)} (${esc(r.state||"sent")}). Robinhood has not reported the fill yet. The trade row goes away when the position is gone; check Robinhood if it stays.`;
   return `<div class="tr-msg ok"><b>${r.state==="filled"?"Closed.":"Close sent."}</b> ${txt} Written to the Desk and the Activity log as "Closed by ${esc(r.by||"you")} (button)".</div>`;
@@ -5108,7 +5112,7 @@ function trCard(){
   if(!ts.length&&!d)return"";
   let h=`<div class="dk-cardx tr-card"><div class="dk-h">In a trade <b>${ts.length?"live":"closed"}</b></div>`;
   h+=ts.map(t=>{const e=t.est_pnl;
-    return `<div class="tr-row" data-trade="${esc(t.option_id)}" role="button" tabindex="0"><div><b>IN A TRADE</b> ${esc(t.label)}<small>tap to open the chart and Close Now</small></div><b class="${trCls(e)}">${e==null?"price unavailable":trMoney(e)+" est."}</b></div>`+trBtn(t,false)}).join("");
+    return `<div class="tr-row" data-trade="${esc(t.option_id)}" role="button" tabindex="0"><div><b>IN A TRADE</b> ${t.practice?`<span class="tr-prac">PRACTICE</span>`:""}${esc(t.label)}<small>tap to open the chart and Close Now</small></div><b class="${trCls(e)}">${e==null?"price unavailable":trMoney(e)+" est."}</b></div>`+trBtn(t,false)}).join("");
   if(d)h+=trDone(d);
   return h+`</div>`;
 }
@@ -5129,19 +5133,19 @@ function trChart(bars,plan,entU,sym){
 }
 function trBig(){
   const t=trCur().find(x=>x.option_id===DK.trOpen),d=DK.cnDone&&Date.now()-DK.cnDone.at<10*60e3?DK.cnDone:null;
-  if(!t)return d?trDone(d):`<div class="banner mut" style="padding:12px">Not in a trade. Nothing is open in the Agentic account.</div>`;
+  if(!t)return d?trDone(d):`<div class="banner mut" style="padding:12px">Not in a trade. Nothing is open right now.</div>`;
   const e=t.est_pnl,pl=t.plan,asOf=t.quote_at||(DK.tl&&DK.tl.at)||"",qty=t.qty||1;
   const lad=pl&&trN(pl.wrong_if)!=null&&trN(pl.tp1)!=null?winLadder({ticker:t.sym,entry_under:t.under_entry,plan:{wrong_if_level:pl.wrong_if,target_level:pl.tp1}},trN(t.under)):"";
   const say=pl?`<b>Plan on this trade:</b> exit if a ${pl.tf}-minute candle closes ${pl.dir==="down"?"over":"under"} ${pl.wrong_if}, or take profit at ${pl.tp1}. Flat by 3:50 PM.`
     :`<b>No exit plan on file.</b> This trade was not opened from an Otto card, so Otto has no lines for it. Close Now still works.`;
-  return `<div class="win-banner on"><div class="win-big"><span class="win-dot"></span>IN A TRADE NOW — ${esc(t.label)}</div>
-    <div class="mut" style="font-size:12.5px">Josh + Baby J · ${qty} contract${qty>1?"s":""} · Agentic account${t.exp?" · exp "+esc(t.exp):""}</div>
-    <div class="win-row"><div><span class="mut">Bought</span><b>${t.entry!=null?"$"+t.entry.toFixed(2):"—"}</b></div><div><span class="mut">Since</span><b>${t.opened_at?esc(winET(t.opened_at)):"—"}</b></div><div><span class="mut">Costs</span><b>${t.entry!=null?"$"+Math.round(t.entry*100*qty):"—"}</b></div>
+  return `${t.practice?`<div class="tr-pracbn"><b>Practice trade.</b> Nothing was sent to Robinhood. Closing it sells at the option's live sell price and scores it on the practice book.</div>`:""}<div class="win-banner on"><div class="win-big"><span class="win-dot"></span>IN A TRADE NOW — ${esc(t.label)}</div>
+    <div class="mut" style="font-size:12.5px">Josh + Baby J · ${qty} contract${qty>1?"s":""} · ${t.practice?"practice book":"Agentic account"}${t.exp?" · exp "+esc(t.exp):""}</div>
+    <div class="win-row"><div><span class="mut">${t.practice?"Pretend fill":"Bought"}</span><b>${t.entry!=null?"$"+t.entry.toFixed(2):"—"}</b></div><div><span class="mut">Since</span><b>${t.opened_at?esc(winET(t.opened_at)):"—"}</b></div><div><span class="mut">Costs</span><b>${t.entry!=null?"$"+Math.round(t.entry*100*qty):"—"}</b></div>
     <div><span class="mut">Option now (sell price)</span><b>${t.bid!=null?"$"+t.bid.toFixed(2):"—"}</b></div>
     <div><span class="mut">Profit/loss <span class="win-est">ESTIMATE</span></span>${e==null?`<span class="mut">unavailable</span>`:`<b class="${trCls(e)}" style="font-size:24px">${trMoney(e)}</b>`}${asOf?`<div class="mut" style="font-size:11px">as of ${esc(winET(asOf))}</div>`:""}</div></div>
     ${lad}<div class="win-say">${say}</div>
     ${d?trDone(d):trBtn(t,true)}</div>${trChart(t.bars,pl,t.under_entry,t.sym)}
-    <div class="mut" style="font-size:12px;margin-top:8px">The estimate uses the price you could sell at right now. The real result is the Robinhood fill after you close. Refreshes every 20 seconds.</div>`;
+    <div class="mut" style="font-size:12px;margin-top:8px">The estimate uses the price you could sell at right now. ${(trCur().find(x=>x.option_id===DK.trOpen)||{}).practice?"A practice close counts at the sell price when you tap.":"The real result is the Robinhood fill after you close."} Refreshes every 20 seconds.</div>`;
 }
 function trRefreshDialog(){
   const dl=$("#dlgOpenTrade");if(!dl||!dl.open)return;
@@ -5157,11 +5161,11 @@ async function trCn(act,opt){
     c.step="selling";dkRenderRight();trRefreshDialog();
     const lab=(trCur().find(t=>t.option_id===opt)||{}).label||"the trade";
     try{const r=await dkApi("close_now",{option_id:opt,author:dkWho()});
-      DK.cnDone={at:Date.now(),r,label:lab};c.step="idle";toast(r.state==="filled"?"Closed":"Close sent");
+      DK.cnDone={at:Date.now(),r,label:lab};c.step="idle";if(r.practice&&r.card&&DK.acts[r.card])DK.acts[r.card].outcome={...(DK.acts[r.card].outcome||{}),practice_close:true,state:r.pnl>0?"win":r.pnl<0?"loss":"scratch",pnl_est:r.pnl};toast(r.state==="filled"?"Closed":"Close sent");
       // v3.41: the line after Close Now — asked AFTER the sell, never before it
       setTimeout(async()=>{const w=await whyAsk("out",{card:{title:lab},fill:r.fill_px});if(w==null)return;
         try{await dkApi("why_out",{id:r.card,option_id:opt,text:w});toast("Saved")}catch(e){toast(String(e.message).slice(0,100))}},300)}
-    catch(e){c.step="err";c.msg=e.message}
+    catch(e){c.step="err";c.msg=e.message;if(String(opt).startsWith("P:"))toast(String(e.message).slice(0,140))}
     setTimeout(()=>dkPanel(true),1500);
   }
   dkRenderRight();trRefreshDialog();

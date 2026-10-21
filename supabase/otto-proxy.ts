@@ -2841,8 +2841,8 @@ export async function coachLog(build = false): Promise<{ week_start: string; wee
   for (const a of prac.filter((a) => inWeek(a.decided_at || a.created_at))) {
     const p = a.plan || {}, pf = p.paper_fill || {}, o = a.outcome || {}, tk = String(p.tv_symbol || "").split(":").pop() || "";
     const at = pf.at || a.decided_at || a.created_at, od = etParts(new Date(at)).date;
-    items.push({ day: od, who: String(a.decided_by || "Josh"), source: "PRACTICE · approved on Otto", ticker: tk, contract: String(a.title || "").replace(/^(PAPER|PRACTICE|LIVE)\s*[—-]\s*/i, "").slice(0, 40), side: p.direction === "down" ? "short" : "long",
-      entry: pf.ask != null ? Number(pf.ask) : null, exit: null, pnl: o.pnl_est != null ? Number(o.pnl_est) : null, entry_time: t12(at), exit_time: o.state && o.state !== "pending" ? "(scored by rule)" : "",
+    items.push({ day: od, who: String(a.decided_by || "Josh"), source: o.practice_close ? "PRACTICE · approved on Otto, closed by hand" : "PRACTICE · approved on Otto", ticker: tk, contract: String(a.title || "").replace(/^(PAPER|PRACTICE|LIVE)\s*[—-]\s*/i, "").slice(0, 40), side: p.direction === "down" ? "short" : "long",
+      entry: pf.ask != null ? Number(pf.ask) : null, exit: o.practice_close && o.exit_px != null ? Number(o.exit_px) : null, pnl: o.pnl_est != null ? Number(o.pnl_est) : null, entry_time: t12(at), exit_time: o.practice_close ? t12(o.closed_at) : o.state && o.state !== "pending" ? "(scored by rule)" : "",
       level: p.level ?? p.stop ?? null, vwap: tk ? await vwapAt(tk, od, Date.parse(at)) : null, why: String(a.summary || "").split("\n")[0].slice(0, 200), overnight: "no (practice, same day)",
       note: o.state ? `scored ${o.state}${o.r != null ? " (" + o.r + "R)" : ""}` : undefined });
   }
@@ -3023,18 +3023,29 @@ async function evalIdea(a: any) {
   return g.state === "open" ? { state: "pending" } : { ...g, at: g.at ? Math.round(g.at / 1000) : undefined };
 }
 // v3.14: grade a few open ideas every 5 minutes from the cron, so the Scoreboard is current without opening it.
-async function scoreTick(budget = 6) {
+export async function scoreTick(budget = 6) {
   const since = new Date(Date.now() - 3 * 864e5).toISOString();
   const acts = await db(`otto_actions?select=*&created_at=gte.${since}&order=created_at.desc&limit=100`).catch(() => []);
   let n = 0;
   for (const a of acts) {
     if (n >= budget) break;
+    // v3.43: a practice trade Josh closed by hand keeps HIS result; the rule's grade is filled in beside it as the what-if.
+    if (a.outcome?.practice_close) {
+      if (a.outcome.rule_grade && a.outcome.rule_grade.state !== "pending") continue;
+      if (!a.plan) continue;
+      n++;
+      const g = await evalIdea({ ...a, outcome: null }).catch(() => null);
+      if (g && ["win", "loss", "scratch", "unscored"].includes(g.state))
+        await db("otto_actions?id=eq." + a.id + "&outcome->>practice_close=eq.true", { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ outcome: { ...a.outcome, rule_grade: { state: g.state, pnl_est: g.pnl_est ?? null, r: g.r ?? null } } }) }).catch(() => {});
+      continue;
+    }
     if (!a.plan || (a.outcome && ["win", "loss", "scratch", "unscored"].includes(a.outcome.state))) continue;
     if (!(a.calls || []).some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open"))) continue;
     n++;
     const o = await evalIdea(a).catch(() => null);
     if (o && ["win", "loss", "scratch", "unscored"].includes(o.state))
-      await db("otto_actions?id=eq." + a.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ outcome: o }) }).catch(() => {});
+      // v3.43: the extra filter means a hand close that landed while this was grading is never overwritten
+      await db("otto_actions?id=eq." + a.id + "&outcome->>practice_close=is.null", { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ outcome: o }) }).catch(() => {});
   }
   return { ok: true, graded: n };
 }
@@ -3048,6 +3059,8 @@ export function scoreRows(ideas: any[], pnlBy: Record<string, number>) {
     practice: isPracticeCard(a), override: !!a.plan?.override, override_read: a.plan?.override_read ?? null,
     why: a.plan?.josh_why ? { setup: a.plan.josh_why.setup, why_now: a.plan.josh_why.why_now, kills: a.plan.josh_why.kills } : null,
     why_not: a.plan?.josh_reject_why?.why_not ?? null, exit_why: a.plan?.josh_exit_why?.text ?? null,
+    // v3.43: a practice trade Josh closed by hand, and what the rule would have done
+    hand_close: a.outcome?.practice_close ? (a.outcome.closed_by || true) : null, rule_state: a.outcome?.rule_grade?.state && a.outcome.rule_grade.state !== "pending" ? a.outcome.rule_grade.state : null, rule_est: a.outcome?.rule_grade?.pnl_est ?? null,
   }));
 }
 async function scorecard() {
@@ -4779,6 +4792,104 @@ export async function whyOut(body: any, who: string) {
   if (!patched.length) return { ok: false, error: "No card found for that trade." };
   await activity("card", `Why out (${rec.by}): ${text}`, rec.by).catch(() => {});
   return { ok: true, cards: patched, why: rec };
+}
+
+
+/* ===================================================================== v3.43 Close Now on PRACTICE trades
+   21 Oct 2026 (Ifoma: "everything pretty much the same experience, paper trade or not"; mockup v343-practice-close-now approved).
+   A practice trade is an otto_actions card with status paper_taken and plan.paper_fill (the pretend fill at the ask when Josh approved).
+   Before v3.43 it was scored only by rule (gradeIdea). Now it also shows as IN A TRADE with a live option price, and Josh can close it:
+   the practice book then counts the SELL AT THE LIVE BID at his tap (decided 21 Oct), and the rule's own grade is kept as a what-if
+   (outcome.rule_grade). NOTHING is sent to Robinhood: only a quote read. No readable bid = refuse (never guess a price).
+   The live Close Now code (closeByButton / closeNow) is NOT touched. Practice rows carry option_id "P:<card id>" so the app's
+   existing button works; the route in front of closeByButton sends a "P:" id here. */
+const PRAC_PREFIX = "P:";
+const practiceFinal = (a: any) => !!(a?.outcome && (["win", "loss", "scratch", "unscored"].includes(a.outcome.state) || a.outcome.practice_close));
+const practiceLeg = (a: any) => (a?.calls || []).flatMap((c: any) => c?.args?.legs || []).find((l: any) => l?.position_effect === "open") || null;
+const practiceLabel = (t: any) => String(t || "").replace(/^\s*(PAPER|PRACTICE|LIVE)(\s*[·-]\s*[A-Z]+)?\s*[—-]\s*/i, "").trim().slice(0, 40) || "practice trade";
+/* The practice trades Josh took today that are still open (not scored by rule, not closed by hand). Never reads Robinhood account data. */
+export async function practiceOpen(): Promise<any[]> {
+  const since = new Date(Date.now() - 20 * 3600e3).toISOString();
+  const rows: any[] = (await db(`otto_actions?select=id,title,created_at,decided_by,plan,outcome,calls,exit,status&status=eq.paper_taken&created_at=gte.${since}&order=created_at.desc&limit=8`).catch(() => [])) || [];
+  const today = etParts().date, out: any[] = [];
+  for (const a of rows) {
+    if (practiceFinal(a)) continue;
+    const pf = a.plan?.paper_fill || {};
+    if (!pf.at || etParts(new Date(pf.at)).date !== today) continue;
+    out.push(a);
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+export async function tradeLivePractice() {
+  const acts = await practiceOpen();
+  const trades: any[] = [];
+  for (const a of acts) {
+    const p = a.plan || {}, pf = p.paper_fill || {}, leg = practiceLeg(a), optId = String(leg?.option_id || "");
+    const sym = String(p.tv_symbol || "").split(":").pop()?.toUpperCase() || "";
+    const [qs, bs] = await Promise.all([
+      optId ? settle((async () => mcpJson(await withTimeout(call("rh", "get_option_quotes", { instrument_ids: [optId] }), 5000, "practice quote")))()) : Promise.resolve({ ok: false, error: "no option on the card" } as any),
+      sym ? settle(rhBars([sym], "10minute", new Date(Date.now() - 8 * 3600e3).toISOString())) : Promise.resolve({ ok: false } as any),
+    ]);
+    const r0 = qs.ok ? (qs.v?.data?.results || [])[0] : null, q = r0?.quote || r0 || null;
+    const bid = cnN0(q?.bid_price), ask = cnN0(pf.ask);
+    const bars: Bar[] = ((bs.ok ? bs.v[sym] : null) || []).slice(-40);
+    const dir = p.direction === "down" ? "down" : "up";
+    trades.push({
+      practice: true, card_id: a.id, option_id: PRAC_PREFIX + a.id, sym, qty: 1, exp: null, type: null,
+      label: practiceLabel(a.title), entry: ask, entry_src: "practice", opened_at: pf.at || null,
+      bid: bid != null && bid > 0 ? bid : null, ask: null, quote_at: q?.updated_at || null,
+      est_pnl: bid != null && bid > 0 && ask != null ? cnR2((bid - ask) * 100) : null,
+      under: bars.length ? bars[bars.length - 1].c : null, under_entry: cnN0(pf.underlying),
+      bars: bars.map((b) => [b.t, b.o, b.h, b.l, b.c]),
+      plan: cnN0(p.stop) != null && cnN0(p.tp1) != null ? { dir, wrong_if: cnN0(p.stop), tp1: cnN0(p.tp1), tf: Number(p.wrong_tf || a.exit?.wrong_tf) === 5 ? 5 : 15, card_id: a.id, title: a.title } : null,
+      quote_error: qs.ok ? null : String(qs.error || "").slice(0, 120),
+    });
+  }
+  return trades;
+}
+/* trade_live for the Desk: the real list exactly as before, plus the open practice trades. One failing side never hides the other. */
+export async function tradeLiveAll() {
+  const [real, prac] = await Promise.all([
+    tradeLive().catch((e) => ({ ok: false, error: String((e as Error)?.message || e).slice(0, 160), trades: [] as any[], rth: rthNow(), at: new Date().toISOString() } as any)),
+    tradeLivePractice().catch(() => [] as any[]),
+  ]);
+  return { ...real, trades: [...(real.trades || []), ...prac] };
+}
+export async function closePractice(body: any, who: string) {
+  const raw = String(body?.option_id || "");
+  const cardId = raw.startsWith(PRAC_PREFIX) ? raw.slice(PRAC_PREFIX.length) : "";
+  if (!/^[0-9a-f-]{36}$/i.test(cardId)) return { ok: false, error: "That practice trade was not found." };
+  const human = String(body?.author || "").replace(/[^A-Za-z .'-]/g, "").trim().slice(0, 30) || "Josh";
+  if (CLOSING.has(raw)) return { ok: false, error: "A close for this practice trade is already running." };
+  CLOSING.add(raw);
+  try {
+    if (!rthNow()) return { ok: false, error: "Market is closed. Close Now works 9:30 AM to 4:00 PM ET. The practice trade stays open until it is scored at the close." };
+    const a = (await db("otto_actions?id=eq." + cardId + "&select=*").catch(() => []))?.[0];
+    if (!a || a.status !== "paper_taken") return { ok: false, error: "That practice trade was not found." };
+    if (practiceFinal(a)) return { ok: false, error: "This practice trade is already closed." };
+    const p = a.plan || {}, pf = p.paper_fill || {}, leg = practiceLeg(a), entry = cnN0(pf.ask);
+    if (!leg?.option_id || entry == null) return { ok: false, error: "This practice trade has no saved fill, so it cannot be closed by hand. It will be scored by its rules." };
+    let bid: number | null = null;
+    try {
+      const q = (mcpJson(await withTimeout(call("rh", "get_option_quotes", { instrument_ids: [leg.option_id] }), 5000, "practice close quote"))?.data?.results || [])[0];
+      bid = cnN0((q?.quote || q)?.bid_price);
+    } catch { /* handled below: no bid = refuse */ }
+    if (bid == null || bid <= 0) return { ok: false, error: "Price unavailable right now, so nothing was closed. The practice trade is still open. Try again in a few seconds." };
+    const pnl = Math.round((bid - entry) * 100), state = pnl > 0 ? "win" : pnl < 0 ? "loss" : "scratch";
+    const nowIso = new Date().toISOString();
+    const outcome = { state, pnl_est: pnl, r: null, at: Math.round(Date.now() / 1000), entry: cnN0(pf.underlying), practice_close: true, entry_px: cnR2(entry), exit_px: cnR2(bid), closed_by: human, closed_at: nowIso,
+      rule_grade: { state: "pending" } };
+    // Only one writer wins: refuse if it was closed or scored in the meantime.
+    const w = await db("otto_actions?id=eq." + cardId + "&status=eq.paper_taken&outcome->>practice_close=is.null", { method: "PATCH", body: JSON.stringify({ outcome }) }).catch(() => null);
+    if (!w?.[0]) return { ok: false, error: "This practice trade changed while you were closing it (it may already be closed). Check the Scoreboard." };
+    const lab = practiceLabel(a.title), res = `${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl)}`;
+    await activity("card", `Closed by ${human} (Close Now, practice): ${lab} at $${bid.toFixed(2)}, practice result ${res}`, human, "pclose|" + cardId).catch(() => {});
+    await logDesk("system", "Otto", `🔴 ${human} closed the practice trade ${lab} with Close Now. Sold at $${bid.toFixed(2)} (live sell price), pretend fill was $${entry.toFixed(2)}: practice result ${res}. Nothing was sent to Robinhood. The practice book counts this, and the rule's own result is kept beside it as a what-if.`, cardId).catch(() => {});
+    return { ok: true, practice: true, title: a.title, card: cardId, state: "filled", qty: 1, fill_px: cnR2(bid), entry_px: cnR2(entry), pnl, by: human };
+  } catch (e) {
+    return { ok: false, error: String((e as Error)?.message || e).slice(0, 300) };
+  } finally { CLOSING.delete(raw); }
 }
 
 // Scheduled / triggered check of everything open in the Agentic account.
@@ -7329,12 +7440,12 @@ Deno.serve(async (req) => {
       if (fn === "act") return json({ ok: true, action: await actOn(String(body.id || ""), String(body.decision || ""), who, body.decision === "approve" ? body.why : (body.why_not ?? body.why)) });
       if (fn === "why_out") return json(await whyOut(body, who));                                   // v3.41: the line after Close Now
       if (fn === "panel") return json(await panel());
-      if (fn === "trade_live") return json(await tradeLive());
+      if (fn === "trade_live") return json(await tradeLiveAll());                                                             // v3.43: + open practice trades
       if (fn === "coach_log") return json({ ok: true, ...(await coachLog(new URL(req.url).searchParams.get("build") === "1")) });
       if (fn === "report_card") return json({ ok: true, ...(await reportCard(Deno.env.get("ANTHROPIC_KEY") || "", new URL(req.url).searchParams.get("build") === "1")) });   // v3.41   // v3.37
       if (fn === "quiz_list") return json(await quizList());                                                                          // v3.38
       if (fn === "quiz_grade") { const k = Deno.env.get("ANTHROPIC_KEY"); if (!k) return json({ ok: false, error: "ANTHROPIC_KEY secret is not set" }, 500); return json(await quizGrade(body, who, k)); }
-      if (fn === "close_now") return json(await closeByButton(body, who));
+      if (fn === "close_now") return json(String(body?.option_id || "").startsWith(PRAC_PREFIX) ? await closePractice(body, who) : await closeByButton(body, who));   // v3.43: "P:" = practice
       // ---- v3.1
       if (fn === "sentiment") return json(await sentimentNow(new URL(req.url).searchParams.get("force") === "1"));
       if (fn === "market_desk") return json(await marketDesk());
