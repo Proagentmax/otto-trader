@@ -5542,7 +5542,7 @@ async function watchFromSignals(rows: any[]) {
 }
 const WATCH_TOOL = {
   name: "add_watch_level",
-  description: "Put a price level on the Watcher's list for today. The server checks it every minute on 5- and 10-minute closes and wakes you with the trigger (break-and-close, pullback-and-hold, rejection) so you can build the card. Use when Ifoma or Josh ask you to watch a level, or when you want a level watched. Never say you're watching something you didn't add here.",
+  description: "Put a price level on the Watcher's list for today. The server checks it every minute on the 10-minute close (House Rule 2) and wakes you with the trigger (break-and-close, pullback-and-hold, rejection) so you can build the card. Use when Ifoma or Josh ask you to watch a level, or when you want a level watched. Never say you're watching something you didn't add here.",
   input_schema: { type: "object", properties: {
     ticker: { type: "string" }, level: { type: "number" },
     dir: { type: "string", enum: ["up", "down", "both"], description: "up = calls side (break above / hold above), down = puts side (break below / rejection), both" },
@@ -5550,6 +5550,7 @@ const WATCH_TOOL = {
 };
 
 /* ------------------------------------------------------------ the minute tick */
+export const WATCH_TF: 5 | 10 = 10;     // v3.42: the bar whose close fires a Watcher card (10 = House Rule 2; 5 = the old 5-or-10 behaviour)
 export async function watchTick(now = Date.now()) {
   const c = marketClock(new Date(now));
   if (c.status !== "open") return { ok: true, skipped: c.status };
@@ -5569,8 +5570,12 @@ export async function watchTick(now = Date.now()) {
       const prev = r.fired?.[d];
       // One CARD per level per side per day. A fire Jarvis passed on (no card) re-arms after 15 minutes.
       if (prev && (prev.cards?.length || !prev.read || now - Date.parse(prev.at) < 15 * 60e3)) continue;
-      const hit = evalLevel(Number(r.level), d, bars5, 5, { now, earliestMin: earliest }) ||
-        evalLevel(Number(r.level), d, b10[r.ticker] || [], 10, { now, earliestMin: earliest });
+      // v3.42 (Ifoma, 20 Oct night: "10-minute close only"): Josh trades the 10-minute candle (House Rule 2) and was rejecting
+      // correct 5-minute cards as "still forming" (4 rejected winners on 20 Oct). Cards fire on the 10-minute close only; the
+      // 5-minute bars still feed the last-price line and the chop count. No 10-minute bars = no card (never a silent 5-minute fallback).
+      const hit = WATCH_TF === 10
+        ? evalLevel(Number(r.level), d, b10[r.ticker] || [], 10, { now, earliestMin: earliest })
+        : (evalLevel(Number(r.level), d, bars5, 5, { now, earliestMin: earliest }) || evalLevel(Number(r.level), d, b10[r.ticker] || [], 10, { now, earliestMin: earliest }));
       if (!hit) continue;
       const fire = { at: new Date(now).toISOString(), trigger: hit.trigger, tf: hit.tf, bar: hit.bar, close_at: hit.close_at,
         crossings: crossings(Number(r.level), completedBars(bars5, 5, now)) };

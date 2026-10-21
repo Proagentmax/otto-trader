@@ -83,6 +83,19 @@ async function fakeDb(path: string, init: RequestInit = {}) {
 /* ---------------- fake Robinhood / TradingView ---------------- */
 import { SPY_5M, NVDA_5M, toRh } from "./fixtures_2026-10-06.ts";
 const FIX: Record<string, any> = { SPY: toRh("SPY", SPY_5M), NVDA: toRh("NVDA", NVDA_5M) };
+// v3.42: the Watcher fires on 10-minute closes, so the fake answers a 10minute request with the 5-minute fixture paired up (9:30+9:35 → the 9:30 bar, …).
+function to10(f: any) {
+  if (!f) return f;
+  const out: any[] = [];
+  for (const b of f.bars) {
+    const m = new RealDate(b.begins_at).getUTCMinutes();
+    const prev = out[out.length - 1];
+    if (m % 10 !== 0 && prev && new RealDate(b.begins_at).getTime() - new RealDate(prev.begins_at).getTime() === 5 * 60e3) {
+      prev.high_price = String(Math.max(+prev.high_price, +b.high_price)); prev.low_price = String(Math.min(+prev.low_price, +b.low_price)); prev.close_price = b.close_price; prev.volume = String((+prev.volume || 0) + (+b.volume || 0));
+    } else out.push({ ...b });
+  }
+  return { ...f, interval: "10minute", bars: out };
+}
 const ACCT = "945257012";
 const OPT = "opt-spy-781c-1009";
 let orders: any[] = [];
@@ -116,7 +129,7 @@ async function fakeCall(service: string, tool: string, args: any) {
     case "mcp-tv-create-alert": return j({ alert_id: 1000 + (++ID) });
     case "mcp-tv-get-economic-calendar": return j({ events: [] });
     case "get_realized_pnl": return j({ data: { data_points: [] } });
-    case "get_equity_historicals": return j({ data: { results: (args.symbols || []).map((sy: string) => FIX[sy]).filter(Boolean) } });
+    case "get_equity_historicals": return j({ data: { results: (args.symbols || []).map((sy: string) => args.interval === "10minute" ? to10(FIX[sy]) : FIX[sy]).filter(Boolean) } });
     default: return j({});
   }
 }
@@ -379,21 +392,21 @@ Deno.test("watcher: Signal words become levels with a side", () => {
   assert(M.levelsFromWords("AMD PLAYING OUT").length === 0, "no numbers, no levels");
 });
 Deno.test("watcher tick: two overlapping cron runs fire ONE trigger; Desk line posted; Jarvis asked", async () => {
-  reset(); setNow("2026-10-06T13:45:30Z");
+  reset(); setNow("2026-10-06T13:50:30Z");   // v3.42: the 10-minute 9:40 bar closes 9:50 (779.05 over 778.60); the 5-minute 9:45 fire is gone
   T.otto_watch.push({ id: 7, day: "2026-10-06", ticker: "SPY", level: 778.6, dir: "up", source: "signal", status: "watching", fired: {} });
   claudeScript = () => textReply("Checked it. READ: SPY broke 778.60 on the 9:40 bar. No card — first 30 minutes and the banner is mixed.");
   const [a, b] = await Promise.all([M.watchTick(NOW), M.watchTick(NOW)]);
   const hits = [...(a.hits || []), ...(b.hits || [])];
   assert(hits.length === 1 && /SPY 778.6 up break/.test(hits[0]), JSON.stringify([a, b]));
   await sleep(150);
-  assert(/👁 Watcher\] SPY 778.6 — break-and-close/.test(deskText()), deskText());
+  assert(/👁 Watcher\] SPY 778.6 — break-and-close \(calls side ▲\) on the 10-minute bar/.test(deskText()), deskText());
   assert(/Jarvis · watcher\] For: 👁 SPY 778.6 ▲ break-and-close\nSPY broke 778.60/.test(deskText()), deskText());
   assert(T.otto_watch[0].fired.up.read && !T.otto_watch[0].fired.up.cards.length, JSON.stringify(T.otto_watch[0].fired));
 });
 Deno.test("watcher tick: a passed trigger re-arms after 15 min and the 10:30 bounce fires", async () => {
-  reset(); setNow("2026-10-06T14:35:20Z");
+  reset(); setNow("2026-10-06T14:40:20Z");   // v3.42: the 10-minute 10:30 bar closes 10:40 (held 778.60, closed 779.69)
   T.otto_watch.push({ id: 8, day: "2026-10-06", ticker: "SPY", level: 778.6, dir: "up", source: "signal", status: "watching",
-    fired: { up: { at: "2026-10-06T13:45:30.000Z", trigger: "break", read: "no card", cards: [] } } });
+    fired: { up: { at: "2026-10-06T13:50:30.000Z", trigger: "break", read: "no card", cards: [] } } });
   claudeScript = () => textReply("READ: Held 778.60 and closed green. No card in this test.");
   const r: any = await M.watchTick(NOW);
   assert(r.hits?.[0] === "SPY 778.6 up pullback-hold", JSON.stringify(r));
@@ -2408,4 +2421,22 @@ Deno.test("v3.35: the practice trade is graded from Josh's tap (not from when Ja
   const o: any = await M.evalIdeaForTest(row);
   assert(o.state === "loss" && o.entry === 780.25, "graded after the tap, not a win from the earlier spike: " + JSON.stringify(o));
   assert(o.pnl_est < 0 && o.pnl_est >= -360, "loss capped at the paid ask $3.60 x 100: " + o.pnl_est);
+});
+
+Deno.test("v3.42 watcher: cards fire on the 10-minute close only — at 9:45 (5-minute break, 10-minute bar still open) nothing fires; at 9:50 it does; no 10-minute bars = no card", async () => {
+  reset(); setNow("2026-10-06T13:45:30Z");
+  T.otto_watch.push({ id: 42, day: "2026-10-06", ticker: "SPY", level: 778.6, dir: "up", source: "signal", status: "watching", fired: {} });
+  const a: any = await M.watchTick(NOW);
+  assert(a.levels === 1 && !(a.hits || []).length, "9:45: the 5-minute fire is gone: " + JSON.stringify(a));
+  assert(M.WATCH_TF === 10, "WATCH_TF is 10");
+  setNow("2026-10-06T13:50:30Z");
+  claudeScript = () => textReply("READ: no card in this test.");
+  const b: any = await M.watchTick(NOW);
+  assert((b.hits || [])[0] === "SPY 778.6 up break", "9:50: the 10-minute bar fires: " + JSON.stringify(b));
+  reset(); setNow("2026-10-06T13:50:30Z"); (M as any).clearCacheForTest();   // the 45-s bar cache would otherwise serve the previous 10-minute bars
+  T.otto_watch.push({ id: 43, day: "2026-10-06", ticker: "SPY", level: 778.6, dir: "up", source: "signal", status: "watching", fired: {} });
+  const keep = callHook; callHook = (tool: string, args: any) => tool === "get_equity_historicals" && args.interval === "10minute" ? { data: { results: [] } } : null;
+  const c: any = await M.watchTick(NOW);
+  callHook = keep;
+  assert(!(c.hits || []).length, "no 10-minute bars = no card, never a silent 5-minute fallback: " + JSON.stringify(c));
 });

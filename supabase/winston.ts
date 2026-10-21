@@ -304,7 +304,9 @@ export type GateCtx = { rules: Rule[]; d: Decision; cap: number; maxLoss: number
 export type GateHit = { rule: string; why: string; soft: boolean };
 // HARD gates always block: the plan itself (W1), risk and size (W2), cash, the max open count and the time windows.
 // SOFT gates (W3, W12-W15, W20-W23) block in strict mode; in data mode they STAMP the trade (flags) so the report can score each gate.
-const SOFT = new Set(["W3", "W12", "W13", "W14", "W15", "W20", "W21", "W22", "W23", "fact"]);
+// v3.42 (Ifoma, 20 Oct night): W12 (spread) is HARD in every mode — a spread is a cost, not a judgment. The two widest entries
+// in Winston's history (CRM 24%, AMGN 77%) were his two biggest losses (−$509) while the other twelve were 0–8%.
+const SOFT = new Set(["W3", "W13", "W14", "W15", "W20", "W21", "W22", "W23", "fact"]);
 export function runGatesAll(c: GateCtx): GateHit[] {
   const R = c.rules, hits: GateHit[] = [];
   const hit = (rule: string, why: string) => hits.push({ rule, why, soft: !!c.dataMode && SOFT.has(rule) });
@@ -394,8 +396,9 @@ export function thesisVwapWrong(thesis: string, spot: number, vwap: number | nul
   for (const c of clauses) {
     const names = (c.match(/\b[A-Z]{2,5}\b/g) || []).filter((w) => !["VWAP", "ORB", "EMA", "SMA", "RSI", "TP", "HOD", "LOD", "ET", "AM", "PM", "OI", "IV", "ATR", "OB", "NY", "CBC"].includes(w));
     if (names.length && me && !names.includes(me)) continue;            // about another name (SPY, QQQ, …) — not our fact
-    if (/\b(below|under|beneath)\s+(the\s+)?(session\s+|day\s+)?vwap/i.test(c) && spot > num(vwap)) return `thesis says below VWAP but price ${spot} is above VWAP ${round2(num(vwap))}`;
-    if (/\b(above|over|reclaimed)\s+(the\s+)?(session\s+|day\s+)?vwap/i.test(c) && spot < num(vwap)) return `thesis says above VWAP but price ${spot} is below VWAP ${round2(num(vwap))}`;
+    const quote = ` — "${c.slice(0, 90)}${c.length > 90 ? "…" : ""}"`;   // v3.42: the stamp quotes the clause it fired on, so it can be audited
+    if (/\b(below|under|beneath)\s+(the\s+)?(session\s+|day\s+)?vwap/i.test(c) && spot > num(vwap)) return `thesis says below VWAP but price ${spot} is above VWAP ${round2(num(vwap))}${quote}`;
+    if (/\b(above|over|reclaimed)\s+(the\s+)?(session\s+|day\s+)?vwap/i.test(c) && spot < num(vwap)) return `thesis says above VWAP but price ${spot} is below VWAP ${round2(num(vwap))}${quote}`;
   }
   return null;
 }
@@ -719,7 +722,7 @@ export async function tryOpen(ctx: Ctx, d: Decision, spot: number, coachCall: bo
   const stamps = [...pick.flags, ...hits.filter((h) => h.soft).map((h) => `${h.rule}: ${h.why}`)];
   const timeExit = Math.max(d.time_exit_min || num(cfg.default_time_exit_min) || 180, num(cfg.min_time_exit_min) || 0);
   const plan = { dir: d.side === "call" ? "up" : "down", wrong_if_level: d.wrong_if_level, target_level: d.target_level, time_exit_min: timeExit,
-    stop_option: risk.stop_option, planned_loss: risk.planned_loss, thesis: String(d.thesis || "").slice(0, 400), picked_by: pick.by, delta: q!.delta || row.delta,
+    stop_option: risk.stop_option, planned_loss: risk.planned_loss, thesis: String(d.thesis || "").slice(0, 1500), picked_by: pick.by,   // v3.42: was 400 — too short to audit a fact stamp delta: q!.delta || row.delta,
     contract: { exp: row.exp, strike: row.strike }, last_mark: { bid: ef.bid, ask: ef.ask, under: spot, at: new Date(nowMs()).toISOString() },
     mode: dataMode ? "data" : "strict", stamps, index: ctx.index ?? null, vwap_at_entry: ctx.vwaps?.[d.ticker] ?? null };
   const ideaId = await recordIdea(day, d, "taken", (stamps.length ? "[stamped: " + stamps.map((s) => s.split(":")[0]).join(", ") + "] " : "") + (d.thesis || "taken"), plan);

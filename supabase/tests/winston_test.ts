@@ -581,15 +581,19 @@ Deno.test("v3.36 gates: soft gates stamp in data mode and block in strict mode; 
     openCount: 0, maxOpen: 3, tickerTakenToday: true, sameTickerOpen: true, spreadPct: 30, quoteAgeSec: 3, blackout: null, coachCall: false, etMin: 620, lastEntryMin: 930, ownFromMin: 600, coachFromMin: 571,
     dataMode: true, reentryBeyondExit: "re-entry above the last exit", atCoachLevel: "within $0.5 of 770", indexDisagree: "SPY above VWAP", thesisWrong: "says below VWAP but price is above", coachResultAfter: "post 207 says sold" };
   const hits = X.runGatesAll(base);
-  eq(hits.map((h: any) => h.rule).sort(), ["W12", "W15", "W20", "W21", "W23", "W3", "fact", "fact"].sort(), "every soft gate fires");
-  assert(hits.every((h: any) => h.soft), "all soft in data mode");
-  assert(X.runGates(base) === null, "data mode: nothing blocks");
-  assert(X.runGates({ ...base, dataMode: false })?.rule === "W3", "strict mode: the first soft gate blocks");
+  eq(hits.map((h: any) => h.rule).sort(), ["W12", "W15", "W20", "W21", "W23", "W3", "fact", "fact"].sort(), "every gate fires");
+  // v3.42: W12 (spread) is HARD in every mode; the rest stay soft in data mode
+  assert(hits.filter((h: any) => h.rule !== "W12").every((h: any) => h.soft), "all soft in data mode except W12");
+  assert(X.runGates(base)?.rule === "W12", "data mode: the spread still blocks (AMGN 77% on 20 Oct)");
+  const tight: any = { ...base, spreadPct: 4 };
+  assert(X.runGates(tight) === null, "data mode, spread under the threshold: nothing blocks");
+  assert(X.runGates({ ...tight, dataMode: false })?.rule === "W3", "strict mode: the first soft gate blocks");
+  assert(X.runGates({ ...base, dataMode: false })?.rule === "W3" || X.runGates({ ...base, dataMode: false })?.rule === "W12", "strict mode blocks either way");
   assert(X.runGates({ ...base, planned_loss: 500 })?.rule === "W2", "W2 is hard even in data mode");
   assert(X.runGates({ ...base, openCount: 3 })?.rule === "max_open", "max_open is hard even in data mode");
   assert(X.runGates({ ...base, cost: 4100 })?.rule === "cash" || X.runGates({ ...base, cost: 4100 })?.rule === "W2", "cash is hard");
   assert(X.runGates({ ...base, etMin: 580 })?.rule === "time", "time window is hard");
-  const off: any = { ...base, rules: rules(["W1", "W2"]), dataMode: false };
+  const off: any = { ...base, rules: rules(["W1", "W2"]), dataMode: false, spreadPct: 4 };
   eq(X.runGatesAll(off).map((h: any) => h.rule), ["fact", "fact"], "rules OFF never fire; the fact checks are not rules and always stamp");
   assert(X.runGates(off)?.rule === "fact", "strict mode: a wrong fact in the thesis blocks (data mode only stamps it)");
 });
@@ -635,6 +639,7 @@ Deno.test("v3.36 fact checks: thesis vs VWAP, and a 'result' post after the cite
   // v3.41: the 19 Oct false positive — the "below VWAP" was about SPY, the trade was TSLA (above its VWAP, 361.70 vs 359.73)
   eq(X.thesisVwapWrong("TSLA is above VWAP (last close 361.925 vs VWAP 359.73), with three rising 10-min closes. SPY is below VWAP with falling closes, so W23 index-agreement must be checked.", 361.695, 359.73, "TSLA"), null, "SPY clause is not a TSLA fact");
   assert(X.thesisVwapWrong("TSLA is below VWAP and SPY is above VWAP", 361.7, 359.73, "TSLA")?.includes("above VWAP"), "the TSLA clause is still checked");
+  assert(/ — "TSLA is below VWAP/.test(String(X.thesisVwapWrong("TSLA is below VWAP and SPY is above VWAP", 361.7, 359.73, "TSLA"))), "v3.42: the stamp quotes the clause it fired on");
   assert(X.thesisVwapWrong("price is below VWAP, rolling over", 723.7, 720.91, "QQQ")?.includes("above VWAP"), "no ticker in the clause = about ours");
   eq(X.thesisVwapWrong("QQQ is below VWAP and rolling over", 719, 720.91, "QQQ"), null, "true statement with the ticker");
   const posts = [{ id: 206, ticker: "SPY", kind: "level", words: "SEE HOW SPY PLAYED THE BOUNCE RIGHT UP TO 768 AND NOW WE STOP" },
