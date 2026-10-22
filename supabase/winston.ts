@@ -1064,7 +1064,7 @@ export async function stateForApp() {
     db("winston_trades?select=*&order=id.desc&limit=400"),
     db("winston_ideas?select=*&order=id.desc&limit=200"),
     db("winston_days?select=day,start_balance,end_balance,report,routine,sentiment,ai,kill&order=day.desc&limit=60"),
-    getLimits(),
+    getLimits(cfg.limits_override),
   ]);
   const eq = await equityState(cfg, day);
   const lim = limitsState(L, eq);
