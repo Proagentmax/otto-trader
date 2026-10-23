@@ -582,17 +582,21 @@ Deno.test("v3.36 gates: soft gates stamp in data mode and block in strict mode; 
     dataMode: true, reentryBeyondExit: "re-entry above the last exit", atCoachLevel: "within $0.5 of 770", indexDisagree: "SPY above VWAP", thesisWrong: "says below VWAP but price is above", coachResultAfter: "post 207 says sold" };
   const hits = X.runGatesAll(base);
   eq(hits.map((h: any) => h.rule).sort(), ["W12", "W15", "W20", "W21", "W23", "W3", "fact", "fact"].sort(), "every gate fires");
-  // v3.42: W12 (spread) is HARD in every mode; the rest stay soft in data mode
-  assert(hits.filter((h: any) => h.rule !== "W12").every((h: any) => h.soft), "all soft in data mode except W12");
-  assert(X.runGates(base)?.rule === "W12", "data mode: the spread still blocks (AMGN 77% on 20 Oct)");
-  const tight: any = { ...base, spreadPct: 4 };
-  assert(X.runGates(tight) === null, "data mode, spread under the threshold: nothing blocks");
-  assert(X.runGates({ ...tight, dataMode: false })?.rule === "W3", "strict mode: the first soft gate blocks");
+  // v3.42: W12 (spread) is HARD in every mode; v3.45: W3 (no adding) is HARD in every mode; the rest stay soft in data mode
+  assert(hits.filter((h: any) => h.rule !== "W12" && h.rule !== "W3").every((h: any) => h.soft), "all soft in data mode except W12 and W3");
+  assert(hits.filter((h: any) => h.rule === "W12" || h.rule === "W3").every((h: any) => !h.soft), "W12 and W3 are never soft");
+  assert(X.runGates(base)?.rule === "W3" || X.runGates(base)?.rule === "W12", "data mode: the hard gates still block");
+  assert(X.runGates({ ...base, spreadPct: 4 })?.rule === "W3", "data mode: already in the ticker blocks (22 Oct SPY 760P/759P adds)");
+  const tight: any = { ...base, spreadPct: 4, sameTickerOpen: false };
+  assert(X.runGates(tight) === null, "data mode, spread under the threshold and not in the ticker: nothing blocks");
+  assert(X.runGates({ ...tight, sameTickerOpen: true, dataMode: false })?.rule === "W3", "strict mode: W3 blocks");
+  assert(X.runGates({ ...tight, dataMode: false })?.rule === "W15", "strict mode: the first soft gate blocks");
   assert(X.runGates({ ...base, dataMode: false })?.rule === "W3" || X.runGates({ ...base, dataMode: false })?.rule === "W12", "strict mode blocks either way");
-  assert(X.runGates({ ...base, planned_loss: 500 })?.rule === "W2", "W2 is hard even in data mode");
-  assert(X.runGates({ ...base, openCount: 3 })?.rule === "max_open", "max_open is hard even in data mode");
-  assert(X.runGates({ ...base, cost: 4100 })?.rule === "cash" || X.runGates({ ...base, cost: 4100 })?.rule === "W2", "cash is hard");
-  assert(X.runGates({ ...base, etMin: 580 })?.rule === "time", "time window is hard");
+  // v3.45: these run on `tight` (not in the ticker) — with W3 hard, `base` would stop at W3 first
+  assert(X.runGates({ ...tight, planned_loss: 500 })?.rule === "W2", "W2 is hard even in data mode");
+  assert(X.runGates({ ...tight, openCount: 3 })?.rule === "max_open", "max_open is hard even in data mode");
+  assert(X.runGates({ ...tight, cost: 4100 })?.rule === "cash" || X.runGates({ ...tight, cost: 4100 })?.rule === "W2", "cash is hard");
+  assert(X.runGates({ ...tight, etMin: 580 })?.rule === "time", "time window is hard");
   const off: any = { ...base, rules: rules(["W1", "W2"]), dataMode: false, spreadPct: 4 };
   eq(X.runGatesAll(off).map((h: any) => h.rule), ["fact", "fact"], "rules OFF never fire; the fact checks are not rules and always stamp");
   assert(X.runGates(off)?.rule === "fact", "strict mode: a wrong fact in the thesis blocks (data mode only stamps it)");

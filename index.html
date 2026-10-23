@@ -913,9 +913,9 @@ svg.nc-svg{width:100%;height:auto;display:block}
   .dk-rail button,.dk-rail .dk-tabs button{display:none;width:auto;flex:1 1 0;min-height:56px;font-size:11.5px;border-radius:12px}
   .dk-rail button svg{width:22px;height:22px;margin-bottom:3px}
   /* v3.42 (20 Oct): Winston joins the phone strip so Ifoma can see when he is in a trade from his phone */
-  .dk-rail .dk-tabs button[data-go="desk"],.dk-rail .dk-tabs button[data-go="scoreboard"],.dk-rail .dk-tabs button[data-go="prep"],.dk-rail .dk-tabs button[data-go="winston"],.dk-rail button[data-go="settings"]{display:grid}
+  .dk-rail .dk-tabs button[data-go="desk"],.dk-rail .dk-tabs button[data-go="scoreboard"],.dk-rail .dk-tabs button[data-go="prep"],.dk-rail .dk-tabs button[data-go="winston"],.dk-rail .dk-tabs button[data-go="homework"],.dk-rail button[data-go="settings"]{display:grid}
   .dk-rail .dk-tabs button[hidden]{display:none!important}
-  .dk-rail .dk-tabs button[data-go="desk"]{order:1}.dk-rail .dk-tabs button[data-go="scoreboard"]{order:2}.dk-rail .dk-tabs button[data-go="prep"]{order:3}.dk-rail .dk-tabs button[data-go="winston"]{order:4}.dk-rail button[data-go="settings"]{order:5}
+  .dk-rail .dk-tabs button[data-go="desk"]{order:1}.dk-rail .dk-tabs button[data-go="scoreboard"]{order:2}.dk-rail .dk-tabs button[data-go="prep"]{order:3}.dk-rail .dk-tabs button[data-go="homework"]{order:4}.dk-rail .dk-tabs button[data-go="winston"]{order:5}.dk-rail button[data-go="settings"]{order:6}
   /* the phone strip sits at the top now */
   .dk-strip{order:-5;position:sticky;top:0;z-index:20;padding:10px 14px}
   .dk-banner{order:-4}
@@ -964,6 +964,29 @@ svg.nc-svg{width:100%;height:auto;display:block}
   /* pages inside the Desk shell */
   .dk-page{padding-bottom:12px}
 }
+
+/* v3.45 (22 Oct 2026, approved mockup v345-homework-mockup.html): Homework — the coach's after-close read */
+.hk-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.hk-bar{height:8px;background:var(--surface-3);border-radius:99px;overflow:hidden;margin-top:8px}.hk-bar i{display:block;height:100%;background:var(--up)}
+.hk-step{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:12px 0;border-top:1px solid var(--rule)}.hk-step:first-child{border-top:0}
+.hk-n{width:26px;height:26px;border-radius:50%;background:var(--surface-3);display:grid;place-items:center;font-size:12.5px;font-weight:700}.hk-n.ok{background:var(--up);color:#000}
+.hk-step h3{font-size:14.5px;margin:2px 0 2px}.hk-hint{font-size:12px;color:var(--ink-3);margin-bottom:6px}
+.hk-auto{font-size:10.5px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+.hk-pills{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.hk-pill{font-size:12px;border:1px solid var(--rule);border-radius:6px;padding:3px 7px;font-family:var(--mono)}
+.hk-step textarea,.hk-lv input,.hk-lv select{width:100%;background:var(--bg,#0B0C0E);color:var(--ink);border:1px solid var(--rule);border-radius:8px;padding:8px;font:inherit;font-size:13.5px}
+.hk-step textarea{min-height:46px;resize:vertical}
+.hk-cnt{font-size:11px;color:var(--ink-3);text-align:right}.hk-cnt.ok{color:var(--up)}
+.hk-seg{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.hk-seg button{border:1px solid var(--rule);background:transparent;color:var(--ink);border-radius:999px;padding:5px 11px;font-size:13px;cursor:pointer}
+.hk-seg button.on.bull{background:var(--up);border-color:var(--up);color:#000}.hk-seg button.on.bear{background:var(--down);border-color:var(--down);color:#fff}
+.hk-lv{display:grid;grid-template-columns:1fr 1fr 110px 34px;gap:6px;margin:5px 0}.hk-lv button{background:transparent;border:1px solid var(--rule);color:var(--ink-3);border-radius:8px;cursor:pointer}
+.hk-tag{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(245,180,0,.16);color:var(--warn);margin-left:6px;letter-spacing:.03em;vertical-align:middle}
+.hk-banner{position:sticky;top:0;z-index:5;border:1px solid rgba(245,180,0,.35);border-left:4px solid var(--warn);background:#2A2412;border-radius:10px;padding:10px 12px;margin:0 0 10px;font-size:13px}
+.hk-banner{display:flex;align-items:center;gap:10px;flex:none!important;height:auto!important;min-height:0!important;padding:8px 10px}.hk-banner span{flex:1}.hk-banner b{color:var(--warn)}.hk-banner button{flex:none;padding:6px 12px}
+.hk-errs{border:1px solid rgba(255,80,0,.4);background:rgba(255,80,0,.08);border-radius:8px;padding:8px 10px;font-size:12.5px;margin-top:10px}
+.hk-week{width:100%;border-collapse:collapse;font-size:13px}.hk-week td,.hk-week th{padding:6px;border-top:1px solid var(--rule);text-align:left}.hk-week th{color:var(--ink-3);font-weight:500}
+.hk-who{display:flex;gap:6px}.hk-who button{border:1px solid var(--rule);background:transparent;color:var(--ink-2);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer}.hk-who button.on{border-color:var(--blue);color:var(--blue)}
+#hkPhone{display:none}
+@media (max-width:1099px){.hk-lv{grid-template-columns:1fr 1fr 96px 30px}#hkPhone.on{display:flex;order:-4;margin:10px 14px 0;position:static}#dkMsgs .hk-banner{display:none}}
 </style>
 </head>
 <body>
@@ -980,6 +1003,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
     <button data-go="winston" title="Winston: a separate paper-only trader on its own $4,000 that collects data"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M9 16l3 2 3-2"/></svg>Winston</button>
     <button data-go="jason"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Calls</button>
     <button data-go="quiz" title="Pop Quiz: the coach's five questions, graded from the calls"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Quiz</button>
+    <button data-go="homework" title="Homework: the coach's after-close read — Otto fills the numbers, you write the read"><svg viewBox="0 0 24 24"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z"/><path d="M8 9h8M8 13h6"/><path d="M4 16a4 4 0 0 1 4-4"/></svg>Homework</button>
     <button data-go="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
     <button data-go="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>Help</button>
     <button data-go="classic" title="The phone layout: Week, Coach, Journal, Market"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Classic</button>
@@ -2407,7 +2431,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.44.0";
+const BUILD="3.45.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3557,7 +3581,7 @@ async function dkOauthReturn(){
    4 Oct 2026, approved mockup otto-v3.1-mockup.html. The sentiment banner
    (Josh's intermarket sheet on live TradingView data, verdict only, no sizing),
    desktop Market / Journal / Review / Score / Jason pages inside the Desk shell. */
-const DK_VIEWS=["desk","scoreboard","charts","prep","market","perf","coach","journal","review","score","playbook","jason","winston","quiz","more","help"];
+const DK_VIEWS=["desk","scoreboard","charts","prep","market","perf","coach","journal","review","score","playbook","jason","winston","quiz","homework","more","help"];
 function dkShow(v){
   if(!DK_VIEWS.includes(v))v="desk";
   DK.view=v;LS.set("dkView",v);
@@ -3566,7 +3590,7 @@ function dkShow(v){
   if(v==="desk"){dkRenderMsgs(true);return}
   const pg=$("#dkPage");pg.scrollTop=0;
   if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see this page.</p></div>`;return}
-  ({scoreboard:dkScoreboard,charts:dkCharts,prep:dkPrep,market:dkMarket,perf:dkPerf,coach:dkCoach,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,winston:()=>dkWinston(),quiz:dkQuiz,more:dkMore,help:dkHelp})[v]();
+  ({scoreboard:dkScoreboard,charts:dkCharts,prep:dkPrep,market:dkMarket,perf:dkPerf,coach:dkCoach,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,winston:()=>dkWinston(),quiz:dkQuiz,homework:()=>dkHomework(),more:dkMore,help:dkHelp})[v]();
   dkSubBar();
 }
 const dkLoading=t=>`<div class="dk-empty" style="margin:60px auto">${esc(t||"Loading…")}</div>`;
@@ -5928,6 +5952,142 @@ async function autoBrain(){
     if(added)toast(added===1?"1 call added to the brain":added+" calls added to the brain");
   }catch(e){}
 }
+
+/* ================================================================ v3.45 HOMEWORK
+   22 Oct 2026, approved mockup v345-homework-mockup.html ("yes we can start with this"). The coach's after-close read
+   (22 Oct 1:1): bonds → indexes → oil vs XOM → dollar/gold/copper/crypto → your call → earnings → QQQ gaps → is-but-shouldn't-be →
+   tomorrow's levels (buy AND sell) on the Watcher. Otto fills the numbers; Josh writes every line (10+ characters).
+   Ifoma: no blocking, ever — a skipped night is FLAGGED: a banner on the Desk, a NO HOMEWORK tag on that day's cards, Baby J's
+   morning read, the Friday report card (20%). Due 9:00 AM. Graded at 4:05 PM from real bars. */
+var HK={j:null,who:null,busy:false,errs:null,saveT:null,saved:null};
+const HK_FIX=v=>esc(v==null?"—":String(v));
+function hkWho(){if(!HK.who)HK.who=LS.get("hkWho","Josh")||"Josh";return HK.who}
+function hkDraft(){const d=LS.get("hkDraft",{})||{};return d[(HK.j&&HK.j.for_day)+"|"+hkWho()]||null}
+function hkCollect(){
+  const j=HK.j||{},ans={};(j.steps||[]).forEach(s=>{if(s.id!=="levels"&&s.id!=="call"){const el=$("#hk_"+s.id);ans[s.id]=el?el.value:""}});
+  const cw=$("#hk_call");ans.call=cw?cw.value:"";
+  const levels=[...document.querySelectorAll(".hk-lv[data-i]")].map(r=>({ticker:(r.querySelector("[data-k=t]").value||"").toUpperCase().trim(),level:r.querySelector("[data-k=l]").value.trim(),dir:r.querySelector("[data-k=d]").value||""}))
+    .filter(x=>x.ticker||x.level||x.dir).map(x=>({...x,level:x.level===""?"":+x.level}));
+  return {author:hkWho(),answers:ans,call:HK.call||null,levels};
+}
+function hkStore(){if(!HK.j)return;const d=LS.get("hkDraft",{})||{};d[HK.j.for_day+"|"+hkWho()]=hkCollect();LS.set("hkDraft",d)}
+function hkAutosave(){hkStore();clearTimeout(HK.saveT);HK.saveT=setTimeout(async()=>{try{await dkApi("hw_save",hkCollect());HK.saved=new Date();const m=$("#hkSaved");if(m)m.textContent="Draft saved "+HK.saved.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}catch(e){}},1500)}
+async function dkHomework(){
+  const pg=$("#dkPage");pg.innerHTML=dkLoading("Loading tonight's homework…");
+  let j;try{j=await dkApi("hw_get",null,"&author="+encodeURIComponent(hkWho()))}catch(e){pg.innerHTML=dkErr(e);return}
+  if(DK.view!=="homework")return;
+  HK.j=j;HK.errs=null;
+  const row=j.row||{},d=hkDraft();
+  HK.call=(d&&d.call)||row.call||null;
+  hkRender();
+}
+function hkPill(r){
+  if(r.price==null)return `<span class="hk-pill mut">${esc(r.label)} —</span>`;
+  const up=(r.chg||0)>=0,cl=r.chg==null?"":up?"up":"dn";
+  const val=r.yld?`${(+r.price).toFixed(3)}%`:(+r.price).toLocaleString("en-US",{maximumFractionDigits:2});
+  const ch=r.chg==null?"":r.yld?` ${up?"▲":"▼"} ${Math.abs(r.chg*100).toFixed(0)} bp`:` ${up?"▲":"▼"} ${Math.abs(r.pct).toFixed(2)}%`;
+  return `<span class="hk-pill ${cl}">${esc(r.label)} ${esc(val)}${esc(ch)}</span>`;
+}
+function hkRender(){
+  const pg=$("#dkPage");if(DK.view!=="homework"||!HK.j)return;
+  const j=HK.j,row=j.row||{},d=hkDraft()||{},ans=Object.assign({},row.answers||{},d.answers||{});
+  const levels=(d.levels&&d.levels.length?d.levels:(row.levels||[])).slice(0,12);
+  const rows=(j.data&&j.data.market&&j.data.market.rows)||[],mis=j.data&&j.data.market&&j.data.market.mismatch;
+  const earn=(j.data&&j.data.earnings)||[];
+  const handed=row.status==="handed_in";
+  const due=new Date(j.due),late=handed&&row.handed_in_at&&Date.parse(row.handed_in_at)>Date.parse(j.due);
+  const dueTxt=due.toLocaleString("en-US",{weekday:"short",hour:"numeric",minute:"2-digit",timeZone:"America/New_York"});
+  const forTxt=new Date(j.for_day+"T12:00:00Z").toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric",timeZone:"UTC"});
+  const need=(j.steps||[]).filter(s=>s.need);
+  const doneStep=s=>s.id==="levels"?levels.some(x=>x.ticker&&+x.level>0&&x.dir):s.id==="call"?!!HK.call&&String(ans.call||"").trim().length>=j.min:String(ans[s.id]||"").trim().length>=j.min;
+  const nDone=need.filter(doneStep).length;
+  const pills=id=>rows.filter(r=>r.step===id).map(hkPill).join("")+(id==="oil"&&mis?`<span class="hk-tag">MISMATCH — find out why</span>`:"");
+  const ta=(id,ph)=>`<textarea id="hk_${id}" data-hk="${id}" placeholder="${esc(ph||"Your read, in your own words")}">${esc(ans[id]||"")}</textarea><div class="hk-cnt" data-for="${id}"></div>`;
+  const step=(s,i)=>{
+    let body="";
+    if(s.id==="call")body=`<div class="hk-seg">${(j.calls||[]).map(c=>`<button data-call="${esc(c)}" class="${HK.call===c?"on "+(/bull/.test(c)?"bull":"bear"):""}">${esc(c[0].toUpperCase()+c.slice(1))}</button>`).join("")}</div>${ta("call","One sentence: why?")}`;
+    else if(s.id==="earnings")body=`<div class="hk-auto">Otto filled · tonight after the close + before tomorrow's open (biggest first)</div><div class="hk-pills">${earn.length?earn.map(e=>`<span class="hk-pill" title="${esc(e.name)}">${esc(e.sym)} · ${esc(e.when)}</span>`).join(""):`<span class="mut" style="font-size:12px">${j.errors&&j.errors.earnings?"Calendar didn't load — use the Discord earnings tab.":"Nothing big on the calendar."}</span>`}</div>${ta("earnings","Which one moves the whole market, and why?")}`;
+    else if(s.id==="levels")body=`<div id="hkLevels">${(levels.length?levels:[{}]).map((x,k)=>hkLvRow(x,k)).join("")}</div><button class="dk-btn sec" id="hkAddLv" style="margin-top:4px">+ Level</button>`;
+    else if(s.id==="odd")body=ta("odd","Ticker + why it doesn't make sense (optional)");
+    else body=(rows.some(r=>r.step===s.id)?`<div class="hk-auto">Otto filled${j.data&&j.data.market&&j.data.market.at?" · "+esc(dkTime(j.data.market.at)):""}</div><div class="hk-pills">${pills(s.id)}</div>`:"")+ta(s.id);
+    return `<div class="hk-step"><div class="hk-n ${doneStep(s)?"ok":""}">${i+1}</div><div><h3>${esc(s.title)}${s.need?"":` <span class="mut" style="font-weight:400;font-size:12px">optional</span>`}</h3><div class="hk-hint">${esc(s.hint)}</div>${body}</div></div>`};
+  const wk=(j.week||[]).map(w=>`<td class="${w.state==="done"?"up":w.state==="missed"?"dn":w.state==="late"?"warn":"mut"}">${w.state==="done"?"✓":w.state==="late"?"✓ late":w.state==="missed"?"✗ skipped":w.state==="open"?"open":"—"}${w.right==="right"?" · call ✓":w.right==="wrong"?" · call ✗":""}</td>`).join("");
+  const lg=j.last_graded&&j.last_graded.grade;
+  const graded=lg?`<div class="dk-cardx" style="margin-top:12px"><div class="dk-h">Graded · ${esc(new Date(j.last_graded.for_day+"T12:00:00Z").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",timeZone:"UTC"}))}</div>
+    <table class="hk-week"><tr><th>Your read</th><th>What happened</th><th></th></tr>
+    <tr><td>${esc(String(j.last_graded.call||"").replace(/^./,c=>c.toUpperCase()))}</td><td>QQQ ${lg.chg>=0?"+":""}${esc(String(lg.chg))}% open → close</td><td class="${lg.direction==="right"?"up":lg.direction==="wrong"?"dn":"mut"}">${lg.direction==="right"?"✓ right":lg.direction==="wrong"?"✗ wrong":"flat day"}</td></tr>
+    ${(lg.levels||[]).map(x=>`<tr><td>${esc(x.ticker)} ${esc(String(x.level))} ${x.dir==="up"?"▲":"▼"}</td><td>${x.touched==null?"no bars":x.touched?"touched"+(x.broke?" and broke":""):"never touched"}</td><td class="${x.fired?"up":"mut"}">${x.fired?"✓ Watcher fired":"—"}</td></tr>`).join("")}</table>
+    <div class="mut" style="font-size:12px;margin-top:6px">Graded by Otto at 4:05 PM from real 5-minute bars. Your words are never changed.</div></div>`:"";
+  pg.innerHTML=`<div class="dkp">
+    <div class="dkp-head"><h2>📓 Homework</h2><span class="mut" style="font-size:12.5px">The coach's after-close read. Otto fills the numbers, you write the read. Next Thursday you run this on the call.</span></div>
+    <div class="dk-cardx" style="margin-bottom:12px"><div class="hk-top"><b>For ${esc(forTxt)}</b><div class="hk-who">${["Josh","Ifoma"].map(w=>`<button data-hkwho="${w}" class="${hkWho()===w?"on":""}">${w}</button>`).join("")}</div><span class="mut">${nDone} of ${need.length} done</span></div>
+      <div class="hk-bar"><i style="width:${Math.round(nDone/Math.max(1,need.length)*100)}%"></i></div>
+      <div class="mut" style="font-size:12.5px;margin-top:6px">${handed?`<span class="${late?"warn":"up"}">✓ Handed in ${esc(dkTime(row.handed_in_at))}${late?" — late (after 9:00 AM)":""}</span>. You can still fix it and hand it in again.`:`Due ${esc(dueTxt)}. Not handed in = flagged on the Desk, on that day's cards and on the Friday report card. It never blocks a card.`}</div></div>
+    <div class="dk-cardx">${(j.steps||[]).map(step).join("")}
+      ${HK.errs?`<div class="hk-errs"><b>Not handed in yet:</b><br>${HK.errs.map(esc).join("<br>")}</div>`:""}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><button class="dk-btn go" id="hkGo" ${HK.busy?"disabled":""}>${HK.busy?"Handing in…":handed?"Hand it in again":"Hand it in"}</button><button class="dk-btn sec" id="hkCopy">📋 Copy for the coach</button><button class="dk-btn sec" id="hkAsk">Ask Baby J</button><span class="mut" id="hkSaved" style="font-size:12px"></span></div>
+      <div class="mut" style="font-size:12px;margin-top:8px">Every line needs ${j.min}+ characters (same as the why gate). Otto never writes your lines. Baby J answers questions on the Desk but doesn't fill anything in.</div></div>
+    <div class="dk-cardx" style="margin-top:12px"><div class="dk-h">This week</div><table class="hk-week"><tr>${(j.week||[]).map(w=>`<th>${esc(w.wd)}</th>`).join("")}</tr><tr>${wk}</tr></table>
+      <div class="mut" style="font-size:12px;margin-top:6px">Friday report card: nights on time (late = half) count 20% of the grade, plus how often your call was right and how many of your levels the Watcher used.</div></div>
+    ${graded}</div>`;
+  hkBind();
+}
+function hkLvRow(x,k){x=x||{};return `<div class="hk-lv" data-i="${k}"><input data-k="t" placeholder="Ticker" maxlength="8" value="${esc(x.ticker||"")}"><input data-k="l" placeholder="Level" inputmode="decimal" value="${esc(x.level==null?"":String(x.level))}"><select data-k="d"><option value="">▲ / ▼</option><option value="up" ${x.dir==="up"?"selected":""}>▲ buy side</option><option value="down" ${x.dir==="down"?"selected":""}>▼ sell side</option></select><button data-lvx="${k}" title="Remove">✕</button></div>${x.refused?`<div class="dn" style="font-size:11.5px">Not on the Watcher: ${esc(x.refused)}</div>`:""}`}
+function hkCount(){const min=(HK.j&&HK.j.min)||10;document.querySelectorAll(".hk-cnt[data-for]").forEach(c=>{const el=$("#hk_"+c.dataset.for);if(!el)return;const n=el.value.trim().length;const opt=c.dataset.for==="odd";c.textContent=opt&&!n?"":n>=min?n+" ✓":n+" / "+min;c.classList.toggle("ok",n>=min)})}
+function hkBind(){
+  const pg=$("#dkPage");
+  pg.querySelectorAll("[data-hk]").forEach(t=>t.addEventListener("input",()=>{hkCount();hkAutosave()}));
+  pg.querySelectorAll("[data-call]").forEach(b=>b.onclick=()=>{hkStore();HK.call=b.dataset.call;hkStore();hkAutosave();hkRender()});
+  pg.querySelectorAll("[data-hkwho]").forEach(b=>b.onclick=()=>{hkStore();HK.who=b.dataset.hkwho;LS.set("hkWho",HK.who);dkHomework()});
+  pg.querySelectorAll(".hk-lv input,.hk-lv select").forEach(el=>el.addEventListener(el.tagName==="SELECT"?"change":"input",hkAutosave));
+  pg.querySelectorAll("[data-lvx]").forEach(b=>b.onclick=()=>{b.closest(".hk-lv").remove();hkAutosave()});
+  const add=$("#hkAddLv");if(add)add.onclick=()=>{const box=$("#hkLevels");const k=box.querySelectorAll(".hk-lv").length;box.insertAdjacentHTML("beforeend",hkLvRow({},k+100));hkBind()};
+  const go=$("#hkGo");if(go)go.onclick=async()=>{if(HK.busy)return;hkStore();HK.busy=true;HK.errs=null;go.disabled=true;go.textContent="Handing in…";
+    try{const r=await fnUrl("hw_submit").then(async({url,headers})=>(await fetch(url,{method:"POST",headers,body:JSON.stringify(hkCollect())})).json());
+      if(!r.ok){HK.errs=r.errors||[r.error||"Couldn't hand it in"];toast("Not handed in yet — see the list")}
+      else{const d=LS.get("hkDraft",{})||{};delete d[HK.j.for_day+"|"+hkWho()];LS.set("hkDraft",d);
+        toast(`📓 Handed in${r.added&&r.added.length?" · "+r.added.length+" level"+(r.added.length===1?"":"s")+" on the Watcher":""}${r.skipped&&r.skipped.length?" · "+r.skipped.length+" not added":""}`);
+        HK.busy=false;dkHomework();if(typeof dkWatchLoad==="function")dkWatchLoad();return}}
+    catch(e){HK.errs=[String(e.message||e).slice(0,200)]}
+    HK.busy=false;hkRender()};
+  const cp=$("#hkCopy");if(cp)cp.onclick=async()=>{const t=hkText();try{await navigator.clipboard.writeText(t);toast("Copied — paste it to your coach")}catch(e){prompt("Copy this:",t)}};
+  const ask=$("#hkAsk");if(ask)ask.onclick=()=>{hkStore();dkShow("desk");const i=$("#dkIn");if(i){i.value="Homework question: ";i.focus()}};
+  hkCount();
+}
+function hkText(){
+  const c=hkCollect(),j=HK.j||{},T=id=>String(c.answers[id]||"").trim();
+  const day=new Date(j.for_day+"T12:00:00Z").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",timeZone:"UTC"});
+  return [`My read for ${day}:`,`Bonds: ${T("bonds")}`,`Indexes: ${T("indexes")}`,`Oil vs XOM: ${T("oil")}`,`Dollar/gold/copper/crypto: ${T("cross")}`,
+    `Call: ${(c.call||"—").toUpperCase()} — ${T("call")}`,`Earnings: ${T("earnings")}`,`QQQ: ${T("qqq")}`,T("odd")?`Doesn't line up: ${T("odd")}`:"",
+    `Levels: ${(c.levels||[]).filter(x=>x.ticker&&x.level).map(x=>`${x.ticker} ${x.level} ${x.dir==="up"?"▲ buy":x.dir==="down"?"▼ sell":""}`).join(", ")||"—"}`].filter(Boolean).join("\n");
+}
+// The flag: a banner at the top of the Desk + a NO HOMEWORK tag on today's cards. Never blocks anything.
+function hkFlag(){const h=DK.watch&&DK.watch.homework;return h&&h.applies&&(h.missed||h.late)?h:null}
+function hkBannerSync(){
+  const box=$("#dkMsgs");if(!box||DK.locked)return;
+  let el=box.querySelector(".hk-banner");const h=hkFlag();
+  let ph=$("#hkPhone");
+  if(!ph&&$("#dkRight")){ph=document.createElement("div");ph.id="hkPhone";ph.className="hk-banner";$("#dkRight").parentNode.insertBefore(ph,$("#dkRight"))}
+  if(!h){if(el)el.remove();if(ph){ph.classList.remove("on");ph.innerHTML=""}return}
+  const html=h.missed?`<span><b>⚠ No homework last night.</b> Cards still work — today's cards carry the flag and it counts on the Friday report card.</span><button class="dk-btn sec" data-hkgo="1">Do it now</button>`
+    :`<span><b>📓 Homework handed in late</b> (after 9:00 AM) — counts as half a night on the Friday report card.</span>`;
+  if(!el){el=document.createElement("div");el.className="hk-banner";el.setAttribute("role","status");box.insertBefore(el,box.firstChild)}
+  if(el.innerHTML!==html)el.innerHTML=html;
+  if(ph){if(ph.innerHTML!==html)ph.innerHTML=html;ph.classList.add("on")}
+  [el,ph].forEach(x=>{const b=x&&x.querySelector("[data-hkgo]");if(b)b.onclick=()=>dkShow("homework")});
+}
+{const _r=dkRenderMsgs;dkRenderMsgs=function(stick){_r(stick);try{hkBannerSync()}catch(e){}}}
+{const _w=dkWatchLoad;dkWatchLoad=async function(){await _w();try{hkBannerSync();if(hkFlag()&&DK.view==="desk")dkRenderMsgs()}catch(e){}}}
+{const _c=dkCard;dkCard=function(a){
+  const h=_c(a);const f=hkFlag();
+  if(!h||!f||!f.missed||!a||!a.created_at)return h;
+  const d=new Date(a.created_at).toLocaleDateString("en-CA",{timeZone:"America/New_York"});
+  const opening=a.status==="paper_wait"||a.status==="paper_taken"||(a.calls||[]).some(c=>/^place_(option|equity)_order$/.test(c.tool)&&!(c.args&&c.args.legs||[]).some(l=>l.position_effect==="close"));
+  if(d!==f.for_day||!opening)return h;
+  return h.replace(`<div class="dk-act-h"><b>${esc(a.title)}</b>`,`<div class="dk-act-h"><b>${esc(a.title)}<span class="hk-tag">NO HOMEWORK</span></b>`);
+}}
+function hkFromHash(){if(location.hash!=="#homework")return;try{if(!DK.open&&typeof openDesk==="function")openDesk();dkShow("homework")}catch(e){}}
+window.addEventListener("hashchange",hkFromHash);window.addEventListener("load",()=>setTimeout(hkFromHash,1800));
 </script>
 </body>
 </html>

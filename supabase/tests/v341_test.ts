@@ -115,6 +115,7 @@ Deno.test("v3.41 practice book: offered / answered / expired / balance / overrid
     mk("e", "paper_taken", 1, { created_at: at(18), outcome: { state: "pending" }, plan: { practice: true, josh_why: WHY } }),
     mk("old", "paper_taken", 1, { created_at: "2026-10-19T14:16:00Z", outcome: { state: "win", pnl_est: 158 }, plan: { practice: true } }),   // Monday 19 Oct: before the book — history only
     { id: "live", title: "LIVE — SPY 766P", status: "done", created_at: at(20), calls: mk("x", "done").calls, plan: { origin: "coach_call" }, checks: [], outcome: { state: "win", pnl_est: 40 } },
+    mk("dup", "paper_taken", 1, { created_at: at(17.001), outcome: { state: "loss", pnl_est: -15 }, plan: { practice: true, josh_why: WHY, duplicate_of: "d" } }),   // v3.45: the 22 Oct META twin — voided, never counted
   ];
   const st = M.practiceStats(cards, { start: 4000, since });
   assert(st.offered === 5 && st.answered === 4 && st.taken === 3 && st.rejected === 1 && st.expired === 1, "counts: " + JSON.stringify(st));

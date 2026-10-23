@@ -305,10 +305,13 @@ export type GateCtx = { rules: Rule[]; d: Decision; cap: number; maxLoss: number
   defensiveCall?: string | null; openReprice?: string | null; moveDone?: string | null };
 export type GateHit = { rule: string; why: string; soft: boolean };
 // HARD gates always block: the plan itself (W1), risk and size (W2), cash, the max open count and the time windows.
-// SOFT gates (W3, W12-W15, W20-W23) block in strict mode; in data mode they STAMP the trade (flags) so the report can score each gate.
+// SOFT gates (W13-W15, W20-W26) block in strict mode; in data mode they STAMP the trade (flags) so the report can score each gate.
 // v3.42 (Ifoma, 20 Oct night): W12 (spread) is HARD in every mode — a spread is a cost, not a judgment. The two widest entries
 // in Winston's history (CRM 24%, AMGN 77%) were his two biggest losses (−$509) while the other twelve were 0–8%.
-const SOFT = new Set(["W3", "W13", "W14", "W15", "W20", "W21", "W22", "W23", "W24", "W25", "W26", "fact"]);
+// v3.45 (Ifoma, 22 Oct "whatever you decide"): W3 (no adding to the same ticker) is HARD in every mode. Every trade W3 had stamped
+// was a loss (19 Oct TSLA 377.5C $0; 22 Oct SPY 760P −$91, SPY 759P −$33 — the two adds that turned a +$120 SPY day flat); the rule is
+// also the coach's. Rollback = put "W3" back in this set. The pass reason stays "W3: …" so the Winston tab shows it.
+const SOFT = new Set(["W13", "W14", "W15", "W20", "W21", "W22", "W23", "W24", "W25", "W26", "fact"]);
 export function runGatesAll(c: GateCtx): GateHit[] {
   const R = c.rules, hits: GateHit[] = [];
   const hit = (rule: string, why: string) => hits.push({ rule, why, soft: !!c.dataMode && SOFT.has(rule) });

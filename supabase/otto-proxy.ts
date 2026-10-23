@@ -2076,7 +2076,10 @@ async function deskSetup(opt: { fast?: boolean } = {}) {
   const pl = await plansToday().catch(() => []);   // v3.19: today's locked plans — hold them to it
   const planLineCtx = pl.length ? "\nTODAY'S LOCKED PLANS (the trader's own; flag any card or trade that isn't this plan): " + pl.map((p: any) => `${p.author}: ${p.line}`).join(" | ") : "";
   const facts = await factsP;   // v3.22: look before saying "none"
-  return { cs, sys, tools, ctxLine: (running ? ctxLine + "\n" + running : ctxLine) + planLineCtx + "\n" + CONTRACT_RULE + (facts ? "\n" + facts : ""), autoClose: !!LIMa.auto_close };
+  const hk45 = await hkStatus().catch(() => null);   // v3.45: Josh's homework for today — his own read; hold him to it
+  const hkLine = !hk45?.applies ? "" : (hk45.done || hk45.late) ? `\nJOSH'S HOMEWORK FOR TODAY (his own after-close read${hk45.late ? ", handed in late" : ""}): ${String(hk45.call || "").toUpperCase()} — "${String(hk45.call_why || "").slice(0, 200)}"; his levels: ${(hk45.levels || []).map((x: any) => `${x.ticker} ${x.level} ${x.dir === "up" ? "▲" : "▼"}`).join(", ") || "none"}. When a card or his idea goes against his own call, say so in one line.`
+    : hk45.missed ? "\nJOSH DID NOT HAND IN LAST NIGHT'S HOMEWORK (due 9:00 AM). It never blocks a card. Every card today carries a NO HOMEWORK tag; if he asks for a trade, one line: his call today is a guess, not a plan." : "";
+  return { cs, sys, tools, ctxLine: (running ? ctxLine + "\n" + running : ctxLine) + planLineCtx + hkLine + "\n" + CONTRACT_RULE + (facts ? "\n" + facts : ""), autoClose: !!LIMa.auto_close };
 }
 
 export async function desk(req: Request, who: string, _apiKey: string) {
@@ -2914,11 +2917,13 @@ export async function coachLog(build = false): Promise<{ week_start: string; wee
    "one rule for next week" and two lines of comment from those numbers; if it fails, the rule is the standing one.
    Grade (Ifoma to confirm): 40% answered ÷ offered, 30% whys that name a level AND a kill, 30% last week's rule followed. */
 export const REPORT_RULE_DEFAULT = "Answer every card — Approve or Reject with your why. Silence is the only wrong answer.";
-export function letterGrade(parts: { answered: number; offered: number; good_whys: number; whys: number; rule_followed: boolean | null }) {
+export function letterGrade(parts: { answered: number; offered: number; good_whys: number; whys: number; rule_followed: boolean | null; homework?: number | null }) {
   const a = parts.offered ? parts.answered / parts.offered : 1;
   const w = parts.whys ? parts.good_whys / parts.whys : (parts.offered ? 0 : 1);
   const r = parts.rule_followed == null ? 0.5 : parts.rule_followed ? 1 : 0;
-  const score = Math.round((0.4 * a + 0.3 * w + 0.3 * r) * 100);
+  // v3.45: homework (nights handed in on time; late = half) is 20% once there is a night to count; the other three keep their 40/30/30 shape.
+  const h = parts.homework == null ? null : Math.max(0, Math.min(1, parts.homework));
+  const score = Math.round((h == null ? 0.4 * a + 0.3 * w + 0.3 * r : 0.32 * a + 0.24 * w + 0.24 * r + 0.2 * h) * 100);
   const letter = score >= 93 ? "A" : score >= 87 ? "A−" : score >= 80 ? "B+" : score >= 73 ? "B" : score >= 67 ? "B−" : score >= 60 ? "C+" : score >= 50 ? "C" : score >= 40 ? "D" : "F";
   return { score, letter };
 }
@@ -2952,13 +2957,14 @@ export async function reportCard(apiKey: string, build = false): Promise<any> {
   const posts: any[] = (await db(`otto_jason?select=id,day,ticker,direction,kind&day=gte.${ws}&day=lte.${we}&order=id.asc&limit=200`).catch(() => [])) || [];
   const calls = posts.filter((p) => p.kind === "call" && p.direction && p.ticker);
   const tookCoach = acts.filter((a) => (a.plan?.origin === "coach_call") && (a.status === "done" || a.status === "paper_taken")).length;
+  const hk = await hkWeek(ws, we).catch(() => null);   // v3.45: the week's homework (Josh)
   // last week's rule followed? the model judges from the numbers; a plain default is used when the call fails
   const facts = { week: `${ws} to ${we}`, practice_book: st, live: { trades: trades.length, pnl: livePnl, cards_taken: liveActs.length },
     overrides: ov.map((a) => ({ title: String(a.title).slice(0, 60), read: String(a.plan.override_read || "").slice(0, 120), result: a.outcome?.state || null })),
     whys: whyRows.slice(0, 12).map((w) => w.why_not ? { why_not: w.why_not } : { setup: w.setup, why_now: w.why_now, kills: w.kills }),
     exits: cards.concat(liveActs).map((a) => a.plan?.josh_exit_why?.text).filter(Boolean).slice(0, 8),
     coach: { calls_with_direction: calls.length, taken_from_coach: tookCoach, tickers: [...new Set(calls.map((c) => c.ticker))].slice(0, 10) },
-    last_week_rule: lastRule };
+    last_week_rule: lastRule, homework: hk };
   let rule = REPORT_RULE_DEFAULT, comment = "", followed: boolean | null = null;
   if (apiKey) {
     try {
@@ -2973,7 +2979,8 @@ export async function reportCard(apiKey: string, build = false): Promise<any> {
       if (typeof out.followed === "boolean") followed = out.followed;
     } catch (e) { console.error("report card model", e); }
   }
-  const g = letterGrade({ answered: st.answered, offered: st.offered, good_whys: good, whys: whyRows.length, rule_followed: followed });
+  const hkTrades = hk ? cards.filter((a) => (a.status === "paper_taken" || a.status === "done") && hk.missed_days.includes(etParts(new Date(a.created_at)).date)).length : 0;
+  const g = letterGrade({ answered: st.answered, offered: st.offered, good_whys: good, whys: whyRows.length, rule_followed: followed, homework: hk ? hk.ratio : null });
   const money = (n: number) => (n < 0 ? "−$" : "+$") + Math.abs(Math.round(n)).toLocaleString("en-US");
   const lines = [
     `📋 Report card — week of ${ws} · Josh + Baby J`,
@@ -2984,10 +2991,11 @@ export async function reportCard(apiKey: string, build = false): Promise<any> {
     `Overrode Baby J: ${ov.length}${ov.length ? " — " + ov.map((a) => `${String(a.title).replace(/^(PAPER|PRACTICE|LIVE)\s*[—-]\s*/i, "").slice(0, 28)} (${a.outcome?.state || "open"})`).join(", ") : ""}.`,
     `Coach posted ${calls.length} call${calls.length === 1 ? "" : "s"} with a direction${calls.length ? ` (${facts.coach.tickers.join(", ")})` : ""}; you took ${tookCoach}.`,
     `Your whys: ${whyRows.length} written, ${good} named a level and a kill.${whyRows.length ? "" : " None — the gate is on now, so next week this line fills in."}`,
+    hk ? `Homework: ${hk.done} of ${hk.nights} night${hk.nights === 1 ? "" : "s"} on time${hk.late ? `, ${hk.late} late` : ""}${hk.missed ? `, ${hk.missed} skipped` : ""} (20% of the grade). Call right ${hk.right} of ${hk.judged}; levels touched ${hk.touched} of ${hk.of}; Watcher fired on ${hk.used}.${hkTrades ? ` Trades taken on a skipped-homework day: ${hkTrades}.` : ""}` : "",
     comment ? `Read: ${comment}` : "",
     `One rule for next week: ${rule}`,
   ].filter(Boolean);
-  const out = { week_start: ws, week_end: we, grade: g.letter, score: g.score, rule, last_rule: lastRule, followed, comment, stats: st, live: { n: trades.length, pnl: livePnl }, overrides: ov.length, text: lines.join("\n"), built_at: new Date().toISOString() };
+  const out = { week_start: ws, week_end: we, grade: g.letter, score: g.score, rule, last_rule: lastRule, followed, comment, stats: st, homework: hk, live: { n: trades.length, pnl: livePnl }, overrides: ov.length, text: lines.join("\n"), built_at: new Date().toISOString() };
   await putSetting("report_card_last", out, "Otto").catch(() => {});
   return out;
 }
@@ -3180,9 +3188,13 @@ async function morningRead(apiKey: string) {
     fired: sent.rows.filter((r: any) => r.fired).map((r: any) => `row ${r.row}: ${r.label}`),
     calendar_today: sent.calendar.map((e: any) => `${etLabel(e.date)} ${e.title} (importance ${e.importance})`) };
   const lastRule41 = String((await setting("report_card_last").catch(() => null))?.rule || "").trim();   // v3.41: the report card's rule leads the week
+  const hk45 = await hkStatus().catch(() => null);   // v3.45
+  const hkMorning = !hk45?.applies ? "" : (hk45.done || hk45.late)
+    ? `\nJosh's homework for today (his own after-close read): ${String(hk45.call || "").toUpperCase()} — "${String(hk45.call_why || "").slice(0, 200)}"; levels ${(hk45.levels || []).map((x: any) => `${x.ticker} ${x.level} ${x.dir === "up" ? "▲" : "▼"}`).join(", ")}. Include ONE line that says where today's tape agrees or disagrees with his call.`
+    : `\nJosh has NOT handed in last night's homework yet (due 9:00 AM; it never blocks a card). Include exactly this line: "📓 No homework handed in yet — without it, today's call is a guess, not a plan."`;
   const prompt = `[Automatic 8:45 morning read — no one typed this. ${sent.et} ET.]${lastRule41 ? `\nLINE ONE of your read must be exactly: "This week's rule: ${lastRule41}"` : ""}
 The live sentiment banner (Josh's intermarket sheet on TradingView data) says: ${JSON.stringify(lite)}
-What's moving (web research just now): ${news.slice(0, 2500) || "unavailable"}
+What's moving (web research just now): ${news.slice(0, 2500) || "unavailable"}${hkMorning}
 
 Write today's morning read for Ifoma and Josh (Workflow 1): one line each for the 10-year, crude, USD/JPY; any binary event today; SPY/QQQ and Mag-7 tone (fetch what you need); a bias that agrees with or explains any disagreement with the banner; and the 2–3 setups worth watching from the TradingView watchlist with the trigger level for each. Levels from the calls are dated marks — say the call date. Never name the coach. No order cards. Under 250 words.`;
   const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools, cs, who: "cron", send: () => {}, allowPropose: false, maxRounds: 8 });
@@ -5011,6 +5023,7 @@ const PUSH_KINDS: Record<string, { label: string; on: boolean; always?: boolean 
   checkin:     { label: "⏰ A check-in Jarvis scheduled", on: true },
   brk:         { label: "Something broke (Activity log)", on: true, always: true },   // v3.26
   lock:        { label: "Kill switch locked new cards", on: true },                     // v3.26
+  homework:    { label: "📓 Homework not handed in (8:30 PM / 8:00 AM)", on: true },      // v3.45
 };
 const PUSH_SUB_URL = "https://proagentmax.github.io/otto-trader/";
 
@@ -5109,7 +5122,8 @@ export function isPracticeCard(a: any): boolean {
 /* v3.41: the practice book's numbers for the Scoreboard and the Friday report card. `since` null = the book has not started. */
 export function practiceStats(acts: any[], book: { start: number; since: string | null }) {
   const since = book.since ? Date.parse(book.since) : Infinity;
-  const cards = (acts || []).filter((a: any) => isPracticeCard(a) && Date.parse(a.created_at) >= since);
+  // v3.45: a card the server (or Ifoma) marked as a duplicate of another (plan.duplicate_of) is not offered, taken or scored — 22 Oct META 632.5P was built twice.
+  const cards = (acts || []).filter((a: any) => isPracticeCard(a) && !a?.plan?.duplicate_of && Date.parse(a.created_at) >= since);
   const taken = cards.filter((a: any) => a.status === "paper_taken");
   const answered = cards.filter((a: any) => a.status === "paper_taken" || a.status === "rejected");
   const expired = cards.filter((a: any) => a.status === "expired");
@@ -5648,7 +5662,7 @@ export async function watchAdd(x: { ticker: string; level: number; dir?: string;
   const r = await db("otto_watch?on_conflict=day,ticker,level,dir&select=*", { method: "POST",
     headers: { prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify([row]) });
   // v3.24 (A12): a level added on the losing side of an open trade becomes that trade's ONE wrong-if.
-  if (x.source === "desk" && !/· (?:plan|Morning Prep|Night Charts)$/.test(String(x.by || ""))) {
+  if (x.source === "desk" && !/· (?:plan|Morning Prep|Night Charts|Homework)$/.test(String(x.by || ""))) {
     const w = await wrongIfFromWatch(ticker, level, String(x.by || "the Desk")).catch(() => null);
     if (w) {
       const made = r?.[0] || null;
@@ -5821,7 +5835,8 @@ export async function watchGet() {
   // v3.18: pending ⏰ check-ins show as chips under the levels
   const checks = await db(`otto_checks?select=id,due_at,what,by&status=eq.pending&day=eq.${etParts().date}&order=due_at.asc&limit=10`).catch(() => []);
   const plans = await plansToday().catch(() => []);   // v3.19: pinned on the Desk
-  return { ok: true, day, clock: marketClock().status, rows, plans, checks: (checks || []).map((c: any) => ({ ...c, label: fmtMin(etParts(new Date(c.due_at)).min) })) };
+  const homework = await hkStatus().catch(() => null);   // v3.45: the Desk banner + the card tag read this
+  return { ok: true, day, clock: marketClock().status, rows, plans, homework, checks: (checks || []).map((c: any) => ({ ...c, label: fmtMin(etParts(new Date(c.due_at)).min) })) };
 }
 async function watchSet(b: any, who: string) {
   const by = String(b?.author || who.split("@")[0]).slice(0, 40);
@@ -6123,7 +6138,7 @@ export async function dailyRecap(force = false) {
     await recapExtras(c.date).catch(() => ""),
   ].join("\n\n");
   // v3.22: the trades section comes from Robinhood, not from Jarvis.
-  const fullActs = await db("otto_actions?select=title,status,result,created_at,plan&created_at=gte." + since + "&order=created_at.asc&limit=200")   // v3.44: plan = practice / reject-why / duplicate.catch(() => acts || []);
+  const fullActs = await db("otto_actions?select=title,status,result,created_at,plan&created_at=gte." + since + "&order=created_at.asc&limit=200").catch(() => acts || []);   // v3.44: plan = practice / reject-why / duplicate; v3.45: the fallback is back out of the comment
   const ords = await dayOrders(c.date).catch(() => null);
   const block = ords ? recapTradesBlock(ords, fullActs || []) : "### Trades and cards\n⚠ Robinhood's order records couldn't be read just now — no trade results in this recap.";
   const raw = await claudeText({ model: MODEL, max_tokens: 1200, system: RECAP_SYS + NAME_RULE, messages: [{ role: "user", content: data + "\n\nSERVER TRADES SECTION (inserted as-is; don't repeat its numbers except the Realized line):\n" + block }] });
@@ -7362,6 +7377,7 @@ Deno.serve(async (req) => {
       if (isTradingDay(c.date) && c.min >= 570 && c.min <= 965) { try { await lockState(true); } catch (e) { console.error("lock", e); } }
       if (isTradingDay(c.date) && c.min >= 575 && c.min <= 990 && c.min % 5 === 0) { try { await outsideSweep(); } catch (e) { console.error("outside", e); } }
       if (isTradingDay(c.date) && c.min >= 965 && c.min <= 980 && c.min % 5 === 0) { try { await prepGradeTick(); } catch (e) { console.error("prep grade", e); } }   // v3.18
+      if (isTradingDay(c.date) && c.min >= 965 && c.min <= 980 && c.min % 5 === 0) { try { await hkGradeTick(); } catch (e) { console.error("homework grade", e); } }   // v3.45
     })());
     return json({ ok: true, started: "watch", clock: c.status }, 202);
   }
@@ -7374,6 +7390,7 @@ Deno.serve(async (req) => {
   if (fn0 === "cron_charts") {      // v3.25: every 10 min; works only in the night (8:30–10 PM) and 8:45 AM windows
     if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
     background(chartsCron().catch((e) => console.error("charts", e)));
+    background(hkRemindTick().catch((e) => console.error("homework remind", e)));   // v3.45
     return json({ ok: true, started: "charts" }, 202);
   }
   if (fn0 === "chart_one") {         // v3.25: one stock per run
@@ -7469,7 +7486,7 @@ Deno.serve(async (req) => {
          "playbook_get", "feedback_add", "feedback_list", "daily_now",
          "prep_get", "prep_submit", "prep_reply", "prep_watch", "prep_img", "score_extra", "check_cancel", "prep_lock",
          "charts_get", "chart_now", "chart_review", "chart_use", "chart_chat",
-         "activity_get", "coach_corner", "coach_report", "lock_state", "trade_live", "close_now", "coach_log", "quiz_grade", "quiz_list"].includes(fn)) {
+         "activity_get", "coach_corner", "coach_report", "lock_state", "trade_live", "close_now", "coach_log", "quiz_grade", "quiz_list", "hw_get", "hw_save", "hw_submit"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
         error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
@@ -7486,6 +7503,9 @@ Deno.serve(async (req) => {
       if (fn === "trade_live") return json(await tradeLiveAll());                                                             // v3.43: + open practice trades
       if (fn === "coach_log") return json({ ok: true, ...(await coachLog(new URL(req.url).searchParams.get("build") === "1")) });
       if (fn === "report_card") return json({ ok: true, ...(await reportCard(Deno.env.get("ANTHROPIC_KEY") || "", new URL(req.url).searchParams.get("build") === "1")) });   // v3.41   // v3.37
+      if (fn === "hw_get") return json(await hkGet(new URL(req.url).searchParams.get("author") || body?.author));          // v3.45
+      if (fn === "hw_save") return json(await hkSave(body));                                                                 // v3.45
+      if (fn === "hw_submit") return json(await hkSubmit(body, who));                                                        // v3.45
       if (fn === "quiz_list") return json(await quizList());                                                                          // v3.38
       if (fn === "quiz_grade") { const k = Deno.env.get("ANTHROPIC_KEY"); if (!k) return json({ ok: false, error: "ANTHROPIC_KEY secret is not set" }, 500); return json(await quizGrade(body, who, k)); }
       if (fn === "close_now") return json(String(body?.option_id || "").startsWith(PRAC_PREFIX) ? await closePractice(body, who) : await closeByButton(body, who));   // v3.43: "P:" = practice
@@ -8937,3 +8957,242 @@ export async function chartNow(b: any, who: string) {
   return chartMany([tk], day, by, "manual");
 }
 export const __test_actOn = actOn;   // v3.39 tests
+
+/* ============================================================ v3.45 (22 Oct 2026) — HOMEWORK (approved mockup v345-homework-mockup.html)
+   The coach's after-close read (22 Oct 1:1, `claude/coach-call-2026-10-22.md`) as a screen. Otto fills the NUMBERS; Josh writes every line.
+   Ifoma 22 Oct: no blocking, ever — a skipped night is FLAGGED (Desk banner, a tag on that day's cards, Baby J's morning read, the Friday
+   report card). Due 9:00 AM ET on the trading day it is for (for_day). Graded at 4:05 PM on for_day from real 5-minute bars (gradeRead).
+   Table otto_homework (028_v345.sql). Levels he marks go on the Watcher for for_day (buy side AND sell side). */
+export const HK_MIN = 10;
+export const HK_CALLS = ["bullish", "slightly bullish", "slightly bearish", "bearish"];
+export const HK_STEPS = [
+  { id: "bonds", title: "Bonds first", hint: "Red bonds = yields down = people buying Treasuries. Nasdaq red too = defensive.", need: true },
+  { id: "indexes", title: "Indexes — who leads, who lags", hint: "Dow, S&P, Nasdaq, Russell. Relative, not absolute.", need: true },
+  { id: "oil", title: "Oil vs oil stocks — do they agree?", hint: "If not, write WHY. That mismatch is where the money is.", need: true },
+  { id: "cross", title: "Dollar, gold, copper, crypto", hint: "Safe haven, Dr. Copper, store of value. One line.", need: true },
+  { id: "call", title: "Your call for tomorrow", hint: "Pick one, then one sentence: why.", need: true },
+  { id: "earnings", title: "Earnings — what matters", hint: "Which report moves the whole market and why? Guidance beats the EPS beat.", need: true },
+  { id: "qqq", title: "QQQ — gaps & key levels", hint: "2–3 lines max. Gaps beat candle levels.", need: true },
+  { id: "odd", title: "Is-but-shouldn't-be", hint: "Anything on the watch list that doesn't line up. Ugly / out-of-favour names.", need: false },
+  { id: "levels", title: "Tomorrow's levels → Watcher", hint: "Buy side AND sell side. They go straight on the Watcher.", need: true },
+];
+// TradingView's public scanner (same endpoint as tvYield10). One call for the whole sheet.
+export const HK_SYMS: { s: string; step: string; label: string; yld?: boolean }[] = [
+  { s: "TVC:US10Y", step: "bonds", label: "US 10Y", yld: true }, { s: "TVC:US02Y", step: "bonds", label: "US 2Y", yld: true }, { s: "NASDAQ:TLT", step: "bonds", label: "TLT" },
+  { s: "AMEX:DIA", step: "indexes", label: "Dow (DIA)" }, { s: "SP:SPX", step: "indexes", label: "S&P 500" }, { s: "NASDAQ:IXIC", step: "indexes", label: "Nasdaq" }, { s: "AMEX:IWM", step: "indexes", label: "Russell (IWM)" },
+  { s: "NYMEX:CL1!", step: "oil", label: "Oil" }, { s: "NYSE:XOM", step: "oil", label: "XOM" }, { s: "NYSE:CVX", step: "oil", label: "CVX" },
+  { s: "TVC:DXY", step: "cross", label: "Dollar (DXY)" }, { s: "FX_IDC:USDJPY", step: "cross", label: "USD/JPY" }, { s: "COMEX:GC1!", step: "cross", label: "Gold" },
+  { s: "COMEX:HG1!", step: "cross", label: "Copper" }, { s: "BITSTAMP:BTCUSD", step: "cross", label: "Bitcoin" },
+  { s: "NASDAQ:QQQ", step: "qqq", label: "QQQ" },
+];
+export function hkRows(j: any) {
+  const by: Record<string, any[]> = {};
+  for (const r of (j?.data || [])) by[String(r.s)] = r.d;
+  return HK_SYMS.map((x) => {
+    const d = by[x.s]; const price = Number(d?.[0]), prev = Number(d?.[1]);
+    if (!d || !isFinite(price) || price <= 0) return { ...x, price: null, prev: null, pct: null, chg: null };
+    const okPrev = isFinite(prev) && prev > 0;
+    return { ...x, price: +price.toFixed(x.yld ? 3 : 2), prev: okPrev ? prev : null,
+      pct: okPrev ? +(((price - prev) / prev) * 100).toFixed(2) : null, chg: okPrev ? +(price - prev).toFixed(x.yld ? 3 : 2) : null };
+  });
+}
+// Oil up / XOM down (or the reverse) by more than 0.3% each = the coach's dislocation.
+export function hkMismatch(rows: any[]) {
+  const g = (l: string) => rows.find((r) => r.label === l)?.pct;
+  const oil = g("Oil"), xom = g("XOM");
+  return oil != null && xom != null && Math.abs(oil) >= 0.3 && Math.abs(xom) >= 0.3 && Math.sign(oil) !== Math.sign(xom);
+}
+async function hkMarket() {
+  return await cached("hk_market", 60e3, async () => {
+    const r = await withTimeout(fetch("https://scanner.tradingview.com/global/scan", { method: "POST",
+      headers: { ...UA, "content-type": "application/json", "origin": "https://www.tradingview.com", "referer": "https://www.tradingview.com/" },
+      body: JSON.stringify({ symbols: { tickers: HK_SYMS.map((x) => x.s), query: { types: [] } }, columns: ["close", "close[1]", "update_time"] }) }), 10_000, "tradingview scanner");
+    if (!r.ok) throw new Error("tradingview HTTP " + r.status);
+    const rows = hkRows(await r.json());
+    return { rows, mismatch: hkMismatch(rows), at: new Date().toISOString() };
+  });
+}
+// Nasdaq's public calendar: tonight after the close (read_day) + tomorrow before the open (for_day), biggest first.
+export function hkPickEarnings(rows: any[], when: "after" | "before", n = 8) {
+  const want = when === "after" ? "time-after-hours" : "time-pre-market";
+  const cap = (r: any) => Number(String(r?.marketCap || "").replace(/[$,]/g, "")) || 0;
+  return (rows || []).filter((r) => r?.time === want && r?.symbol).sort((a, b) => cap(b) - cap(a)).slice(0, n)
+    .map((r) => ({ sym: String(r.symbol), name: String(r.name || "").slice(0, 40), when: when === "after" ? "tonight after close" : "before the open", cap: cap(r) }));
+}
+async function hkEarnings(readDay: string, forDay: string) {
+  return await cached(`hk_earn|${readDay}|${forDay}`, 30 * 60e3, async () => {
+    const get = async (d: string) => { const r = await withTimeout(fetch("https://api.nasdaq.com/api/calendar/earnings?date=" + d, { headers: UA }), 10_000, "nasdaq calendar");
+      if (!r.ok) throw new Error("nasdaq HTTP " + r.status); return (await r.json())?.data?.rows || []; };
+    const [a, b] = await Promise.all([get(readDay).catch(() => []), get(forDay).catch(() => [])]);
+    return [...hkPickEarnings(a, "after"), ...hkPickEarnings(b, "before")];
+  });
+}
+function hkPrevTradingDay(date: string) { let d = addDays(date, -1); while (!isTradingDay(d)) d = addDays(d, -1); return d; }
+// Which night's homework is open now: after the close / weekend → the next trading day; before or during the session → today.
+export function hkForDay(now = new Date()) { return watchDay(now); }
+export const hkAuthor = (a: any) => PREP_AUTHORS.has(String(a)) ? String(a) : "Josh";
+const hkDue = (forDay: string) => nyIso(forDay, "9:00 AM")!;
+export function hkValidate(b: any): { ok: boolean; errors: string[]; answers: Record<string, string>; call: string | null; levels: any[] } {
+  const clean = (v: unknown, n = 500) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+  const answers: Record<string, string> = {};
+  for (const s of HK_STEPS) if (s.id !== "levels") answers[s.id] = clean(b?.answers?.[s.id]);
+  const call = HK_CALLS.includes(String(b?.call || "").toLowerCase()) ? String(b.call).toLowerCase() : null;
+  const levels = (Array.isArray(b?.levels) ? b.levels : []).slice(0, 12).map((x: any) => ({
+    ticker: String(x?.ticker || "").toUpperCase().replace(/[^A-Z.]/g, "").slice(0, 8), level: Math.round(Number(x?.level) * 100) / 100,
+    dir: x?.dir === "up" || x?.dir === "down" ? x.dir : null, note: clean(x?.note, 120) })).filter((x: any) => x.ticker || x.level > 0);
+  const errors: string[] = [];
+  for (const s of HK_STEPS) {
+    if (!s.need || s.id === "levels") continue;
+    if (answers[s.id].length < HK_MIN) errors.push(`${s.title}: write at least ${HK_MIN} characters`);
+  }
+  if (!call) errors.push("Your call for tomorrow: pick bullish / slightly bullish / slightly bearish / bearish");
+  const good = levels.filter((x: any) => x.ticker && x.level > 0 && x.dir);
+  if (!good.length) errors.push("Tomorrow's levels: at least one level with a ticker, a price and ▲ buy or ▼ sell");
+  if (levels.some((x: any) => !(x.ticker && x.level > 0 && x.dir))) errors.push("Tomorrow's levels: every row needs a ticker, a price and ▲ buy or ▼ sell (or delete the row)");
+  return { ok: !errors.length, errors, answers, call, levels: good };
+}
+async function hkRow(forDay: string, author: string) {
+  return (await db(`otto_homework?select=*&for_day=eq.${forDay}&author=eq.${encodeURIComponent(author)}`).catch(() => []))?.[0] || null;
+}
+// Josh's status for one trading day (default today): done on time / late / missed (due passed, nothing handed in) / pending.
+export async function hkStatus(day = etParts().date, author = "Josh") {
+  if (!isTradingDay(day)) return { applies: false, for_day: day };
+  const since = (await setting("homework_since").catch(() => null))?.day || null;
+  if (!since || day < since) return { applies: false, for_day: day, before_start: true };
+  const r = await hkRow(day, author);
+  const due = hkDue(day), past = Date.now() > Date.parse(due);
+  const inAt = r?.status === "handed_in" ? r.handed_in_at : null;
+  const done = !!inAt && Date.parse(inAt) <= Date.parse(due), late = !!inAt && !done;
+  return { applies: true, for_day: day, due, done, late, missed: !inAt && past, pending: !inAt && !past,
+    call: r?.call || null, call_why: r?.answers?.call || null, levels: (r?.levels || []).map((x: any) => ({ ticker: x.ticker, level: x.level, dir: x.dir })), grade: r?.grade || null };
+}
+export async function hkGet(authorIn: any) {
+  const author = hkAuthor(authorIn);
+  const forDay = hkForDay(), readDay = hkPrevTradingDay(forDay);
+  if (!(await setting("homework_since").catch(() => null))?.day) await putSetting("homework_since", { day: forDay }, "Otto").catch(() => {});
+  const row = await hkRow(forDay, author);
+  const errors: Record<string, string> = {};
+  let data: any = row?.status === "handed_in" && row?.data ? row.data : null;
+  if (!data) {
+    const [m, e] = await Promise.all([hkMarket().catch((x) => { errors.market = String((x as Error).message).slice(0, 120); return null; }),
+      hkEarnings(readDay, forDay).catch((x) => { errors.earnings = String((x as Error).message).slice(0, 120); return []; })]);
+    data = { market: m, earnings: e || [] };
+  }
+  const ws = mondayOf(forDay), we = addDays(ws, 4);
+  const rows: any[] = (await db(`otto_homework?select=for_day,status,handed_in_at,call,grade&author=eq.${encodeURIComponent(author)}&for_day=gte.${ws}&for_day=lte.${we}&order=for_day.asc`).catch(() => [])) || [];
+  const since = (await setting("homework_since").catch(() => null))?.day || forDay;
+  const week: any[] = [];
+  for (let d = ws; d <= we; d = addDays(d, 1)) {
+    if (!isTradingDay(d)) continue;
+    const r = rows.find((x) => x.for_day === d), due = hkDue(d);
+    const inAt = r?.status === "handed_in" ? r.handed_in_at : null;
+    week.push({ day: d, wd: dayName(d), before_start: d < since, open: d === forDay,
+      state: inAt ? (Date.parse(inAt) <= Date.parse(due) ? "done" : "late") : Date.now() > Date.parse(due) ? (d < since ? "n/a" : "missed") : "open",
+      right: r?.grade?.direction ?? null });
+  }
+  const last = (await db(`otto_homework?select=for_day,call,answers,levels,grade&author=eq.${encodeURIComponent(author)}&grade=not.is.null&order=for_day.desc&limit=1`).catch(() => []))?.[0] || null;
+  return { ok: true, author, for_day: forDay, read_day: readDay, due: hkDue(forDay), clock: marketClock().status, steps: HK_STEPS, calls: HK_CALLS, min: HK_MIN,
+    row, data, errors, week, last_graded: last, since };
+}
+export async function hkSave(b: any) {
+  const author = hkAuthor(b?.author), forDay = hkForDay();
+  const v = hkValidate(b);
+  const now = new Date().toISOString();
+  const raw = (Array.isArray(b?.levels) ? b.levels : []).slice(0, 12);   // a draft keeps half-typed rows
+  const r = await db("otto_homework?on_conflict=for_day,author&select=*", { method: "POST",
+    headers: { prefer: "resolution=merge-duplicates,return=representation" },
+    body: JSON.stringify([{ for_day: forDay, author, answers: v.answers, call: v.call, levels: raw, updated_at: now }]) });
+  return { ok: true, saved_at: now, row: r?.[0] || null };
+}
+export async function hkSubmit(b: any, who: string) {
+  const author = hkAuthor(b?.author), forDay = hkForDay(), readDay = hkPrevTradingDay(forDay);
+  const v = hkValidate(b);
+  if (!v.ok) return { ok: false, errors: v.errors };
+  const prev = await hkRow(forDay, author);
+  const [m, e] = await Promise.all([hkMarket().catch(() => null), hkEarnings(readDay, forDay).catch(() => [])]);
+  const now = new Date().toISOString();
+  const first = prev?.status === "handed_in" && prev.handed_in_at ? prev.handed_in_at : now;
+  // levels → Watcher (for_day). A level the Watcher refuses (e.g. >10% from the price) is reported, never silently dropped.
+  const added: string[] = [], skipped: string[] = [], levels: any[] = [];
+  for (const x of v.levels) {
+    const was = (prev?.levels || []).find((p: any) => p.ticker === x.ticker && Number(p.level) === x.level && p.dir === x.dir && p.watch_id);
+    if (was) { levels.push({ ...x, watch_id: was.watch_id }); continue; }
+    try {
+      const w = await watchAdd({ ticker: x.ticker, level: x.level, dir: x.dir, source: "desk", by: `${author} · Homework`,
+        note: `${author}'s homework: ${x.dir === "up" ? "buy side ▲" : "sell side ▼"}${x.note ? " · " + x.note : ""}` });
+      levels.push({ ...x, watch_id: w?.id ?? null });
+      added.push(`${x.ticker} ${x.level} ${x.dir === "up" ? "▲" : "▼"}`);
+    } catch (err) { skipped.push(`${x.ticker} ${x.level}: ${String((err as Error).message).slice(0, 90)}`); levels.push({ ...x, watch_id: null, refused: String((err as Error).message).slice(0, 90) }); }
+  }
+  const r = await db("otto_homework?on_conflict=for_day,author&select=*", { method: "POST",
+    headers: { prefer: "resolution=merge-duplicates,return=representation" },
+    body: JSON.stringify([{ for_day: forDay, author, answers: v.answers, call: v.call, levels, data: { market: m, earnings: e || [] },
+      status: "handed_in", handed_in_at: first, updated_at: now }]) });
+  const late = Date.parse(first) > Date.parse(hkDue(forDay));
+  const head = prev?.status === "handed_in" ? "updated" : "handed in";
+  await logDesk("system", "Otto", `📓 ${author} ${head} the homework for ${prettyDate(forDay).replace(/, \d{4}$/, "")}${late ? " (late — after 9:00 AM)" : ""}: ${v.call!.toUpperCase()} — "${v.answers.call.slice(0, 160)}"${added.length ? ` · on the Watcher: ${added.join(", ")}` : ""}${skipped.length ? ` · not added: ${skipped.join("; ")}` : ""}`).catch(() => {});
+  await activity("change", `Homework ${head} by ${author} for ${forDay}: ${v.call}${added.length ? " · " + added.join(", ") : ""}`, author, `hw|${forDay}|${author}`).catch(() => {});
+  void who;
+  return { ok: true, row: r?.[0] || null, added, skipped, late };
+}
+export const hkBias = (call: string | null) => !call ? "neutral" : /bull/.test(call) ? "long" : "short";
+// 4:05 PM on for_day: his call vs QQQ's open→close, his levels touched, the Watcher levels that fired.
+export async function hkGradeTick(force = false) {
+  const c = marketClock();
+  if (!force && (!isTradingDay(c.date) || c.min < 965)) return { ok: true, skipped: "after 4:05 PM on trading days" };
+  const rows = await db(`otto_homework?select=*&for_day=eq.${c.date}&status=eq.handed_in&grade=is.null`).catch(() => []);
+  if (!rows?.length) return { ok: true, graded: 0 };
+  const start = nyIso(c.date, "9:30 AM")!, end = nyIso(c.date, "4:00 PM")!;
+  const tickers = [...new Set(["QQQ", ...rows.flatMap((r: any) => (r.levels || []).map((x: any) => x.ticker))])] as string[];
+  const bars = await rhBars(tickers, "5minute", start, end);
+  for (const t of Object.keys(bars)) bars[t] = bars[t].filter((b) => b.t >= Date.parse(start) && b.t < Date.parse(end));
+  const watch: any[] = (await db(`otto_watch?select=ticker,level,dir,fired&day=eq.${c.date}&limit=300`).catch(() => [])) || [];
+  let n = 0;
+  for (const r of rows) {
+    const g: any = gradeRead(hkBias(r.call), bars.QQQ || [], r.levels || [], bars);
+    if (!g) continue;
+    g.levels = g.levels.map((x: any) => { const w = watch.find((y) => y.ticker === x.ticker && Number(y.level) === Number(x.level) && (y.dir === x.dir || y.dir === "both"));
+      return { ...x, fired: !!(w && w.fired && Object.keys(w.fired).length) }; });
+    g.used = g.levels.filter((x: any) => x.fired).length;
+    g.call = r.call; g.at = new Date().toISOString();
+    await db(`otto_homework?id=eq.${r.id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ grade: g }) }).catch(() => {});
+    n++;
+  }
+  return { ok: true, graded: n };
+}
+// The week's homework for the Friday report card (Josh). Late = half a night.
+export async function hkWeek(ws: string, we: string, author = "Josh") {
+  const since = (await setting("homework_since").catch(() => null))?.day || null;
+  if (!since) return null;
+  const rows: any[] = (await db(`otto_homework?select=for_day,status,handed_in_at,call,grade&author=eq.${author}&for_day=gte.${ws}&for_day=lte.${we}`).catch(() => [])) || [];
+  const days: string[] = [];
+  for (let d = ws > since ? ws : since; d <= we; d = addDays(d, 1)) if (isTradingDay(d) && Date.now() > Date.parse(hkDue(d))) days.push(d);
+  if (!days.length) return null;
+  let done = 0, late = 0, right = 0, judged = 0, touched = 0, of = 0, used = 0;
+  const missedDays: string[] = [];
+  for (const d of days) {
+    const r = rows.find((x) => x.for_day === d && x.status === "handed_in");
+    if (!r) { missedDays.push(d); continue; }
+    if (Date.parse(r.handed_in_at) <= Date.parse(hkDue(d))) done++; else late++;
+    if (r.grade) { if (r.grade.direction === "right") right++; if (r.grade.direction === "right" || r.grade.direction === "wrong") judged++;
+      touched += r.grade.touched || 0; of += r.grade.of || 0; used += r.grade.used || 0; }
+  }
+  return { nights: days.length, done, late, missed: missedDays.length, missed_days: missedDays, right, judged, touched, of, used,
+    ratio: (done + 0.5 * late) / days.length };
+}
+// Push reminders: 8:30 PM the night before and 8:00 AM the morning of, only if not handed in. Once each.
+export async function hkRemindTick() {
+  const c = marketClock(), e = etParts();
+  const pm = c.status !== "open" && e.min >= 1230 && e.min < 1240, am = isTradingDay(e.date) && e.min >= 480 && e.min < 490;
+  if (!pm && !am) return { ok: true, skipped: "not a reminder window" };
+  const forDay = hkForDay();
+  if (pm && forDay === e.date) return { ok: true, skipped: "no homework tonight" };
+  const key = `homework_ping_${forDay}_${pm ? "pm" : "am"}`;
+  if ((await setting(key).catch(() => null))?.sent) return { ok: true, skipped: "sent" };
+  const r = await hkRow(forDay, "Josh");
+  if (r?.status === "handed_in") return { ok: true, skipped: "handed in" };
+  await putSetting(key, { sent: true }, "Otto").catch(() => {});
+  await notify("homework", pm ? "📓 Homework not handed in yet" : "📓 Homework due at 9:00 AM",
+    pm ? "Tonight's read: bonds, indexes, oil vs XOM, your call, tomorrow's levels. ~20 minutes." : "Not handed in yet. Skipped = flagged on today's cards and the Friday report card.", "./#homework");
+  return { ok: true, sent: pm ? "pm" : "am" };
+}
