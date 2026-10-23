@@ -2536,7 +2536,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="4.0.0";
+const BUILD="4.0.1";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -6385,6 +6385,9 @@ function v4Pop(kind,arg){
     if(V4.on&&side==="right")v4SpotDraw();
   };
   if(LAY_CARDS.right[0]!=="spotlight")LAY_CARDS.right.splice(1,0,"spotlight");   // after "in-a-trade", which always stays on top
+  // a saved layout lists the cards it knew; the Spotlight is new, so it is pinned under the trade row like the trade row itself (v3.33)
+  const _apply=layApplyCards;layApplyCards=function(){_apply();if(!V4.on)return;const R=$("#dkRight"),sp=R&&R.querySelector('[data-card="spotlight"]');if(!sp)return;
+    const tr=R.querySelector('[data-card="in-a-trade"]');if(tr){if(tr.nextElementSibling!==sp)tr.after(sp)}else if(R.firstElementChild!==sp)R.prepend(sp)};
   const _open=openDesk;openDesk=function(){v4Apply();_open();if(V4.on){v4Load();v4Timer()}};
   const _more=dkMore;dkMore=function(){_more();const pg=$("#dkPage .more-grid")||$("#dkPage .dkp");if(!pg)return;
     const c=document.createElement("div");c.className="dk-cardx";
