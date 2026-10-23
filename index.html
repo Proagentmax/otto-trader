@@ -1018,7 +1018,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
 .dk.v4 .dk-compose:before{content:"";position:absolute;inset:-1.5px;border-radius:17px;padding:1.5px;background:linear-gradient(90deg,var(--v4up),var(--v4blue) 50%,var(--gold));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
 .dk.v4 .dk-go{background:linear-gradient(180deg,var(--v4up),#13B978);color:#06130C;font-weight:700}
 /* Market Read: hero + tiles live in the banner slot */
-.dk.v4 .dk-banner{display:block;padding:12px 16px 10px;border-bottom:1px solid #1E242E;background:none}
+.dk.v4 .dk-banner{display:block;padding:12px 16px 12px;border-bottom:1px solid rgba(245,196,81,.28);box-shadow:0 1px 0 rgba(245,196,81,.08),0 10px 24px -14px rgba(245,196,81,.25);background:none;position:relative;z-index:1}
 .dk.v4 .dk-banner.t-long,.dk.v4 .dk-banner.t-short,.dk.v4 .dk-banner.t-chop,.dk.v4 .dk-banner.t-none{background:none}
 .v4hero{position:relative;border-radius:18px;overflow:hidden;border:1px solid #2E3542;box-shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.4);min-height:168px;cursor:pointer;background:#0D1016}
 .v4hero .art{position:absolute;inset:0;background-size:cover;background-position:right center;transition:opacity .5s}
@@ -1034,13 +1034,15 @@ svg.nc-svg{width:100%;height:auto;display:block}
 .v4btn{border:1px solid #2E3542;background:linear-gradient(180deg,#232833,#1B1F27);color:var(--ink);border-radius:10px;padding:6px 11px;font-size:12px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.4)}
 .v4btn.gold{background:linear-gradient(180deg,var(--gold),var(--gold2));border-color:var(--gold2);color:#1A1200;font-weight:700;box-shadow:0 6px 18px rgba(245,196,81,.25)}
 .v4tiles{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:10px}
+@media(max-width:1500px){.v4tile{padding:7px 8px;min-height:56px}.v4tile .k{font-size:9.5px;letter-spacing:.04em}.v4tile .v{font-size:12px}.v4tile .v small{font-size:10px;margin-left:3px}.v4tile svg{width:46px;height:20px;right:5px}.v4tile .v{padding-right:50px;overflow:hidden;text-overflow:ellipsis}}
+@media(max-width:1300px){.v4tile .k i{display:none}.v4tile svg{width:38px}}
 .v4tile{background:linear-gradient(180deg,#181C24,#12151B);border:1px solid #262D39;border-radius:12px;padding:8px 10px;box-shadow:0 1px 2px rgba(0,0,0,.45),0 8px 22px rgba(0,0,0,.35);cursor:pointer;position:relative;overflow:hidden;transition:.15s;min-height:62px}
 .v4tile:hover{border-color:var(--gold);transform:translateY(-1px)}.v4tile.on{border-color:var(--gold);box-shadow:0 0 0 1px rgba(245,196,81,.35),0 8px 22px rgba(0,0,0,.35)}
 .v4tile .k{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);display:flex;justify-content:space-between;gap:6px;white-space:nowrap;overflow:hidden}.v4tile .k i{font-style:normal;color:var(--ink-2);font-weight:700;overflow:hidden;text-overflow:ellipsis}
 .v4tile .v{font-family:var(--mono);font-size:13px;margin-top:3px;white-space:nowrap}.v4tile .v small{font-size:11px;margin-left:5px}
 .v4tile svg{position:absolute;right:6px;bottom:4px;width:64px;height:24px;opacity:.9}
 .v4tile.cal .v{font-family:inherit;font-size:12px;color:var(--ink-2);white-space:normal;line-height:1.3}
-.v4chips{display:flex;gap:6px;align-items:center;justify-content:flex-end;margin-top:8px;font-size:11px;color:var(--ink-3)}.v4chips .dk-chip{font-size:11px}
+.v4chips{display:none}
 .v4sk{height:168px;border-radius:18px;background:linear-gradient(90deg,#12151B,#181C24,#12151B);background-size:200% 100%;animation:v4sh 1.4s infinite;display:grid;place-items:center;color:var(--ink-3)}@keyframes v4sh{to{background-position:-200% 0}}
 /* Spotlight (right column) */
 .dk.v4 .v4spot{padding:0;overflow:hidden;position:relative;height:330px;min-height:330px;flex:0 0 330px;cursor:pointer;border-color:#2E3542}
@@ -1088,10 +1090,56 @@ svg.nc-svg{width:100%;height:auto;display:block}
 .v4sc .rule{margin-top:8px;border-top:1px solid rgba(255,255,255,.1);padding-top:7px;font-size:11.5px;color:var(--ink-2);line-height:1.4;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .v4sc .vd{display:inline-block;margin-top:7px;font-size:10.5px;font-weight:800;letter-spacing:.06em;padding:3px 8px;border-radius:6px;background:rgba(245,196,81,.14);color:var(--gold)}
 /* laptop + phone */
-@media(max-width:1380px){.v4tiles{grid-template-columns:repeat(4,minmax(0,1fr))}.v4tile{min-height:56px}.v4hero{min-height:140px}.v4hero .txt{max-width:70%;padding:13px 20px 12px}.v4hero h2{font-size:26px}.v4hero p{font-size:12.5px;margin-bottom:7px}.v4chips{margin-top:6px}}
+@media(max-width:1380px){.v4hero{min-height:140px}.v4hero .txt{max-width:70%;padding:13px 20px 12px}.v4hero h2{font-size:26px}.v4hero p{font-size:12.5px;margin-bottom:7px}.v4chips{margin-top:6px}}
 @media(max-width:1099px){.dk.v4 .dk-banner{padding:8px 10px}.v4hero{min-height:120px}.v4hero .txt{max-width:100%;padding:12px 14px}.v4hero h2{font-size:22px}.v4hero p{font-size:12.5px}.v4hero .cta{display:none}.v4hero .veil{background:linear-gradient(90deg,rgba(10,12,16,.92),rgba(10,12,16,.6))}
-  .v4tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.v4tile svg{display:none}.v4chips{display:none}
+  .v4tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.v4tile svg{display:none}.v4tile .k i{display:inline}.v4chips{display:none}
   .v4ov{padding:0}.v4pop{width:100%;max-height:100%;border-radius:0}.v4pop .two{grid-template-columns:1fr}.v4pop .grid{grid-template-columns:1fr 1fr}.v4sc{flex-basis:200px;height:400px}.dk.v4 .v4spot{height:300px}}
+
+/* ---- v4.1: top bar, lean rail, left column folded into popups (match the approved mockup) ---- */
+@media(min-width:1100px){
+  .dk.v4{grid-template-columns:72px minmax(0,1fr) 330px;grid-template-rows:auto auto auto minmax(0,1fr)}
+  .dk.v4 .dk-rail{grid-row:2/5}
+  .dk.v4 .v4top{grid-column:1/4;grid-row:1;display:flex;align-items:center;gap:12px;padding:8px 16px 8px 14px;border-bottom:1px solid #1E242E;background:rgba(10,12,16,.6)}
+  .dk.v4 .dk-strip{grid-column:2/4}.dk.v4 .dk-banner{grid-column:2/4;grid-row:3}
+  .dk.v4 #dkLeft{display:none}
+  .dk.v4 .dk-desk{grid-column:2;grid-row:4}.dk.v4 #dkRight{grid-column:3;grid-row:4}.dk.v4 .dk-page{grid-column:2/4;grid-row:4}
+    /* the rail keeps the main guys; everything lives in the ★ Menu launcher */
+  .dk.v4 .dk-rail .dk-tabs button[data-go]:not([data-go="desk"]):not([data-go="scoreboard"]):not([data-go="homework"]):not([data-go="winston"]):not([data-go="playbook"]),.dk.v4 .dk-rail button[data-go="settings"],.dk.v4 .dk-rail .dk-cust,.dk.v4 .dk-rail .dk-logo,.dk.v4 .dk-rail .dk-more,.dk.v4 .dk-rail .dk-morebox{display:none}
+  .dk.v4 .dk-head .dk-pill,.dk.v4 .dk-head .dk-who{display:none}
+}
+.dk.v4 .v4top{display:none}
+.v4top .mk{width:34px;height:34px;border-radius:50%;background:url(img/logo-mark.webp) center/cover;box-shadow:0 0 18px rgba(245,196,81,.35);flex:none}
+.v4top .nm{line-height:1.05}.v4top .nm b{font-size:16px;letter-spacing:.08em;background:linear-gradient(180deg,#F8E3A6,#C9962B);-webkit-background-clip:text;color:transparent;display:block}.v4top .nm small{font-size:9.5px;color:var(--ink-3);letter-spacing:.12em;text-transform:uppercase}
+.v4top .mid{display:none}
+.v4top .mid button,.v4top .pillb{display:flex;align-items:center;gap:7px;border:1px solid #262D39;background:linear-gradient(180deg,#1B1F27,#14171E);border-radius:999px;padding:6px 12px 6px 9px;font-size:12.5px;color:var(--ink-2);cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.4);min-height:0;white-space:nowrap}
+.v4top .mid button:hover,.v4top .pillb:hover{color:var(--ink);border-color:#3A4252}
+.v4top .mid button.on{color:var(--ink);border-color:rgba(245,196,81,.5);box-shadow:0 0 0 1px rgba(245,196,81,.25)}
+.v4top .mid svg,.v4top .pillb svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;padding:4px;box-sizing:content-box;border-radius:8px;background:linear-gradient(145deg,var(--c1,#3A4252),var(--c2,#1E242E));color:#fff}
+.v4top .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.v4top .st{border:1px solid #262D39;border-radius:999px;padding:5px 11px;background:#12151B;color:var(--ink-2);font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer}.v4top .st.q{cursor:default}.v4top .st i.off{background:var(--ink-3);box-shadow:none}.v4top .st .ver{color:var(--ink-3);font-size:11px}.v4top .st i{width:7px;height:7px;border-radius:50%;background:var(--v4up);box-shadow:0 0 8px var(--v4up)}.v4top .st i.bad{background:var(--v4dn);box-shadow:0 0 8px var(--v4dn)}.v4top .st b{color:var(--gold);font-weight:600}
+.v4top .who{display:flex;align-items:center;gap:7px;border:1px solid #262D39;border-radius:999px;padding:3px 10px 3px 3px;background:#12151B;font-size:12.5px;color:var(--ink-2)}
+.v4top .who .av{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#2a3142,#1a1f2a);display:grid;place-items:center;font-weight:700;color:var(--gold);box-shadow:inset 0 0 0 1px rgba(245,196,81,.4);font-size:12px}
+.v4top .who select{background:transparent;border:0;color:var(--ink);font-weight:600;padding:0;cursor:pointer;outline:0}
+.v4top .gear{display:none;width:32px;height:32px;border-radius:50%;border:1px solid #262D39;background:#12151B;display:grid;place-items:center;color:var(--ink-2);min-height:0;padding:0}.v4top .gear svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8}
+.v4top .gear.dot{position:relative}.v4top .gear.dot::after{content:"";position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#ff5a52}
+.dk.v4 .dk-rail .v4more{width:54px;min-height:50px;border-radius:14px;color:var(--ink-3);font-size:10.5px;font-weight:600;display:grid;place-items:center;line-height:1.1;padding:5px 0 4px}
+.dk.v4 .dk-rail .v4more svg{width:18px;height:18px;padding:9px;box-sizing:content-box;border-radius:12px;stroke:#fff;fill:none;stroke-width:1.9;stroke-linecap:round;background:linear-gradient(145deg,#3A4252,#1E242E);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 6px 14px rgba(0,0,0,.45);margin-bottom:3px}
+.dk.v4 .dk-rail .v4more svg{background:linear-gradient(145deg,#F5C451,#B57F1C);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 0 18px rgba(245,196,81,.35)}
+.v4launch{position:absolute;inset:0;z-index:58;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);display:flex;align-items:flex-end;justify-content:center;padding:0 0 96px 0}
+.dk.v4 .dk-compose .v4cb{display:flex;align-items:center;gap:6px;border:1px solid #262D39;background:linear-gradient(180deg,#1B1F27,#14171E);border-radius:10px;padding:7px 11px 7px 8px;font-size:12.5px;color:var(--ink-2);min-height:0;white-space:nowrap}.dk.v4 .dk-compose .v4cb svg{width:15px;height:15px;stroke:#fff;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;padding:4px;box-sizing:content-box;border-radius:8px;background:linear-gradient(145deg,var(--c1,#3A4252),var(--c2,#1E242E))}.dk.v4 .dk-compose .v4cb.menu svg{--c1:#F5C451;--c2:#B57F1C}.dk.v4 .dk-compose .v4cb:hover{color:var(--ink);border-color:#3A4252}.dk:not(.v4) .dk-compose .v4cb{display:none}
+.v4lp{width:min(720px,80%);background:linear-gradient(180deg,#171B23,#0F1218);border:1px solid #333B4A;border-radius:22px;box-shadow:0 40px 120px rgba(0,0,0,.8);padding:16px 18px 14px}
+.v4lp h4{margin:0 0 10px;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)}.v4lp h4.s{margin-top:14px}
+.v4lp .g{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.v4lp button{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;background:#151922;border:1px solid #262D39;color:var(--ink);font-size:13px;text-align:left;min-height:0}
+.v4lp button:hover{border-color:rgba(245,196,81,.5);background:#1A1F2A}.v4lp button.on{border-color:rgba(245,196,81,.6)}
+.v4lp button svg{width:16px;height:16px;padding:7px;box-sizing:content-box;border-radius:10px;stroke:#fff;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;background:linear-gradient(145deg,var(--c1,#3A4252),var(--c2,#1E242E));box-shadow:inset 0 1px 0 rgba(255,255,255,.15);flex:none}
+.v4lp button small{display:block;color:var(--ink-3);font-size:11px;font-weight:400}
+.v4chips .v4watch{border:1px solid #262D39;border-radius:999px;padding:4px 10px;background:#12151B;color:var(--ink-2);cursor:pointer;font-size:11px;display:flex;align-items:center;gap:6px}.v4chips .v4watch i{width:7px;height:7px;border-radius:50%;background:var(--ink-3)}.v4chips .v4watch i.on{background:var(--v4up);box-shadow:0 0 8px var(--v4up)}
+.v4pop .v4card .dk-cardx{background:none;border:0;padding:0;box-shadow:none}.v4pop .v4card .dk-h{font-size:14px}.v4pop .v4card .dk-row{font-size:14px;padding:8px 0}.v4pop .v4card .wt-lv{font-size:14px}
+.v4pop .wl{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.v4pop .wl div{background:#1F242D;border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;font-size:14px}.v4pop .wl b{font-family:var(--mono);font-weight:500}
+
+@media(max-width:1099px){.dk.v4 .dk-rail .v4more{display:none}}
+@media(min-width:1100px){.dk.v4 .dk-strip{grid-row:2}}
 </style>
 </head>
 <body>
@@ -2536,7 +2584,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="4.0.1";
+const BUILD="4.1.2";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -6395,6 +6443,103 @@ function v4Pop(kind,arg){
     pg.appendChild(c);c.querySelector("#v4Toggle").addEventListener("click",()=>{V4.on=!V4.on;localStorage.setItem("otto:v4",V4.on?"1":"0");v4Apply();dkRenderStrip();dkRenderBanner();dkRenderRight();if(V4.on)v4Load();toast(V4.on?"New look on":"Classic look on");dkMore()})};
   v4Apply();
   document.addEventListener("keydown",e=>{if(e.key==="Escape")v4Close()});
+}
+
+
+/* ---- v4.1 (23 Oct, same day): match the approved mockup — a real top bar (logo, quick actions, status, time, who),
+   a lean rail (Desk · Scoreboard · Homework · Winston · Playbook) with a ★ Menu launcher for everything else, and the
+   left column folded into popups: Watchlist (top bar), Watcher (chip under the tiles), Morning read (top bar), Today
+   (calendar tile), Night Charts (launcher). Classic look keeps the old rail and left column untouched. ---- */
+const V4_ICON={desk:'<path d="M4 5h16v10H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',scoreboard:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',prep:'<path d="M17 18a5 5 0 0 0-10 0"/><path d="M12 2v7M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1M8 6l4-4 4 4"/>',journal:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',playbook:'<path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/>',winston:'<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4M9 13h.01M15 13h.01M9 16h6"/>',jason:'<path d="M3 10v4l11 5V5z"/><path d="M14 9a4 4 0 0 1 0 6M17 7a7 7 0 0 1 0 10"/>',quiz:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',homework:'<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M9 9h6M9 13h4"/>',charts:'<path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/>',market:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',help:'<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/>',classic:'<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',customize:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',watch:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',star:'<path d="M12 2l3 7 7 .6-5.3 4.6 1.7 7.3L12 17.8 5.6 21.5l1.7-7.3L2 9.6 9 9z"/>',look:'<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z"/>'};
+const V4_TINT={desk:["#F5C451","#B57F1C"],scoreboard:["#2EE59D","#0E8F5C"],prep:["#FFB547","#B86A0E"],journal:["#4FB6FF","#1F5FA8"],playbook:["#3FD6C7","#147F76"],winston:["#9B8CFF","#5A48C9"],jason:["#FF9F5C","#C25A17"],quiz:["#F26BA6","#A8336B"],homework:["#5CA8FF","#2457B5"],charts:["#7FD1FF","#2B6FB3"],market:["#B0BEC5","#546E7A"],help:["#8A94A6","#3A4252"],classic:["#8A94A6","#3A4252"],settings:["#8A94A6","#3A4252"],customize:["#8A94A6","#3A4252"],watch:["#2EE59D","#0E8F5C"],list:["#F5C451","#B57F1C"],sun:["#FFB547","#B86A0E"]};
+V4_ICON.watchlist=V4_ICON.list;V4_ICON.watcher=V4_ICON.watch;V4_ICON.morning=V4_ICON.sun;V4_TINT.watchlist=V4_TINT.list;V4_TINT.watcher=V4_TINT.watch;V4_TINT.morning=V4_TINT.sun;V4_TINT.more=["#B0BEC5","#546E7A"];V4_ICON.more='<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>';
+const v4Svg=(k)=>`<svg viewBox="0 0 24 24" style="--c1:${(V4_TINT[k]||V4_TINT.help)[0]};--c2:${(V4_TINT[k]||V4_TINT.help)[1]}">${V4_ICON[k]||V4_ICON.help}</svg>`;
+function v4Go(k){
+  if(k==="watchlist")return v4Pop("watchlist");
+  if(k==="watcher")return v4Pop("watcher");
+  if(k==="morning")return v4Pop("morning");
+  if(k==="look"){V4.on=!V4.on;localStorage.setItem("otto:v4",V4.on?"1":"0");v4Apply();dkRenderStrip();dkRenderBanner();dkRenderRight();v4TopDraw();if(V4.on)v4Load();toast(V4.on?"New look on":"Classic look on");return}
+  if(k==="customize"){const b=$("#dkCust");if(b)b.click();return}
+  const b=$(`.dk-rail button[data-go="${k}"]`);if(b)b.click();
+}
+function v4TopBuild(){
+  const dk=$("#dk");if(!dk||$("#v4top"))return;
+  const t=document.createElement("div");t.id="v4top";t.className="v4top";
+  t.innerHTML=`<div class="mk"></div><div class="nm"><b>OTTO</b><small>Trader · The Desk</small></div>
+    <div class="mid"><button data-v4go="watchlist">${v4Svg("list")}Watchlist</button><button data-v4go="watcher">${v4Svg("watch")}Watcher</button><button data-v4go="morning">${v4Svg("sun")}Morning read</button><button data-v4go="journal">${v4Svg("journal")}Journal</button></div>
+    <div class="r"><span class="st" id="v4w" title="Watcher"><i></i>Watcher</span><span class="st" id="v4tv" data-set="1" title="TradingView"><i></i>TradingView</span><span class="st" id="v4rh" data-set="1" title="Robinhood"><i></i>Robinhood</span><span class="st q" id="v4clock"></span><span class="who"><span class="av" id="v4av">J</span><span id="v4whoSlot"></span></span><button class="gear" id="v4gear" aria-label="Settings" hidden></button></div>`;
+  dk.insertBefore(t,dk.firstChild);
+  const who=$("#dkWho");if(who)who.addEventListener("change",()=>{$("#v4av").textContent=(who.value||"J")[0]});
+  t.querySelectorAll("[data-v4go]").forEach(b=>b.addEventListener("click",()=>v4Go(b.dataset.v4go)));
+  t.querySelector("#v4gear").addEventListener("click",openSettings);
+  t.querySelector("#v4w").addEventListener("click",()=>v4Pop("watcher"));t.querySelectorAll("[data-set]").forEach(x=>x.addEventListener("click",openSettings));
+  // ★ Menu and ⚙ Settings live at the bottom, next to + Chart and Order ticket
+  const comp=$(".dk-compose");if(comp&&!$("#v4cbMenu")){const m=document.createElement("button");m.id="v4cbMenu";m.className="v4cb menu";m.type="button";m.title="Everything in the app";m.innerHTML=`<svg viewBox="0 0 24 24">${V4_ICON.star}</svg>Menu`;m.addEventListener("click",v4Launcher);
+    const g=document.createElement("button");g.id="v4cbSet";g.className="v4cb";g.type="button";g.title="Settings";g.innerHTML=`<svg viewBox="0 0 24 24">${V4_ICON.settings}</svg>`;g.addEventListener("click",openSettings);
+    comp.insertBefore(g,comp.firstChild)}   // v4.1.2: ★ Menu stays on the rail with the other tabs; only Settings moves to the bottom bar
+  // the ★ Menu on the rail — opens the launcher with everything
+  const rail=$(".dk-rail");if(rail&&!$("#v4menuBtn")){const m=document.createElement("button");m.id="v4menuBtn";m.className="v4more";m.innerHTML=`<svg viewBox="0 0 24 24">${V4_ICON.star}</svg>Menu`;m.addEventListener("click",v4Launcher);const sp=rail.querySelector(".sp");rail.insertBefore(m,sp||null)}
+  v4TopDraw();if(!V4.clockT)V4.clockT=setInterval(v4TopDraw,30e3);
+}
+function v4TopDraw(){
+  const t=$("#v4top");if(!t)return;const wide=V4.on&&innerWidth>=1100;t.style.display=wide?"flex":"none";
+  // "At the desk" lives in the top bar on a laptop and back in the Desk head on a phone / Classic
+  const who=$("#dkWho"),slot=$("#v4whoSlot"),home=$(".dk-head .dk-who");if(who&&slot&&home){if(wide&&who.parentElement!==slot)slot.appendChild(who);else if(!wide&&who.parentElement!==home)home.appendChild(who)}
+  const p=DK.panel||{},c=p.conn||{},bad=(c.tv===false&&!!p.quotes_error)||(c.rh===false&&!!p.rh_error)||!!(V4.mr&&V4.mr.error);
+  const dot=(el,ok,err,lab)=>{if(!el)return;el.innerHTML=`<i class="${err?"bad":ok?"":"off"}"></i>${lab}`};
+  dot($("#v4tv"),c.tv,p.quotes_error,"TradingView");dot($("#v4rh"),c.rh,p.rh_error,"Robinhood");
+  const W=DK.watch,won=W&&W.clock==="open",wn=W?(W.rows||[]).filter(r=>r.status==="watching").length:0;dot($("#v4w"),won,W&&W.error,`Watcher${W?(won?` · ${wn}`:W.clock==="pre"?" · 9:30":" · off"):""}`);
+  const ck0=$("#v4clock");if(ck0)ck0.title=`v${BUILD}`;
+  const n=nyNow(),open=!["Sat","Sun"].includes(n.wd)&&n.min>=570&&n.min<960,pre=!["Sat","Sun"].includes(n.wd)&&n.min>=240&&n.min<570;
+  const d=new Date().toLocaleDateString("en-US",{weekday:"short",day:"numeric",month:"short",timeZone:"America/New_York"}),tm=new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"});
+  const ck=$("#v4clock");if(ck)ck.innerHTML=`${esc(d)} · <b>${esc(tm)}</b> · ${open?"open":pre?"pre-market":"closed"} <span class="ver">· v${BUILD}</span>`;
+  const av=$("#v4av");if(av&&who)av.textContent=(who.value||"J")[0];
+  const sb=$('.dk-rail button[data-go="settings"]'),g2=$("#v4cbSet");if(g2&&sb)g2.style.boxShadow=sb.classList.contains("dot")?"0 0 0 1px #ff5a52":"";
+  t.querySelectorAll(".mid button[data-v4go]").forEach(b=>b.classList.toggle("on",DK.view===b.dataset.v4go));
+}
+function v4Launcher(){
+  v4Close();const o=document.createElement("div");o.id="v4ov";o.className="v4launch";
+  const it=(k,l,s)=>`<button data-v4go="${k}" class="${DK.view===k?"on":""}">${v4Svg(k)}<span>${l}${s?`<small>${s}</small>`:""}</span></button>`;
+  o.innerHTML=`<div class="v4lp"><h4>Go to</h4><div class="g">${it("desk","Desk","Jarvis · cards · signals")}${it("scoreboard","Scoreboard","Josh + Baby J vs Winston")}${it("prep","Pre-market","Prep · Market · Night Charts")}${it("homework","Homework","the after-close read")}${it("winston","Winston","the paper trader")}${it("playbook","Playbook","the Otto Rules")}${it("jason","Calls","the coach's calls")}${it("quiz","Quiz","five questions, graded")}${it("journal","Journal","every trade, with its reason")}${it("charts","Night Charts","9 charts, ready by 7")}${it("more","Everything else","signals today · levels · brain")}${it("help","Help","")}</div>
+    <h4 class="s">Desk tools</h4><div class="g">${it("watchlist","Watchlist","Treasure Hunt")}${it("watcher","Watcher","levels · every minute")}${it("morning","Morning read","the three inputs")}${it("customize","Customize","move the cards")}</div>
+    <h4 class="s">App</h4><div class="g">${it("settings","Settings","accounts · limits · push")}${it("classic","Phone layout","Week · Coach · Journal · Market")}<button data-v4go="look">${v4Svg("look")}<span>Look<small>${V4.on?"new (v4) · switch to Classic":"classic · switch to new"}</small></span></button></div></div>`;
+  o.addEventListener("click",e=>{if(e.target===o)v4Close()});
+  o.querySelectorAll("[data-v4go]").forEach(b=>b.addEventListener("click",()=>{v4Close();v4Go(b.dataset.v4go)}));
+  $("#dk").appendChild(o);
+}
+/* the three left-column cards, as popups */
+const _v4Pop=v4Pop;v4Pop=function(kind,arg){
+  if(kind==="watchlist"){
+    const p=DK.panel||{},Q=dkQuotes(),w=p.watch||[];
+    const rows=!p.conn||!p.conn.tv?`<span class="mut">Connect TradingView in Settings to see your watchlist here.</span>`:p.watchlist_error?`<span class="dk-err">${esc(p.watchlist_error)}</span>`:!w.length?`<span class="mut">Your active TradingView watchlist is empty.</span>`
+      :`<div class="wl">${w.map(s=>{const q=dkQ(Q,s);return `<div><span>${esc(s.split(":")[1]||s)}</span><span><b>${q?dkNum(q.close):"—"}</b> ${q?dkPct(q.change):""}</span></div>`}).join("")}</div>`;
+    v4Open(v4Ph(null,`Watchlist · ${esc(p.watchlist_name||"TradingView")}`,`${w.length} names · prices from ${esc(p.quotes_source||"TradingView")}`),rows+`<div class="mut" style="font-size:12.5px;margin-top:12px">Prices only, by decision (4 Oct) — levels live on the Watcher.</div>`);return;
+  }
+  if(kind==="watcher"){
+    v4Open(v4Ph(null,"Watcher","levels · 5/10-min closes · clears at 4 PM"),`<div class="v4card">${dkWatchCard()}</div>`,o=>{dkWatchBind(o);o.querySelectorAll("[data-nc-open]").forEach(b=>b.addEventListener("click",()=>{v4Close();dkShow("charts")}))});return;
+  }
+  if(kind==="morning"){
+    const nc=typeof ncDeskCard==="function"?ncDeskCard():"";
+    v4Open(v4Ph("img/hero-neutral.webp","Morning read",nyChip()),`<div class="two"><div>Ask the desk for today's read: the three inputs, SPY/QQQ, the Mag 7, the calendar — no orders. The Market Read above already has bonds, who leads, oil vs XOM, the dollar, gold · copper and crypto; this adds the Mag 7 and your watchlist's earnings.
+        <div class="v4ask"><span>Morning read: the three macro inputs, SPY/QQQ and the Mag 7, today's calendar and earnings on my watchlist…</span><button class="v4btn gold" data-v4ask="Morning read: the three macro inputs, SPY/QQQ and the Mag 7, today's calendar and earnings on my watchlist. Bias and the 2–3 setups worth watching. No orders.">Run it</button></div></div>
+        <div class="side"><h4>Night Charts</h4><div class="v4card">${nc||`<span class="mut">Not charted yet.</span>`}</div></div></div>`,o=>o.querySelectorAll("[data-nc-open]").forEach(b=>b.addEventListener("click",()=>{v4Close();dkShow("charts")})));return;
+  }
+  return _v4Pop(kind,arg);
+};
+/* the Watcher chip under the tiles (the mockup's "Watcher ● on · 27s") */
+const _v4RenderRead=v4RenderRead;v4RenderRead=function(){
+  _v4RenderRead();v4TopDraw();const ch=$("#dkBanner .v4chips");if(!ch)return;ch.querySelectorAll(".v4watch").forEach(x=>x.remove());
+  const W=DK.watch,on=W&&W.clock==="open",n=W&&(W.rows||[]).filter(r=>r.status==="watching").length;
+  const b=document.createElement("span");b.className="v4watch";b.innerHTML=`<i class="${on?"on":""}"></i>Watcher ${W?(on?`on · ${n||0} level${n===1?"":"s"}`:W.clock==="pre"?"starts 9:30":"off"):"…"}`;b.addEventListener("click",()=>v4Pop("watcher"));
+  ch.insertBefore(b,ch.firstChild);v4TopDraw();
+};
+{
+  const _open2=openDesk;openDesk=function(){_open2();v4TopBuild();v4TopDraw()};
+  const _show=dkShow;dkShow=function(v){_show(v);v4TopDraw()};
+  const _apply2=v4Apply;v4Apply=function(){_apply2();v4TopDraw()};
+  const _wl=dkWatchLoad;dkWatchLoad=async function(){await _wl();if(V4.on&&DK.open)v4RenderRead()};
+  addEventListener("resize",v4TopDraw);
+  if(DK.open)v4TopBuild();
 }
 
 </script>
