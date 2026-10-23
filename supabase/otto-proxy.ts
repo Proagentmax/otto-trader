@@ -2515,6 +2515,144 @@ async function sentimentNow(force = false, kind = "live"): Promise<any> {
   return body;
 }
 
+/* ------------------------------------------------------------ v4.0 MARKET READ
+   The coach's CNBC pass (22 Oct 1:1, minutes 9–17), done by Otto every 10 minutes:
+   bonds first, then who leads, oil vs XOM, the dollar, gold · copper, crypto, the calendar.
+   Rules are mechanical and the thresholds live in MR_RULES; missing data is "—", never a guess.
+   Verdict (Ifoma 23 Oct): DEFENSIVE = Nasdaq ≤ −1% and TLT ≥ +0.2%; RISK-ON = Nasdaq ≥ +0.5%
+   and TLT ≤ −0.2% and copper/BTC green; else NEUTRAL, soft or firm by the index average.
+   Dislocations: oil/XOM, oil/CVX, gold/NEM, copper/FCX — both ≥0.3% and opposite signs → a line,
+   never a card by itself. One route (`market_read`), cached 10 minutes, no new table.
+   Prices: Yahoo chart API (the same source the banner already trusts), one call per symbol,
+   1d/5m for today's sparkline + 5d/1d for the last five days. */
+export const MR_RULES = { def_nq: -1.0, def_tlt: 0.2, on_nq: 0.5, on_tlt: -0.2, disloc: 0.3, lead: 0.25 };
+const MR_SYMS: Record<string, string> = { tlt: "TLT", qqq: "QQQ", spy: "SPY", dia: "DIA", iwm: "IWM", cl: "CL=F", xom: "XOM", cvx: "CVX",
+  dxy: "DX-Y.NYB", jpy: "JPY=X", gc: "GC=F", nem: "NEM", hg: "HG=F", fcx: "FCX", btc: "BTC-USD" };
+export type MrQ = { sym: string; price: number | null; pct: number | null; hi: number | null; lo: number | null; age: number | null; spark: number[]; days: { d: string; pct: number }[]; error?: string };
+async function mrQuote(sym: string): Promise<MrQ> {
+  const T: any = (globalThis as any).__OTTO_TEST__;
+  if (T?.yahoo) return T.yahoo(sym);
+  const get = (range: string, interval: string, ms: number) => cached(`mr|${sym}|${range}|${interval}`, ms, async () => {
+    const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=${range}&interval=${interval}`, { headers: UA });
+    if (!r.ok) throw new Error("yahoo HTTP " + r.status);
+    const j = await r.json(); const x = j?.chart?.result?.[0];
+    if (!x?.meta) throw new Error(j?.chart?.error?.description || "yahoo: no data");
+    return x;
+  });
+  const out: MrQ = { sym, price: null, pct: null, hi: null, lo: null, age: null, spark: [], days: [] };
+  try {
+    const x: any = await withTimeout(get("1d", "5m", 60e3), 6000, "Yahoo");
+    const m = x.meta, price = Number(m.regularMarketPrice), prev = Number(m.chartPreviousClose ?? m.previousClose);
+    const q = x.indicators?.quote?.[0] || {};
+    const closes: number[] = (q.close || []).filter((c: any) => typeof c === "number");
+    if (isFinite(price) && isFinite(prev) && prev) { out.price = price; out.pct = (price - prev) / prev * 100; }
+    out.hi = Math.max(...(q.high || []).filter((v: any) => typeof v === "number"), -Infinity); if (!isFinite(out.hi!)) out.hi = null;
+    out.lo = Math.min(...(q.low || []).filter((v: any) => typeof v === "number"), Infinity); if (!isFinite(out.lo!)) out.lo = null;
+    out.age = isFinite(Number(m.regularMarketTime)) ? Math.max(0, Math.round(Date.now() / 1000 - Number(m.regularMarketTime))) : null;
+    out.spark = closes.slice(-78);           // a full session of 5-minute closes
+  } catch (e) { out.error = String((e as Error).message ?? e).slice(0, 120); }
+  try {
+    const x: any = await withTimeout(get("6d", "1d", 10 * 60e3), 6000, "Yahoo 5d");
+    const ts: number[] = x.timestamp || [], cl: (number | null)[] = x.indicators?.quote?.[0]?.close || [];
+    const rows = ts.map((t, i) => ({ t, c: cl[i] })).filter((r) => typeof r.c === "number") as { t: number; c: number }[];
+    for (let i = 1; i < rows.length; i++) out.days.push({ d: new Date(rows[i].t * 1000).toLocaleDateString("en-US", { weekday: "short", timeZone: "America/New_York" }), pct: (rows[i].c - rows[i - 1].c) / rows[i - 1].c * 100 });
+    out.days = out.days.slice(-5);
+  } catch { /* five-day row is a nice-to-have */ }
+  return out;
+}
+const mrPct = (q: MrQ | undefined) => q && q.pct != null && isFinite(q.pct) ? q.pct : null;
+const mrF = (v: number | null, d = 2) => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`;
+export function mrVerdict(Q: Record<string, MrQ>) {
+  const nq = mrPct(Q.qqq), tlt = mrPct(Q.tlt), hg = mrPct(Q.hg), btc = mrPct(Q.btc);
+  const idx = [mrPct(Q.spy), mrPct(Q.qqq), mrPct(Q.dia)].filter((v): v is number => v != null);
+  const avg = idx.length ? idx.reduce((a, b) => a + b, 0) / idx.length : null;
+  if (nq == null || tlt == null) return { key: "none", label: "No read", tone: "none", why: "Nasdaq or bonds have no fresh price yet — nothing is guessed.", flip: "The read starts once QQQ and TLT both print." };
+  if (nq <= MR_RULES.def_nq && tlt >= MR_RULES.def_tlt)
+    return { key: "def", label: "Defensive", tone: "down", why: `Treasuries bought (TLT ${mrF(tlt)}) while Nasdaq is ${mrF(nq)}: money is leaving stocks for bonds. Puts, not calls. Discount every bounce.`, flip: `QQQ back above ${mrF(MR_RULES.def_nq)} on the day or TLT red turns this Neutral.` };
+  const greens = [hg, btc].filter((v): v is number => v != null);
+  if (nq >= MR_RULES.on_nq && tlt <= MR_RULES.on_tlt && greens.length && greens.every((v) => v > 0))
+    return { key: "on", label: "Risk-on", tone: "up", why: `Treasuries sold (TLT ${mrF(tlt)}), Nasdaq ${mrF(nq)} and leading, ${hg != null && hg > 0 ? "copper" : ""}${hg != null && hg > 0 && btc != null && btc > 0 ? " and " : ""}${btc != null && btc > 0 ? "crypto" : ""} green. Calls on the leaders — let price come to you.`, flip: `Nasdaq under ${mrF(MR_RULES.on_nq)} or TLT green turns this Neutral.` };
+  const soft = avg != null && avg < 0;
+  return { key: soft ? "neu_soft" : "neu_firm", label: soft ? "Neutral · soft" : "Neutral · firm", tone: "flat",
+    why: `${tlt < 0 ? "Bonds sold a little" : tlt > 0 ? "Bonds bid a little" : "Bonds flat"} (TLT ${mrF(tlt)}), Nasdaq ${mrF(nq)}${avg != null ? `, indexes average ${mrF(avg)}` : ""}. ${soft ? "Not the defensive pattern — discount the bounce, trade the leader's names only." : "Nothing lines up strongly either way — small size, let the first hour settle."}`,
+    flip: `Defensive at Nasdaq ≤ ${MR_RULES.def_nq}% with TLT ≥ +${MR_RULES.def_tlt}%; Risk-on at Nasdaq ≥ +${MR_RULES.on_nq}% with TLT ≤ ${MR_RULES.on_tlt}% and copper/BTC green.` };
+}
+export function mrDislocations(Q: Record<string, MrQ>) {
+  const pairs: [string, string, string][] = [["cl", "xom", "Oil vs XOM"], ["cl", "cvx", "Oil vs CVX"], ["gc", "nem", "Gold vs NEM"], ["hg", "fcx", "Copper vs FCX"]];
+  const out: { label: string; a: string; b: string; a_pct: number; b_pct: number; text: string }[] = [];
+  for (const [a, b, label] of pairs) {
+    const pa = mrPct(Q[a]), pb = mrPct(Q[b]);
+    if (pa == null || pb == null || Math.abs(pa) < MR_RULES.disloc || Math.abs(pb) < MR_RULES.disloc || Math.sign(pa) === Math.sign(pb)) continue;
+    out.push({ label, a: MR_SYMS[a], b: MR_SYMS[b], a_pct: pa, b_pct: pb,
+      text: `${label}: ${MR_SYMS[a]} ${mrF(pa)} but ${MR_SYMS[b]} ${mrF(pb)} — the correlation that should be there isn't. ${pa > 0 ? "Either the commodity comes down or the stock is telling you about broad weakness" : "Either the commodity bounces or the stock is running ahead"}. A candidate to look at, not a card.` });
+  }
+  return out;
+}
+// Coach rules per tile — his words from the 22 Oct 1:1 (brain v9, PB-1022-*), kept with the tile so a popup can show them.
+const MR_COACH: Record<string, { rule: string; ref: string }> = {
+  bonds: { rule: "Bonds first. Bonds red (rates down, price up) with stocks red = people turning defensive, a rotation. When they match, pressure in markets confirmed by the bond market: ultra defensive.", ref: "22 Oct call · PB-1022-01" },
+  indexes: { rule: "Which index is performing best, left to right? Dow and Russell holding while Nasdaq is −2% = Nasdaq is the laggard. Trade the leader's names, fade the laggard.", ref: "22 Oct call · PB-1022-02" },
+  oil: { rule: "Oil up but XOM down = the correlation that should be there isn't. Either oil comes down or there's broad weakness — look for puts, not calls (or a bounce trade).", ref: "22 Oct call · PB-1022-03" },
+  dollar: { rule: "JPY red = the dollar is not getting stronger, it's getting weaker. A firm dollar tightens conditions; a weak yen is healthy liquidity.", ref: "22 Oct call · PB-1022-04" },
+  gold: { rule: "Gold is the safe haven; copper is Dr. Copper, the indicator for expansion. Both red with stocks red = fear and no growth bid.", ref: "22 Oct call · PB-1022-05" },
+  crypto: { rule: "Crypto is the store-of-value read. Green with Nasdaq = risk-on confirmed; red while stocks bounce = the bounce is suspect.", ref: "22 Oct call · PB-1022-05" },
+  calendar: { rule: "Never assume you know, even if you do know. Always look for something you're missing — the calendar and the reporters tell you what moves the laggard.", ref: "22 Oct call · PB-1022-07" },
+};
+export function mrTiles(Q: Record<string, MrQ>, calendar: any[], session: string) {
+  const q = (k: string) => Q[k] || { sym: MR_SYMS[k], price: null, pct: null, hi: null, lo: null, age: null, spark: [], days: [] };
+  const tile = (k: string, label: string, main: string, sub: string, extra: any = {}) => {
+    const m = q(main); return { k, label, sub, sym: m.sym, price: m.price, pct: m.pct, hi: m.hi, lo: m.lo, age: m.age, spark: m.spark, days: m.days, error: m.error || null, rule: MR_COACH[k].rule, ref: MR_COACH[k].ref, ...extra };
+  };
+  const tlt = mrPct(q("tlt"));
+  const idx = [["spy", "S&P"], ["qqq", "Nasdaq"], ["dia", "Dow"], ["iwm", "Russell"]].map(([k, n]) => ({ k, n, pct: mrPct(q(k)), price: q(k).price })).filter((x) => x.pct != null) as { k: string; n: string; pct: number; price: number | null }[];
+  const lead = idx.length ? idx.reduce((a, b) => (b.pct > a.pct ? b : a)) : null, lag = idx.length ? idx.reduce((a, b) => (b.pct < a.pct ? b : a)) : null;
+  const cl = mrPct(q("cl")), xom = mrPct(q("xom")), dxy = mrPct(q("dxy")), jpy = mrPct(q("jpy")), gc = mrPct(q("gc")), hg = mrPct(q("hg")), btc = mrPct(q("btc"));
+  const agree = cl != null && xom != null ? (Math.sign(cl) === Math.sign(xom) ? "agree" : "disagree") : "—";
+  const next = (calendar || []).find((e) => Date.parse(e.date) > Date.now()) || null;
+  return [
+    tile("bonds", "1 · Bonds", "tlt", tlt == null ? "—" : tlt > 0.15 ? "bought" : tlt < -0.15 ? "sold" : "flat"),
+    tile("indexes", "2 · Indexes", "qqq", lead && lag && lead.k !== lag.k && lead.pct - lag.pct >= MR_RULES.lead ? `${lead.n} leads · ${lag.n} lags` : idx.length ? "moving together" : "—",
+      { indexes: idx.map((x) => ({ k: x.k, n: x.n, pct: x.pct, price: x.price })), leader: lead?.n || null, laggard: lag?.n || null }),
+    tile("oil", "3 · Oil vs XOM", "cl", agree, { xom: { price: q("xom").price, pct: xom }, cvx: { price: q("cvx").price, pct: mrPct(q("cvx")) } }),
+    tile("dollar", "4 · Dollar", "dxy", dxy == null ? "—" : dxy > 0.1 ? "firm" : dxy < -0.1 ? "weak" : "flat", { jpy: { price: q("jpy").price, pct: jpy } }),
+    tile("gold", "5 · Gold · Cu", "gc", `${gc == null ? "—" : gc > 0.3 ? "gold bid" : gc < -0.3 ? "gold sold" : "flat"} · ${hg == null ? "—" : hg > 0.3 ? "Cu up" : hg < -0.3 ? "Cu down" : "Cu flat"}`,
+      { copper: { price: q("hg").price, pct: hg }, nem: { pct: mrPct(q("nem")) }, fcx: { pct: mrPct(q("fcx")) } }),
+    tile("crypto", "6 · Crypto", "btc", btc == null ? "—" : btc > 0.5 ? "bid" : btc < -0.5 ? "sold" : "calm"),
+    { k: "calendar", label: "Calendar", sub: session === "closed" ? "closed" : next ? (next.importance >= 1 ? "binary ahead" : "light") : "clear", sym: null, price: null, pct: null, spark: [], days: [],
+      next: next ? { at: next.date, title: next.title, importance: next.importance } : null, events: (calendar || []).slice(0, 8), rule: MR_COACH.calendar.rule, ref: MR_COACH.calendar.ref },
+  ];
+}
+export function mrLines(tiles: any[], v: any) {
+  const t = (k: string) => tiles.find((x) => x.k === k) || {};
+  const b = t("bonds"), i = t("indexes"), o = t("oil"), d = t("dollar"), g = t("gold"), c = t("crypto");
+  return [
+    `Bonds: TLT ${mrF(b.pct)} — ${b.sub}.`,
+    `Indexes: ${(i.indexes || []).map((x: any) => `${x.n} ${mrF(x.pct)}`).join(", ") || "—"}${i.leader ? ` — ${i.leader} leads, ${i.laggard} lags.` : "."}`,
+    `Oil vs XOM: CL ${mrF(o.pct)}, XOM ${mrF(o.xom?.pct ?? null)} — they ${o.sub}.`,
+    `Dollar: DXY ${mrF(d.pct)}, USD/JPY ${mrF(d.jpy?.pct ?? null)} — ${d.sub}.`,
+    `Gold ${mrF(g.pct)} · copper ${mrF(g.copper?.pct ?? null)} — ${g.sub}.`,
+    `Crypto: BTC ${mrF(c.pct)} — ${c.sub}.`,
+    `Verdict: ${v.label}. ${v.why}`,
+  ];
+}
+let MR: { at: number; body: any } | null = null;
+export const marketReadForTest = (force = false) => marketRead(force);
+async function marketRead(force = false) {
+  if (!force && MR && Date.now() - MR.at < 10 * 60e3) return MR.body;
+  const keys = Object.keys(MR_SYMS);
+  const qs = await Promise.all(keys.map((k) => mrQuote(MR_SYMS[k])));
+  const Q: Record<string, MrQ> = Object.fromEntries(keys.map((k, i) => [k, qs[i]]));
+  const now = etParts();
+  const session = ["Sat", "Sun"].includes(now.wd) ? "closed" : now.min < 570 ? "pre" : now.min < 960 ? "open" : "after";
+  let calendar: any[] = [];
+  try { const s = await sentimentNow(); calendar = s?.calendar || []; } catch { /* shown as unavailable */ }
+  const verdict = mrVerdict(Q), tiles = mrTiles(Q, calendar, session), dislocations = mrDislocations(Q);
+  const body = { ok: true, at: Date.now(), et: `${now.wd} ${fmtMin(now.min)}`, date: now.date, session, verdict, tiles, dislocations, lines: mrLines(tiles, verdict),
+    fresh: qs.filter((x) => x.pct != null).length, total: qs.length, source: "Yahoo · 5-minute bars", rules: MR_RULES };
+  MR = { at: Date.now(), body };
+  return body;
+}
+
 /* ------------------------------------------------------------ Market (desktop) */
 
 const MAG7 = ["NASDAQ:AAPL", "NASDAQ:MSFT", "NASDAQ:NVDA", "NASDAQ:AMZN", "NASDAQ:GOOGL", "NASDAQ:META", "NASDAQ:TSLA"];
@@ -7486,6 +7624,7 @@ Deno.serve(async (req) => {
          "playbook_get", "feedback_add", "feedback_list", "daily_now",
          "prep_get", "prep_submit", "prep_reply", "prep_watch", "prep_img", "score_extra", "check_cancel", "prep_lock",
          "charts_get", "chart_now", "chart_review", "chart_use", "chart_chat",
+         "market_read",                                                                                                   // v4.0
          "activity_get", "coach_corner", "coach_report", "lock_state", "trade_live", "close_now", "coach_log", "quiz_grade", "quiz_list", "hw_get", "hw_save", "hw_submit"].includes(fn)) {
       const who = deskUser(claims);
       if (!who) return json({ ok: false, locked: true,
@@ -7511,6 +7650,7 @@ Deno.serve(async (req) => {
       if (fn === "close_now") return json(String(body?.option_id || "").startsWith(PRAC_PREFIX) ? await closePractice(body, who) : await closeByButton(body, who));   // v3.43: "P:" = practice
       // ---- v3.1
       if (fn === "sentiment") return json(await sentimentNow(new URL(req.url).searchParams.get("force") === "1"));
+      if (fn === "market_read") return json(await marketRead(new URL(req.url).searchParams.get("force") === "1"));   // v4.0: the coach's CNBC pass, every 10 min
       if (fn === "market_desk") return json(await marketDesk());
       if (fn === "journal") return json(await journal(new URL(req.url).searchParams.get("force") === "1"));
       if (fn === "trade_reason") {
