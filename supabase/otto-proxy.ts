@@ -1083,7 +1083,24 @@ const STAMP_RE = /^\s*(?:LIVE|PAPER)\s*(?:[—–:·|-]+\s*)?/i;
 export const bareTitle = (t: any): string => String(t ?? "").replace(STAMP_RE, "").replace(/^Buy\s+/i, "");
 const INNER_STAMP_RE = /\s*(?:[—–:·|-]\s*)?\b(?:LIVE|PAPER)\b\s*(?:[—–:·|-]\s*)?/gi;
 // v3.39: Jarvis also writes the word inside the title ("SCALP · PAPER · CRWV 69C" went out LIVE on 16 Oct). The server's word is the only one.
-export const stampTitle = (t: any, paper: boolean): string => (paper ? "PAPER — " : "LIVE — ") + String(t ?? "").replace(STAMP_RE, "").replace(INNER_STAMP_RE, " · ").replace(/^(?:\s*·\s*)+|(?:\s*·\s*)+$/g, "").replace(/(?:\s*·\s*){2,}/g, " · ").trim();
+// v3.44: the cleaning is shared. A NON-opening card (an equity order, a close, an alert) gets no prefix from the server, so any
+// LIVE/PAPER word Jarvis wrote is stripped instead: 22 Oct ULTA went out "PAPER – Buy 1 ULTA 625C…" while it was LIVE (pending),
+// because only opening option cards were stamped. The dash was never the problem: STAMP_RE already takes "-", "–", "—" and none.
+export const unstampTitle = (t: any): string => String(t ?? "").replace(STAMP_RE, "").replace(INNER_STAMP_RE, " · ").replace(/^(?:\s*·\s*)+|(?:\s*·\s*)+$/g, "").replace(/(?:\s*·\s*){2,}/g, " · ").trim();
+export const stampTitle = (t: any, paper: boolean): string => (paper ? "PAPER — " : "LIVE — ") + unstampTitle(t);
+/* v3.44 fix 2 (22 Oct ULTA, 9 Oct NVDA): a card that NAMES an option but whose order is place_equity_order is a stock order at an
+   option price ("625C @ $4.40" = buy 1 SHARE at $4.40; the size check saw $4.40, not the ~$440 premium, so it went LIVE).
+   Refused before anything is reviewed or stored; Jarvis gets the reason and proposes again with place_option_order (cost = premium × 100). */
+const OPT_IN_TITLE = /\b[A-Z]{1,5}\s+\d{1,5}(?:\.\d{1,2})?[CP]\b/;
+export function optionAsStock(input: any): string | null {
+  const eqc = (Array.isArray(input?.calls) ? input.calls : []).find((c: any) => c?.tool === "place_equity_order");
+  if (!eqc) return null;
+  const title = String(input?.title || ""), p = input?.plan && typeof input.plan === "object" ? input.plan : {};
+  const named = OPT_IN_TITLE.test(title) || !!(p.option_id || p.contract || p.option || p.strike != null || Number(p.stop_option) > 0);
+  if (!named) return null;
+  const a = eqc.args || {}, lp = Number(a.limit_price ?? a.price), q = Number(a.quantity) || 1;
+  return `NO CARD — this card names an option ("${unstampTitle(title).slice(0, 80)}") but its order is place_equity_order: buy ${q} SHARE${q === 1 ? "" : "S"} of ${String(a.symbol || "?").toUpperCase()}${lp > 0 ? ` at $${lp.toFixed(2)}` : ""}. That is a stock order at an option price${lp > 0 ? ` (the option would cost about $${Math.round(lp * 100 * q)}, premium × 100)` : ""}. Propose again with place_option_order (legs: option_id, side buy, position_effect open, ratio_quantity 1).`;
+}
 // v3.39: Jarvis's Desk line says the card's REAL status. "Card is up as PAPER" on a LIVE card is a false statement (16 Oct CRWV).
 export function statusWords(text: string, acts: { title?: string; status?: string }[]): string {
   if (!acts.length) return text;
@@ -1098,9 +1115,25 @@ const noCardLevel = (row: any): string => {
   const lv = Number(row?.level) > 0 ? Number(row.level) : levelsFromWords(row?.words || "")[0]?.level;
   return `NO CARD — the coach posted a level with no direction ("${String(row?.words || "").slice(0, 80)}"). Don't pick a side: it's on the Watcher both ways, and the card comes when price touches ${lv ?? "the level"} and a 5-minute candle closes. Say that in your read.`;
 };
+// v3.21 one card per ticker + direction (15 min). v3.44 fix 4: the same test runs again right AFTER the insert, because two
+// Watcher runs 1 s apart (22 Oct META 632.5P, fd913098 + 77df88fc) both passed the check before either card existed.
+export function sameIdeaCard(r: any, tk: string, direction: any, nowMs = Date.now()): boolean {
+  return !!(r?.plan && String(r.plan.tv_symbol || "").split(":").pop()?.toUpperCase() === tk && r.plan.direction === direction &&
+    nowMs - Date.parse(r.created_at) < 15 * 60e3 &&
+    (["pending", "running", "paper_wait"].includes(r.status) || (r.status === "done" && ["waiting_fill", "armed"].includes(r.exit?.state))));
+}
+// Of all live cards for this idea, the oldest (created_at, then id) keeps it. Both racers compute the same winner.
+export function dupWinner(rows: any[], me: any, tk: string, direction: any, nowMs = Date.now()): any | null {
+  const same = (rows || []).filter((r: any) => r.id === me.id || sameIdeaCard(r, tk, direction, nowMs));
+  if (!same.some((r: any) => r.id === me.id)) same.push(me);
+  same.sort((a: any, b: any) => String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id)));
+  return same[0] && same[0].id !== me.id ? same[0] : null;
+}
 export async function proposeAction(input: any, who: string, opts: { manual?: boolean; planExtra?: Record<string, unknown>; blockLevels?: Record<string, any> } = {}) {
   const calls = Array.isArray(input.calls) ? input.calls.slice(0, 6) : [];
   if (!calls.length) throw new Error("no calls");
+  const asStock = optionAsStock(input);                                       // v3.44 fix 2: never a stock order at an option price
+  if (asStock) throw new Error(asStock);
   // v3.1: an opening option order must carry its plan, so the scorecard can grade it.
   const opening = calls.some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open"));
   // v3.14: the server stamps where the idea came from (signal / desk / scanner / alert / watcher trigger) for the Scoreboard.
@@ -1133,9 +1166,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
   if (opening && !opts.manual && plan) {
     const tk = String(plan.tv_symbol || "").split(":").pop()?.toUpperCase() || "";
     const recent = await db("otto_actions?select=id,title,status,plan,exit,created_at&order=created_at.desc&limit=40").catch(() => []);
-    const dup = (recent || []).find((r: any) => r.plan && String(r.plan.tv_symbol || "").split(":").pop()?.toUpperCase() === tk &&
-      r.plan.direction === plan.direction && Date.now() - Date.parse(r.created_at) < 15 * 60e3 &&
-      (["pending", "running", "paper_wait"].includes(r.status) || (r.status === "done" && ["waiting_fill", "armed"].includes(r.exit?.state))));
+    const dup = (recent || []).find((r: any) => sameIdeaCard(r, tk, plan.direction));
     if (dup) throw new Error(`A ${tk} ${plan.direction === "down" ? "puts" : "calls"} card is already up: "${dup.title}" (${dup.status === "done" ? "filled, trade open" : dup.status}). Don't make a second one — point them to that card.`);
     // v3.22: levels more than 10% from the live price go back once, then no card.
     await levelGate(plan);
@@ -1280,12 +1311,24 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     if (exit) { const st = await staleEntry({ exit, plan }).catch(() => null); if (st) checks.unshift({ ok: false, guard: true, stale: true, text: st }); }
   }
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
-    title: (opening ? stampTitle(unname(input.title || "Action"), !!paper) : unname(input.title || "Action")).slice(0, 140),
+    title: (opening ? stampTitle(unname(input.title || "Action"), !!paper) : unstampTitle(unname(input.title || "Action")) || "Action").slice(0, 140),
     summary: unname(input.summary || "").slice(0, 4000),
     calls: out, risk, review: review.join("\n\n---\n\n"), status: practice ? "paper_wait" : paper ? "paper" : "pending", created_by: who,
     plan: plan ? { ...plan, setup: String(plan.setup).toLowerCase().slice(0, 40), ...(practice ? { practice: true } : {}) } : (practice ? { practice: true } : null), banner, checks,
     ...(exit ? { exit: { ...exit, state: "planned", log: [] } } : {}),
   }) });
+  // v3.44 fix 4: the post-insert duplicate check (before any ping, Desk line or activity is written for this card)
+  if (opening && !opts.manual && plan && rows?.[0] && ["pending", "paper_wait"].includes(rows[0].status)) {
+    const tk44 = String(plan.tv_symbol || "").split(":").pop()?.toUpperCase() || "";
+    const again = await db("otto_actions?select=id,title,status,plan,exit,created_at&order=created_at.desc&limit=40").catch(() => null);
+    const win = again ? dupWinner(again, rows[0], tk44, plan.direction) : null;
+    if (win) {
+      await db(`otto_actions?id=eq.${rows[0].id}&status=in.(pending,paper_wait)`, { method: "PATCH", headers: { prefer: "return=minimal" },
+        body: JSON.stringify({ status: "expired", decided_by: `otto (duplicate of ${String(win.id).slice(0, 8)})`, decided_at: new Date().toISOString(),
+          plan: { ...(rows[0].plan || {}), duplicate_of: win.id } }) }).catch(() => {});
+      throw new Error(`A ${tk44} ${plan.direction === "down" ? "puts" : "calls"} card is already up: "${win.title}" (${win.status}). Don't make a second one — point them to that card.`);
+    }
+  }
   if (rows?.[0]?.status === "pending" && who !== "signals" && who !== "alert" && who !== "watcher") await markPinged([rows[0].id]), await notify("card", `🃏 Card waiting: ${String(rows[0].title).slice(0, 80)}`, "Tap to open the Desk and Approve or Reject (cards expire in 20 minutes).");
   if (rows?.[0]?.status === "paper_wait") {
     await markPinged([rows[0].id]);
@@ -6080,7 +6123,7 @@ export async function dailyRecap(force = false) {
     await recapExtras(c.date).catch(() => ""),
   ].join("\n\n");
   // v3.22: the trades section comes from Robinhood, not from Jarvis.
-  const fullActs = await db("otto_actions?select=title,status,result,created_at&created_at=gte." + since + "&order=created_at.asc&limit=60").catch(() => acts || []);
+  const fullActs = await db("otto_actions?select=title,status,result,created_at,plan&created_at=gte." + since + "&order=created_at.asc&limit=200")   // v3.44: plan = practice / reject-why / duplicate.catch(() => acts || []);
   const ords = await dayOrders(c.date).catch(() => null);
   const block = ords ? recapTradesBlock(ords, fullActs || []) : "### Trades and cards\n⚠ Robinhood's order records couldn't be read just now — no trade results in this recap.";
   const raw = await claudeText({ model: MODEL, max_tokens: 1200, system: RECAP_SYS + NAME_RULE, messages: [{ role: "user", content: data + "\n\nSERVER TRADES SECTION (inserted as-is; don't repeat its numbers except the Realized line):\n" + block }] });
@@ -7935,23 +7978,30 @@ async function dayOrders(day: string): Promise<any[]> {
     return (j?.data?.orders || []).filter((o: any) => !o.created_at || etParts(new Date(o.created_at)).date === day);
   });
 }
-export async function todayFacts(day = etParts().date): Promise<{ prep: any[] | null; sig: any[] | null; ord: any[] | null }> {
+export async function todayFacts(day = etParts().date): Promise<{ prep: any[] | null; sig: any[] | null; ord: any[] | null; cards?: any[] | null }> {
   return await cached("facts|" + day, 60e3, async () => {
-    const [prep, sig, ord] = await Promise.all([
+    const [prep, sig, ord, cards] = await Promise.all([
       db(`otto_prep?select=author,created_at,status&day=eq.${day}`).catch(() => null),
       db(`otto_jason?select=id,ticker,kind,posted_label&day=eq.${day}&limit=200`).catch(() => null),
       dayOrders(day).catch(() => null),
+      todaysCards(day).catch(() => null),                                      // v3.44 fix 5
     ]);
-    return { prep, sig, ord };
+    return { prep, sig, ord, cards };
   });
 }
-export function factsLine(f: { prep: any[] | null; sig: any[] | null; ord: any[] | null }): string {
+// v3.44: today's cards (ET day), for the tally Jarvis reads and the claim checker's practice list.
+async function todaysCards(day = etParts().date): Promise<any[]> {
+  const start = nyIso(day, "12:00 AM") || `${day}T04:00:00Z`;
+  return (await db(`otto_actions?select=id,title,status,plan,created_at&created_at=gte.${start}&order=created_at.asc&limit=300`)) || [];
+}
+export function factsLine(f: { prep: any[] | null; sig: any[] | null; ord: any[] | null; cards?: any[] | null }): string {
   const pr = f.prep == null ? "unknown" : f.prep.length ? f.prep.map((p: any) => `${p.author} ${etHM(p.created_at)}`).join(", ") : "none";
   const fl = f.ord == null ? "unknown" : f.ord.length ? `${f.ord.length} (${f.ord.filter((o: any) => o.state === "filled").length} filled, ${f.ord.filter((o: any) => EXIT_DEAD_ORDER.has(o.state)).length} cancelled/rejected)` : "none";
   const sg = f.sig == null ? "unknown" : f.sig.length ? `${f.sig.length} (${f.sig.filter((r: any) => r.kind === "call").length} calls)` : "none";
   return `TODAY SO FAR (checked by the server — never say "none" of these without checking; the server corrects a false "none"): morning reads: ${pr}; Agentic option orders: ${fl}; coach signal posts: ${sg}. ` +
     `Cite a coaching call only by a date you got from search_jason — a call date that isn't in the brain is removed as "(source not found)".` +
-    (f.ord ? " " + tradesLine(dayFacts(f.ord)) : "");   // v3.24
+    (f.ord ? " " + tradesLine(dayFacts(f.ord)) : "") +   // v3.24
+    (f.cards ? " " + cardsTodayLine(f.cards) + " A card Josh rejected with a why is REJECTED (say so), never \"pending\", \"expired\" or \"not approved\"." : "");   // v3.44 fix 5
 }
 const NONE_CLAIMS = [
   { kind: "prep", re: /[^.!?\n]*\b(?:no|don't have|do not have|haven't (?:seen|got|gotten|received)|didn't (?:see|get)|don't see|nobody (?:has )?posted|hasn't posted|no one posted)\s+(?:[\w']+\s+){0,3}?(?:prep|morning reads?|morning sentiment|plan of attack|pre-market plan)\b[^.!?\n]*[.!?]?/gi },
@@ -8009,6 +8059,39 @@ const avgFill = (o: any, l: any) => {
   return q ? { q, px: ex.reduce((s: number, x: any) => s + Number(x.price) * Number(x.quantity), 0) / q }
     : o.state === "filled" ? { q: Number(o.processed_quantity || o.quantity || 0), px: Number(o.average_price || o.price || 0) } : { q: 0, px: 0 };
 };
+/* v3.44 fix 5: practice trades are practice. A practice fill (paper_taken, plan.paper_fill) never reaches Robinhood, and a card Josh
+   rejected with a why (plan.josh_reject_why) was REJECTED, not "pending / expired / not approved" (22 Oct: LLY 1325C, LLY 1300P,
+   NVDA 207.5P; "21 cards made · 0 approved" with 5 practice trades taken). Duplicates voided by the server don't count. */
+export function cardTally(acts: any[]) {
+  const A = (acts || []).filter((a: any) => !a?.plan?.duplicate_of);
+  const lab = (a: any) => { const m = String(a.title || "").match(/\b([A-Z]{1,5})\s+(\d{1,5}(?:\.\d{1,2})?[CP])\b/); return m ? `${m[1]} ${m[2]}` : unstampTitle(a.title).slice(0, 40); };
+  const rejJosh = A.filter((a: any) => a.status === "rejected" && a.plan?.josh_reject_why);
+  return {
+    made: A.length,
+    live: A.filter((a: any) => ["done", "failed", "running"].includes(a.status)).length,
+    practice: A.filter((a: any) => a.status === "paper_taken"),
+    rejected_josh: rejJosh,
+    rejected_other: A.filter((a: any) => a.status === "rejected" && !a.plan?.josh_reject_why).length,
+    expired: A.filter((a: any) => a.status === "expired").length,
+    auto: A.filter((a: any) => a.status === "paper").length,
+    waiting: A.filter((a: any) => ["pending", "paper_wait"].includes(a.status)).length,
+    failed: A.filter((a: any) => a.status === "failed"),
+    lab,
+  };
+}
+export function practiceTargets(acts: any[]): { sym: string; strike: number; side: string }[] {
+  return (acts || []).filter((a: any) => a.status === "paper_taken" && !a.plan?.duplicate_of).map((a: any) => {
+    const sym = String(a.plan?.tv_symbol || "").split(":").pop()?.toUpperCase() || (String(a.title || "").match(/\b([A-Z]{1,5})\s+\d/) || [])[1] || "";
+    const m = String(a.title || "").match(/\b(\d{1,5}(?:\.\d{1,2})?)([CP])\b/);
+    return { sym, strike: m ? Number(m[1]) : NaN, side: m ? (m[2] === "P" ? "put" : "call") : a.plan?.direction === "down" ? "put" : "call" };
+  }).filter((t) => t.sym);
+}
+export function cardsTodayLine(acts: any[]): string {
+  const k = cardTally(acts);
+  if (!k.made) return "Cards today: none.";
+  return `Cards today: ${k.made} made · ${k.live} approved LIVE · ${k.practice.length} practice trade${k.practice.length === 1 ? "" : "s"} taken${k.practice.length ? ` (${k.practice.map(k.lab).join(", ")}; practice fills are never sent to Robinhood, so Robinhood will not show them)` : ""} · ${k.rejected_josh.length} rejected by Josh with a why${k.rejected_josh.length ? ` (${k.rejected_josh.map((a: any) => `${k.lab(a)}: "${String(a.plan.josh_reject_why.why_not || "").slice(0, 60)}"`).join("; ")})` : ""}` +
+    `${k.rejected_other ? ` · ${k.rejected_other} rejected` : ""} · ${k.expired} expired · ${k.auto} auto-rejected${k.waiting ? ` · ${k.waiting} still waiting` : ""}.`;
+}
 export function recapTradesBlock(orders: any[], acts: any[]): string {
   const lines: string[] = [];
   let realized = 0, closedAny = false;
@@ -8032,10 +8115,9 @@ export function recapTradesBlock(orders: any[], acts: any[]): string {
       lines.push(`- ${t}${lab}: ${o.state === "rejected" || o.state === "failed" ? "REJECTED by Robinhood" : o.state} — never filled${why ? ` (Robinhood: ${why})` : ""}`);
     } else lines.push(`- ${t}${lab}: order ${o.state} — not filled yet`);
   }
-  const A = acts || [];
-  const n = (f: (a: any) => boolean) => A.filter(f).length;
-  const failed = A.filter((a: any) => a.status === "failed");
-  const cardLine = A.length ? `Cards: ${A.length} made · ${n((a) => ["done", "failed", "running"].includes(a.status))} approved · ${n((a) => a.status === "rejected")} passed · ${n((a) => a.status === "expired")} expired` +
+  const K = cardTally(acts || []);
+  const failed = K.failed;
+  const cardLine = K.made ? `Cards: ${K.made} made · ${K.live} approved LIVE · ${K.practice.length} practice trade${K.practice.length === 1 ? "" : "s"} taken (no real money) · ${K.rejected_josh.length + K.rejected_other} rejected${K.rejected_josh.length ? ` (${K.rejected_josh.length} by Josh with a why)` : ""} · ${K.expired} expired` +
     (failed.length ? ` · ${failed.length} failed (${failed.map((a: any) => `${a.title}: ${brokerReason(((a.result || []).find((r: any) => !r.ok) || {}).text || "no reason given").replace(/^Rejected by Robinhood:\s*/, "").split("\n")[0]}`).join("; ").slice(0, 400)})` : "") +
     `. Cards nobody took are graded as ideas only — not trades, no money won or lost.` : "Cards: none.";
   return `### Trades and cards\n_From Robinhood's own order records (Otto, not Jarvis)._\n` +
@@ -8121,7 +8203,8 @@ export const sentences = (t: string) => String(t || "").split(/(?<=[.!?…][*_"'
 export type Trip = { sym: string; label: string; option_id: string; strike: number; side: string; opened_at: string;
   entry: number; qty: number; state: "open" | "closed" | "partial"; exit: number | null; closed_at: string | null; pnl: number | null };
 export type Unfilled = { sym: string; label: string; option_id: string; strike: number; side: string; state: string; created_at: string; reason: string };
-export type DayFacts = { trips: Trip[]; unfilled: Unfilled[]; losers: number; realized: number; closed: number };
+export type DayFacts = { trips: Trip[]; unfilled: Unfilled[]; losers: number; realized: number; closed: number;
+  practice?: { sym: string; strike: number; side: string }[] };   // v3.44: today's practice trades — never checked against Robinhood
 
 const oTime = (o: any) => String(o?.last_transaction_at || o?.updated_at || o?.created_at || "");
 /** Today's round trips from Robinhood's own order records (the same matching the 5:15 recap uses). */
@@ -8210,6 +8293,11 @@ export function checkTradeClaims(text: string, f: DayFacts, nMax = 2): { text: s
     if (!s.trim()) return s;
     tgt = targetOf(s, known, tgt);
     if (OTHER_DAY.test(s)) return s;
+    // v3.44 fix 5: a sentence about practice / paper trades, or about a contract that is one of today's practice trades, is not a
+    // Robinhood claim ("Robinhood shows no META 632.5P fill" was a false correction on a practice fill, 22 Oct).
+    if (/\b(?:practice|paper)\b/i.test(s)) return s;
+    if ((tgt.sym || tgt.strike != null) && (f.practice || []).some((p) => (!tgt.sym || tgt.sym === p.sym) && (tgt.strike == null || Math.abs(tgt.strike - p.strike) < 0.01) && (!tgt.side || tgt.side === p.side))
+      && !f.trips.some((t) => hits(tgt, t))) return s;
     const anyTarget = !!(tgt.sym || tgt.strike != null);
     const mine = f.trips.filter((t) => hits(tgt, t)), dead = f.unfilled.filter((u) => hits(tgt, u));
     const what = tgt.sym ? `${tgt.sym}${tgt.strike != null ? " " + tgt.strike + (tgt.side === "put" ? "P" : tgt.side === "call" ? "C" : "") : ""}` : "that order";
@@ -8353,6 +8441,7 @@ export async function factCheck324(text: string): Promise<{ text: string; notes:
   if (claims) {
     try {
       const f = dayFacts(await withTimeout(dayOrders(etParts().date), 8000, "Robinhood orders"));
+      f.practice = practiceTargets(await withTimeout(todaysCards(), 5000, "practice cards").catch(() => []));   // v3.44 fix 5
       const L = await getLimits().catch(() => LIMIT_DEFAULTS);
       const r = checkTradeClaims(t, f, Number(L.daily_losses) || 0);
       t = r.text; notes.push(...r.notes);

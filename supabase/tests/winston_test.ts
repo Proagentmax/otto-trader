@@ -100,7 +100,7 @@ function fakeMd(service: string, tool: string, args: any) {
   if (tool === "get_option_instruments") return { data: { instruments: Object.entries(W.opts).filter(([, o]) => (o.type || "call") === args.type && (o.exp || "2026-10-16") === args.expiration_dates).map(([id, o]) => ({ id, strike_price: o.strike.toFixed(4), expiration_date: o.exp || "2026-10-16", tradability: "tradable", state: "active" })) } };
   if (tool === "get_option_quotes") return { data: { results: args.instrument_ids.filter((id: string) => W.opts[id]).map((id: string) => { const o = W.opts[id]; return { quote: { instrument_id: id, bid_price: String(o.bid), ask_price: String(o.ask), mark_price: String((o.bid + o.ask) / 2), delta: String(o.delta), volume: o.vol, open_interest: o.oi, updated_at: o.at || new Date(NOW).toISOString() } }; }) } };
   if (tool === "mcp-tv-get-economic-calendar") return { result: W.calendar };
-  if (tool === "get_earnings_calendar") return { data: { results: [] } };
+  if (tool === "get_earnings_calendar") return { data: { results: (W as any).earnings || [] } };   // v3.44: a test can set W.earnings
   if (tool === "mcp-tv-get-news") return { result: [{ title: "SPY holds above its 50-day average" }] };
   throw new Error("fake md: unsupported " + tool);
 }
@@ -740,4 +740,114 @@ Deno.test("replay 7 (v3.36): the 15 Oct SPY chase in DATA MODE opens WITH stamps
   eq(W.ai.n, 1, "the new post woke him");
   eq(TABLES.winston_trades.length, 0, "strict: still no trade");
   assert(/^W21:/.test(TABLES.winston_ideas[0].reason), "strict: blocked by W21 at the sell-to: " + TABLES.winston_ideas[0].reason);
+});
+
+Deno.test("v3.43.1: the Winston tab (fn=state) shows no daily-stop lock in data mode after two losses, matching the tick; strict mode still shows it", async () => {
+  const jwt = (claims: any) => "Bearer x." + btoa(JSON.stringify(claims)).replace(/=+$/, "") + ".y";
+  const good = { role: "authenticated", email: "ottotrader@vinecreativestudio.com", sub: "u" };
+  const state = async () => await (await X.handle(new Request("https://x/functions/v1/winston?fn=state", { headers: { authorization: jwt(good) } }))).json();
+  const twoLosses = () => { for (const [id, pnl] of [[101, -29], [102, -27]]) TABLES.winston_trades.push({ id, day: "2026-10-22", status: "closed", ticker: "PLTR", side: "call", pnl_realistic: pnl, entry_ask: 1.5, qty: 1, closed_at: "2026-10-22T15:00:00Z", flags: [], broke: [] }); };
+  // 22 Oct: data mode, override on, two losses ($56) -> the tab showed "LOCKED — daily stop reached" while the tick kept trading
+  seed(); setNow("2026-10-22T16:11:00Z"); twoLosses();
+  TABLES.winston_settings[0].value = { enabled: true, paper_balance: 4000, mode: "data", max_open: 4, limits_override: { daily_on: false } };
+  const st: any = await state();
+  eq(st.limits.locked, null, "data mode: the tab must not say LOCKED on a loss count: " + JSON.stringify(st.limits.locked));
+  eq(st.limits.daily_on, false, "the tab's limits carry the override");
+  const r: any = await X.tick({ force: true });
+  assert(!r.locked, "and the tick agrees: " + JSON.stringify(r).slice(0, 200));
+  // strict mode (no override): the same two losses still show the lock
+  seed(); setNow("2026-10-22T16:11:00Z"); twoLosses();
+  TABLES.winston_settings[0].value = { enabled: true, paper_balance: 4000, mode: "strict", max_open: 4 };
+  assert((await state()).limits.locked?.why.includes("daily stop"), "strict: the daily stop still shows");
+});
+
+/* ---------------- v3.44: the coach's 22 Oct rules (W24 bonds first, W25 first 15 / after earnings, W26 move already done) ---------------- */
+Deno.test("v3.44 pure: tape read (bonds first), first-15 / earnings wait, move already done, last night's reporters", () => {
+  // 22 Oct: QQQ about -2%, Treasuries bought
+  const tape = X.tapeRead({ spot: 712, prev: 726.5 }, { spot: 92.5, prev: 92 }, { nasdaq_pct: 1, bond_pct: 0.2 });
+  assert(tape?.defensive, "QQQ -2.0% + TLT +0.54% = defensive: " + JSON.stringify(tape));
+  assert(/bonds bought/.test(tape!.why), "says bonds bought");
+  assert(X.defensiveCall("call", tape)?.includes("puts, not calls"), "a call on that day is stamped");
+  eq(X.defensiveCall("put", tape), null, "a put on that day is fine");
+  eq(X.tapeRead({ spot: 712, prev: 726.5 }, { spot: 91.8, prev: 92 }, {})?.defensive, false, "Nasdaq red but bonds SOLD = not the coach's defensive read");
+  eq(X.tapeRead({ spot: 724, prev: 726.5 }, { spot: 92.5, prev: 92 }, {})?.defensive, false, "QQQ only -0.3% = not defensive");
+  eq(X.tapeRead(undefined, { spot: 92.5, prev: 92 }, {}), null, "no QQQ quote = no read (never a guess)");
+  // W25
+  assert(X.openReprice("SPY", 575, [], {})?.includes("first 15"), "9:35 = options still repricing");
+  eq(X.openReprice("SPY", 585, [], {}), null, "9:45 = fine");
+  assert(X.openReprice("LRCX", 590, ["LRCX"], {})?.includes("reported earnings"), "9:50 on a name that reported last night = wait the full 30");
+  eq(X.openReprice("LRCX", 600, ["LRCX"], {}), null, "10:00 = fine after earnings");
+  eq(X.openReprice("NVDA", 590, ["LRCX"], {}), null, "another name is not held to the earnings wait");
+  // W26
+  assert(X.moveDone("put", "LRCX", { spot: 150, prev: 167.6 }, {})?.includes("-10.5"), "LRCX -10.5% -> a put chases: " + X.moveDone("put", "LRCX", { spot: 150, prev: 167.6 }, {}));
+  eq(X.moveDone("call", "LRCX", { spot: 150, prev: 167.6 }, {}), null, "a call on a name that is down is not chasing");
+  assert(X.moveDone("put", "QQQ", { spot: 712, prev: 726.5 }, {})?.includes("threshold -1.5%"), "QQQ -2% -> index threshold 1.5%");
+  eq(X.moveDone("put", "QQQ", { spot: 720, prev: 726.5 }, {}), null, "QQQ -0.9% = not done");
+  eq(X.moveDone("put", "NVDA", { spot: 196, prev: 203 }, {}), null, "NVDA -3.4% is under the 5% stock threshold");
+  eq(X.moveDone("put", "NVDA", { spot: 196, prev: 203 }, { stock_pct: 3 }), "NVDA is already -3.45% from yesterday's close — the move is done; don't chase it with a put (threshold -3%)", "the threshold is a rule param");
+  // reporters: after yesterday's close or before today's open
+  const rows = [{ symbol: "LRCX", report: { date: "2026-10-21", timing: "pm" } }, { symbol: "IBM", report: { date: "2026-10-21", timing: "pm" } },
+    { symbol: "TSLA", report: { date: "2026-10-21", timing: "am" } }, { symbol: "WDC", report: { date: "2026-10-22", timing: "pm" } }, { symbol: "T", report: { date: "2026-10-22", timing: "am" } }];
+  eq(X.reportedFrom(rows, "2026-10-22", "2026-10-21").sort(), ["IBM", "LRCX", "T"], "yesterday pm + today am; tonight's WDC is not yet");
+  eq(X.prevTradingDay("2026-10-26"), "2026-10-23", "Monday -> Friday");
+  eq(X.prevTradingDay("2026-11-27"), "2026-11-25", "the day after Thanksgiving -> Wednesday");
+});
+Deno.test("v3.44 gates: W24-W26 stamp in data mode, block in strict mode, never fire when the rule is OFF", () => {
+  const rules = (on: string[]) => ["W1", "W2", "W24", "W25", "W26"].map((id) => ({ id, kind: "x", source: "x", title: id, body: "", active: on.includes(id), params: {} }));
+  const base: any = { rules: rules(["W1", "W2", "W24", "W25", "W26"]), d: { wrong_if_level: 152, target_level: 146 }, cap: 1000, maxLoss: 400, planned_loss: 70, cost: 205, cash: 4000, stop_option: 1.35, ask: 2.05,
+    openCount: 0, maxOpen: 4, tickerTakenToday: false, sameTickerOpen: false, spreadPct: 3, quoteAgeSec: 3, blackout: null, coachCall: false, etMin: 881, lastEntryMin: 930, ownFromMin: 600, coachFromMin: 571,
+    dataMode: true, defensiveCall: "defensive tape", openReprice: "first 15", moveDone: "LRCX -10.5%" };
+  const hits = X.runGatesAll(base);
+  eq(hits.map((h: any) => h.rule), ["W24", "W25", "W26"], "all three fire");
+  assert(hits.every((h: any) => h.soft) && X.runGates(base) === null, "data mode: stamps only, nothing blocks");
+  eq(X.runGates({ ...base, dataMode: false })?.rule, "W24", "strict mode: they block");
+  eq(X.runGatesAll({ ...base, rules: rules(["W1", "W2"]) }).length, 0, "rules OFF never fire");
+});
+Deno.test("replay 22 Oct (v3.44): defensive tape, LRCX -10.5% after earnings — the LRCX put is stamped W26, an AAPL call is stamped W24, a 9:41 coach call on LRCX is stamped W25; the AI is told the tape", async () => {
+  const setup = () => {
+    seed();
+    TABLES.winston_settings[0].value = { enabled: true, paper_balance: 4000, mode: "data", max_open: 4, min_time_exit_min: 120, limits_override: { daily_on: false } };
+    TABLES.winston_rules.push({ id: "W24", sort: 174, kind: "gate", source: "coach 2026-10-22", title: "W24", body: "W24", active: true, params: { nasdaq_pct: 1, bond_pct: 0.2 } });
+    TABLES.winston_rules.push({ id: "W25", sort: 175, kind: "gate", source: "coach 2026-10-22", title: "W25", body: "W25", active: true, params: { open_wait_min: 15, earnings_wait_min: 30 } });
+    TABLES.winston_rules.push({ id: "W26", sort: 176, kind: "gate", source: "coach 2026-10-22", title: "W26", body: "W26", active: true, params: { index_pct: 1.5, stock_pct: 5 } });
+    W.spot = { SPY: 735, QQQ: 712, TLT: 92.5, LRCX: 150, AAPL: 343 }; W.prev = { SPY: 745, QQQ: 726.5, TLT: 92, LRCX: 167.6, AAPL: 345 };
+    W.bars = {}; W.calls.length = 0; W.ai.n = 0;
+    (W as any).earnings = [{ symbol: "LRCX", report: { date: "2026-10-21", timing: "pm" } }];
+    W.opts = { lp148: { strike: 148, bid: 2.0, ask: 2.05, delta: -0.35, vol: 900, oi: 400, exp: "2026-10-23", type: "put" },
+      ac345: { strike: 345, bid: 2.4, ask: 2.45, delta: 0.36, vol: 900, oi: 400, exp: "2026-10-23", type: "call" } };
+    TABLES.otto_jason.push({ id: 390, day: "2026-10-22", posted_label: "9:05 AM", kind: "note", ticker: "LRCX", direction: null, level: null, words: "LRCX DOWN 10% ON EARNINGS", late: false });   // a coach mention puts LRCX on Winston's list (as on the real day)
+  };
+  // 2:41 PM ET: Winston's own LRCX put + an AAPL call
+  setup(); setNow("2026-10-22T18:41:00Z");
+  aiScript = () => ({ decisions: [
+    { ticker: "LRCX", side: "put", source: "own", thesis: "LRCX broke down after earnings and keeps making lower lows", wrong_if_level: 152, target_level: 146, time_exit_min: 120, cites: [{ type: "chart" }] },
+    { ticker: "AAPL", side: "call", source: "own", thesis: "AAPL held 342.50 daily support", wrong_if_level: 341.5, target_level: 347, time_exit_min: 120, cites: [{ type: "chart" }] }], passes: [] });
+  await X.tick();
+  const lr = TABLES.winston_trades.find((t) => t.ticker === "LRCX"), ap = TABLES.winston_trades.find((t) => t.ticker === "AAPL");
+  assert(lr && ap, "both opened in data mode (stamps, not blocks): " + JSON.stringify(TABLES.winston_ideas.map((i) => i.reason)));
+  const ids = (t: any) => t.plan.stamps.map((s: string) => s.split(":")[0]);
+  assert(ids(lr).includes("W26") && !ids(lr).includes("W24") && !ids(lr).includes("W25"), "LRCX put: W26 only (14:41 is long after the earnings wait): " + JSON.stringify(lr.plan.stamps));
+  assert(ids(ap).includes("W24") && !ids(ap).includes("W26"), "AAPL call: W24 (a call on a defensive day): " + JSON.stringify(ap.plan.stamps));
+  assert(lr.flags.includes("stamp:W26") && ap.flags.includes("stamp:W24"), "stamps on the flags for the report");
+  assert(lr.plan.tape?.defensive, "the trade's plan records the tape");
+  assert(/TAPE READ \(W24, bonds first\): QQQ -2% with TLT \+0.54%/.test(W.ai.last.user) && /DEFENSIVE/.test(W.ai.last.user), "the AI was told the tape: " + (W.ai.last.user.match(/TAPE READ[^\n]*/) || [""])[0]);
+  assert(/REPORTED EARNINGS[^\n]*LRCX/.test(W.ai.last.user), "and who reported last night");
+  eq(TABLES.winston_settings.find((r) => r.key === "earnings_seen")?.value.symbols, ["LRCX"], "reporters cached for the day");
+  const nEarn = W.calls.filter((c) => c.tool === "get_earnings_calendar").length;
+  setNow("2026-10-22T18:51:00Z"); aiScript = () => ({ decisions: [], passes: [] }); await X.tick();
+  eq(W.calls.filter((c) => c.tool === "get_earnings_calendar").length, nEarn, "the earnings calendar is read once a day, not every tick");
+  // 9:41 AM ET: a coach call on LRCX -> W25 (reported last night, inside the 30-minute wait)
+  setup(); setNow("2026-10-22T13:41:00Z");
+  TABLES.otto_jason.push({ id: 400, day: "2026-10-22", posted_label: "9:40 AM", kind: "call", ticker: "LRCX", direction: "short", level: null, words: "LRCX PUTS UNDER 151", late: false });
+  aiScript = () => ({ decisions: [{ ticker: "LRCX", side: "put", source: "coach:400", thesis: "Coach post 400: LRCX puts under 151", wrong_if_level: 152, target_level: 146, time_exit_min: 120, cites: [{ type: "coach_post", ref: "400" }] }], passes: [] });
+  await X.tick();
+  const early = TABLES.winston_trades.find((t) => t.ticker === "LRCX");
+  assert(early && early.plan.stamps.some((s: string) => /^W25: LRCX just reported earnings/.test(s)), "W25 stamped on the 9:41 coach call: " + JSON.stringify(early?.plan?.stamps));
+  // strict mode: the same 2:41 put is blocked by W26
+  setup(); setNow("2026-10-22T18:41:00Z"); TABLES.winston_settings[0].value.mode = "strict";
+  aiScript = () => ({ decisions: [{ ticker: "LRCX", side: "put", source: "own", thesis: "LRCX lower lows", wrong_if_level: 152, target_level: 146, time_exit_min: 120, cites: [{ type: "chart" }] }], passes: [] });
+  await X.tick();
+  eq(TABLES.winston_trades.length, 0, "strict mode: no trade");
+  assert(TABLES.winston_ideas.some((i) => i.status === "blocked" && /^W26:/.test(i.reason || "")), "blocked by W26: " + JSON.stringify(TABLES.winston_ideas.map((i) => i.reason)));
+  aiScript = null; (W as any).earnings = [];
 });

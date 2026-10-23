@@ -300,13 +300,15 @@ export type GateCtx = { rules: Rule[]; d: Decision; cap: number; maxLoss: number
   openCount: number; maxOpen: number; tickerTakenToday: boolean; sameTickerOpen: boolean; spreadPct: number; quoteAgeSec: number | null; blackout: string | null;
   coachCall: boolean; etMin: number; lastEntryMin: number; ownFromMin: number; coachFromMin: number;
   // v3.36 — the coach's 15 Oct rules and the data-mode switch. All optional so the v3.31 callers and tests still work.
-  dataMode?: boolean; reentryBeyondExit?: string | null; atCoachLevel?: string | null; indexDisagree?: string | null; thesisWrong?: string | null; coachResultAfter?: string | null };
+  dataMode?: boolean; reentryBeyondExit?: string | null; atCoachLevel?: string | null; indexDisagree?: string | null; thesisWrong?: string | null; coachResultAfter?: string | null;
+  // v3.44 — the coach, 22 Oct 2026 (stamps in data mode, blocks in strict mode when the rule is on)
+  defensiveCall?: string | null; openReprice?: string | null; moveDone?: string | null };
 export type GateHit = { rule: string; why: string; soft: boolean };
 // HARD gates always block: the plan itself (W1), risk and size (W2), cash, the max open count and the time windows.
 // SOFT gates (W3, W12-W15, W20-W23) block in strict mode; in data mode they STAMP the trade (flags) so the report can score each gate.
 // v3.42 (Ifoma, 20 Oct night): W12 (spread) is HARD in every mode — a spread is a cost, not a judgment. The two widest entries
 // in Winston's history (CRM 24%, AMGN 77%) were his two biggest losses (−$509) while the other twelve were 0–8%.
-const SOFT = new Set(["W3", "W13", "W14", "W15", "W20", "W21", "W22", "W23", "fact"]);
+const SOFT = new Set(["W3", "W13", "W14", "W15", "W20", "W21", "W22", "W23", "W24", "W25", "W26", "fact"]);
 export function runGatesAll(c: GateCtx): GateHit[] {
   const R = c.rules, hits: GateHit[] = [];
   const hit = (rule: string, why: string) => hits.push({ rule, why, soft: !!c.dataMode && SOFT.has(rule) });
@@ -340,6 +342,10 @@ export function runGatesAll(c: GateCtx): GateHit[] {
   if (ruleOn(R, "W23") && c.indexDisagree) hit("W23", c.indexDisagree);                   // index agreement
   if (c.thesisWrong) hit("fact", c.thesisWrong);                                            // the thesis contradicts the quote (price vs VWAP)
   if (c.coachResultAfter) hit("fact", c.coachResultAfter);                                 // the coach already sold / trimmed after the cited post
+  // v3.44 — the coach, 22 Oct 2026
+  if (ruleOn(R, "W24") && c.defensiveCall) hit("W24", c.defensiveCall);                   // bonds first: Nasdaq red + Treasuries bid = puts, not calls
+  if (ruleOn(R, "W25") && c.openReprice) hit("W25", c.openReprice);                       // options reprice in the first 15; after earnings wait the full 30
+  if (ruleOn(R, "W26") && c.moveDone) hit("W26", c.moveDone);                             // don't chase a move that's done
   return hits;
 }
 // Returns the first HARD reason to pass (with the rule id), or null when nothing blocks. Soft stamps come from runGatesAll.
@@ -385,6 +391,52 @@ export function indexDisagree(side: "call" | "put", idx: IndexRead): string | nu
   if (side === "call" && !idx.above_vwap && idx.falling) return `SPY is below its VWAP (${idx.vwap}) and making lower closes — a long fights the index`;
   return null;
 }
+/* ------------------------------------------------------------------ v3.44: the coach's 22 Oct reads (pure) */
+
+// W24 "Read the bond market first": Nasdaq (QQQ) red AND Treasuries bid (TLT up = yields down) = a defensive tape; the coach's read is
+// puts, not calls, and discount the bounces. 22 Oct: QQQ about -2%, bonds bought, "extremely bearish". Thresholds live in the rule's params.
+export type TapeRead = { defensive: boolean; qqq_pct: number | null; tlt_pct: number | null; why: string } | null;
+const pctChange = (q: { spot: number; prev: number } | undefined) => q && q.spot > 0 && q.prev > 0 ? round2((q.spot - q.prev) / q.prev * 100) : null;
+export function tapeRead(qqq: { spot: number; prev: number } | undefined, tlt: { spot: number; prev: number } | undefined, p: any = {}): TapeRead {
+  const qp = pctChange(qqq), tp = pctChange(tlt);
+  if (qp == null || tp == null) return null;                                    // no data = no read (never a guess)
+  const nq = num(p.nasdaq_pct) || 1, bd = p.bond_pct != null ? num(p.bond_pct) : 0.2;
+  const defensive = qp <= -nq && tp >= bd;
+  return { defensive, qqq_pct: qp, tlt_pct: tp, why: `QQQ ${qp >= 0 ? "+" : ""}${qp}% with TLT ${tp >= 0 ? "+" : ""}${tp}% (${tp > 0 ? "bonds bought, yields down" : "bonds sold, yields up"})` };
+}
+export function defensiveCall(side: "call" | "put", tape: TapeRead): string | null {
+  return side === "call" && tape?.defensive ? `defensive tape: ${tape.why} — the coach reads this as puts, not calls (22 Oct)` : null;
+}
+// W25 "The first 15 minutes doubles everything": options reprice in the first 15 minutes; after a stock's own earnings, wait the full 30.
+// reported = tickers that reported after yesterday's close or before today's open.
+export function openReprice(ticker: string, etMin: number, reported: string[], p: any = {}): string | null {
+  const open = 570, w = num(p.open_wait_min) || 15, we = num(p.earnings_wait_min) || 30;
+  if ((reported || []).includes(ticker) && etMin < open + we) return `${ticker} just reported earnings — wait the full ${we} minutes after the open (entry ${fmtMin(etMin)} ET)`;
+  if (etMin < open + w) return `options are still repricing in the first ${w} minutes (entry ${fmtMin(etMin)} ET)`;
+  return null;
+}
+// W26 "Don't chase a move that's done": a put on a name already down big from yesterday's close (or a call on one up big). Index names
+// (SPY, QQQ) use a smaller threshold. 22 Oct: LRCX -10.5% after earnings was the coach's example; after -2% on the index, puts at support are "too dangerous".
+const INDEX_NAMES = new Set(["SPY", "QQQ", "IWM", "DIA"]);
+export function moveDone(side: "call" | "put", ticker: string, q: { spot: number; prev: number } | undefined, p: any = {}): string | null {
+  const ch = pctChange(q); if (ch == null) return null;
+  const th = INDEX_NAMES.has(ticker) ? (num(p.index_pct) || 1.5) : (num(p.stock_pct) || 5);
+  if (side === "put" && ch <= -th) return `${ticker} is already ${ch}% from yesterday's close — the move is done; don't chase it with a put (threshold -${th}%)`;
+  if (side === "call" && ch >= th) return `${ticker} is already +${ch}% from yesterday's close — the move is done; don't chase it with a call (threshold +${th}%)`;
+  return null;
+}
+// Which tickers reported earnings after the previous trading day's close or before today's open (Robinhood earnings calendar, read-only).
+export function reportedFrom(rows: any[], day: string, prevDay: string): string[] {
+  const out = new Set<string>();
+  for (const r of rows || []) {
+    const sym = String(r?.symbol || "").toUpperCase(), d = String(r?.report?.date || r?.date || "").slice(0, 10), tm = String(r?.report?.timing || r?.timing || "").toLowerCase();
+    if (!sym || !d) continue;
+    if ((d === prevDay && tm === "pm") || (d === day && tm === "am")) out.add(sym);
+  }
+  return [...out];
+}
+export function prevTradingDay(date: string): string { let d = addDays(date, -1); for (let i = 0; i < 10 && !isTradingDay(d); i++) d = addDays(d, -1); return d; }
+
 // Fact check: a thesis that says "below VWAP" while price is above it (or the reverse) is a wrong fact (NVDA/QQQ 15 Oct: "below VWAP (720.91)" at 723.7).
 // v3.41: the claim must be about THIS ticker. A thesis that says "TSLA is above VWAP … SPY is below VWAP" was stamped as a
 // wrong fact on TSLA (19 Oct, the day's only winner) because the whole text was searched. Now each sentence/clause is read on its
@@ -683,7 +735,8 @@ async function recordIdea(day: string, d: Partial<Decision> & { ticker?: string;
 }
 
 type Ctx = { cfg: any; L: any; rules: Rule[]; day: string; min: number; eq: Awaited<ReturnType<typeof equityState>>; lim: ReturnType<typeof limitsState>;
-  posts?: any[]; index?: IndexRead; vwaps?: Record<string, number> };   // v3.36: today's coach posts, the SPY read and each focus ticker's VWAP
+  posts?: any[]; index?: IndexRead; vwaps?: Record<string, number>;
+  quotes?: Record<string, { spot: number; prev: number }>; tape?: TapeRead; reported?: string[] };   // v3.44: day change, bonds-first tape, last night's reporters   // v3.36: today's coach posts, the SPY read and each focus ticker's VWAP
 
 // Turn one decision into a paper trade, or a passed/blocked idea with the reason. Never throws past this point.
 export async function tryOpen(ctx: Ctx, d: Decision, spot: number, coachCall: boolean, blackout: string | null = null): Promise<{ opened: boolean; why: string; tradeId?: number }> {
@@ -716,7 +769,9 @@ export async function tryOpen(ctx: Ctx, d: Decision, spot: number, coachCall: bo
     etMin: min, lastEntryMin: num(cfg.last_entry_min), ownFromMin: num(cfg.own_idea_from_min), coachFromMin: num(cfg.coach_idea_from_min),
     dataMode, reentryBeyondExit: reentryBeyondExit(d.side, spot, closedToday, d.ticker), atCoachLevel: atCoachLevel(d.side, spot, ctx.posts || [], d.ticker),
     indexDisagree: d.ticker === "SPY" && d.side === "call" ? null : indexDisagree(d.side, ctx.index ?? null),
-    thesisWrong: thesisVwapWrong(d.thesis, spot, ctx.vwaps?.[d.ticker], d.ticker), coachResultAfter: citedId ? coachResultAfter(citedId, d.ticker, ctx.posts || []) : null });
+    thesisWrong: thesisVwapWrong(d.thesis, spot, ctx.vwaps?.[d.ticker], d.ticker), coachResultAfter: citedId ? coachResultAfter(citedId, d.ticker, ctx.posts || []) : null,
+    defensiveCall: defensiveCall(d.side, ctx.tape ?? null), openReprice: openReprice(d.ticker, min, ctx.reported || [], ruleParams(rules, "W25")),
+    moveDone: moveDone(d.side, d.ticker, ctx.quotes?.[d.ticker], ruleParams(rules, "W26")) });
   const gate = hits.find((h) => !h.soft);
   if (gate) { await recordIdea(day, d, "blocked", `${gate.rule}: ${gate.why}`); return { opened: false, why: gate.rule + ": " + gate.why }; }
   const stamps = [...pick.flags, ...hits.filter((h) => h.soft).map((h) => `${h.rule}: ${h.why}`)];
@@ -724,7 +779,7 @@ export async function tryOpen(ctx: Ctx, d: Decision, spot: number, coachCall: bo
   const plan = { dir: d.side === "call" ? "up" : "down", wrong_if_level: d.wrong_if_level, target_level: d.target_level, time_exit_min: timeExit,
     stop_option: risk.stop_option, planned_loss: risk.planned_loss, thesis: String(d.thesis || "").slice(0, 1500), picked_by: pick.by,   // v3.42: was 400 — too short to audit a fact stamp delta: q!.delta || row.delta,
     contract: { exp: row.exp, strike: row.strike }, last_mark: { bid: ef.bid, ask: ef.ask, under: spot, at: new Date(nowMs()).toISOString() },
-    mode: dataMode ? "data" : "strict", stamps, index: ctx.index ?? null, vwap_at_entry: ctx.vwaps?.[d.ticker] ?? null };
+    mode: dataMode ? "data" : "strict", stamps, index: ctx.index ?? null, tape: ctx.tape ?? null, vwap_at_entry: ctx.vwaps?.[d.ticker] ?? null };
   const ideaId = await recordIdea(day, d, "taken", (stamps.length ? "[stamped: " + stamps.map((s) => s.split(":")[0]).join(", ") + "] " : "") + (d.thesis || "taken"), plan);
   const t = await db("winston_trades", { method: "POST", body: JSON.stringify({ day, opened_at: new Date(nowMs()).toISOString(), status: "open", ticker: d.ticker, side: d.side, option_id: row.id, label: row.label, qty: 1,
     source: d.source || "own", idea_id: ideaId, experiment: d.experiment || null, plan, entry_bid: ef.bid, entry_ask: ef.ask, entry_mid: round2(ef.mid * 1000) / 1000, entry_fill: ef.fill, entry_under: spot,
@@ -810,6 +865,19 @@ async function econBlackout(day: string, min: number, windowMin: number): Promis
   return null;
 }
 
+// v3.44 W25: who reported after yesterday's close or before today's open. Read once a day and kept in winston_settings (one call, not one per tick).
+async function reportedToday(day: string): Promise<string[]> {
+  try {
+    const have = await getSetting("earnings_seen").catch(() => null);
+    if (have?.day === day && Array.isArray(have.symbols)) return have.symbols;
+    const prev = prevTradingDay(day);
+    const j = await md("rh", "get_earnings_calendar", { start_date: prev, days: 2, filter: "high_market_cap" });
+    const symbols = reportedFrom(j?.data?.results || [], day, prev);
+    await putSetting("earnings_seen", { day, symbols, at: new Date(nowMs()).toISOString() });
+    return symbols;
+  } catch { return []; }                                                          // unavailable = nothing known (logged as none)
+}
+
 export async function tick(opts: { force?: boolean } = {}): Promise<any> {
   const cfg = await getConfig();
   const c = marketClock();
@@ -835,7 +903,7 @@ export async function tick(opts: { force?: boolean } = {}): Promise<any> {
     const lastId = lastDay ? num(st.last_jason_id) : 0;
     const newPosts = posts.filter((p) => num(p.id) > lastId);
     const universe = [...new Set<string>([...posts.map((p) => String(p.ticker || "").toUpperCase()).filter(Boolean), ...cfg.universe])].slice(0, 24);
-    const quotes = await equityQuotes(universe);
+    const quotes = await equityQuotes([...universe, "QQQ", "TLT"]);                   // v3.44: QQQ + TLT for the bonds-first read (TLT is never traded)
     const lastSnap: Record<string, number> = lastDay ? (st.snap || {}) : {};
     const movers = universe.filter((s) => quotes[s] && lastSnap[s] && Math.abs(quotes[s].spot - lastSnap[s]) / lastSnap[s] >= 0.006);
     const heartbeat = !lastDay || nowMs() - num(st.last_ai_ms) >= 60 * 60e3;
@@ -859,6 +927,9 @@ export async function tick(opts: { force?: boolean } = {}): Promise<any> {
     const nowT = nowMs();
     const snapshot = focus.map((s) => ({ ticker: s, price: quotes[s].spot, prev_close: quotes[s].prev, day: barsSummary(bars[s] || [], nowT) }));
     ctx.index = indexRead(bars.SPY || [], nowT);                                                       // v3.36 W23
+    ctx.quotes = quotes;                                                                              // v3.44 W26 day change
+    ctx.tape = tapeRead(quotes.QQQ, quotes.TLT, ruleParams(rules, "W24"));                             // v3.44 W24
+    ctx.reported = await reportedToday(day);                                                          // v3.44 W25
     ctx.vwaps = Object.fromEntries(snapshot.map((x) => [x.ticker, num(x.day?.vwap)]).filter(([, v]) => num(v) > 0));   // v3.36 fact check
     const dayRow = ((await db(`winston_days?day=eq.${day}&select=routine,sentiment`)) || [])[0] || {};
     const todays = (await db(`winston_ideas?day=eq.${day}&select=ticker,side,status,reason,source&order=id.asc&limit=60`)) || [];
@@ -871,8 +942,10 @@ BRAIN (the coach's calls, summarised):\n${brain || "unavailable"}
 TODAY'S ROUTINE NOTES: ${JSON.stringify(dayRow.routine || null).slice(0, 2500)}\nSENTIMENT: ${JSON.stringify(dayRow.sentiment || null).slice(0, 1200)}
 ALREADY DECIDED TODAY: ${JSON.stringify(todays).slice(0, 3000)}
 CHART SNAPSHOT (10-minute bars, ET times; each bar is [time, open, high, low, close]): ${JSON.stringify(snapshot)}
+TAPE READ (W24, bonds first): ${ctx.tape ? `${ctx.tape.why} — ${ctx.tape.defensive ? "DEFENSIVE: the coach's read is puts, not calls; discount bounces" : "not defensive by the W24 thresholds"}` : "unavailable"}
+REPORTED EARNINGS SINCE YESTERDAY'S CLOSE (W25 waits the full 30 minutes on these): ${ctx.reported?.length ? ctx.reported.join(", ") : "none known"}
 SPY READ (W23): ${ctx.index ? `last ${ctx.index.last} vs VWAP ${ctx.index.vwap} — ${ctx.index.above_vwap ? "above" : "below"} VWAP, closes ${ctx.index.rising ? "rising" : ctx.index.falling ? "falling" : "mixed"}` : "unavailable"}
-READ THE COACH'S POST KINDS: a "result" post (sold, trimmed, took profit, stopped) is his EXIT on that name, not a fresh entry — a tail like "and play the bounce" after a sale is not a new buy unless he gives a new level. A "level" post names where he SELLS TO or buys from; do not enter a call within $0.50 of a level he sells into (W21). Let price come to you (W20): no re-entry on a name above where the last trade got out.
+READ THE COACH'S POST KINDS: a "result" post (sold, trimmed, took profit, stopped) is his EXIT on that name, not a fresh entry — a tail like "and play the bounce" after a sale is not a new buy unless he gives a new level. A "level" post names where he SELLS TO or buys from; do not enter a call within $0.50 of a level he sells into (W21). Let price come to you (W20): no re-entry on a name above where the last trade got out. Don't chase a move that's done (W26): a name already down big today is not a fresh put.
 Decide now. Act on NEW coach posts (take or pass, with a reason) and on any idea of your own that the chart and brain support.`;
     let out: any, usage = { input: 0, output: 0 };
     try { const r = await aiJson(SYSTEM, user, DECIDE_TOOL); out = r.out; usage = r.usage; } catch (e) { await wlog("ai_error", { msg: String((e as Error).message).slice(0, 200) }); return { ok: false, error: "AI: " + String((e as Error).message).slice(0, 120), closed: mgd.closed }; }
@@ -988,9 +1061,9 @@ export async function sentiment(opts: { force?: boolean } = {}) {
   if (!opts.force && !(c.min >= 550 && c.min <= 569)) return { ok: true, skipped: "outside the 9:10-9:29 window" };
   const have = ((await db(`winston_days?day=eq.${c.date}&select=sentiment`)) || [])[0]?.sentiment;
   if (have && !opts.force) return { ok: true, skipped: "already done today" };
-  let q: any = {}; try { q = await equityQuotes(["SPY", "QQQ", ...cfg.universe]); } catch { /* unavailable */ }
+  let q: any = {}; try { q = await equityQuotes(["SPY", "QQQ", "TLT", ...cfg.universe]); } catch { /* unavailable */ }
   const data = Object.fromEntries(Object.entries(q).map(([s, v]: any) => [s, { price: v.spot, prev_close: v.prev, change_pct: v.prev ? round2((v.spot - v.prev) / v.prev * 100) : null }]));
-  const { out, usage } = await aiJson(SYSTEM, `Pre-open read for ${c.date}, ${fmtMin(c.min)} ET. Use ONLY this data (pre-market moves vs the previous close): ${JSON.stringify(data)}. Say the tone and why in two or three sentences.`, SENT_TOOL, 800);
+  const { out, usage } = await aiJson(SYSTEM, `Pre-open read for ${c.date}, ${fmtMin(c.min)} ET. Use ONLY this data (pre-market moves vs the previous close): ${JSON.stringify(data)}. Read bonds FIRST (TLT up = Treasuries bought = yields down = money hiding; the coach, 22 Oct: Nasdaq red + bonds bid = defensive, puts not calls, discount bounces), then the indexes, then the names. Say the tone and why in two or three sentences.`, SENT_TOOL, 800);
   await db("winston_days?on_conflict=day", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ day: c.date, sentiment: out, updated_at: new Date(nowMs()).toISOString() }) });
   await addAiCost(c.date, usage).catch(() => {});
   return { ok: true, sentiment: out };

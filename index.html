@@ -2407,7 +2407,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="3.43.0";
+const BUILD="3.44.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3382,8 +3382,12 @@ async function dkCardClick(e){
   const order=(a.calls||[]).some(c=>/^place_/.test(c.tool));
   // v3.41: the why gate — an OPENING card (practice or live) needs Josh's three lines to approve, one line to reject. Close/stop cards need none.
   const opening=(a.calls||[]).some(c=>c.tool==="place_option_order"&&(c.args&&c.args.legs||[]).some(l=>l.position_effect==="open"))||a.status==="paper_wait";
+  // v3.44 fix 1: the server asks for a why on EVERY reject of a waiting card (live or practice), so the app does too. 22 Oct ULTA:
+  // a live card that wasn't an opening option order sent Reject with no why, the server refused, and the card expired.
   let why=null;
-  if(opening){why=await whyAsk(ok?"approve":"reject",{card:a});if(why==null)return}
+  const waiting=a.status==="pending"||a.status==="paper_wait";
+  if(no&&waiting){why=await whyAsk("reject",{card:a});if(why==null)return}
+  else if(ok&&opening){why=await whyAsk("approve",{card:a});if(why==null)return}
   if(ok&&order&&a.status!=="paper_wait"&&!confirm(`Place this with real money?\n\n${a.title}${a.risk&&a.risk.flag?"\n\n⚠ Over your 20% flag.":""}`))return;
   card.querySelectorAll("button").forEach(b=>b.disabled=true);
   try{
@@ -4087,7 +4091,7 @@ const winR=n=>n==null||!isFinite(n)?"—":`${n>=0?"+":"−"}${Math.abs(+n).toFix
 const winET=t=>{try{return new Date(t).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"})}catch(e){return ""}};
 const WIN_WHY={wrong_if:"wrong-if: 10-minute close through the level",target:"target touched",time:"time exit",flat_close:"flat by 3:50 PM",kill:"closed by the kill switch",coach_exit:"coach exit: indecision then no new high"};
 /* v3.38: stamps = gates that would have BLOCKED the trade in strict mode (plan.stamps "W20: why" / "fact: why" / "picker:volume_not_above_oi"; flags "stamp:W20"). */
-const WIN_STAMP_LABEL={W3:"W3 already in this ticker",W12:"W12 spread too wide",W13:"W13 quote too old",W14:"W14 event blackout",W15:"W15 one per ticker per day",W20:"W20 re-entry past last exit",W21:"W21 at the coach's sell-to",W22:"W22 coach exit",W23:"W23 index disagrees"};
+const WIN_STAMP_LABEL={W3:"W3 already in this ticker",W12:"W12 spread too wide",W13:"W13 quote too old",W14:"W14 event blackout",W15:"W15 one per ticker per day",W20:"W20 re-entry past last exit",W21:"W21 at the coach's sell-to",W22:"W22 coach exit",W23:"W23 index disagrees",W24:"W24 defensive tape (call)",W25:"W25 first 15 / after earnings",W26:"W26 move already done"};
 function winStampKey(s){s=String(s||"");const id=s.split(":")[0].trim(),why=s.slice(s.indexOf(":")+1).trim();
   if(id==="picker")return /volume/i.test(why)?"picker: volume below OI":/delta/i.test(why)?"picker: delta outside .20–.50":"picker: "+why.replace(/_/g," ");
   if(id==="fact")return /vwap/i.test(why)?"fact: thesis contradicts VWAP":"fact: coach had already sold";

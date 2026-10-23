@@ -1282,7 +1282,7 @@ Deno.test("v3.22: the 7 Oct recap from Robinhood's records — unfilled 240P is 
   assert(/NVDA 237\.5P 10\/16: bought 1 @ \$4\.55 → sold @ \$4\.40 = −\$15/.test(b), b);
   assert(/ABBV 230C 10\/16: REJECTED by Robinhood — never filled \(Robinhood: Invalid field: chain_symbol\)/.test(b), b);
   assert(/Realized on closed trades today: −\$15/.test(b) && !/win/i.test(b), b);
-  assert(/Cards: 4 made · 2 approved · 1 passed · 1 expired · 1 failed \(Buy ABBV 230C: Invalid field: chain_symbol\)/.test(b), b);
+  assert(/Cards: 4 made · 2 approved LIVE · 0 practice trades taken \(no real money\) · 1 rejected · 1 expired · 1 failed \(Buy ABBV 230C: Invalid field: chain_symbol\)/.test(b), b);   // v3.44: live vs practice split
   const j = "### Today in one line\nRough day.\n\n### Trades and cards\n- NVDA 240P: WIN +1R\n\n### What was discussed\nstuff";
   const s = M.spliceRecap(j, b);
   assert(!/WIN \+1R/.test(s) && s.indexOf("Rough day") < s.indexOf("From Robinhood's own") && s.indexOf("From Robinhood's own") < s.indexOf("What was discussed"), s);
@@ -2439,4 +2439,104 @@ Deno.test("v3.42 watcher: cards fire on the 10-minute close only — at 9:45 (5-
   const c: any = await M.watchTick(NOW);
   callHook = keep;
   assert(!(c.hits || []).length, "no 10-minute bars = no card, never a silent 5-minute fallback: " + JSON.stringify(c));
+});
+
+/* =============================== v3.44 (22 Oct day review: 5 fixes) =============================== */
+// The exact ULTA card from 22 Oct (20cc74a7…, signals, 13:59 UTC): an option title on a STOCK order.
+const ultaCard = () => ({
+  title: "PAPER – Buy 1 ULTA 625C 10/23 @ $4.40 (Coach Call – Long)", summary: "coach ULTA call 9:58",
+  calls: [{ service: "rh", tool: "place_equity_order", args: { side: "buy", type: "limit", symbol: "ULTA", quantity: 1, limit_price: 4.40, time_in_force: "gfd", account_number: "945257012" } }],
+  plan: { tv_symbol: "NASDAQ:ULTA", direction: "up", setup: "coach call", tp1: 640, stop: 615, stop_option: 3.0 },
+});
+Deno.test("v3.44 fix 2: an option-titled card built as a STOCK order is refused before anything is reviewed or stored (ULTA 625C @ $4.40, 22 Oct)", async () => {
+  const why = M.optionAsStock(ultaCard());
+  assert(why && /buy 1 SHARE of ULTA at \$4\.40/.test(why) && /about \$440, premium × 100/.test(why) && /place_option_order/.test(why), String(why));
+  assert(M.optionAsStock({ ...ultaCard(), title: "Buy 1 NVDA 190C 10/10 @ $2.15", plan: null }), "9 Oct NVDA family: the title alone is enough");
+  assert(M.optionAsStock({ ...ultaCard(), title: "Buy 1 share", plan: { stop_option: 3 } }), "a plan with an option stop is enough");
+  assert(M.optionAsStock({ ...ultaCard(), title: "Buy 5 C @ $50 (Citigroup shares)", plan: null }) === null, "a real stock order (ticker C) is not refused");
+  assert(M.optionAsStock(spyCard()) === null, "a real option order is untouched");
+  reset(); setNow("2026-10-22T13:59:00Z");
+  let err = ""; try { await M.proposeAction(ultaCard(), "signals"); } catch (e) { err = (e as Error).message; }
+  assert(/^NO CARD — this card names an option/.test(err), err);
+  assert(!T.otto_actions.length, "no card stored");
+  assert(!calls.some((c) => /review_|place_/.test(c.tool)), "nothing sent to Robinhood, not even a review: " + calls.map((c) => c.tool).join(","));
+});
+Deno.test("v3.44 fix 3: the server's LIVE/PAPER word wins whatever dash Jarvis used; a non-opening card loses Jarvis's word", () => {
+  for (const t of ["PAPER – Buy 1 ULTA 625C", "PAPER - Buy 1 ULTA 625C", "PAPER — Buy 1 ULTA 625C", "PAPER Buy 1 ULTA 625C", "paper:  Buy 1 ULTA 625C", "LIVE – Buy 1 ULTA 625C"])
+    assert(M.stampTitle(t, false) === "LIVE — Buy 1 ULTA 625C", `${t} → ${M.stampTitle(t, false)}`);
+  assert(M.stampTitle("SCALP · PAPER – CRWV 69C", false) === "LIVE — SCALP · CRWV 69C", M.stampTitle("SCALP · PAPER – CRWV 69C", false));
+  assert(M.unstampTitle("PAPER – Sell 10 SPY shares") === "Sell 10 SPY shares", M.unstampTitle("PAPER – Sell 10 SPY shares"));
+  assert(M.unstampTitle("Alert: SPY 780 — PAPER – watch") === "Alert: SPY 780 · watch", M.unstampTitle("Alert: SPY 780 — PAPER – watch"));
+});
+Deno.test("v3.44 fix 3: a live stock-order card titled \"PAPER –\" by Jarvis is stored without the false word", async () => {
+  reset(); setNow("2026-10-22T14:30:00Z");
+  const c: any = await M.proposeAction({ title: "PAPER – Buy 1 SPY share @ $735", summary: "x",
+    calls: [{ service: "rh", tool: "place_equity_order", args: { side: "buy", type: "limit", symbol: "SPY", quantity: 1, limit_price: 735, time_in_force: "gfd" } }], plan: null }, "ottotrader@vinecreativestudio.com");
+  assert(c.status === "pending" && c.title === "Buy 1 SPY share @ $735", c.status + " · " + c.title);
+});
+Deno.test("v3.44 fix 4: two Watcher cards for the same idea 1 s apart (META 632.5P, 22 Oct) → exactly one card stays", async () => {
+  reset(); setNow("2026-10-22T18:30:56Z");
+  const r = await Promise.allSettled([M.proposeAction(spyCard(), "watcher", { planExtra: { source: "watcher", watch_id: 21 } }), M.proposeAction(spyCard(), "watcher", { planExtra: { source: "watcher", watch_id: 21 } })]);
+  const live = T.otto_actions.filter((a) => a.status === "pending"), voided = T.otto_actions.filter((a) => a.status === "expired");
+  assert(live.length === 1, "one live card: " + JSON.stringify(T.otto_actions.map((a) => [a.id, a.status, a.decided_by])));
+  assert(voided.length === T.otto_actions.length - 1 && voided.every((a) => a.plan.duplicate_of === live[0].id && /^otto \(duplicate of /.test(a.decided_by)), "the other is voided as a duplicate");
+  assert(r.filter((x) => x.status === "rejected").length === T.otto_actions.length - 1 && r.every((x) => x.status === "fulfilled" || /already up/.test(String((x as any).reason?.message))), "the loser gets the 'already up' answer");
+  assert(M.cardTally(T.otto_actions).made === 1, "a voided duplicate is not counted in the tally");
+  const pinged = pings.filter((p) => /Card waiting/.test(p.title)).length;
+  assert(pinged <= 1, "no second ping for the duplicate: " + pinged);
+  // the pure rule: the oldest wins, ties by id; a different ticker or direction is not a duplicate
+  const at = (s: string) => `2026-10-22T18:30:${s}Z`;
+  const p = { tv_symbol: "NASDAQ:META", direction: "down" };
+  const a = { id: "fd913098", created_at: at("56.1"), status: "paper_wait", plan: p }, b = { id: "77df88fc", created_at: at("57.0"), status: "paper_wait", plan: p };
+  const now = RealDate.parse(at("58"));
+  assert(M.dupWinner([a, b], b, "META", "down", now)?.id === "fd913098" && M.dupWinner([a, b], a, "META", "down", now) === null, "the 18:30:56 card keeps it");
+  assert(M.dupWinner([a, { ...b, plan: { ...p, direction: "up" } }], { ...b, plan: { ...p, direction: "up" } }, "META", "up", now) === null, "calls vs puts are different ideas");
+});
+Deno.test("v3.44 fix 5: the recap and Jarvis's facts count practice trades as practice, and a reject-with-why as rejected (22 Oct)", () => {
+  const c = (title: string, status: string, plan: any = {}) => ({ title, status, plan: { tv_symbol: "NASDAQ:" + (title.match(/\b([A-Z]{2,5}) \d/) || [])[1], ...plan }, result: null, created_at: "2026-10-22T15:00:00Z" });
+  const acts = [
+    c("PRACTICE — Buy LLY 1325C 10/23", "rejected", { josh_reject_why: { why_not: "chasing the open, no level" } }),
+    c("PRACTICE — Buy LLY 1300P 10/23", "rejected", { josh_reject_why: { why_not: "against the bounce at support" } }),
+    c("PRACTICE — Buy NVDA 207.5P 10/23", "rejected", { josh_reject_why: { why_not: "three touches at 213, no short" } }),
+    c("PRACTICE — Buy META 632.5P 10/26", "paper_taken", { direction: "down", paper_fill: { ask: 1.2 } }),
+    c("PRACTICE — Buy META 632.5P 10/26", "expired", { direction: "down", duplicate_of: "fd913098" }),
+    c("PRACTICE — Buy TSLA 400C 10/23", "paper_taken", { direction: "up", paper_fill: { ask: 2.1 } }),
+    c("LIVE — Buy ULTA 625C 10/23", "expired"), c("PAPER — Buy AMD 230C 10/23", "paper"),
+  ];
+  const b = M.recapTradesBlock([], acts);
+  assert(/Cards: 7 made · 0 approved LIVE · 2 practice trades taken \(no real money\) · 3 rejected \(3 by Josh with a why\) · 1 expired/.test(b), b);
+  assert(!/0 approved ·/.test(b.replace("0 approved LIVE", "")), "never a bare '0 approved' next to practice trades");
+  const line = M.cardsTodayLine(acts);
+  assert(/2 practice trades taken \(META 632\.5P, TSLA 400C; practice fills are never sent to Robinhood/.test(line), line);
+  assert(/3 rejected by Josh with a why \(LLY 1325C: "chasing the open, no level"; LLY 1300P/.test(line), line);
+  assert(/never \\"pending\\"|never "pending"/.test(M.factsLine({ prep: [], sig: [], ord: null, cards: acts })), "Jarvis is told a rejected card is rejected");
+  eq3(M.practiceTargets(acts), [{ sym: "META", strike: 632.5, side: "put" }, { sym: "TSLA", strike: 400, side: "call" }], "practice targets (the voided duplicate is not one)");
+});
+const eq3 = (a: any, b: any, m: string) => assert(JSON.stringify(a) === JSON.stringify(b), `${m}: ${JSON.stringify(a)} vs ${JSON.stringify(b)}`);
+Deno.test("v3.44 fix 5: numberCheck never 'corrects' a practice fill against Robinhood; real claims are still checked", () => {
+  const f: any = M.dayFacts([]);
+  f.practice = [{ sym: "META", strike: 632.5, side: "put" }];
+  const t1 = "META 632.5P filled at $1.20 and is working.";
+  const r1 = M.checkTradeClaims(t1, f, 2);
+  assert(r1.text === t1 && !r1.notes.length, "practice fill left alone: " + r1.text);
+  const t2 = "Josh's practice trade on TSLA filled at $2.10.";
+  assert(M.checkTradeClaims(t2, f, 2).text === t2, "a sentence about a practice trade is not a Robinhood claim");
+  const t3 = "NVDA 207.5P filled at $1.40.";
+  const r3 = M.checkTradeClaims(t3, f, 2);
+  assert(/Corrected by Otto: Robinhood shows no NVDA 207\.5P fill today/.test(r3.text), "a real (non-practice) false fill is still corrected: " + r3.text);
+});
+Deno.test("v3.44 fix 1: the app asks the one-line why on EVERY reject of a waiting card (live or practice); approve keeps the 3-line gate for opening cards", async () => {
+  const app = await Deno.readTextFile(new URL("../../index.html", import.meta.url));
+  const fn = app.slice(app.indexOf("async function dkCardClick"), app.indexOf("async function dkCardClick") + 2600);
+  assert(/const waiting=a\.status==="pending"\|\|a\.status==="paper_wait";/.test(fn), "waiting = pending or paper_wait");
+  assert(/if\(no&&waiting\)\{why=await whyAsk\("reject",\{card:a\}\);if\(why==null\)return\}/.test(fn), "reject asks on any waiting card");
+  assert(/else if\(ok&&opening\)\{why=await whyAsk\("approve",\{card:a\}\);if\(why==null\)return\}/.test(fn), "approve asks on opening cards");
+  assert(!/if\(opening\)\{why=await whyAsk\(ok\?/.test(fn), "the old opening-only gate is gone");
+  // and the server side it must match: a live non-opening card's reject with a why goes through; with none it is refused
+  reset(); setNow("2026-10-22T14:00:00Z");
+  T.otto_actions.push({ id: "20cc74a7-0000-4000-8000-000000000001", title: "LIVE — Buy 1 SPY share", status: "pending", created_at: "2026-10-22T13:59:00Z", calls: [{ service: "rh", tool: "place_equity_order", args: {} }], plan: null });
+  let err = ""; try { await M.actOnForTest("20cc74a7-0000-4000-8000-000000000001", "reject", "Josh", null); } catch (e) { err = (e as Error).message; }
+  assert(/Why gate: say why not/.test(err) && T.otto_actions[0].status === "pending", "no why → refused (what the app used to hit): " + err);
+  const r: any = await M.actOnForTest("20cc74a7-0000-4000-8000-000000000001", "reject", "Josh", "wrong instrument — that is a stock order");
+  assert(r.status === "rejected" && T.otto_actions[0].plan.josh_reject_why.why_not === "wrong instrument — that is a stock order", JSON.stringify(r));
 });
