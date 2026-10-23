@@ -41,7 +41,7 @@ Deno.test("dislocations: both ≥0.3% and opposite signs, four pairs only", () =
 Deno.test("tiles: seven in the coach's order, leader/laggard, oil agree/disagree, '—' when missing", () => {
   const t = M.mrTiles(Q({ tlt: 0.3, spy: -0.9, qqq: -2.1, dia: -0.2, iwm: -0.1, cl: 1.4, xom: -0.6, dxy: 0.2, jpy: -0.4, gc: -2, hg: -1, btc: -3 }), [{ date: new Date(NOW + 3600e3).toISOString(), title: "Michigan", importance: 0 }], "open");
   assertEquals(t.map((x: any) => x.k), ["bonds", "indexes", "oil", "dollar", "gold", "crypto", "calendar"]);
-  assertEquals(t[0].sub, "bought"); assertEquals(t[1].leader, "Russell"); assertEquals(t[1].laggard, "Nasdaq"); assertEquals(t[2].sub, "disagree");
+  assertEquals(t[0].sub, "bought · yield ↓"); assertEquals(t[0].sym, "^TNX"); assertEquals(t[0].price, null, "no 10Y quote in this fixture → — on the face, TLT still decides the sub"); assertEquals(t[0].tlt.pct, 0.3); assertEquals(t[3].sym, "jpy"); assertEquals(t[3].dxy.pct, 0.2); assertEquals(t[1].leader, "Russell"); assertEquals(t[1].laggard, "Nasdaq"); assertEquals(t[2].sub, "disagree");
   assertEquals(t[6].next.title, "Michigan"); assert(/22 Oct call/.test(t[0].ref));
   const e = M.mrTiles(Q({}), [], "pre");
   assertEquals(e[0].sub, "—"); assertEquals(e[0].price, null); assertEquals(e[2].sub, "—");
@@ -49,15 +49,15 @@ Deno.test("tiles: seven in the coach's order, leader/laggard, oil agree/disagree
 Deno.test("lines: six instrument lines + the verdict, numbers formatted, nothing invented", () => {
   const Qs = Q({ tlt: -0.21, spy: -1.18, qqq: -0.1, dia: 0.4, cl: 1.4, xom: 0.59, dxy: 0.2, jpy: 0.1, gc: -0.03, hg: null, btc: 0.21 });
   const L = M.mrLines(M.mrTiles(Qs, [], "open"), M.mrVerdict(Qs));
-  assertEquals(L.length, 7); assert(/^Bonds: TLT -0\.21%/.test(L[0])); assert(/copper —/.test(L[4])); assert(/^Verdict: Neutral · soft/.test(L[6]));
+  assertEquals(L.length, 7); assert(/^Bonds: 10Y — \(—\), TLT -0\.21%/.test(L[0])); assert(/copper —/.test(L[4])); assert(/^Verdict: Neutral · soft/.test(L[6]));
 });
 Deno.test("route: market_read builds from the stubbed quotes, 15 symbols, cached 10 minutes, force refreshes", async () => {
-  PX = { TLT: -0.21, QQQ: -0.1, SPY: -1.18, DIA: 0.4, IWM: 0.2, "CL=F": 1.4, XOM: 0.59, CVX: 0.3, "DX-Y.NYB": 0.2, "JPY=X": 0.1, "GC=F": -0.03, NEM: 0.1, "HG=F": null, FCX: 0.5, "BTC-USD": 0.21 };
+  PX = { TLT: -0.21, QQQ: -0.1, SPY: -1.18, DIA: 0.4, IWM: 0.2, "^TNX": 1.2, "CL=F": 1.4, XOM: 0.59, CVX: 0.3, "DX-Y.NYB": 0.2, "JPY=X": 0.1, "GC=F": -0.03, NEM: 0.1, "HG=F": null, FCX: 0.5, "BTC-USD": 0.21 };
   YCALLS = 0;
   const r = await M.marketReadForTest();
-  assertEquals(YCALLS, 15); assertEquals(r.ok, true); assertEquals(r.session, "open"); assertEquals(r.verdict.key, "neu_soft"); assertEquals(r.tiles.length, 7); assertEquals(r.fresh, 14);
+  assertEquals(YCALLS, 16); assertEquals(r.ok, true); assertEquals(r.session, "open"); assertEquals(r.verdict.key, "neu_soft"); assertEquals(r.tiles.length, 7); assertEquals(r.fresh, 15); assertEquals(r.tiles[0].sym, "^TNX"); assertEquals(r.tiles[3].sym, "JPY=X");
   assertEquals(r.tiles[4].copper.pct, null, "copper missing shows null, never a guess");
-  const r2 = await M.marketReadForTest(); assertEquals(YCALLS, 15, "second call inside 10 min is served from cache");
-  NOW += 11 * 60e3; await M.marketReadForTest(); assertEquals(YCALLS, 30, "refreshes after 10 minutes");
+  const r2 = await M.marketReadForTest(); assertEquals(YCALLS, 16, "second call inside 10 min is served from cache");
+  NOW += 11 * 60e3; await M.marketReadForTest(); assertEquals(YCALLS, 32, "refreshes after 10 minutes");
   PX.QQQ = -1.5; PX.TLT = 0.4; const r3 = await M.marketReadForTest(true); assertEquals(r3.verdict.key, "def");
 });

@@ -1018,8 +1018,22 @@ globalThis.addEventListener("unhandledrejection", (ev: PromiseRejectionEvent) =>
 export const strayCount = () => STRAY;
 const TEST: any = (globalThis as any).__OTTO_TEST__ || null;
 
+/* v4.2: TradingView's connector has a DAILY tool-call quota (hit 23 Oct ~noon: three open Desks × one alerts call per
+   minute). Every TV call is counted per ET day in otto_settings "tv_calls" (approximate across instances — good enough
+   for the top-bar number), and a quota error opens the breaker until the 00:00 UTC reset instead of retrying all day. */
+let TV_CALLS: { day: string; n: number } = { day: "", n: 0 };
+export const tvCallsToday = () => TV_CALLS;
+function tvCount() {
+  const day = etParts().date;
+  if (TV_CALLS.day !== day) TV_CALLS = { day, n: 0 };
+  TV_CALLS.n++;
+  if (TV_CALLS.n % 5 === 0) putSetting("tv_calls", TV_CALLS).catch(() => {});
+}
+async function tvCallsLoad() { try { const v = await setting("tv_calls"); if (v?.day === etParts().date && v.n > TV_CALLS.n) TV_CALLS = v; } catch { /* */ } }
+const nextUtcMidnight = () => { const d = new Date(); d.setUTCHours(24, 0, 0, 0); return d.getTime(); };
 async function call(service: string, tool: string, args: any) {
   let res: any;
+  if (service === "tv") tvCount();
   if (TEST?.call) res = await TEST.call(service, tool, args);
   else {
     res = await mcp(service, "tools/call", { name: tool, arguments: args || {} });
@@ -1567,9 +1581,10 @@ function tvBudget<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   // (breaker open), its later "TradingView timed out" had no handler — an unhandled rejection —
   // and Supabase shut the whole worker down ("event loop error"), killing every Desk/Signal run on it.
   p.catch(() => {});
-  if (tvSlow()) return Promise.reject(new Error("TradingView is slow right now — using backups for a couple of minutes"));
+  if (tvSlow()) return Promise.reject(new Error(TV_SLOW_UNTIL > Date.now() + 10 * 60_000 ? "TradingView daily quota used up — saved copies until 8 PM ET" : "TradingView is slow right now — using backups for a couple of minutes"));
   return withTimeout(p, ms, label).catch((e) => {
-    if (/slow right now|timed out|HTTP 429|429|rate.?limit|bad handshake|unreachable/i.test(String(e?.message))) { TV_SLOW_UNTIL = Date.now() + 120_000; putSetting("tv_slow_until", TV_SLOW_UNTIL).catch(() => {}); }
+    if (/QUOTA_EXCEEDED|quota exceeded/i.test(String(e?.message))) { TV_SLOW_UNTIL = nextUtcMidnight(); putSetting("tv_slow_until", TV_SLOW_UNTIL).catch(() => {}); }   // v4.2: daily quota — stop asking until the reset
+    else if (/slow right now|timed out|HTTP 429|429|rate.?limit|bad handshake|unreachable/i.test(String(e?.message))) { TV_SLOW_UNTIL = Date.now() + 120_000; putSetting("tv_slow_until", TV_SLOW_UNTIL).catch(() => {}); }
     throw e;
   });
 }
@@ -1629,10 +1644,16 @@ async function panel() {
     // v3.1: quotesFor() falls back to OHLCV bars when the screener is rate-limited (429).
     out.macro = MACRO; out.watch = wsyms;
     // v3.9.2: prices from Yahoo first; TradingView only fills what Yahoo couldn't price.
-    const [yq0, al] = await Promise.all([
-      yahooQuotes(syms),
-      settle(tvBudget((async () => mcpJson(await call("tv", "mcp-tv-list-alerts", { active: true })))(), 7000, "TradingView alerts")),
-    ]);
+    // v4.2: alerts at most every 10 minutes, shared by every open Desk (was one TradingView call per Desk per minute).
+    const alertsPart = async () => {
+      const ac = await setting("alerts_cache").catch(() => null);
+      if (ac?.at && Date.now() - Date.parse(ac.at) < 10 * 60e3) return { ok: true, v: ac.alerts, cached: true };
+      const r = await settle(tvBudget((async () => mcpJson(await call("tv", "mcp-tv-list-alerts", { active: true })))(), 7000, "TradingView alerts"));
+      if (r.ok) putSetting("alerts_cache", { alerts: r.v, at: new Date().toISOString() }).catch(() => {});
+      else if (ac?.alerts) return { ok: true, v: ac.alerts, cached: true, note: "saved copy — " + r.error };
+      return r;
+    };
+    const [yq0, al] = await Promise.all([yahooQuotes(syms), alertsPart()]);
     let qv: Record<string, any> = { ...yq0 };
     out.quotes_source = "yahoo";
     const missing = syms.filter((s) => !qv[s]);
@@ -1642,7 +1663,8 @@ async function panel() {
       else if (!q.ok) out.quotes_note = `${missing.length} not on Yahoo; TradingView: ${q.error}`;
     }
     if (Object.keys(qv).length) out.quotes = { data: Object.entries(qv).map(([symbol, v]: any) => ({ symbol, close: v.close, change: v.change })) };
-    if (al.ok) out.alerts = al.v; else out.alerts_error = al.error;
+    if (al.ok) { out.alerts = al.v; if ((al as any).note) out.alerts_note = (al as any).note; } else out.alerts_error = al.error;
+    await tvCallsLoad(); out.tv_calls = TV_CALLS.n; out.tv_quota_until = tvSlow() && TV_SLOW_UNTIL > Date.now() + 10 * 60_000 ? TV_SLOW_UNTIL : null;   // v4.2
   };
 
   const rhPart = async () => {
@@ -2526,7 +2548,7 @@ async function sentimentNow(force = false, kind = "live"): Promise<any> {
    Prices: Yahoo chart API (the same source the banner already trusts), one call per symbol,
    1d/5m for today's sparkline + 5d/1d for the last five days. */
 export const MR_RULES = { def_nq: -1.0, def_tlt: 0.2, on_nq: 0.5, on_tlt: -0.2, disloc: 0.3, lead: 0.25 };
-const MR_SYMS: Record<string, string> = { tlt: "TLT", qqq: "QQQ", spy: "SPY", dia: "DIA", iwm: "IWM", cl: "CL=F", xom: "XOM", cvx: "CVX",
+const MR_SYMS: Record<string, string> = { tnx: "^TNX", tlt: "TLT", qqq: "QQQ", spy: "SPY", dia: "DIA", iwm: "IWM", cl: "CL=F", xom: "XOM", cvx: "CVX",
   dxy: "DX-Y.NYB", jpy: "JPY=X", gc: "GC=F", nem: "NEM", hg: "HG=F", fcx: "FCX", btc: "BTC-USD" };
 export type MrQ = { sym: string; price: number | null; pct: number | null; hi: number | null; lo: number | null; age: number | null; spark: number[]; days: { d: string; pct: number }[]; error?: string };
 async function mrQuote(sym: string): Promise<MrQ> {
@@ -2610,11 +2632,11 @@ export function mrTiles(Q: Record<string, MrQ>, calendar: any[], session: string
   const agree = cl != null && xom != null ? (Math.sign(cl) === Math.sign(xom) ? "agree" : "disagree") : "—";
   const next = (calendar || []).find((e) => Date.parse(e.date) > Date.now()) || null;
   return [
-    tile("bonds", "1 · Bonds", "tlt", tlt == null ? "—" : tlt > 0.15 ? "bought" : tlt < -0.15 ? "sold" : "flat"),
+    tile("bonds", "1 · Bonds", "tnx", tlt == null ? "—" : tlt > 0.15 ? "bought · yield ↓" : tlt < -0.15 ? "sold · yield ↑" : "flat", { tlt: { price: q("tlt").price, pct: tlt }, yield: true }),   // v4.2.1: 10Y shown, TLT decides (Ifoma 23 Oct)
     tile("indexes", "2 · Indexes", "qqq", lead && lag && lead.k !== lag.k && lead.pct - lag.pct >= MR_RULES.lead ? `${lead.n} leads · ${lag.n} lags` : idx.length ? "moving together" : "—",
       { indexes: idx.map((x) => ({ k: x.k, n: x.n, pct: x.pct, price: x.price })), leader: lead?.n || null, laggard: lag?.n || null }),
     tile("oil", "3 · Oil vs XOM", "cl", agree, { xom: { price: q("xom").price, pct: xom }, cvx: { price: q("cvx").price, pct: mrPct(q("cvx")) } }),
-    tile("dollar", "4 · Dollar", "dxy", dxy == null ? "—" : dxy > 0.1 ? "firm" : dxy < -0.1 ? "weak" : "flat", { jpy: { price: q("jpy").price, pct: jpy } }),
+    tile("dollar", "4 · Dollar", "jpy", jpy == null ? (dxy == null ? "—" : dxy > 0.1 ? "firm" : dxy < -0.1 ? "weak" : "flat") : jpy > 0.1 ? "yen weak · $ firm" : jpy < -0.1 ? "yen strong · $ weak" : "flat", { jpy: { price: q("jpy").price, pct: jpy }, dxy: { price: q("dxy").price, pct: dxy } }),   // v4.2.1: USD/JPY shown first (the coach reads JPY), DXY underneath
     tile("gold", "5 · Gold · Cu", "gc", `${gc == null ? "—" : gc > 0.3 ? "gold bid" : gc < -0.3 ? "gold sold" : "flat"} · ${hg == null ? "—" : hg > 0.3 ? "Cu up" : hg < -0.3 ? "Cu down" : "Cu flat"}`,
       { copper: { price: q("hg").price, pct: hg }, nem: { pct: mrPct(q("nem")) }, fcx: { pct: mrPct(q("fcx")) } }),
     tile("crypto", "6 · Crypto", "btc", btc == null ? "—" : btc > 0.5 ? "bid" : btc < -0.5 ? "sold" : "calm"),
@@ -2626,10 +2648,10 @@ export function mrLines(tiles: any[], v: any) {
   const t = (k: string) => tiles.find((x) => x.k === k) || {};
   const b = t("bonds"), i = t("indexes"), o = t("oil"), d = t("dollar"), g = t("gold"), c = t("crypto");
   return [
-    `Bonds: TLT ${mrF(b.pct)} — ${b.sub}.`,
+    `Bonds: 10Y ${b.price == null ? "—" : (+b.price).toFixed(3) + "%"} (${mrF(b.pct)}), TLT ${mrF(b.tlt?.pct ?? null)} — ${b.sub}.`,
     `Indexes: ${(i.indexes || []).map((x: any) => `${x.n} ${mrF(x.pct)}`).join(", ") || "—"}${i.leader ? ` — ${i.leader} leads, ${i.laggard} lags.` : "."}`,
     `Oil vs XOM: CL ${mrF(o.pct)}, XOM ${mrF(o.xom?.pct ?? null)} — they ${o.sub}.`,
-    `Dollar: DXY ${mrF(d.pct)}, USD/JPY ${mrF(d.jpy?.pct ?? null)} — ${d.sub}.`,
+    `Dollar: USD/JPY ${mrF(d.pct)}, DXY ${mrF(d.dxy?.pct ?? null)} — ${d.sub}.`,
     `Gold ${mrF(g.pct)} · copper ${mrF(g.copper?.pct ?? null)} — ${g.sub}.`,
     `Crypto: BTC ${mrF(c.pct)} — ${c.sub}.`,
     `Verdict: ${v.label}. ${v.why}`,

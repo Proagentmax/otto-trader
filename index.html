@@ -1006,6 +1006,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
 .dk.v4 .dk-rail button[data-go="jason"]{--c1:#FF9F5C;--c2:#C25A17;--glow:rgba(255,159,92,.5)}
 .dk.v4 .dk-rail button[data-go="quiz"]{--c1:#F26BA6;--c2:#A8336B;--glow:rgba(242,107,166,.5)}
 .dk.v4 .dk-rail button[data-go="homework"]{--c1:#5CA8FF;--c2:#2457B5;--glow:rgba(92,168,255,.5)}
+.dk.v4 .dk-rail button[data-go="settings"]{--c1:#3A4252;--c2:#1E242E;--glow:rgba(255,255,255,.18)}
 .dk.v4 .dk-rail button.on{background:rgba(255,255,255,.04);color:var(--ink)}
 .dk.v4 .dk-rail button.on svg{box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 0 22px var(--glow),0 0 0 1px var(--glow)}
 .dk.v4 .dk-rail button:hover{color:var(--ink-2)}
@@ -1034,8 +1035,8 @@ svg.nc-svg{width:100%;height:auto;display:block}
 .v4btn{border:1px solid #2E3542;background:linear-gradient(180deg,#232833,#1B1F27);color:var(--ink);border-radius:10px;padding:6px 11px;font-size:12px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.4)}
 .v4btn.gold{background:linear-gradient(180deg,var(--gold),var(--gold2));border-color:var(--gold2);color:#1A1200;font-weight:700;box-shadow:0 6px 18px rgba(245,196,81,.25)}
 .v4tiles{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:10px}
-@media(max-width:1500px){.v4tile{padding:7px 8px;min-height:56px}.v4tile .k{font-size:9.5px;letter-spacing:.04em}.v4tile .v{font-size:12px}.v4tile .v small{font-size:10px;margin-left:3px}.v4tile svg{width:46px;height:20px;right:5px}.v4tile .v{padding-right:50px;overflow:hidden;text-overflow:ellipsis}}
-@media(max-width:1300px){.v4tile .k i{display:none}.v4tile svg{width:38px}}
+@media(max-width:1500px){.v4tiles .v4tile{min-height:70px;padding:7px 8px 20px}.v4tiles .v4tile .k{font-size:9.5px;letter-spacing:.04em}.v4tiles .v4tile .v{font-size:12px;margin-top:2px;position:relative;z-index:1;padding-right:0;overflow:hidden;text-overflow:ellipsis}.v4tiles .v4tile .v small{font-size:10px;margin-left:3px}.v4tiles .v4tile svg{left:6px;right:6px;width:auto;bottom:2px;height:18px;opacity:.5;z-index:0}}
+@media(max-width:1300px){.v4tiles .v4tile .k i{display:none}}
 .v4tile{background:linear-gradient(180deg,#181C24,#12151B);border:1px solid #262D39;border-radius:12px;padding:8px 10px;box-shadow:0 1px 2px rgba(0,0,0,.45),0 8px 22px rgba(0,0,0,.35);cursor:pointer;position:relative;overflow:hidden;transition:.15s;min-height:62px}
 .v4tile:hover{border-color:var(--gold);transform:translateY(-1px)}.v4tile.on{border-color:var(--gold);box-shadow:0 0 0 1px rgba(245,196,81,.35),0 8px 22px rgba(0,0,0,.35)}
 .v4tile .k{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);display:flex;justify-content:space-between;gap:6px;white-space:nowrap;overflow:hidden}.v4tile .k i{font-style:normal;color:var(--ink-2);font-weight:700;overflow:hidden;text-overflow:ellipsis}
@@ -1104,7 +1105,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
   .dk.v4 #dkLeft{display:none}
   .dk.v4 .dk-desk{grid-column:2;grid-row:4}.dk.v4 #dkRight{grid-column:3;grid-row:4}.dk.v4 .dk-page{grid-column:2/4;grid-row:4}
     /* the rail keeps the main guys; everything lives in the ★ Menu launcher */
-  .dk.v4 .dk-rail .dk-tabs button[data-go]:not([data-go="desk"]):not([data-go="scoreboard"]):not([data-go="homework"]):not([data-go="winston"]):not([data-go="playbook"]),.dk.v4 .dk-rail button[data-go="settings"],.dk.v4 .dk-rail .dk-cust,.dk.v4 .dk-rail .dk-logo,.dk.v4 .dk-rail .dk-more,.dk.v4 .dk-rail .dk-morebox{display:none}
+  .dk.v4 .dk-rail .dk-tabs button[data-go]:not([data-go="desk"]):not([data-go="scoreboard"]):not([data-go="homework"]):not([data-go="winston"]):not([data-go="playbook"]),.dk.v4 .dk-rail .dk-cust,.dk.v4 .dk-rail .dk-logo,.dk.v4 .dk-rail .dk-more,.dk.v4 .dk-rail .dk-morebox{display:none}
   .dk.v4 .dk-head .dk-pill,.dk.v4 .dk-head .dk-who{display:none}
 }
 .dk.v4 .v4top{display:none}
@@ -2584,7 +2585,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="4.1.2";
+const BUILD="4.2.1";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -6258,6 +6259,8 @@ function v4Apply(){const dk=$("#dk");if(dk)dk.classList.toggle("v4",V4.on)}
 const v4F=(v,d=2)=>v==null||!isFinite(v)?"—":`${v>=0?"+":""}${(+v).toFixed(d)}%`;
 const v4N=(v,d)=>v==null||!isFinite(v)?"—":(+v).toLocaleString(undefined,{minimumFractionDigits:d??2,maximumFractionDigits:d??2});
 const v4Cls=v=>v==null?"":v>0?"up2":v<0?"dn2":"";
+const v4Px=(t,v)=>v==null?"—":t&&t.yield?(+v).toFixed(3)+"%":v4N(v,v>1000?0:2);
+const v4Sym=t=>t&&t.yield?"10Y":String(t&&t.sym||"").replace(/\^TNX/,"10Y").replace(/=F|-USD|\.NYB|=X/g,"");
 const v4Col=v=>v==null?"#7F8794":v>0?"#2EE59D":v<0?"#FF5C6A":"#7F8794";
 function v4Spark(pts,col,w=64,h=24){
   pts=(pts||[]).filter(p=>typeof p==="number"&&isFinite(p));
@@ -6281,7 +6284,7 @@ function v4HeroKey(m){return !m||!m.verdict?"none":(m.session==="closed"||m.sess
 function v4Tile(t,i,on){
   if(t.k==="calendar"){const nx=t.next;return `<div class="v4tile cal ${on?"on":""}" data-v4tile="${i}"><div class="k"><span>${esc(t.label)}</span><i>${esc(t.sub)}</i></div><div class="v">${nx?`${esc(dkTime(nx.at))} ${esc(nx.title)}`:t.sub==="closed"?"Market closed":"Nothing left today"}</div></div>`}
   const px=t.price==null?"—":v4N(t.price,t.price>1000?0:2);
-  return `<div class="v4tile ${on?"on":""}" data-v4tile="${i}" title="${esc(t.rule||"")}"><div class="k"><span>${esc(t.label)}</span><i>${esc(t.sub)}</i></div><div class="v">${esc(String(t.sym||"").replace(/=F|-USD|\.NYB|=X/g,""))} ${px}<small class="${v4Cls(t.pct)}">${t.pct==null?"":(t.pct>=0?"▲":"▼")+Math.abs(t.pct).toFixed(1)+"%"}</small></div>${v4Spark(t.spark,v4Col(t.pct))}</div>`;
+  return `<div class="v4tile ${on?"on":""}" data-v4tile="${i}" title="${esc(t.rule||"")}"><div class="k"><span>${esc(t.label)}</span><i>${esc(t.sub)}</i></div><div class="v">${esc(v4Sym(t))} ${t.yield?v4Px(t,t.price):px}<small class="${v4Cls(t.pct)}">${t.pct==null?"":(t.pct>=0?"▲":"▼")+Math.abs(t.pct).toFixed(1)+"%"}</small></div>${v4Spark(t.spark,v4Col(t.pct))}</div>`;
 }
 function v4RenderRead(){
   const el=$("#dkBanner");if(!V4.on||!el)return;
@@ -6331,8 +6334,8 @@ function v4SpotDraw(){
   box.querySelector("#v4dots").innerHTML=m.tiles.map((_,i)=>`<i class="${i===V4.spot?"on":""}"></i>`).join("");
   const info=box.querySelector("#v4sinfo");
   if(t.k==="calendar"){const ev=(t.events||[]).slice(0,4);info.innerHTML=`<div class="nm">Calendar · ${esc(t.sub)}</div><div class="px" style="font-size:18px">${esc(m.et||"")}</div>${ev.length?ev.map(e=>`<div class="hl" style="grid-template-columns:62px 1fr;margin-top:4px"><span class="mono">${esc(dkTime(e.date))}</span><span style="color:var(--ink)">${esc(e.title)}</span></div>`).join(""):`<div class="mut" style="margin-top:6px">No US releases left today.</div>`}<div class="rule"><b>Coach:</b> ${esc(t.rule)}</div>`}
-  else info.innerHTML=`<div class="nm">${esc(t.label.replace(/^\d · /,""))} · ${esc(String(t.sym||"").replace(/=F|-USD|\.NYB|=X/g,""))}</div><div class="px">${t.price==null?"—":v4N(t.price,t.price>1000?0:2)}</div><div class="ch ${v4Cls(t.pct)}">${t.pct==null?"no fresh price":(t.pct>=0?"▲":"▼")+" "+v4F(t.pct)+" today · "+esc(t.sub)}</div><svg class="sp"></svg>
-    <div class="hl"><div>Day high<b>${t.hi==null?"—":v4N(t.hi,t.hi>1000?0:2)}</b></div><div>Day low<b>${t.lo==null?"—":v4N(t.lo,t.lo>1000?0:2)}</b></div><div>${t.k==="oil"?"XOM":t.k==="gold"?"Copper":t.k==="dollar"?"USD/JPY":t.k==="indexes"?"Leader":"5-day"}<b>${t.k==="oil"?v4F(t.xom&&t.xom.pct):t.k==="gold"?v4F(t.copper&&t.copper.pct):t.k==="dollar"?v4F(t.jpy&&t.jpy.pct):t.k==="indexes"?esc(t.leader||"—"):v4F((t.days||[]).reduce((a,d)=>a+d.pct,0))}</b></div></div>
+  else info.innerHTML=`<div class="nm">${esc(t.label.replace(/^\d · /,""))} · ${esc(v4Sym(t))}</div><div class="px">${v4Px(t,t.price)}</div><div class="ch ${v4Cls(t.pct)}">${t.pct==null?"no fresh price":(t.pct>=0?"▲":"▼")+" "+v4F(t.pct)+" today · "+esc(t.sub)}</div><svg class="sp"></svg>
+    <div class="hl"><div>Day high<b>${t.hi==null?"—":v4N(t.hi,t.hi>1000?0:2)}</b></div><div>Day low<b>${t.lo==null?"—":v4N(t.lo,t.lo>1000?0:2)}</b></div><div>${t.k==="oil"?"XOM":t.k==="gold"?"Copper":t.k==="dollar"?"DXY":t.k==="bonds"?"TLT":t.k==="indexes"?"Leader":"5-day"}<b>${t.k==="oil"?v4F(t.xom&&t.xom.pct):t.k==="gold"?v4F(t.copper&&t.copper.pct):t.k==="dollar"?v4F(t.dxy&&t.dxy.pct):t.k==="bonds"?v4F(t.tlt&&t.tlt.pct):t.k==="indexes"?esc(t.leader||"—"):v4F((t.days||[]).reduce((a,d)=>a+d.pct,0))}</b></div></div>
     <div class="rule"><b>Coach:</b> ${esc(t.rule)}</div>`;
   const sp=info.querySelector("svg.sp");if(sp)sp.outerHTML=v4Spark(t.spark,v4Col(t.pct),300,42).replace("<svg ",'<svg class="sp" ');
   $$("#dkBanner [data-v4tile]").forEach(x=>x.classList.toggle("on",+x.dataset.v4tile===V4.spot));
@@ -6386,15 +6389,16 @@ function v4Pop(kind,arg){
     if(t.k==="calendar"){
       v4Open(v4Ph(V4.spotImg.closed,"Today's calendar",m.et||""),`${(t.events||[]).length?`<ul>${t.events.map(e=>`<li><span class="mono">${esc(dkTime(e.date))}</span> · ${esc(e.title)} <span class="mut">${e.importance>=1?"· binary":""}</span></li>`).join("")}</ul>`:`<span class="mut">No US releases today.</span>`}<h4>The coach's rule</h4>${esc(t.rule)}<div class="mut" style="font-size:12px">${esc(t.ref)}</div>`);return;
     }
-    const col=v4Col(t.pct),sym=String(t.sym||"").replace(/=F|-USD|\.NYB|=X/g,"");
+    const col=v4Col(t.pct),sym=v4Sym(t);
     const extra=t.k==="indexes"?(t.indexes||[]).map(x=>`<div><div class="k">${esc(x.n)}</div><div class="v ${v4Cls(x.pct)}">${v4F(x.pct)}</div></div>`).join("")
       :t.k==="oil"?`<div><div class="k">XOM</div><div class="v ${v4Cls(t.xom&&t.xom.pct)}">${v4F(t.xom&&t.xom.pct)}</div></div><div><div class="k">CVX</div><div class="v ${v4Cls(t.cvx&&t.cvx.pct)}">${v4F(t.cvx&&t.cvx.pct)}</div></div>`
       :t.k==="gold"?`<div><div class="k">Copper</div><div class="v ${v4Cls(t.copper&&t.copper.pct)}">${v4F(t.copper&&t.copper.pct)}</div></div><div><div class="k">NEM</div><div class="v ${v4Cls(t.nem&&t.nem.pct)}">${v4F(t.nem&&t.nem.pct)}</div></div><div><div class="k">FCX</div><div class="v ${v4Cls(t.fcx&&t.fcx.pct)}">${v4F(t.fcx&&t.fcx.pct)}</div></div>`
-      :t.k==="dollar"?`<div><div class="k">USD/JPY</div><div class="v ${v4Cls(t.jpy&&t.jpy.pct)}">${v4F(t.jpy&&t.jpy.pct)}</div></div>`:"";
+      :t.k==="dollar"?`<div><div class="k">DXY</div><div class="v ${v4Cls(t.dxy&&t.dxy.pct)}">${t.dxy&&t.dxy.price!=null?v4N(t.dxy.price)+" · ":""}${v4F(t.dxy&&t.dxy.pct)}</div></div>`
+      :t.k==="bonds"?`<div><div class="k">TLT (decides bought/sold)</div><div class="v ${v4Cls(t.tlt&&t.tlt.pct)}">${t.tlt&&t.tlt.price!=null?v4N(t.tlt.price)+" · ":""}${v4F(t.tlt&&t.tlt.pct)}</div></div>`:"";
     const img=t.k==="bonds"?"img/hero-neutral.webp":t.k==="indexes"?(/Nasdaq/.test(t.leader||"")?"img/hero-riskon.webp":"img/hero-night.webp"):null;
     const dis=(m.dislocations||[]).filter(d=>(t.k==="oil"&&/Oil/.test(d.label))||(t.k==="gold"&&/Gold|Copper/.test(d.label)));
-    v4Open(v4Ph(img,`${t.label.replace(/^\d · /,"")} · ${sym}`,`${t.price==null?"—":v4N(t.price,t.price>1000?0:2)} · ${v4F(t.pct)} · ${t.sub}`,V4.grad[t.k]),
-      `<div class="grid"><div><div class="k">Now</div><div class="v">${t.price==null?"—":v4N(t.price,t.price>1000?0:2)}</div></div><div><div class="k">Day high</div><div class="v">${t.hi==null?"—":v4N(t.hi,t.hi>1000?0:2)}</div></div><div><div class="k">Day low</div><div class="v">${t.lo==null?"—":v4N(t.lo,t.lo>1000?0:2)}</div></div><div><div class="k">Today</div><div class="v ${v4Cls(t.pct)}">${v4F(t.pct)}</div></div>${extra}</div>
+    v4Open(v4Ph(img,`${t.label.replace(/^\d · /,"")} · ${sym}`,`${v4Px(t,t.price)} · ${v4F(t.pct)} · ${t.sub}`,V4.grad[t.k]),
+      `<div class="grid"><div><div class="k">Now</div><div class="v">${v4Px(t,t.price)}</div></div><div><div class="k">Day high</div><div class="v">${v4Px(t,t.hi)}</div></div><div><div class="k">Day low</div><div class="v">${v4Px(t,t.lo)}</div></div><div><div class="k">Today</div><div class="v ${v4Cls(t.pct)}">${v4F(t.pct)}</div></div>${extra}</div>
        <div class="two"><div><div class="big"><div class="hd"><span>Today · 5-minute closes</span><span class="${v4Cls(t.pct)}">${v4F(t.pct)}</span></div>${v4Spark(t.spark,col,900,150)}</div>
          <h4>Last 5 days</h4><div class="days">${(t.days||[]).length?t.days.map(d=>`<div>${esc(d.d)}<b class="${v4Cls(d.pct)}">${v4F(d.pct)}</b></div>`).join(""):`<div>—<b>no history yet</b></div>`}</div>
          ${dis.length?`<h4>Dislocation</h4>${dis.map(d=>`<div>${esc(d.text)}</div>`).join("")}`:""}
@@ -6405,9 +6409,9 @@ function v4Pop(kind,arg){
   }
   if(kind==="all"){
     v4Open(v4Ph(null,"The read, instrument by instrument",`Market read · ${m.et||""} · scroll →`),
-      `<div class="v4strip">${m.tiles.map((t,i)=>{const sym=String(t.sym||"").replace(/=F|-USD|\.NYB|=X/g,"");return `<div class="v4sc" data-v4goto="${i}"><div class="art" style="background-image:${v4SpotArt(t,m)}"></div><div class="veil"></div><div class="info"><div class="nm">${esc(t.label.replace(/^\d · /,""))}${sym?" · "+esc(sym):""}</div>
+      `<div class="v4strip">${m.tiles.map((t,i)=>{const sym=String(t.sym||"").replace(/=F|-USD|\.NYB|=X/g,"");return `<div class="v4sc" data-v4goto="${i}"><div class="art" style="background-image:${v4SpotArt(t,m)}"></div><div class="veil"></div><div class="info"><div class="nm">${esc(t.label.replace(/^\d · /,""))}${sym?" · "+esc(v4Sym(t)):""}</div>
         ${t.k==="calendar"?`<div class="px" style="font-size:18px">${esc(t.sub)}</div>${(t.events||[]).slice(0,3).map(e=>`<div class="hl" style="grid-template-columns:56px 1fr;margin-top:4px"><span class="mono">${esc(dkTime(e.date))}</span><span style="color:var(--ink)">${esc(e.title)}</span></div>`).join("")}`
-        :`<div class="px">${t.price==null?"—":v4N(t.price,t.price>1000?0:2)}</div><div class="ch ${v4Cls(t.pct)}">${t.pct==null?"no fresh price":(t.pct>=0?"▲":"▼")+" "+v4F(t.pct)}</div>${v4Spark(t.spark,v4Col(t.pct),200,54)}<div class="hl"><div>Day high<b>${t.hi==null?"—":v4N(t.hi,t.hi>1000?0:2)}</b></div><div>Day low<b>${t.lo==null?"—":v4N(t.lo,t.lo>1000?0:2)}</b></div><div>5-day<b>${v4F((t.days||[]).reduce((a,d)=>a+d.pct,0))}</b></div></div><span class="vd">${esc(t.sub.toUpperCase())}</span>`}
+        :`<div class="px">${v4Px(t,t.price)}</div><div class="ch ${v4Cls(t.pct)}">${t.pct==null?"no fresh price":(t.pct>=0?"▲":"▼")+" "+v4F(t.pct)}</div>${v4Spark(t.spark,v4Col(t.pct),200,54)}<div class="hl"><div>Day high<b>${v4Px(t,t.hi)}</b></div><div>Day low<b>${v4Px(t,t.lo)}</b></div><div>5-day<b>${v4F((t.days||[]).reduce((a,d)=>a+d.pct,0))}</b></div></div><span class="vd">${esc(t.sub.toUpperCase())}</span>`}
         <div class="rule"><b style="color:var(--gold)">Coach:</b> ${esc(t.rule)}</div></div></div>`}).join("")}</div><div class="mut" style="font-size:12.5px">Tap a card for its full page. Pictures: Bonds, Nasdaq, Dow and the closed market; Oil, Gold and Crypto get theirs when the stills arrive.</div>`);
     return;
   }
@@ -6474,9 +6478,7 @@ function v4TopBuild(){
   t.querySelector("#v4gear").addEventListener("click",openSettings);
   t.querySelector("#v4w").addEventListener("click",()=>v4Pop("watcher"));t.querySelectorAll("[data-set]").forEach(x=>x.addEventListener("click",openSettings));
   // ★ Menu and ⚙ Settings live at the bottom, next to + Chart and Order ticket
-  const comp=$(".dk-compose");if(comp&&!$("#v4cbMenu")){const m=document.createElement("button");m.id="v4cbMenu";m.className="v4cb menu";m.type="button";m.title="Everything in the app";m.innerHTML=`<svg viewBox="0 0 24 24">${V4_ICON.star}</svg>Menu`;m.addEventListener("click",v4Launcher);
-    const g=document.createElement("button");g.id="v4cbSet";g.className="v4cb";g.type="button";g.title="Settings";g.innerHTML=`<svg viewBox="0 0 24 24">${V4_ICON.settings}</svg>`;g.addEventListener("click",openSettings);
-    comp.insertBefore(g,comp.firstChild)}   // v4.1.2: ★ Menu stays on the rail with the other tabs; only Settings moves to the bottom bar
+  // v4.2: ★ Menu and ⚙ Settings both live on the rail (Settings at the bottom, where the arrow pointed); the bottom bar is + Chart · Order ticket · ask · Send
   // the ★ Menu on the rail — opens the launcher with everything
   const rail=$(".dk-rail");if(rail&&!$("#v4menuBtn")){const m=document.createElement("button");m.id="v4menuBtn";m.className="v4more";m.innerHTML=`<svg viewBox="0 0 24 24">${V4_ICON.star}</svg>Menu`;m.addEventListener("click",v4Launcher);const sp=rail.querySelector(".sp");rail.insertBefore(m,sp||null)}
   v4TopDraw();if(!V4.clockT)V4.clockT=setInterval(v4TopDraw,30e3);
@@ -6487,14 +6489,15 @@ function v4TopDraw(){
   const who=$("#dkWho"),slot=$("#v4whoSlot"),home=$(".dk-head .dk-who");if(who&&slot&&home){if(wide&&who.parentElement!==slot)slot.appendChild(who);else if(!wide&&who.parentElement!==home)home.appendChild(who)}
   const p=DK.panel||{},c=p.conn||{},bad=(c.tv===false&&!!p.quotes_error)||(c.rh===false&&!!p.rh_error)||!!(V4.mr&&V4.mr.error);
   const dot=(el,ok,err,lab)=>{if(!el)return;el.innerHTML=`<i class="${err?"bad":ok?"":"off"}"></i>${lab}`};
-  dot($("#v4tv"),c.tv,p.quotes_error,"TradingView");dot($("#v4rh"),c.rh,p.rh_error,"Robinhood");
+  const tvq=p.tv_quota_until&&p.tv_quota_until>Date.now();dot($("#v4tv"),c.tv&&!tvq,p.quotes_error||tvq,`TradingView${p.tv_calls!=null?` · ${p.tv_calls}`:""}${tvq?" · quota — back 8 PM":""}`);
+  const tvEl=$("#v4tv");if(tvEl)tvEl.title=tvq?"TradingView's daily tool-call quota is used up; alerts and the watchlist are saved copies until midnight UTC (8 PM ET). Prices come from Yahoo and Robinhood.":`TradingView tool calls today: ${p.tv_calls==null?"—":p.tv_calls} (alerts and watchlist are shared copies, refreshed every 10 min)`;dot($("#v4rh"),c.rh,p.rh_error,"Robinhood");
   const W=DK.watch,won=W&&W.clock==="open",wn=W?(W.rows||[]).filter(r=>r.status==="watching").length:0;dot($("#v4w"),won,W&&W.error,`Watcher${W?(won?` · ${wn}`:W.clock==="pre"?" · 9:30":" · off"):""}`);
   const ck0=$("#v4clock");if(ck0)ck0.title=`v${BUILD}`;
   const n=nyNow(),open=!["Sat","Sun"].includes(n.wd)&&n.min>=570&&n.min<960,pre=!["Sat","Sun"].includes(n.wd)&&n.min>=240&&n.min<570;
   const d=new Date().toLocaleDateString("en-US",{weekday:"short",day:"numeric",month:"short",timeZone:"America/New_York"}),tm=new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"});
   const ck=$("#v4clock");if(ck)ck.innerHTML=`${esc(d)} · <b>${esc(tm)}</b> · ${open?"open":pre?"pre-market":"closed"} <span class="ver">· v${BUILD}</span>`;
   const av=$("#v4av");if(av&&who)av.textContent=(who.value||"J")[0];
-  const sb=$('.dk-rail button[data-go="settings"]'),g2=$("#v4cbSet");if(g2&&sb)g2.style.boxShadow=sb.classList.contains("dot")?"0 0 0 1px #ff5a52":"";
+
   t.querySelectorAll(".mid button[data-v4go]").forEach(b=>b.classList.toggle("on",DK.view===b.dataset.v4go));
 }
 function v4Launcher(){
