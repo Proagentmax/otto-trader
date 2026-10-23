@@ -1150,6 +1150,10 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
   if (asStock) throw new Error(asStock);
   // v3.1: an opening option order must carry its plan, so the scorecard can grade it.
   const opening = calls.some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open"));
+  // v4.2.2 (23 Oct bug, AAPL 355C Coach #352): an opening leg with no option_id slipped through at 9:33 — no live quote at
+  // approve, "price unavailable" on the trade row, Close Now refused. The self-test already required it; now the server does too.
+  const openLeg = calls.flatMap((c: any) => c.tool === "place_option_order" ? (c.args?.legs || []) : []).find((l: any) => l.position_effect === "open");
+  if (openLeg && !openLeg.option_id) throw new Error(`NO CARD — the opening leg has no option_id ("${String(input.title || "").slice(0, 80)}"). Look the contract up first (get_option_chains / get_option_instruments for the strike and expiry in the title) and propose again with legs[0].option_id set.`);
   // v3.14: the server stamps where the idea came from (signal / desk / scanner / alert / watcher trigger) for the Scoreboard.
   const plan = input.plan && typeof input.plan === "object" ? { ...input.plan, ...(opening ? (opts.planExtra || {}) : {}),
     ...(opening && !opts.planExtra?.source ? { source: who === "signals" ? "signal" : who === "alert" ? "alert" : who === "otto" ? "manual" : "desk" } : {}) } : null;

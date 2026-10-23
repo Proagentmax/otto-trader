@@ -2461,6 +2461,17 @@ Deno.test("v3.44 fix 2: an option-titled card built as a STOCK order is refused 
   assert(!T.otto_actions.length, "no card stored");
   assert(!calls.some((c) => /review_|place_/.test(c.tool)), "nothing sent to Robinhood, not even a review: " + calls.map((c) => c.tool).join(","));
 });
+Deno.test("v4.2.2: an opening option leg with no option_id is refused before anything is stored (AAPL 355C Coach #352, 23 Oct 9:33)", async () => {
+  reset(); setNow("2026-10-23T13:33:00Z");
+  const bad = spyCard(); bad.title = "Buy 1 AAPL 355C 10/28 @ 2.25 (Coach #352)"; bad.calls[0].args.legs = [{ side: "buy", ratio_quantity: 1, position_effect: "open" }]; bad.calls[0].args.price = "2.25";
+  let err = ""; try { await M.proposeAction(bad, "signals"); } catch (e) { err = (e as Error).message; }
+  assert(/^NO CARD — the opening leg has no option_id/.test(err) && /get_option_instruments/.test(err), err);
+  assert(!T.otto_actions.length, "no card stored");
+  assert(!calls.some((c) => /review_|place_/.test(c.tool)), "nothing sent to Robinhood: " + calls.map((c) => c.tool).join(","));
+  reset(); setNow("2026-10-06T15:51:00Z");
+  const ok: any = await M.proposeAction(spyCard(), "ottotrader@vinecreativestudio.com");
+  assert(ok && ok.id, "a leg with option_id still builds");
+});
 Deno.test("v3.44 fix 3: the server's LIVE/PAPER word wins whatever dash Jarvis used; a non-opening card loses Jarvis's word", () => {
   for (const t of ["PAPER – Buy 1 ULTA 625C", "PAPER - Buy 1 ULTA 625C", "PAPER — Buy 1 ULTA 625C", "PAPER Buy 1 ULTA 625C", "paper:  Buy 1 ULTA 625C", "LIVE – Buy 1 ULTA 625C"])
     assert(M.stampTitle(t, false) === "LIVE — Buy 1 ULTA 625C", `${t} → ${M.stampTitle(t, false)}`);
