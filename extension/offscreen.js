@@ -15,19 +15,29 @@ function piece() {
   };
   rec.start(); timer = setTimeout(() => { try { rec.stop(); } catch (e) {} }, PIECE_MS);
 }
-chrome.runtime.onMessage.addListener(async (m) => {
-  if (!m || m.target !== "offscreen") return;
+// IMPORTANT: this listener must NOT be async and must ignore every message not meant for it. Chrome counts a returned Promise as
+// "I answered", so an async listener here answered the popup's other messages with undefined and broke pairing (26 Oct, v1.4.0).
+chrome.runtime.onMessage.addListener((m) => {
+  if (!m || m.target !== "offscreen") return false;
+  run(m);
+  return false;
+});
+async function run(m) {
   if (m.type === "ears-go") {
     try {
       session = m.session; seq = 0; stopping = false; startedAt = Date.now();
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { mandatory: { chromeMediaSource: "tab", chromeMediaStreamId: m.streamId } }, video: false });
+      const src = { mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: m.streamId } };
+      // v1.4.5: ask for audio + video exactly like Chrome's own sample and keep only the audio (Chrome rejects audio-only with "Invalid capture
+      // constraints", and a stream id is single-use, so the fallback gets a FRESH id from the background — see ears-retry).
+      if (m.mode === "audio") stream = await navigator.mediaDevices.getUserMedia({ audio: src });
+      else { const both = await navigator.mediaDevices.getUserMedia({ audio: src, video: src }); both.getVideoTracks().forEach((t) => { t.stop(); both.removeTrack(t); }); stream = both; }
       ctx = new AudioContext(); ctx.createMediaStreamSource(stream).connect(ctx.destination);   // capturing mutes the tab — play it back so the call stays audible
       piece();
-    } catch (e) { chrome.runtime.sendMessage({ target: "background", type: "ears-error", error: "could not listen to that tab: " + (e.message || e) }); }
+    } catch (e) { chrome.runtime.sendMessage({ target: "background", type: m.mode === "audio" ? "ears-error" : "ears-retry", error: "could not listen to that tab: " + String(e.name || "Error") + " — " + (e.message || e) }); }
   }
   if (m.type === "ears-stop") {
     stopping = true; clearTimeout(timer);
     try { if (rec && rec.state === "recording") rec.stop(); } catch (e) {}
     setTimeout(() => { try { stream && stream.getTracks().forEach((t) => t.stop()); ctx && ctx.close(); } catch (e) {} stream = null; }, 1200);
   }
-});
+}

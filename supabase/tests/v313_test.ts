@@ -1488,9 +1488,9 @@ Deno.test("v3.30 item 4: the Signal card rules ask for a 2-line summary and a 1�
   assert(/summary to 2 short lines/.test(M.ONE_STEP_RULE) && /summary to 2 short lines/.test(M.LEVEL_ONE_STEP_RULE) && !/4 short lines/.test(M.ONE_STEP_RULE + M.LEVEL_ONE_STEP_RULE), "summary trimmed");
   assert(/1–2 short plain lines/.test(M.ONE_STEP_RULE) && /1–2 short plain lines/.test(M.signalProposeTool([]).input_schema.properties.read.description), "read trimmed");
   const bg = await Deno.readTextFile(new URL("../../extension/background.js", import.meta.url));
-  assert(/const QUIET_MS = 3000;/.test(bg) && /const MAX_WAIT_MS = 8000;/.test(bg) && /const VER = "1\.4\.0"/.test(bg), "extension 1.4.0 waits 3 s quiet / 8 s max");
+  assert(/const QUIET_MS = 3000;/.test(bg) && /const MAX_WAIT_MS = 8000;/.test(bg) && /const VER = "1\.5\.0"/.test(bg), "extension 1\.4\.4 waits 3 s quiet / 8 s max");
   const mf = JSON.parse(await Deno.readTextFile(new URL("../../extension/manifest.json", import.meta.url)));
-  assert(mf.version === "1.4.0", "manifest version " + mf.version);
+  assert(mf.version === "1.5.0", "manifest version " + mf.version);
 });
 
 Deno.test("v3.23: the 9:10 self-test fails (and pings) when post → card is slower than 30 s", async () => {

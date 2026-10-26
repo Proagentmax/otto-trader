@@ -144,8 +144,56 @@ Deno.test("v4.6 static: the Desk renders Ears posts with Arm / Dismiss / Remove 
   for (const k of ["^🎧 Ears heard", "data-ears-arm", "data-ears-skip", "data-ears-rm", "data-ears-mode", '"ears_arm"', '"ears_dismiss"', '"ears_remove"', '"ears_mode"']) assert(html.includes(k), "index.html has " + k);
   const mf = JSON.parse(await Deno.readTextFile(U("extension/manifest.json")));
   for (const p of ["tabCapture", "offscreen", "activeTab"]) assert(mf.permissions.includes(p), "permission " + p);
-  assert(mf.version === "1.4.0" && !mf.permissions.includes("<all_urls>"), "version, no broad host");
+  assert(mf.version === "1.5.0" && !mf.permissions.includes("<all_urls>"), "version, no broad host");
   const bg = await Deno.readTextFile(U("extension/background.js")), off = await Deno.readTextFile(U("extension/offscreen.js")), pop = await Deno.readTextFile(U("extension/popup.js"));
   assert(/fn=ears/.test(bg) && /x-otto-signal/.test(bg) && /ears-chunk/.test(bg) && /PIECE_MS = 60000/.test(off) && /chromeMediaSource: "tab"/.test(off) && /ctx\.destination/.test(off), "capture pieces of 60 s, tab audio stays audible");
-  assert(/tabCapture\.getMediaStreamId/.test(pop) && (await Deno.readTextFile(U("extension/offscreen.html"))).includes("offscreen.js"), "popup starts it from a click");
+  assert(/tabCapture\.getMediaStreamId/.test(bg) && /ears-start/.test(pop) && (await Deno.readTextFile(U("extension/offscreen.html"))).includes("offscreen.js"), "popup starts it from a click");
+});
+Deno.test("v4.6.1 regression: the offscreen message listener is never async and ignores messages not meant for it (an async one answered the popup with undefined and broke pairing)", async () => {
+  const off = await Deno.readTextFile(new URL("../../extension/offscreen.js", import.meta.url));
+  assert(!/onMessage\.addListener\(\s*async/.test(off), "listener must not be async");
+  assert(/target !== "offscreen"\) return false/.test(off), "ignores other targets");
+  const pop = await Deno.readTextFile(new URL("../../extension/popup.js", import.meta.url));
+  assert(/r\(v \|\| \{ ok: false/.test(pop), "popup survives a missing reply");
+});
+Deno.test("v4.6.2 regression: tab audio is requested audio-only first (no video:false), with a fallback that drops the video track", async () => {
+  const off = await Deno.readTextFile(new URL("../../extension/offscreen.js", import.meta.url));
+  assert(!/video: false/.test(off) && /audio: src, video: src/.test(off) && /removeTrack/.test(off) && /ears-retry/.test(off), "audio+video first like Chrome's sample, audio-only retry");
+  const bg = await Deno.readTextFile(new URL("../../extension/background.js", import.meta.url));
+  assert(/ears-retry/.test(bg) && /mode: "audio"/.test(bg), "retry gets a fresh stream id");
+});
+Deno.test("v4.6.6 regression: the tab-capture constraint key is chromeMediaSourceId (Chrome's documented key) — chromeMediaStreamId made every capture fail with 'Error starting tab capture'", async () => {
+  const off = await Deno.readTextFile(new URL("../../extension/offscreen.js", import.meta.url));
+  assert(/chromeMediaSourceId: m\.streamId/.test(off) && !/chromeMediaStreamId/.test(off), "documented constraint key");
+});
+
+/* ---------------- v4.7: Winston hears the call; tickers snap to known names; handled posts fold ---------------- */
+Deno.test("v4.7 ears: a spoken name snaps to a known ticker (Micron → MU, SK → SKHY); an unknown one is listed as unsure and never armed", async () => {
+  reset(); await M.earsIn({ kind: "start", session: "s10" });
+  const known = ["MU", "SKHY", "NVDA", "PLTR"];
+  assert(M.earsSnap("Micron", known) === "MU" && M.earsSnap("SK", known) === "SKHY" && M.earsSnap("NVDS", known) === null && M.earsSnap("CRWD", ["CRWV", ...known]) === null && M.earsSnap("US 10Y", known) === null && M.earsSnap("CRWD", known) === null && M.earsSnap("PLTR", known) === "PLTR", "snap");
+  SAY = ["Micron nine twenty and SK one forty two seventy eight and some random nine hundred"];
+  LEV = [[L("Micron", "920", "above 920"), L("SK", "142.78", "resistance"), L("ZZZZ", "900", "random")]];
+  const r = await M.earsIn(chunk("s10", 1));
+  assert(r.new === 2 && r.unsure === 1, "2 snapped, 1 unsure: " + JSON.stringify(r));
+  const post = DESK.find((d) => d.startsWith("🎧 Ears heard 2"))!;
+  assert(/MU 920 ▲/.test(post) && /SKHY 142.78/.test(post) && /Unsure .*ZZZZ 900/.test(post), "post: " + post);
+  const a = await route("ears_arm", { author: "Ifoma" }); assert(a.total === 2 && !WATCH.some((w) => w.ticker === "ZZZZ"), "unsure never armed");
+  const st = (await route("ears_state", {})).state; assert(st.handled_at, "handled_at set on arm");
+});
+Deno.test("v4.7 ears: the Winston push + stop result carry the counts the popup shows", async () => {
+  reset(); await M.earsIn({ kind: "start", session: "s11" });
+  const pings: string[] = []; (globalThis as any).__OTTO_TEST__.notify = (k: string, t: string) => pings.push(k + ":" + t);
+  SAY = ["NVDA above two eighteen"]; LEV = [[L("NVDA", "218", "above 218")]]; await M.earsIn(chunk("s11", 1));
+  setNow("2026-10-26T15:09:00Z"); const e = await M.earsIn({ kind: "stop", session: "s11" });
+  assert(e.levels === 1 && e.waiting === 1 && e.minutes === 9, "stop result: " + JSON.stringify(e));
+  assert(pings.some((p) => /^ears:🎧 Ears heard 1 level/.test(p)) && pings.some((p) => /waiting for your Arm/.test(p)), "pings: " + pings.join(" | "));
+  (globalThis as any).__OTTO_TEST__.notify = () => {};
+});
+Deno.test("v4.7 static: the extension popup shows the stop result + Open the Desk; the Desk folds handled Ears posts", async () => {
+  const U = (p: string) => new URL("../../" + p, import.meta.url);
+  const pop = await Deno.readTextFile(U("extension/popup.js")), ph = await Deno.readTextFile(U("extension/popup.html")), bg = await Deno.readTextFile(U("extension/background.js"));
+  assert(/waiting for your Arm/.test(pop) && /earsOpen/.test(ph) && /ears-open-desk/.test(bg) && /otto-trader\/#desk/.test(bg), "popup result + open desk");
+  const html = await Deno.readTextFile(U("index.html"));
+  assert(/earsHandledAt/.test(html) && /handled · /.test(html), "handled posts fold");
 });

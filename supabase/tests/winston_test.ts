@@ -1233,3 +1233,15 @@ Deno.test("v4.5 no shadow when the plan is broken or has no levels, and the SQL 
   const html = await Deno.readTextFile(new URL("../../index.html", import.meta.url));
   assert(/winShadowLine/.test(html) && /winShadowBox/.test(html), "Winston page shows the ledger");
 });
+
+Deno.test("v4.7 Ears → Winston: only today's ARMED levels reach the prompt, with the call minute; drafts and other days do not", () => {
+  const st = { started: "2026-10-26T13:36:00Z", levels: [
+    { ticker: "PLTR", level: 171.5, dir: "up", meaning: "needs to reclaim 171.5", min: 6, status: "armed" },
+    { ticker: "NVDA", level: 217, dir: "both", meaning: "support", min: 7, status: "draft" },
+    { ticker: "AMD", level: 515, dir: "down", meaning: "below 515 negated", min: 9, status: "armed" } ] };
+  const a = X.earsLines(st, "2026-10-26");
+  assert(a.length === 2 && /\[heard live, call minute 6\] PLTR 171.5 \(break ABOVE\) — needs to reclaim 171.5/.test(a[0]) && /AMD 515 \(break BELOW\)/.test(a[1]), JSON.stringify(a));
+  assert(X.earsLines(st, "2026-10-27").length === 0 && X.earsLines(null, "2026-10-26").length === 0, "other day / empty");
+  assert(X.dbGuard("otto_settings?key=eq.ears_state&select=value", "GET") === undefined, "wall lets Winston READ ears_state");
+  let blocked = false; try { X.dbGuard("otto_settings?key=eq.ears_state", "POST"); } catch { blocked = true; } assert(blocked, "never write it");
+});

@@ -6,7 +6,7 @@
    v1.3: edits / late charts arrive as {edited:true} with a new key (id#e<hash>); the Discord tab also nudges the
    check-in every minute (Chrome can hold back the alarm on an idle PC); scrolled-up and unknown-author counts
    travel in the heartbeat. */
-const VER = "1.4.0";
+const VER = "1.5.0";
 const QUIET_MS = 3000;      // v1.3.1 (13 Oct): was 12 s. Send once he's been quiet this long…
 const MAX_WAIT_MS = 8000;   // v1.3.1: was 30 s. …or this long after the first new line, whichever comes first
 
@@ -233,6 +233,7 @@ async function earsDrain() {
       try { const j = await earsPost(item); earsQ.shift();
         if (item.kind === "chunk") { const s = (await store.get("ears")) || {}; await earsStatus({ sent: (s.sent || 0) + 1, levels: j.levels ?? s.levels, mode: j.mode || s.mode, err: "" }); }
         else if (item.kind === "start" && j.mode) await earsStatus({ mode: j.mode });
+        else if (item.kind === "stop") await earsStatus({ result: { levels: j.levels || 0, armed: j.armed || 0, waiting: j.waiting || 0, dismissed: j.dismissed || 0, skipped: j.skipped || 0, minutes: j.minutes || 0 } });
       }
       catch (e) { item.tries = (item.tries || 0) + 1; await earsStatus({ err: String(e.message || e).slice(0, 160) });
         if (item.tries >= 4 && item.kind === "chunk") { earsQ.shift(); const s = (await store.get("ears")) || {}; await earsStatus({ lost: (s.lost || 0) + 1 }); continue; }   // give up on one piece, keep the call going
@@ -241,15 +242,17 @@ async function earsDrain() {
     }
   } finally { earsBusy = false; }
 }
-async function earsStart(tabId, streamId) {
+async function earsStart(tabId) {
   const s = (await store.get("ears")) || {};
   if (s.on) return { ok: false, error: "Already listening." };
+  const streamId = await new Promise((res) => chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, (id) => res(chrome.runtime.lastError ? { error: chrome.runtime.lastError.message } : { id })));
+  if (!streamId.id) return { ok: false, error: "Chrome would not share this tab: " + streamId.error };
   const session = "e" + Date.now().toString(36);
-  await store.set({ ears: { on: true, session, tabId, startedAt: Date.now(), sent: 0, lost: 0, levels: 0, mode: s.mode || "draft", err: "" } });
+  await store.set({ ears: { on: true, session, tabId, startedAt: Date.now(), sent: 0, lost: 0, levels: 0, mode: s.mode || "draft", err: "", result: null } });
   if (!(await chrome.offscreen.hasDocument().catch(() => false)))
     await chrome.offscreen.createDocument({ url: "offscreen.html", reasons: ["USER_MEDIA"], justification: "Record the call tab's audio so Otto can hear the coach's levels." });
   earsQ.push({ kind: "start", session });
-  chrome.runtime.sendMessage({ target: "offscreen", type: "ears-go", streamId, session });
+  chrome.runtime.sendMessage({ target: "offscreen", type: "ears-go", streamId: streamId.id, session, mode: "both" });
   earsDrain();
   return { ok: true, session };
 }
@@ -264,12 +267,20 @@ async function earsStop(why) {
 }
 async function earsMsg(m) {
   try {
-    if (m.type === "ears-start") return await earsStart(m.tabId, m.streamId);
+    if (m.type === "ears-start") return await earsStart(m.tabId);
     if (m.type === "ears-stop") return await earsStop("stopped");
     if (m.type === "ears-chunk") { const s = (await store.get("ears")) || {}; if (!s.on && !m.final) return { ok: false };
       earsQ.push({ kind: "chunk", session: m.session, seq: m.seq, min: m.min, mime: m.mime, audio: m.audio }); earsDrain(); return { ok: true }; }
-    if (m.type === "ears-error") { await earsStatus({ err: String(m.error || "").slice(0, 160), on: false }); return { ok: true }; }
+    if (m.type === "ears-retry") {   // the first way of asking failed: try audio-only with a FRESH stream id, once
+      const s = (await store.get("ears")) || {}; if (!s.on) return { ok: false };
+      const id = await new Promise((res) => chrome.tabCapture.getMediaStreamId({ targetTabId: s.tabId }, (x) => res(chrome.runtime.lastError ? null : x)));
+      if (!id) { await earsStatus({ err: String(m.error || "").slice(0, 200), on: false }); chrome.offscreen.closeDocument().catch(() => {}); return { ok: false }; }
+      await earsStatus({ firstErr: String(m.error || "").slice(0, 200) });
+      chrome.runtime.sendMessage({ target: "offscreen", type: "ears-go", streamId: id, session: s.session, mode: "audio" }); return { ok: true };
+    }
+    if (m.type === "ears-error") { await earsStatus({ err: String(m.error || "").slice(0, 160) + (((await store.get("ears")) || {}).firstErr ? " | first try: " + ((await store.get("ears")) || {}).firstErr : ""), on: false }); chrome.offscreen.closeDocument().catch(() => {}); return { ok: true }; }
     if (m.type === "ears-state") return { ok: true, ears: (await store.get("ears")) || {} };
+    if (m.type === "ears-open-desk") { await chrome.tabs.create({ url: "https://proagentmax.github.io/otto-trader/#desk" }); return { ok: true }; }
   } catch (e) { await earsStatus({ err: String(e.message || e).slice(0, 160) }); return { ok: false, error: String(e.message || e) }; }
   return { ok: false };
 }
