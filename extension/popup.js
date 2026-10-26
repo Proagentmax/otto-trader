@@ -22,3 +22,24 @@ $("#open").onclick = async () => { const r = await ask({ type: "open" }); $("#ms
 $("#pause").onclick = async () => { const s = await ask({ type: "state" }); await ask({ type: "pause", on: !s.paused }); draw(); };
 $("#beat").onclick = async () => { await ask({ type: "beat" }); draw(); };
 draw(); setInterval(draw, 3000);
+
+// v1.4.0 Ears
+const clk = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+async function drawEars() {
+  const r = await ask({ target: "background", type: "ears-state" }); const e = (r && r.ears) || {};
+  $("#earsGo").style.display = e.on ? "none" : "block"; $("#earsHint").style.display = e.on ? "none" : "block"; $("#earsLive").style.display = e.on ? "block" : "none";
+  if (e.on) { $("#earsClk").textContent = clk(Date.now() - e.startedAt); $("#earsN").textContent = e.sent || 0; $("#earsLv").textContent = e.levels || 0; $("#earsMode").textContent = e.mode === "auto" ? "Automatic (armed at once)" : "Draft (you tap Arm)"; }
+  $("#earsErr").textContent = e.err ? e.err + (e.lost ? ` · ${e.lost} piece(s) lost` : "") : (e.lost ? `${e.lost} piece(s) could not be sent` : "");
+}
+$("#earsGo").onclick = async () => {
+  $("#earsErr").textContent = "";
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) { $("#earsErr").textContent = "No tab found."; return; }
+  chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id }, async (streamId) => {
+    if (chrome.runtime.lastError || !streamId) { $("#earsErr").textContent = "Chrome would not share this tab: " + ((chrome.runtime.lastError || {}).message || "try again"); return; }
+    const r = await ask({ target: "background", type: "ears-start", tabId: tab.id, streamId });
+    if (!r || !r.ok) $("#earsErr").textContent = (r && r.error) || "Could not start."; drawEars();
+  });
+};
+$("#earsStop").onclick = async () => { await ask({ target: "background", type: "ears-stop" }); drawEars(); };
+drawEars(); setInterval(drawEars, 1000);

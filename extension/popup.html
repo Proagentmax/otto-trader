@@ -13,6 +13,16 @@ textarea{width:100%;box-sizing:border-box;margin-top:6px;background:#171a1f;colo
 <div id="pairBox"><div style="margin-top:10px;font-weight:600">Pairing code</div>
 <div class="mut">Otto → Settings → Otto Signals → Copy code, then paste here.</div>
 <textarea id="code" placeholder="Paste the pairing code"></textarea><button class="go" id="pair">Save</button></div>
+<div id="earsBox" style="margin-top:12px;padding-top:10px;border-top:1px solid #23272e">
+<div style="font-weight:600">🎧 Ears — listen to a live call</div>
+<div class="mut" id="earsHint">Open the call in this tab (Discord or Zoom in the browser), then press the button.</div>
+<button class="go" id="earsGo">Listen to this tab</button>
+<div id="earsLive" style="display:none;margin-top:8px">
+<div><span class="dot bad"></span><b>Listening</b> · <span id="earsClk">0:00</span> · pieces sent <span id="earsN">0</span></div>
+<div class="mut">Levels heard so far: <b id="earsLv">0</b> · Mode: <b id="earsMode">Draft</b></div>
+<button id="earsStop" style="background:#3a1410;border-color:#ff5000;color:#ffb199">Stop listening</button></div>
+<div id="earsErr" class="err" style="margin-top:6px"></div>
+</div>
 <button class="go" id="open">Open the watcher window</button>
 <div class="mut" style="margin-top:6px">Opens the channel in its own window. Minimize it — don't close it. If it gets closed during market hours, the watcher reopens it (minimized).</div>
 <button id="pause">Pause</button>

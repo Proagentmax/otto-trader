@@ -109,11 +109,11 @@ Deno.test("v4.5 arm_callouts: no levels in the newest call = a plain error, noth
   assert(r.ok === false && /No callouts/.test(r.error || ""), "error " + JSON.stringify(r));
   assert(WATCH.length === 0, "nothing written");
 });
-Deno.test("v4.5 static: the Desk page shows the Arm button on callouts posts only, and the app is 4.5.0", async () => {
+Deno.test("v4.5 static: the Desk page shows the Arm button on callouts posts only, and the app is 4.6.0 (v4.6 bumped it)", async () => {
   const html = await Deno.readTextFile(new URL("../../index.html", import.meta.url));
   assert(/data-arm-callouts/.test(html) && /arm_callouts/.test(html), "button wired");
   assert(/\^📣 This week's callouts/.test(html), "only on callouts posts");
-  assert(/const BUILD="4\.5\.0"/.test(html), "BUILD");
+  assert(/const BUILD="4\.6\.0"/.test(html), "BUILD");
   const sw = await Deno.readTextFile(new URL("../../sw.js", import.meta.url));
-  assert(/otto-v4\.5\.0/.test(sw), "sw version");
+  assert(/otto-v4\.6\.0/.test(sw), "sw version");
 });

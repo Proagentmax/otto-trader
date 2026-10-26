@@ -6110,6 +6110,136 @@ export async function armCallouts(who: string) {
   await logDesk("system", "Otto", `👁 ${who} armed ${armed} of ${lv.length} callouts from ${call.call.date} on the Watcher${skipped ? ` (${skipped} skipped — too far from the live price, already there, or not a stock)` : ""}.`);
   return { ok: true, armed, skipped, total: lv.length, why: why.slice(0, 6) };
 }
+/* ------------------------------------------------------------ v4.6: EARS — the live call listener ------------------------------------------------------------
+   Ifoma 26 Oct: the coach says levels out loud; they reached Otto after the bounce (PLTR). The Chrome extension records ONE tab's audio in
+   ~60 s pieces and posts each to ?fn=ears (the watcher's pairing key). Each piece: Whisper (OpenAI) → text → Claude pulls the levels the coach
+   SAID → new ones go on the Desk as a DRAFT (one tap arms them) or, in Automatic mode, onto the Watcher at once. Mode = otto_settings.ears_mode.
+   State (levels, transcript) lives in otto_settings.ears_state — no table. Secret: OPENAI_KEY (Supabase). */
+const EARS_VOCAB = "Trading call. Tickers and levels: SPY, QQQ, IWM, NVDA, AMD, TSLA, AAPL, MSFT, AMZN, META, GOOGL, PLTR, MU, AVGO, INTC, SMCI, COIN, CRWV, 10-year yield. Prices like 217.5, 778.60, 920. Words: reclaim, support, resistance, order block, gap fill, wrong if, break above, break below.";
+const EARS_TOOL = { name: "record_levels", description: "Record price levels the speaker SAID out loud in the NEWEST part of the call.",
+  input_schema: { type: "object", properties: { levels: { type: "array", items: { type: "object", properties: {
+    instrument: { type: "string", description: "Stock ticker only (e.g. PLTR). Skip indexes futures and yields." },
+    value: { type: "string", description: "The number he said, e.g. 171.5" },
+    meaning: { type: "string", description: "What he said about it, in his words, max 14 words (above/reclaim/support/resistance/below/lose...)" } },
+    required: ["instrument", "value", "meaning"] } } }, required: ["levels"] } };
+export type EarsLevel = { id: number; ticker: string; level: number; dir: string; meaning: string; min: number; status: "draft" | "armed" | "dismissed" | "skipped" };
+export type EarsState = { session: string; started: string; last: string; chunks: number; seqs: number[]; levels: EarsLevel[]; transcript: string; ended?: string | null; n?: number };
+export async function earsMode(): Promise<"draft" | "auto"> { return (await setting("ears_mode").catch(() => null)) === "auto" ? "auto" : "draft"; }
+async function earsTranscribe(audioB64: string, mime: string): Promise<string> {
+  const T = (globalThis as any).__OTTO_TEST__;
+  if (T?.transcribe) return T.transcribe(audioB64, mime);
+  const key = Deno.env.get("OPENAI_KEY") || "";
+  if (!key) throw new Error("OPENAI_KEY is not set in Supabase (Edge Functions → Secrets)");
+  const bin = Uint8Array.from(atob(audioB64), (c) => c.charCodeAt(0));
+  const fd = new FormData();
+  fd.append("file", new Blob([bin], { type: mime || "audio/webm" }), "chunk." + (/mp4|m4a/.test(mime) ? "m4a" : "webm"));
+  fd.append("model", "whisper-1"); fd.append("language", "en"); fd.append("response_format", "text"); fd.append("prompt", EARS_VOCAB);
+  const r = await fetch("https://api.openai.com/v1/audio/transcriptions", { method: "POST", headers: { authorization: "Bearer " + key }, body: fd, signal: AbortSignal.timeout(45_000) });
+  if (!r.ok) throw new Error("transcription failed: OpenAI HTTP " + r.status + " " + (await r.text()).slice(0, 160));
+  return (await r.text()).trim();
+}
+/* Whisper invents text on silence ("Thank you for watching"); drop those and anything too short to hold a level. */
+export function earsClean(t: string): string {
+  const s = String(t || "").replace(/\s+/g, " ").trim();
+  if (s.length < 12 || /^(thanks? for watching|thank you\.?|you|bye\.?)$/i.test(s)) return "";
+  return s;
+}
+async function earsExtract(newText: string, context: string): Promise<{ instrument: string; value: string; meaning: string }[]> {
+  const T = (globalThis as any).__OTTO_TEST__;
+  if (T?.earsExtract) return T.earsExtract(newText, context);
+  const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
+  const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", signal: AbortSignal.timeout(40_000),
+    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: MODEL, max_tokens: 1500, tools: [EARS_TOOL], tool_choice: { type: "tool", name: "record_levels" },
+      system: "You listen to a live trading call transcribed from speech (it can mishear). Record ONLY price levels for a specific stock that the speaker clearly SAID in the NEWEST text: a ticker plus a number he gave as support, resistance, a reclaim, a break, a target or a line that negates the idea. Never invent or round a number, never guess a ticker he did not name (use EARLIER only to know which stock 'it' or 'this one' means), skip index futures and yields, skip numbers that are times, percentages, dollar amounts of options or account sizes. If unsure, leave it out. Return an empty list when there are none.",
+      messages: [{ role: "user", content: `EARLIER (context only, do not record):\n${context.slice(-3000) || "(start of call)"}\n\nNEWEST:\n${newText.slice(0, 6000)}` }] }) });
+  if (!r.ok) throw new Error("reading the call failed: claude HTTP " + r.status);
+  const j = await r.json(); const tu = (j.content || []).find((b: any) => b.type === "tool_use");
+  return Array.isArray(tu?.input?.levels) ? tu.input.levels : [];
+}
+const earsLine = (l: { ticker: string; level: number; dir: string; meaning: string }) => `${l.ticker} ${l.level}${l.dir === "up" ? " ▲" : l.dir === "down" ? " ▼" : ""} — "${String(l.meaning).replace(/"/g, "'").slice(0, 70)}"`;
+async function earsArmOne(l: EarsLevel, by: string): Promise<boolean> {
+  try { const r = await watchAdd({ ticker: l.ticker, level: l.level, dir: l.dir, source: "desk", note: ("Ears: " + l.meaning).slice(0, 160), by }); return !!(r && r.status !== "removed"); }
+  catch { return false; }
+}
+export async function earsIn(body: any) {
+  const kind = String(body?.kind || "");
+  const session = String(body?.session || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+  if (!session) throw new Error("need a session id");
+  let st: EarsState | null = await setting("ears_state").catch(() => null);
+  if (!st || st.session !== session) st = { session, started: new Date().toISOString(), last: "", chunks: 0, seqs: [], levels: [], transcript: "", ended: null, n: 0 };
+  if (kind === "start") { await putSetting("ears_state", st, "ears"); return { ok: true, mode: await earsMode() }; }
+  if (kind === "stop") {
+    if (st.ended) return { ok: true, ended: true };
+    st.ended = new Date().toISOString();
+    const c = (s: string) => st!.levels.filter((l) => l.status === s).length;
+    await putSetting("ears_state", st, "ears");
+    const mins = Math.max(1, Math.round((Date.parse(st.ended) - Date.parse(st.started)) / 60000));
+    await logDesk("system", "Otto", `🎧 Ears: listening ended after ${mins} minute${mins === 1 ? "" : "s"}. ${st.levels.length} level${st.levels.length === 1 ? "" : "s"} heard — ${c("armed")} armed, ${c("draft")} waiting, ${c("dismissed")} dismissed, ${c("skipped")} skipped (too far from the price or not a stock).`);
+    return { ok: true, ended: true, levels: st.levels.length };
+  }
+  if (kind !== "chunk") throw new Error("unknown ears kind");
+  const seq = Number(body.seq) || 0;
+  if (st.seqs.includes(seq)) return { ok: true, dup: true, levels: st.levels.length, mode: await earsMode() };   // a retry after a dropped reply
+  const audio = String(body.audio || "");
+  if (audio.length < 200 || audio.length > 6_000_000) throw new Error("bad audio size");
+  const text = earsClean(await earsTranscribe(audio, String(body.mime || "audio/webm")));
+  const tmin = Math.max(0, Number(body.min) || st.chunks);
+  st.chunks++; st.seqs = st.seqs.concat(seq).slice(-300); st.last = new Date().toISOString();
+  let found: { instrument: string; value: string; meaning: string }[] = [];
+  if (text) {
+    found = await earsExtract(text, st.transcript).catch((e) => { console.error("ears extract", e); return []; });
+    st.transcript = (st.transcript + `\n[${tmin}m] ${text}`).slice(-90_000);
+  }
+  const fresh: EarsLevel[] = [];
+  for (const l of calloutLevels({ levels: found })) {
+    if (st.levels.some((x) => x.ticker === l.ticker && x.level === l.level)) continue;
+    const n = (st.n = (st.n || 0) + 1);
+    const lv: EarsLevel = { id: n, ticker: l.ticker, level: l.level, dir: l.dir, meaning: l.meaning, min: tmin, status: "draft" };
+    st.levels.push(lv); fresh.push(lv);
+  }
+  const mode = await earsMode();
+  if (fresh.length && mode === "auto") for (const l of fresh) l.status = (await earsArmOne(l, "Ears · Callouts")) ? "armed" : "skipped";
+  await putSetting("ears_state", st, "ears");
+  if (fresh.length) {
+    await logDesk("system", "Otto", `🎧 Ears heard ${fresh.length} new level${fresh.length === 1 ? "" : "s"} · ${mode === "auto" ? "AUTO-ARMED" : "DRAFT"} · call minute ${tmin}\n` + fresh.map(earsLine).join("\n") +
+      (mode === "auto" ? `\nArmed on the Watcher at once (${fresh.filter((l) => l.status === "armed").length} of ${fresh.length}). Heard by voice, so a number can be wrong.`
+        : `\nHeard by voice, so a number can be misheard. Check them, then tap.`));
+  }
+  return { ok: true, heard: text.length, new: fresh.length, levels: st.levels.length, mode };
+}
+export async function earsArm(who: string) {
+  const st: EarsState | null = await setting("ears_state").catch(() => null);
+  const drafts = (st?.levels || []).filter((l) => l.status === "draft");
+  if (!st || !drafts.length) return { ok: true, armed: 0, skipped: 0, total: 0 };
+  let armed = 0, skipped = 0;
+  for (const l of drafts) { if (await earsArmOne(l, `${String(who).slice(0, 30)} · Callouts`)) { l.status = "armed"; armed++; } else { l.status = "skipped"; skipped++; } }
+  await putSetting("ears_state", st, "ears");
+  await logDesk("system", "Otto", `👁 ${who} armed ${armed} of ${drafts.length} Ears levels from today's call on the Watcher${skipped ? ` (${skipped} skipped — too far from the live price, already there, or not a stock)` : ""}.`);
+  return { ok: true, armed, skipped, total: drafts.length };
+}
+export async function earsDismiss(who: string) {
+  const st: EarsState | null = await setting("ears_state").catch(() => null);
+  let n = 0; for (const l of st?.levels || []) if (l.status === "draft") { l.status = "dismissed"; n++; }
+  if (st && n) { await putSetting("ears_state", st, "ears"); await logDesk("system", "Otto", `🎧 ${who} dismissed ${n} Ears level${n === 1 ? "" : "s"}.`); }
+  return { ok: true, dismissed: n };
+}
+export async function earsRemove(who: string, ticker: string, level: number) {   // Automatic mode: take a misheard level back off
+  const st: EarsState | null = await setting("ears_state").catch(() => null);
+  const l = st?.levels.find((x) => x.ticker === ticker && x.level === level);
+  if (!st || !l) return { ok: true, removed: 0 };
+  const rows = await db(`otto_watch?day=eq.${watchDay()}&ticker=eq.${encodeURIComponent(ticker)}&level=eq.${level}&status=eq.watching&select=id`).catch(() => []);
+  for (const r of rows || []) await db("otto_watch?id=eq." + r.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ status: "removed" }) }).catch(() => {});
+  l.status = "dismissed"; await putSetting("ears_state", st, "ears");
+  await logDesk("system", "Otto", `👁 ${who} removed ${ticker} ${level} (Ears) from the Watcher.`);
+  return { ok: true, removed: (rows || []).length };
+}
+export async function earsModeSet(m: string, who: string) {
+  const v = m === "auto" ? "auto" : "draft"; await putSetting("ears_mode", v, who);
+  await logDesk("system", "Otto", `🎧 ${who} set Ears to ${v === "auto" ? "AUTOMATIC (levels go straight onto the Watcher)" : "DRAFT (you tap Arm)"}.`);
+  return { ok: true, mode: v };
+}
+
 async function watchSet(b: any, who: string) {
   const by = String(b?.author || who.split("@")[0]).slice(0, 40);
   if (b?.add) {
@@ -7614,6 +7744,13 @@ Deno.serve(async (req) => {
     try { return json(await signalIn(req)); }
     catch (e) { const m = String((e as Error).message || e); return json({ ok: false, error: m }, /key/.test(m) ? 401 : 500); }
   }
+  if (fn0 === "ears") {   // v4.6: the extension's tab audio — same pairing key as signal_in
+    try {
+      const cfg = await sigCfg(); const key = req.headers.get("x-otto-signal") || "";
+      if (!cfg.key || key.length < 16 || key !== cfg.key) return json({ ok: false, error: "bad watcher key" }, 401);
+      return json(await earsIn(await req.json().catch(() => ({}))));
+    } catch (e) { return json({ ok: false, error: String((e as Error).message || e).slice(0, 300) }, 500); }
+  }
   if (fn0 === "signal_jarvis") {
     if (!cronAllowed(req)) return json({ ok: false, error: "bad cron secret" }, 401);
     background(signalJarvis(Number(new URL(req.url).searchParams.get("batch") || 0)));
@@ -7752,7 +7889,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, email: claims.email || null, anonymous: !!claims.is_anonymous, desk: !!deskUser(claims) });
     }
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
-         "sentiment", "market_desk", "journal", "why_out", "report_card", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "watch_get", "watch_set", "watch_scan", "arm_callouts", "performance", "help", "jason_today", "jason_sweep", "jason_score",
+         "sentiment", "market_desk", "journal", "why_out", "report_card", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "watch_get", "watch_set", "watch_scan", "arm_callouts", "ears_arm", "ears_dismiss", "ears_remove", "ears_mode", "ears_state", "performance", "help", "jason_today", "jason_sweep", "jason_score",
          "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set",
          "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear", "selftest_now",
          "playbook_get", "feedback_add", "feedback_list", "daily_now",
@@ -7821,6 +7958,11 @@ Deno.serve(async (req) => {
       if (fn === "watch_get") return json(await watchGet());
       if (fn === "watch_set") return json(await watchSet(body, who));
       if (fn === "arm_callouts") return json(await armCallouts(String(body?.author || who.split("@")[0])));
+      if (fn === "ears_arm") return json(await earsArm(String(body?.author || who.split("@")[0])));
+      if (fn === "ears_dismiss") return json(await earsDismiss(String(body?.author || who.split("@")[0])));
+      if (fn === "ears_remove") return json(await earsRemove(String(body?.author || who.split("@")[0]), String(body?.ticker || "").toUpperCase(), Number(body?.level)));
+      if (fn === "ears_mode") { if (body?.mode) return json(await earsModeSet(String(body.mode), String(body?.author || who.split("@")[0]))); return json({ ok: true, mode: await earsMode() }); }
+      if (fn === "ears_state") { const st: EarsState | null = await setting("ears_state").catch(() => null); return json({ ok: true, mode: await earsMode(), state: st ? { ...st, transcript: undefined, seqs: undefined } : null }); }
       // v3.25 Night Charts
       if (fn === "charts_get") return json(await chartsGet(new URL(req.url).searchParams.get("day") || undefined));
       if (fn === "chart_now") return json(await chartNow(body, who));

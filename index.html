@@ -2625,7 +2625,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="4.5.0";
+const BUILD="4.6.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3422,6 +3422,15 @@ function dkWatchBind(box){
   const sc=box.querySelector("#wtScan");if(sc)sc.addEventListener("click",async()=>{sc.disabled=true;sc.textContent="Scanning…";try{await dkApi("watch_scan",{author:dkWho()});toast("Jarvis is scanning — proposals land here in ~1 min");setTimeout(dkWatchLoad,60e3)}catch(e){toast(String(e.message).slice(0,80))}sc.disabled=false;sc.textContent="🔎 Scan now"});
 }
 function dkWho(){return ($("#dkWho")&&$("#dkWho").value)||"Josh"}
+document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-ears-arm],[data-ears-skip],[data-ears-rm],[data-ears-mode]");if(!t)return;
+  const note=t.parentNode.querySelector("#earsNote")||t.closest(".dk-sys").querySelector("#earsNote");t.disabled=true;
+  try{
+    if(t.hasAttribute("data-ears-arm")){t.textContent="Arming…";const r=await dkApi("ears_arm",{author:dkWho()});t.textContent="Armed ✓";if(note)note.textContent=`${r.armed} on the Watcher${r.skipped?` · ${r.skipped} skipped (too far from price or not a stock)`:""}`;toast(`${r.armed} Ears levels armed`);try{dkWatchLoad()}catch(_){}}
+    else if(t.hasAttribute("data-ears-skip")){const r=await dkApi("ears_dismiss",{author:dkWho()});t.textContent="Dismissed";toast(`${r.dismissed} dismissed`)}
+    else if(t.hasAttribute("data-ears-rm")){const [tk,lv]=t.getAttribute("data-ears-rm").split("|");await dkApi("ears_remove",{author:dkWho(),ticker:tk,level:Number(lv)});t.textContent="removed";try{dkWatchLoad()}catch(_){}}
+    else{const r=await dkApi("ears_mode",{author:dkWho(),mode:t.getAttribute("data-ears-mode")});toast("Ears is now "+(r.mode==="auto"?"Automatic":"Draft"));t.textContent=r.mode==="auto"?"Automatic ✓ (next post)":"Draft ✓ (next post)"}
+  }catch(er){t.disabled=false;toast(String(er.message||er).slice(0,90))}
+});
 document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.closest("[data-arm-callouts]");if(!b)return;b.disabled=true;const note=b.parentNode.querySelector("#armNote");b.textContent="Arming…";try{const r=await dkApi("arm_callouts",{author:dkWho()});b.textContent="Armed ✓";if(note)note.textContent=`${r.armed} on the Watcher${r.skipped?` · ${r.skipped} skipped (too far from price or not a stock)`:""}`;toast(`${r.armed} callouts armed on the Watcher`);try{dkWatchLoad()}catch(_){}}catch(er){b.disabled=false;b.textContent="Arm these on the Watcher";toast(String(er.message||er).slice(0,90))}});
 function dkRenderLeft(){
   const p=DK.panel||{},Q=dkQuotes();
@@ -3541,6 +3550,8 @@ function dkRenderMsgs(stick){
   if(DK.lock&&DK.lock.locked)h+=`<div class="dk-lockbar" role="status"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff8a5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;margin-top:2px"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><div><b>Locked — ${esc((DK.lock.reasons||[]).map(r=>r.text).join(" · "))}</b>No new cards until ${esc(dkDate(DK.lock.until))} ET. Signals are still listening; new ideas are saved as paper cards and scored in Coaches Corner.</div></div>`;
   for(const r of DK.rows){
     if(alIs(r))continue;                       // v3.12: TradingView alerts live in their own tab
+    if(r.role==="system"&&/^🎧 Ears heard/.test(r.content||"")){const ls=String(r.content).split("\n"),auto=/AUTO-ARMED/.test(ls[0]),lv=ls.slice(1).filter(x=>/^[A-Z.]{1,6} [\d.]+/.test(x)),note=ls.filter(x=>!/^[A-Z.]{1,6} [\d.]+/.test(x)).slice(1).join(" ");
+      h+=`<div class="dk-sys dk-call"><b>${esc(ls[0])}</b>\n${lv.map(x=>{const m=/^([A-Z.]{1,6}) ([\d.]+)/.exec(x);return esc(x)+(auto&&m?` <button class="dk-link" data-ears-rm="${m[1]}|${m[2]}">remove</button>`:"")}).join("\n")}<div class="mut" style="margin-top:4px">${esc(note)}</div><div class="arm">${auto?"":`<button class="dk-btn go" data-ears-arm>Arm these ${lv.length} on the Watcher</button> <button class="dk-btn" data-ears-skip>Dismiss</button>`}<span class="mut" id="earsNote"></span></div><div class="mut" style="margin-top:6px">Mode: <b>${auto?"Automatic":"Draft"}</b> · <button class="dk-link" data-ears-mode="${auto?"draft":"auto"}">${auto?"switch back to Draft":"switch to Automatic"}</button> · ${dkTime(r.created_at)}</div></div>`;continue}
     if(r.role==="system"&&/^📣 This week's callouts/.test(r.content||"")){h+=`<div class="dk-sys dk-call"><b>${esc(String(r.content).split("\n")[0])}</b>\n${esc(String(r.content).split("\n").slice(1).join("\n"))}<div class="arm"><button class="dk-btn go" data-arm-callouts>Arm these on the Watcher</button><span class="mut" id="armNote"></span></div> · ${dkTime(r.created_at)}</div>`;continue}
     if(r.role==="system"){h+=`<div class="dk-sys">${esc(r.content)} · ${dkTime(r.created_at)}</div>`;continue}
     if(r.role==="user"){const jz=/^📣/.test(r.content||"");h+=`<div class="dk-m me${jz?" jason":""}"><div class="dk-mw">${esc(r.author||"")} · ${dkTime(r.created_at)}${jz?`<span class="dk-jtag">SIGNAL</span>`:""}</div>${esc(jz?String(r.content).replace(/^📣 Jason's post \(pasted\):?\n?/,""):r.content)}</div>`;continue}
