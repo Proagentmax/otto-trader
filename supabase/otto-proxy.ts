@@ -3426,12 +3426,13 @@ function cronAllowed(req: Request) {
 export const WINSTON_ALLOW: Record<string, Set<string>> = {
   rh: new Set(["get_option_chains", "get_option_instruments", "get_option_quotes", "get_option_historicals",
     "get_equity_quotes", "get_equity_historicals", "get_equity_technical_indicators", "get_earnings_calendar",
-    "get_index_quotes", "search"]),
+    "get_index_quotes", "search",
+    "get_equity_analyst_ratings", "get_earnings_results", "preview_scan"]),   // v4.4: analyst consensus, EPS history, the market scanner (preview_scan runs a filter set live and saves nothing)
   tv: new Set(["mcp-tv-get-symbol-data", "mcp-tv-get-symbol-data-batch", "mcp-tv-get-ohlcv", "mcp-tv-get-news",
     "mcp-tv-get-news-story", "mcp-tv-get-technicals-rating", "mcp-tv-get-earnings-calendar",
     "mcp-tv-get-economic-calendar", "mcp-tv-get-screener-columns", "mcp-tv-run-screener", "mcp-tv-search-symbols"]),
 };
-export const WINSTON_DENY = /place|cancel|exercise|review_|create|update|delete|add_|remove|stop|restart|portfolio|position|order|pnl|account|alert|watchlist|trade_approval|tax|margin|upgrade/i;
+export const WINSTON_DENY = /place|cancel|exercise|(^|[^a-z])review_|create|update|delete|add_|remove|stop|restart|portfolio|position|order|pnl|account|alert|watchlist|trade_approval|tax|margin|upgrade/i;
 export function winstonGatewayCheck(service: unknown, tool: unknown, args: unknown): { ok: true } | { ok: false; error: string } {
   const sv = String(service || ""), tl = String(tool || "");
   if (!WINSTON_ALLOW[sv]) return { ok: false, error: "service not allowed" };
