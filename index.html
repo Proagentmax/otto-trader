@@ -764,6 +764,8 @@ body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
 .pp-lvl{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--rule);font-size:13px;gap:8px}
 .dk-sys.st-ok{color:var(--up);border:1px solid rgba(0,200,5,.25)}.dk-sys.st-bad{color:var(--down);border:1px solid rgba(255,80,0,.35)}
 .dk-sys.ck{color:var(--blue);border:1px solid rgba(90,169,255,.3)}
+.dk-sys.dk-call{align-self:stretch;border-radius:14px;text-align:left;padding:12px 14px;border:1px solid rgba(201,150,43,.35);background:linear-gradient(180deg,rgba(201,150,43,.08),transparent);color:var(--ink-2);white-space:pre-wrap;font-size:12.5px;line-height:1.5}.dk-call b{color:var(--ink)}.dk-call .arm{margin-top:10px;display:flex;gap:10px;align-items:center}.dk-call .arm button{font:600 12.5px var(--body)}
+
 .dk-sys details summary{cursor:pointer;list-style:none}.dk-sys details pre{white-space:pre-wrap;font:11.5px var(--body);margin:6px 0 0;text-align:left;color:var(--ink-2)}
 .dk-corr{margin-top:8px;border-left:3px solid var(--down);background:rgba(255,80,0,.07);padding:6px 10px;border-radius:0 6px 6px 0;font-size:13.5px}
 .wt-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}
@@ -996,8 +998,9 @@ svg.nc-svg{width:100%;height:auto;display:block}
 .win43 .dk-h .x{color:var(--gold,#F5C451);text-transform:none;letter-spacing:0;font-weight:600;font-size:11px;cursor:pointer}
 .win43 .dk-cardx{overflow:hidden;min-width:0}.win43-click{cursor:pointer;transition:.15s}.win43-click:hover{border-color:#3a4458;transform:translateY(-1px)}
 .win43-strip{display:grid;grid-template-columns:286px minmax(0,1fr) 212px 250px;gap:12px;margin-bottom:12px}
-.win43-ring{display:flex;align-items:center;gap:14px}.win43-ring .c{position:relative;width:96px;height:96px;flex:0 0 auto}.win43-ring svg{width:96px;height:96px;transform:rotate(-90deg)}
+.win43-ring{display:flex;align-items:center;gap:14px}.win43-ring .c{position:relative;width:78px;height:78px;flex:0 0 auto}.win43-ring svg{width:78px;height:78px;transform:rotate(-90deg)}.win43-ring .bal{display:flex;flex-direction:column;gap:2px;min-width:0}.win43-ring .bal b{font:700 28px var(--mono);letter-spacing:-.04em;line-height:1.05;white-space:nowrap}.win43-ring .bal small{font-size:11.5px;color:var(--ink-3);line-height:1.25}.win43-ring .bal small i{font-style:normal;font-weight:700}
 .win43-ring .v{position:absolute;inset:0;display:grid;place-items:center;text-align:center}.win43-ring .v b{font:700 13px var(--mono);display:block;letter-spacing:-.03em}.win43-ring .v small{font-size:8.5px;color:var(--ink-3);display:block;line-height:1.1}
+.win43-strip .dk-cardx>.win43-kv{grid-template-columns:1fr auto}
 .win43-kv{display:grid;grid-template-columns:auto auto;gap:2px 10px;font-size:12px}.win43-kv span{color:var(--ink-3);white-space:nowrap}.win43-kv b{font-family:var(--mono);font-weight:600;text-align:right;white-space:nowrap}
 .win43-big{font:700 25px/1 var(--mono);letter-spacing:-.02em}
 .win43 .gd{color:var(--gold,#F5C451)}.win43 .up{color:var(--up)}.win43 .dn{color:var(--dn)}
@@ -1024,6 +1027,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
 .win43-popbody{font-size:13.5px}.win43-popbody .dk-cardx{margin-bottom:12px}
 .v4pop .bd .win43-stat4 .up,.win43 .n.up{color:var(--up)}.v4pop .bd .n.dn{color:var(--dn)}
 @media (max-width:1180px){.win43-strip{grid-template-columns:1fr 1fr}.win43-main{grid-template-columns:1fr}.win43-tl{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:640px){.win43-strip{grid-template-columns:1fr}.win43-road{grid-template-columns:repeat(3,minmax(0,1fr))}.win43-ring .bal b{font-size:26px}}
 /* ================= v4.0 (23 Oct 2026) — the "alive" desk: dark + gold, real stills, Market Read hero, Spotlight, popups.
    Everything here is scoped to .dk.v4 so "Classic look" (More → Look) is the whole rollback. ================= */
 .dk.v4{--gold:#F5C451;--gold2:#C9962B;--v4blue:#5CA8FF;--v4violet:#9B8CFF;--v4orange:#FF9F5C;--v4up:#2EE59D;--v4dn:#FF5C6A;
@@ -2621,7 +2625,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="4.3.0";
+const BUILD="4.5.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3418,6 +3422,7 @@ function dkWatchBind(box){
   const sc=box.querySelector("#wtScan");if(sc)sc.addEventListener("click",async()=>{sc.disabled=true;sc.textContent="Scanning…";try{await dkApi("watch_scan",{author:dkWho()});toast("Jarvis is scanning — proposals land here in ~1 min");setTimeout(dkWatchLoad,60e3)}catch(e){toast(String(e.message).slice(0,80))}sc.disabled=false;sc.textContent="🔎 Scan now"});
 }
 function dkWho(){return ($("#dkWho")&&$("#dkWho").value)||"Josh"}
+document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.closest("[data-arm-callouts]");if(!b)return;b.disabled=true;const note=b.parentNode.querySelector("#armNote");b.textContent="Arming…";try{const r=await dkApi("arm_callouts",{author:dkWho()});b.textContent="Armed ✓";if(note)note.textContent=`${r.armed} on the Watcher${r.skipped?` · ${r.skipped} skipped (too far from price or not a stock)`:""}`;toast(`${r.armed} callouts armed on the Watcher`);try{dkWatchLoad()}catch(_){}}catch(er){b.disabled=false;b.textContent="Arm these on the Watcher";toast(String(er.message||er).slice(0,90))}});
 function dkRenderLeft(){
   const p=DK.panel||{},Q=dkQuotes();
   const cal=(DK.sent&&DK.sent.calendar)||[];
@@ -3536,6 +3541,7 @@ function dkRenderMsgs(stick){
   if(DK.lock&&DK.lock.locked)h+=`<div class="dk-lockbar" role="status"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff8a5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;margin-top:2px"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><div><b>Locked — ${esc((DK.lock.reasons||[]).map(r=>r.text).join(" · "))}</b>No new cards until ${esc(dkDate(DK.lock.until))} ET. Signals are still listening; new ideas are saved as paper cards and scored in Coaches Corner.</div></div>`;
   for(const r of DK.rows){
     if(alIs(r))continue;                       // v3.12: TradingView alerts live in their own tab
+    if(r.role==="system"&&/^📣 This week's callouts/.test(r.content||"")){h+=`<div class="dk-sys dk-call"><b>${esc(String(r.content).split("\n")[0])}</b>\n${esc(String(r.content).split("\n").slice(1).join("\n"))}<div class="arm"><button class="dk-btn go" data-arm-callouts>Arm these on the Watcher</button><span class="mut" id="armNote"></span></div> · ${dkTime(r.created_at)}</div>`;continue}
     if(r.role==="system"){h+=`<div class="dk-sys">${esc(r.content)} · ${dkTime(r.created_at)}</div>`;continue}
     if(r.role==="user"){const jz=/^📣/.test(r.content||"");h+=`<div class="dk-m me${jz?" jason":""}"><div class="dk-mw">${esc(r.author||"")} · ${dkTime(r.created_at)}${jz?`<span class="dk-jtag">SIGNAL</span>`:""}</div>${esc(jz?String(r.content).replace(/^📣 Jason's post \(pasted\):?\n?/,""):r.content)}</div>`;continue}
     h+=`<div class="dk-m ai${/daily recap/i.test(r.author||"")?" dk-recap":""}"><div class="dk-mw">${esc(/^otto$/i.test(r.author||"")?"Jarvis":(r.author||"Jarvis"))} · ${dkTime(r.created_at)}</div>${r.content?`<div class="md">${md(r.content)}</div>`:""}${r.action_id?dkCard(DK.acts[r.action_id]):""}</div>`;
@@ -4428,14 +4434,15 @@ function winStrip(j){
   const seg=c=>`<div class="win43-seg ${c.ok?"ok":c.near?"near":"no"}"><span class="m">${c.ok?"✓":c.near?"○":"✗"}</span><div class="t">${esc(c.t)}</div><div class="n ${c.cls||""}">${esc(c.n)}</div><div class="s">${esc(c.s||"")}</div></div>`;
   return `<div class="win43-strip">
     <div class="dk-cardx win43-click" data-wpop="score"><div class="dk-h">Winston's book <b>paper · real fills</b></div>
-      <div class="win43-ring"><div class="c"><svg viewBox="0 0 104 104"><circle cx="52" cy="52" r="44" fill="none" stroke="#1E242E" stroke-width="9"/><circle cx="52" cy="52" r="44" fill="none" stroke="url(#win43g)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${dash.toFixed(1)}" stroke-dashoffset="${(dash*(1-fill)).toFixed(1)}"/><defs><linearGradient id="win43g" x1="0" x2="1"><stop offset="0" stop-color="#C9962B"/><stop offset="1" stop-color="#F5C451"/></linearGradient></defs></svg>
-        <div class="v"><b class="gd">$${eq.toLocaleString(undefined,{maximumFractionDigits:0})}</b><small>from $${start.toLocaleString()}<br>${wm(gain)} · ${(pct>=0?"+":"")+pct.toFixed(1)}%</small></div></div>
-        <div class="win43-kv"><span>Today</span><b class="${(j.day_pnl||0)>0?"up":(j.day_pnl||0)<0?"dn":""}">${j.day_pnl==null||!T.some(t=>t.day===day)?"—":wm(+j.day_pnl)}</b>
+      <div class="win43-ring"><div class="c"><svg viewBox="0 0 104 104"><circle cx="52" cy="52" r="44" fill="none" stroke="#1E242E" stroke-width="6"/><circle cx="52" cy="52" r="44" fill="none" stroke="url(#win43g)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${dash.toFixed(1)}" stroke-dashoffset="${(dash*(1-fill)).toFixed(1)}"/><defs><linearGradient id="win43g" x1="0" x2="1"><stop offset="0" stop-color="#C9962B"/><stop offset="1" stop-color="#F5C451"/></linearGradient></defs></svg></div>
+        <div class="bal"><b class="gd">$${eq.toLocaleString(undefined,{maximumFractionDigits:0})}</b><small>from $${start.toLocaleString()}<br><i class="${gain>0?"up":gain<0?"dn":""}">${wm(gain)} · ${(pct>=0?"+":"")+pct.toFixed(1)}%</i></small></div></div>
+        <div class="win43-kv" style="margin-top:10px"><span>Today</span><b class="${(j.day_pnl||0)>0?"up":(j.day_pnl||0)<0?"dn":""}">${j.day_pnl==null||!T.some(t=>t.day===day)?"—":wm(+j.day_pnl)}</b>
           <span>${lastDay?esc(wDay(lastDay).split(",")[0]):"Last"}</span><b class="${lastDay&&sum(lastDay)>0?"up":lastDay&&sum(lastDay)<0?"dn":""}">${lastDay?wm(sum(lastDay)):"—"}</b>
           <span>Last week</span><b class="${wkPrev&&g.weeks[wkPrev]>0?"up":wkPrev&&g.weeks[wkPrev]<0?"dn":""}">${wkPrev?wm(g.weeks[wkPrev]):"—"}</b>
           <span>All time</span><b>${st.trades||0} · ${st.wins||0}–${st.losses||0}</b>
           <span>Expectancy</span><b class="${(st.expectancy_r||0)>0?"up":"dn"}">${winR(st.expectancy_r)}</b>
-          <span>Spread paid</span><b class="dn">${wm(-Math.abs(st.spread_cost||0))}</b></div></div></div>
+          <span>Spread paid</span><b class="dn">${wm(-Math.abs(st.spread_cost||0))}</b>
+          ${winShadowLine(j)}</div></div>
     <div class="dk-cardx"><div class="dk-h"><span style="white-space:nowrap">Road to live <b>· the gate of 18 Oct</b></span><span class="x" style="white-space:nowrap">${g.met} of ${g.total} · ${esc(g.earliest)}</span></div>
       <div class="win43-bar"><i style="width:${Math.round(100*g.met/g.total)}%"></i></div>
       <div class="win43-road">${g.conds.map(seg).join("")}</div></div>
@@ -4555,6 +4562,16 @@ function winReport(j){
   return `<div class="dkp-head" style="margin-top:-4px"><span class="mut">The end-of-day report: what was taken, what was passed and why, and the money three ways.</span>${pick}</div>${body}
     <div class="dk-cardx"><div class="dk-h">All time <b>${st.trades||0} trades</b></div><div class="mut" style="font-size:12.5px">${esc(st.note||"")}</div></div>`;
 }
+function winShadowLine(j){const t=j.shadow&&j.shadow.total;if(!t||!t.n)return `<span>Shadow</span><b class="mut" title="Ideas a rule blocked, scored as if taken. Not in his book.">none yet</b>`;
+  return `<span>Shadow</span><b title="Ideas a rule blocked, scored on the stock as if taken (estimate). Not in his book or the gate. ${t.wins} won, ${t.losses} lost, ${t.time} time exits, ${t.open} open.">${t.wins}–${t.losses} · ${wm(t.est)} est</b>`}
+function winShadowBox(j){const sh=j.shadow||{},by=Object.entries(sh.by_rule||{}).sort((a,b)=>b[1].n-a[1].n),rec=(sh.recent||[]).slice(0,12);
+  const verdict=r=>{const done=r.wins+r.losses+r.time;if(done<5)return `<span class="mut">needs ${5-done} more</span>`;return r.est>0?`<span class="dn">costing money</span>`:`<span class="up">earning its keep</span>`};
+  const rows=by.map(([k,r])=>`<tr><td><b>${esc(k)}</b></td><td class="mono">${r.n}</td><td class="mono">${r.wins}–${r.losses}${r.time?` · ${r.time} time`:""}${r.open?` · ${r.open} open`:""}</td><td class="mono ${r.est>0?"dn":r.est<0?"up":""}">${wm(r.est)}</td><td>${verdict(r)}</td></tr>`).join("");
+  return `<div class="dk-cardx" style="margin-top:12px"><div class="dk-h">What each rule costs <b>shadow trades</b><span class="mut" style="float:right;font-weight:500">${(sh.total&&sh.total.n)||0} booked</span></div>
+    ${by.length?`<div style="overflow:auto"><table class="dkt"><tr><th>Rule</th><th>Blocked</th><th>Shadow W–L</th><th>If taken (est.)</th><th>Read</th></tr>${rows}</table></div>
+    <div class="mut" style="font-size:12px;margin-top:8px">When a rule blocks an idea that has a side and a plan, Winston books a shadow trade and scores it on the stock by the same exits (target, a 10-minute close through the wrong-if, 3:50 PM). Dollars are estimates (about 40¢ per $1 of stock, 1 contract), never fills. <b>Red dollars = the rule kept him out of money; green = it saved him.</b> Shadows never touch his book, equity, stats or the gate. A rule needs 5 scored shadows before it gets a read.</div>
+    <div style="margin-top:10px">${rec.map(x=>`<div class="dk-row"><span>${esc(x.ticker)} ${x.side==="call"?"call":"put"} · ${esc(x.rule)} · ${esc(wDay(x.day).split(",")[0])}</span><span class="mono">${x.status==="open"?"open":x.status+" "+wm(x.pnl_est)}</span></div>`).join("")}</div>`
+    :`<div class="mut">Nothing yet. The first idea a rule blocks (with a side and a plan) shows up here and is scored the same day.</div>`}</div>`}
 async function winScore(j){
   let cc=null,ccErr=null;try{cc=await dkApi("coach_corner",null,"&range=all")}catch(e){ccErr=e.message}
   const st=j.stats||{},u=cc&&cc.us,c=cc&&cc.coach;
@@ -4581,6 +4598,7 @@ async function winScore(j){
       <div class="dk-cardx"><div class="dk-h">Winston's balance curve</div>${spark||`<div class="mut">Fills in after the first reported day.</div>`}</div>
       <div class="dk-cardx"><div class="dk-h">Money three ways</div><div class="dk-row"><span>Real fills</span><span class="mono">${winM(st.pnl_realistic)}</span></div><div class="dk-row"><span>At mid</span><span class="mono">${winM(st.pnl_mid)}</span></div><div class="dk-row"><span>Spread cost doubled</span><span class="mono">${winM(st.pnl_double)}</span></div></div>
       <div class="dk-cardx"><div class="dk-h">Tests (kept out of the score)</div><div class="mono">${st.experiments||0} closed · ${winM(st.experiment_pnl_realistic)}</div><div class="mut" style="font-size:12px">E1/E2 stay OFF until you switch them on.</div></div></div>
+    ${winShadowBox(j)}
     <div class="dk-cardx" style="margin-top:12px"><div class="dk-h">Every Winston trade <b>${(j.trades||[]).length}</b></div>${winTradeRows((j.trades||[]).slice(0,120),true)}</div>`;
 }
 async function dkWinston(keep){

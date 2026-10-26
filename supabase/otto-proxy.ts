@@ -3404,9 +3404,16 @@ async function morningRead(apiKey: string) {
   const hkMorning = !hk45?.applies ? "" : (hk45.done || hk45.late)
     ? `\nJosh's homework for today (his own after-close read): ${String(hk45.call || "").toUpperCase()} — "${String(hk45.call_why || "").slice(0, 200)}"; levels ${(hk45.levels || []).map((x: any) => `${x.ticker} ${x.level} ${x.dir === "up" ? "▲" : "▼"}`).join(", ")}. Include ONE line that says where today's tape agrees or disagrees with his call.`
     : `\nJosh has NOT handed in last night's homework yet (due 9:00 AM; it never blocks a card). Include exactly this line: "📓 No homework handed in yet — without it, today's call is a guess, not a plan."`;
+  const callMorning = (() => {   // v4.5: Tue–Fri the read opens with the week's callouts still in play
+    const c = newestCall(calls); if (!c) return "";
+    const age = Math.round((Date.parse(marketClock().date) - Date.parse(c.call.date)) / 86400e3);
+    if (!(age >= 1 && age <= 4)) return "";
+    const body = calloutsText(c).split("\n").slice(1, -1).join("; ").slice(0, 900);
+    return body ? `\nThis week's callouts from the ${c.call.date} call (still in play): ${body}\nInclude ONE line, right after the rule line, that starts exactly "This week's callouts still in play:" and names the 2–3 closest to today's price with the level that negates each.` : "";
+  })();
   const prompt = `[Automatic 8:45 morning read — no one typed this. ${sent.et} ET.]${lastRule41 ? `\nLINE ONE of your read must be exactly: "This week's rule: ${lastRule41}"` : ""}
 The live sentiment banner (Josh's intermarket sheet on TradingView data) says: ${JSON.stringify(lite)}
-What's moving (web research just now): ${news.slice(0, 2500) || "unavailable"}${hkMorning}
+What's moving (web research just now): ${news.slice(0, 2500) || "unavailable"}${hkMorning}${callMorning}
 
 Write today's morning read for Ifoma and Josh (Workflow 1): one line each for the 10-year, crude, USD/JPY; any binary event today; SPY/QQQ and Mag-7 tone (fetch what you need); a bias that agrees with or explains any disagreement with the banner; and the 2–3 setups worth watching from the TradingView watchlist with the trigger level for each. Levels from the calls are dated marks — say the call date. Never name the coach. No order cards. Under 250 words.`;
   const res = await runDesk({ msgs: [{ role: "user", content: prompt }], sys, tools, cs, who: "cron", send: () => {}, allowPropose: false, maxRounds: 8 });
@@ -5875,7 +5882,7 @@ export async function watchAdd(x: { ticker: string; level: number; dir?: string;
   const r = await db("otto_watch?on_conflict=day,ticker,level,dir&select=*", { method: "POST",
     headers: { prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify([row]) });
   // v3.24 (A12): a level added on the losing side of an open trade becomes that trade's ONE wrong-if.
-  if (x.source === "desk" && !/· (?:plan|Morning Prep|Night Charts|Homework)$/.test(String(x.by || ""))) {
+  if (x.source === "desk" && !/· (?:plan|Morning Prep|Night Charts|Homework|Callouts)$/.test(String(x.by || ""))) {
     const w = await wrongIfFromWatch(ticker, level, String(x.by || "the Desk")).catch(() => null);
     if (w) {
       const made = r?.[0] || null;
@@ -6050,6 +6057,58 @@ export async function watchGet() {
   const plans = await plansToday().catch(() => []);   // v3.19: pinned on the Desk
   const homework = await hkStatus().catch(() => null);   // v3.45: the Desk banner + the card tag read this
   return { ok: true, day, clock: marketClock().status, rows, plans, homework, checks: (checks || []).map((c: any) => ({ ...c, label: fmtMin(etParts(new Date(c.due_at)).min) })) };
+}
+
+/* ------------------------------------------------------------ v4.5: this week's callouts (Desk post + one-tap Arm) ------------------------------------------------------------
+   Ifoma 26 Oct: when the Monday call is seeded, post the levels on the Desk and let one tap put them on the Watcher. */
+export function newestCall(calls: any[]): any | null {
+  const rows = (Array.isArray(calls) ? calls : []).filter((c) => c?.call?.date).sort((a, b) => String(b.call.date).localeCompare(String(a.call.date)));
+  return rows[0] || null;
+}
+// "needs a move above 920" → up; "below 880 negates" / "lose it" → down; support / resistance / anything else → both. Not a stock (US 10Y) → null.
+export function calloutLevels(call: any): { ticker: string; level: number; dir: string; meaning: string }[] {
+  const out: { ticker: string; level: number; dir: string; meaning: string }[] = [];
+  for (const l of Array.isArray(call?.levels) ? call.levels : []) {
+    const ticker = String(l?.instrument || "").trim().toUpperCase();
+    const level = Number(String(l?.value || "").replace(/[^0-9.]/g, ""));
+    if (!/^[A-Z]{1,5}$/.test(ticker) || !(level > 0)) continue;
+    const m = String(l?.meaning || "");
+    const dir = /\b(?:support|resistance|order block|gap support)\b/i.test(m) ? "both"
+      : /\b(?:below|lose[sd]?|lost|negat)/i.test(m) && !/\b(?:above|reclaim)/i.test(m) ? "down"
+      : /\b(?:above|reclaim|flip zone long|back above|target)/i.test(m) ? "up" : "both";
+    if (!out.some((o) => o.ticker === ticker && o.level === level)) out.push({ ticker, level, dir, meaning: m });
+  }
+  return out;
+}
+export function calloutsText(call: any): string {
+  const lv = calloutLevels(call);
+  if (!lv.length) return "";
+  const by: Record<string, string[]> = {};
+  for (const l of lv) (by[l.ticker] = by[l.ticker] || []).push(`${l.level}${l.dir === "up" ? " ▲" : l.dir === "down" ? " ▼" : ""} ${l.meaning.split(/[;—]/)[0].replace(/\s+/g, " ").trim().slice(0, 48)}`);
+  return `📣 This week's callouts — ${String(call?.call?.title || "coach call").slice(0, 80)} (${call.call.date})\n` +
+    Object.entries(by).map(([t, a]) => `${t}: ${a.join(" · ")}`).join("\n") +
+    `\n${lv.length} levels. Tap the button to put them on today's Watcher (▲ = watch for a break up, ▼ = watch for a break down, none = either way).`;
+}
+export async function postCallouts(payload: any[]) {
+  const call = newestCall(payload); const text = call ? calloutsText(call) : "";
+  if (!text) return false;
+  await logDesk("system", "Otto", text);
+  return true;
+}
+export async function armCallouts(who: string) {
+  const call = newestCall(await loadBrain());
+  const lv = call ? calloutLevels(call) : [];
+  if (!lv.length) throw new Error("No callouts found in the newest call.");
+  const by = `${String(who).slice(0, 30)} · Callouts`;
+  let armed = 0, skipped = 0; const why: string[] = [];
+  for (const l of lv) {
+    try {
+      const r = await watchAdd({ ticker: l.ticker, level: l.level, dir: l.dir, source: "desk", note: l.meaning.slice(0, 160), by });
+      if (r && r.status !== "removed") armed++; else skipped++;
+    } catch (e) { skipped++; why.push(`${l.ticker} ${l.level}: ${String((e as Error).message).slice(0, 60)}`); }
+  }
+  await logDesk("system", "Otto", `👁 ${who} armed ${armed} of ${lv.length} callouts from ${call.call.date} on the Watcher${skipped ? ` (${skipped} skipped — too far from the live price, already there, or not a stock)` : ""}.`);
+  return { ok: true, armed, skipped, total: lv.length, why: why.slice(0, 6) };
 }
 async function watchSet(b: any, who: string) {
   const by = String(b?.author || who.split("@")[0]).slice(0, 40);
@@ -7693,7 +7752,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, email: claims.email || null, anonymous: !!claims.is_anonymous, desk: !!deskUser(claims) });
     }
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
-         "sentiment", "market_desk", "journal", "why_out", "report_card", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "watch_get", "watch_set", "watch_scan", "performance", "help", "jason_today", "jason_sweep", "jason_score",
+         "sentiment", "market_desk", "journal", "why_out", "report_card", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "watch_get", "watch_set", "watch_scan", "arm_callouts", "performance", "help", "jason_today", "jason_sweep", "jason_score",
          "push_key", "push_sub", "push_list", "push_remove", "push_test", "layout_get", "layout_set",
          "signals_feed", "signal_img", "signals_cfg", "signals_cfg_set", "signal_chat", "signal_chat_clear", "selftest_now",
          "playbook_get", "feedback_add", "feedback_list", "daily_now",
@@ -7761,6 +7820,7 @@ Deno.serve(async (req) => {
       if (fn === "house_rules_get") return json({ ok: true, rules: await houseRules() });
       if (fn === "watch_get") return json(await watchGet());
       if (fn === "watch_set") return json(await watchSet(body, who));
+      if (fn === "arm_callouts") return json(await armCallouts(String(body?.author || who.split("@")[0])));
       // v3.25 Night Charts
       if (fn === "charts_get") return json(await chartsGet(new URL(req.url).searchParams.get("day") || undefined));
       if (fn === "chart_now") return json(await chartNow(body, who));
@@ -7885,7 +7945,8 @@ Deno.serve(async (req) => {
       if (!ins.ok) return json({ ok: false, error: "insert failed: " + (await ins.text()).slice(0, 200) }, 502);
       const row = await ins.json();
       BRAIN = null;                                   // drop the cached copy
-      return json({ ok: true, seeded: payload.length,
+      let callouts = false; try { callouts = await postCallouts(payload); } catch { /* the seed already worked */ }   // v4.5
+      return json({ ok: true, seeded: payload.length, callouts,
                     version: Array.isArray(row) && row[0] ? row[0].version : null });
     }
 

@@ -13,7 +13,7 @@ const dbLog: { table: string; method: string }[] = [];
 let SERIAL = 0;
 function seed() {
   for (const k of Object.keys(TABLES)) delete TABLES[k];
-  for (const k of ["winston_settings", "winston_rules", "winston_days", "winston_ideas", "winston_trades", "winston_log", "otto_jason", "otto_settings", "brain_versions"]) TABLES[k] = [];
+  for (const k of ["winston_settings", "winston_rules", "winston_days", "winston_ideas", "winston_trades", "winston_log", "winston_shadows", "otto_jason", "otto_settings", "brain_versions"]) TABLES[k] = [];
   touched.clear(); dbLog.length = 0; SERIAL = 0;
   TABLES.winston_settings.push({ key: "config", value: { enabled: true, paper_balance: 4000 } });
   TABLES.otto_settings.push({ key: "limits", value: { size_cap_pct: 25, max_trade_pct: 10, daily_losses: 2, daily_x: 2, weekly_pct: 20, auto_close: true, max_trade_loss: 100, account_value: 936 } });
@@ -70,7 +70,7 @@ async function fakeDb(path: string, init: RequestInit = {}) {
         if (ex) { if (/merge-duplicates/.test(prefer)) { Object.assign(ex, b); made.push(ex); } continue; }
       }
       const row = { ...b };
-      if (["winston_ideas", "winston_trades", "winston_log"].includes(table) && row.id == null) row.id = ++SERIAL;
+      if (["winston_ideas", "winston_trades", "winston_log", "winston_shadows"].includes(table) && row.id == null) row.id = ++SERIAL;
       if (table === "winston_trades") { row.flags ||= []; row.broke ||= []; }
       rows.push(row); made.push(row);
     }
@@ -119,7 +119,7 @@ const X = await import("../winston.ts");
 
 function assert(c: unknown, msg: string) { if (!c) throw new Error("ASSERT: " + msg); }
 function eq(a: any, b: any, msg: string) { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`ASSERT ${msg}: got ${JSON.stringify(a)} want ${JSON.stringify(b)}`); }
-const ALLOWED_TABLES = /^(winston_(settings|rules|days|ideas|trades|log)|otto_jason|brain_versions|otto_settings)$/;
+const ALLOWED_TABLES = /^(winston_(settings|rules|days|ideas|trades|log|shadows)|otto_jason|brain_versions|otto_settings)$/;
 
 /* =========================== G1. static scan: no order code, no sign-in code =========================== */
 Deno.test("G1: winston.ts has no order-writing tool names, no token or sign-in code, no live-account tables", async () => {
@@ -1149,4 +1149,87 @@ Deno.test("v4.4 static: winston.ts still has no order/account tools; preview_sca
   const code = src.split("\n").filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l)).join("\n");
   assert(/"preview_scan"/.test(code) && !/create_scan|run_scan|update_scan|get_scans/.test(code), "only preview_scan");
   assert(/<data>/.test(code) && /cleanUntrusted\(p\.words/.test(code) && /cleanUntrusted\(h\.title/.test(code), "coach words and headlines go through cleanUntrusted");
+});
+
+/* ================================ v4.5 (26 Oct 2026): pass fact check (C) + the rule-cost ledger (D) ================================ */
+Deno.test("v4.5 passFactProblem: the 26 Oct TSLA pass (+4.1% 'exceeds' 5%) is caught; a true claim, an index threshold and no-number reasons are left alone", () => {
+  const q = (spot: number, prev: number) => ({ spot, prev });
+  const bad = X.passFactProblem("TSLA is +4.1% from yesterday's close, which exceeds the 5% W26 threshold — pass.", "TSLA", q(396.2, 380.6), ["W26"], {});
+  assert(bad && /does not/.test(bad) && /W26 does not apply/.test(bad), "caught: " + bad);
+  eq(X.passFactProblem("+5.9% from yesterday's close exceeds the 5% W26 threshold", "TSLA", q(403, 380.6), ["W26"], {}), null, "true claim passes");
+  eq(X.passFactProblem("Spread too wide and the setup is not clean", "TSLA", q(396.2, 380.6), [], {}), null, "no numbers, no complaint");
+  assert(/W26 does not apply/.test(X.passFactProblem("blocked by W26", "AAPL", q(345, 344), ["W26"], {}) || ""), "cites W26 on a flat day");
+  eq(X.passFactProblem("QQQ +1.8% from yesterday's close exceeds the 1.5% W26 threshold", "QQQ", q(509.2, 500.2), ["W26"], {}), null, "index threshold is 1.5");
+  assert(/does not/.test(X.passFactProblem("move of +3.0% exceeds the 4% line", "AAPL", q(345, 344), [], {}) || ""), "any 'X exceeds Y' with X<Y");
+  assert(/is not/.test(X.passFactProblem("up +6% which is below the 5% cap", "AAPL", q(345, 344), [], {}) || ""), "'below' that is not");
+});
+Deno.test("v4.5 a false pass is stamped with the real figure, logged, and Winston is made to look again on the next tick even when nothing moved", async () => {
+  seed(); setNow("2026-10-14T14:51:00Z"); await setupCall(); TABLES.otto_jason.length = 0; W.spot.NVDA = 207.6; W.prev.NVDA = 199;      // +4.3%
+  aiScript = () => ({ decisions: [], passes: [{ ticker: "NVDA", source: "own", reason: "NVDA is +4.3% from yesterday's close, which exceeds the 5% W26 threshold.", rule_ids: ["W26"] }] });
+  await X.tick();
+  const idea = TABLES.winston_ideas.find((i) => i.ticker === "NVDA");
+  assert(idea && /⚠ FACT CHECK \(server\)/.test(idea.reason) && /does not|W26 does not apply/.test(idea.reason), "stamped: " + JSON.stringify(idea?.reason));
+  assert(TABLES.winston_log.some((l) => l.kind === "pass_fact"), "logged");
+  eq(TABLES.winston_settings.find((s) => s.key === "tick_state").value.reask, ["NVDA"], "reask stored");
+  const n0 = W.ai.n; setNow("2026-10-14T15:01:00Z"); aiScript = () => ({ decisions: [], passes: [] });
+  await X.tick();
+  assert(W.ai.n === n0 + 1, "he looked again although prices were flat: " + (W.ai.n - n0));
+  assert(/FACT CHECK \(server\)/.test(String(W.ai.last?.user || "")), "the prompt names the false pass");
+  eq(TABLES.winston_settings.find((s) => s.key === "tick_state").value.reask, [], "cleared after the re-look");
+});
+Deno.test("v4.5 gradeShadow: target touch = win; a 10-minute close through the wrong-if = loss (and wins the tie); bars before the block are ignored; end of day = time; not yet = open", () => {
+  const T0 = Date.parse("2026-10-14T14:40:00Z"), b = (min: number, o: number, h: number, l: number, c: number) => ({ t: T0 + min * 60e3, o, h, l, c, v: 1 });
+  const call = { side: "call", spot: 200, wrong_if: 198, target: 204, created_ms: T0 };
+  const END = Date.parse("2026-10-14T19:50:00Z");
+  let g = X.gradeShadow(call, [b(-10, 200, 210, 190, 200), b(0, 200, 201, 199, 200.5), b(10, 200.5, 204.2, 200, 203)], T0 + 25 * 60e3, END);
+  assert(g && g.state === "win" && g.exit === 204 && g.r === 2 && g.pnl_est === 160, "win " + JSON.stringify(g));
+  g = X.gradeShadow(call, [b(0, 200, 201, 197, 197.5)], T0 + 15 * 60e3, END);
+  assert(g && g.state === "loss" && g.r === -1.25, "loss " + JSON.stringify(g));
+  g = X.gradeShadow(call, [b(0, 200, 205, 196, 197)], T0 + 15 * 60e3, END);
+  assert(g && g.state === "loss", "both in one bar = loss");
+  eq(X.gradeShadow(call, [b(0, 200, 201, 199, 200)], T0 + 5 * 60e3, END), null, "the forming bar is not read");
+  eq(X.gradeShadow(call, [b(0, 200, 201, 199, 200)], T0 + 15 * 60e3, END), null, "nothing yet");
+  g = X.gradeShadow(call, [b(0, 200, 201, 199, 201)], END + 1, END);
+  assert(g && g.state === "time" && g.exit === 201, "time exit " + JSON.stringify(g));
+  g = X.gradeShadow({ side: "put", spot: 200, wrong_if: 202, target: 196, created_ms: T0 }, [b(0, 200, 200.5, 195.5, 197)], T0 + 15 * 60e3, END);
+  assert(g && g.state === "win" && g.exit === 196 && g.pnl_est === 160, "put win " + JSON.stringify(g));
+});
+Deno.test("v4.5 shadowTally: per-rule counts and estimated dollars", () => {
+  const t = X.shadowTally([{ rule: "W26", status: "win", pnl_est: 120 }, { rule: "W26", status: "loss", pnl_est: -40 }, { rule: "W25", status: "open" }, { rule: "W26", status: "time", pnl_est: 8 }]);
+  eq([t.by_rule.W26.n, t.by_rule.W26.wins, t.by_rule.W26.losses, t.by_rule.W26.time, t.by_rule.W26.est], [3, 1, 1, 1, 88], "W26");
+  eq([t.by_rule.W25.open, t.total.n, t.total.est], [1, 4, 88], "total");
+});
+Deno.test("v4.5 a rule that blocks a planned idea books ONE shadow, scored later by the same exits; it never touches his trades, equity or stats", async () => {
+  seed(); TABLES.winston_rules.push({ id: "W26", sort: 176, kind: "gate", source: "coach 2026-10-22", title: "W26", body: "W26", active: true, params: { index_pct: 1.5, stock_pct: 5 } });
+  setNow("2026-10-14T14:51:00Z"); await setupCall(); TABLES.otto_jason.length = 0;                       // strict mode: W26 blocks
+  W.spot.NVDA = 211; W.prev.NVDA = 199;                                                                          // +6.0% — a call is 'a move that's done'
+  W.opts = { opt1: { strike: 211, bid: 2.40, ask: 2.50, delta: 0.35, vol: 900, oi: 400 } };
+  W.bars = { NVDA: [barRow("2026-10-14T14:30:00Z", 210, 211, 209.5, 210.5)] };
+  aiScript = () => ({ decisions: [{ ticker: "NVDA", side: "call", source: "own", thesis: "Momentum continuation above the high", wrong_if_level: 208, target_level: 218, cites: [{ type: "level", note: "intraday high" }] }], passes: [] });
+  const eq0 = (await X.stateForApp()).equity;
+  await X.tick();
+  eq(TABLES.winston_trades.length, 0, "blocked: no trade");
+  assert(TABLES.winston_ideas.some((i) => i.status === "blocked" && /^W26:/.test(i.reason)), "blocked by W26: " + JSON.stringify(TABLES.winston_ideas.map((i) => i.reason)));
+  eq(TABLES.winston_shadows.length, 1, "one shadow booked");
+  const sh = TABLES.winston_shadows[0];
+  assert(sh.rule === "W26" && sh.side === "call" && sh.status === "open" && sh.spot === 211 && sh.wrong_if === 208 && sh.target === 218, "row " + JSON.stringify(sh));
+  setNow("2026-10-14T15:11:00Z"); W.spot.NVDA = 212; await X.tick();                                            // same idea offered again: still one shadow
+  eq(TABLES.winston_shadows.length, 1, "no second shadow for the same name and side");
+  W.bars = { NVDA: [barRow("2026-10-14T14:30:00Z", 210, 211, 209.5, 210.5), barRow("2026-10-14T14:50:00Z", 211, 212, 210.5, 211.5), barRow("2026-10-14T15:00:00Z", 211.5, 218.6, 211, 217)] };
+  setNow("2026-10-14T15:21:00Z"); await X.tick();
+  assert(TABLES.winston_shadows[0].status === "win" && TABLES.winston_shadows[0].exit_under === 218 && TABLES.winston_shadows[0].pnl_est > 0, "scored a win: " + JSON.stringify(TABLES.winston_shadows[0]));
+  const st: any = await X.stateForApp();
+  eq(TABLES.winston_trades.length, 0, "still no trade");
+  eq(st.equity, eq0, "equity untouched"); eq(st.stats.trades, 0, "stats untouched");
+  eq([st.shadow.by_rule.W26.n, st.shadow.by_rule.W26.wins, st.shadow.total.est > 0], [1, 1, true], "state carries the ledger: " + JSON.stringify(st.shadow.by_rule));
+  const rep = await X.buildReport("2026-10-14", (await X.getConfig()));
+  assert(rep.shadow && rep.shadow.total.n === 1, "the 4:15 report carries it");
+});
+Deno.test("v4.5 no shadow when the plan is broken or has no levels, and the SQL + the Winston page carry the ledger", async () => {
+  eq(await X.bookShadow("2026-10-14", { ticker: "NVDA", side: "call", wrong_if_level: 0, target_level: 204 } as any, 200, "W26", "x"), null, "no wrong-if");
+  eq(await X.bookShadow("2026-10-14", { ticker: "NVDA", side: "call", wrong_if_level: 205, target_level: 204 } as any, 200, "W26", "x"), null, "a wrong-if on the wrong side of price is not a rule's fault");
+  const sql = await Deno.readTextFile(new URL("../030_v450_shadows.sql", import.meta.url));
+  assert(/create table if not exists public\.winston_shadows/.test(sql) && /enable row level security/.test(sql), "SQL 030");
+  const html = await Deno.readTextFile(new URL("../../index.html", import.meta.url));
+  assert(/winShadowLine/.test(html) && /winShadowBox/.test(html), "Winston page shows the ledger");
 });
