@@ -1143,6 +1143,20 @@ export function dupWinner(rows: any[], me: any, tk: string, direction: any, nowM
   same.sort((a: any, b: any) => String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id)));
   return same[0] && same[0].id !== me.id ? same[0] : null;
 }
+/* v4.2.3 (Ifoma 26 Oct, "tighten it"): plan.weak fired on 100% of cards in the week of 20 Oct, so "Overrode Baby J" meant "approved anything".
+   Weak now means exactly one of: the read/banner is No Edge or Choppy, or the entry is a chase (the bar already ran past the level).
+   Anything else the model writes there is dropped on the server, so the flag cannot drift back to "everything". */
+export const WEAK_RE = /no edge|chop|choppy|chase|chasing|ran (well )?past|past the level|already ran|beyond the level/i;
+export function weakGuard(weak: unknown): string | undefined {
+  const t = typeof weak === "string" ? weak.trim() : "";
+  return t && WEAK_RE.test(t) ? t.slice(0, 240) : undefined;
+}
+export function overrideRead(a: any): string {
+  const w = weakGuard(a?.plan?.weak);
+  if (w) return w.slice(0, 160);
+  const chase = (a?.checks || []).find((c: any) => c.ok === false && /chas/i.test(String(c.text)));
+  return chase ? String(chase.text).slice(0, 160) : "";
+}
 export async function proposeAction(input: any, who: string, opts: { manual?: boolean; planExtra?: Record<string, unknown>; blockLevels?: Record<string, any> } = {}) {
   const calls = Array.isArray(input.calls) ? input.calls.slice(0, 6) : [];
   if (!calls.length) throw new Error("no calls");
@@ -1158,6 +1172,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
   const plan = input.plan && typeof input.plan === "object" ? { ...input.plan, ...(opening ? (opts.planExtra || {}) : {}),
     ...(opening && !opts.planExtra?.source ? { source: who === "signals" ? "signal" : who === "alert" ? "alert" : who === "otto" ? "manual" : "desk" } : {}) } : null;
   if (plan) plan.rules = cleanRules(plan.rules);
+  if (plan) plan.weak = weakGuard(plan.weak);                                 // v4.2.3: weak only means No Edge / Choppy / a chase
   // v3.21 (Ifoma, 7 Oct night): wrong-if is a 5-minute close on every new card; older cards keep 15.
   if (plan && opening) plan.wrong_tf = 5;
   // v3.4: ...and its exits. No exits, no card (Jarvis and the manual ticket alike).
@@ -1420,7 +1435,7 @@ export async function practiceOn(a: any, decision: string, who: string, why: any
   if (under == null) { under = Number(a.plan?.entry_underlying) > 0 ? Number(a.plan.entry_underlying) : null; note += "No live stock price: used the card's entry price. "; }
   const fill = { ask, delta, underlying: under, at: now, by: who, note: note.trim() || null };
   // v3.41: the v3.39 override tag applies to practice approvals too (the practice book's "Overrode Baby J" line reads it)
-  const weakRead = a.plan?.weak ? String(a.plan.weak).slice(0, 160) : String(((a.checks || []).find((c: any) => c.ok === false && /chas/i.test(String(c.text))) || {}).text || "").slice(0, 160);
+  const weakRead = overrideRead(a);                                          // v4.2.3: only a real No Edge / Choppy / chase flag counts as an override
   const plan = { ...(a.plan || {}), paper_fill: fill, josh_why: why_ok, ...(weakRead ? { override: true, override_read: weakRead } : {}) };
   const r = await left({ status: "paper_taken", decided_by: who, decided_at: now, plan, outcome: null });
   if (!r?.[0]) return publicAction((await db("otto_actions?id=eq." + id + "&select=*"))[0] || a);
@@ -1488,8 +1503,8 @@ async function actOn(id: string, decision: string, who: string, why: any = null)
     } catch { /* no data = no block */ }
   }
   // v3.39: Baby J is the senior. Approving a card he flagged weak / a chase is logged as an override — one line, no argument, kept score.
-  if (a.plan?.weak || (a.checks || []).some((c: any) => c.ok === false && /chas/i.test(String(c.text)))) {
-    const said = a.plan?.weak ? String(a.plan.weak).slice(0, 160) : String(((a.checks || []).find((c: any) => c.ok === false && /chas/i.test(String(c.text))) || {}).text || "").slice(0, 160);
+  const said = overrideRead(a);                                              // v4.2.3
+  if (said) {
     await db("otto_actions?id=eq." + id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ plan: { ...(a.plan || {}), override: true, override_read: said } }) }).catch(() => {});
     await logDesk("assistant", "Jarvis", `Noted. I called this one weak — "${said}". Logging it as an override by ${who.split("@")[0]}. The scoreboard keeps count.`, id);
     await activity("card", `Override: ${who.split("@")[0]} approved a card Baby J flagged — ${a.title}`, who.split("@")[0]);
@@ -1824,7 +1839,7 @@ const PROPOSE_TOOL = (writeHelp: string) => ({
           expires: { type: "string", description: "Option expiration YYYY-MM-DD" },
           signal_level: { type: "boolean", description: "true when the entry level came from a Signal posted before the open (the House Rule lets the open be traded off it)" },
           level: { type: "number", description: "v3.37: the underlying level the idea is built on (the coach's, the Watcher's or the chart's). The server checks the entry against it: let price come to you, don't chase." },
-          weak: { type: "string", description: "v3.36: if your own read says the setup is weak, one plain sentence why (shows as a red line; the card is still built — flag, never block)." },
+          weak: { type: "string", description: "v4.2.3: ONLY when the banner/read is No Edge or Choppy, or the entry is a chase (the bar already ran past the level): one plain sentence that names which (shows as a red line; the card is still built — flag, never block). Any other doubt goes in the summary, NOT here — leave weak empty." },
           rules: { type: "array", items: { type: "string" }, maxItems: 6, description: "v3.15: ids of the PLAYBOOK book rules this card relies on (e.g. T-1, D-1, M-2). Every rule cited builds its own record on the scoreboard." },
         },
         required: ["tv_symbol", "direction", "setup", "tp1", "stop", "stop_option"],
@@ -2990,6 +3005,18 @@ async function weeklyReview(apiKey: string, who = "Jarvis") {
    Desk Friday after the weekly review and kept in otto_settings.coach_log; ?fn=coach_log returns it any time (&build=1 rebuilds). */
 export type LogItem = { day: string; who: string; source: string; ticker: string; contract: string; side: string; entry: number | null; exit: number | null; pnl: number | null;
   entry_time: string; exit_time: string; level: number | null; vwap: number | null; why: string; overnight: string; note?: string };
+/* v4.2.3 fix 2: a rule-scored practice trade can be a "win" by its own rule (TP1 at the card price) while Josh's fill lost money
+   (NVDA 215P 20 Oct: "Result −$29 … scored win (0.37R)"). Say both, never a bare "scored win" next to a negative result.
+   fix 7: a card that never had a real contract (no option_id) is an estimate on the underlying — say so. */
+export function practiceNote(o: any): string | undefined {
+  if (!o || !o.state || o.state === "pending") return undefined;
+  const r = o.r != null ? ` (${o.r}R)` : "";
+  const est = o.pnl_est != null ? Number(o.pnl_est) : null;
+  const tag = o.est_no_contract ? " · est. (no contract)" : "";
+  if (est != null && ((o.state === "win" && est < 0) || (o.state === "loss" && est > 0)))
+    return `scored by its rule at the card price: ${o.state}${r}; at your fill: ${est < 0 ? "−" : "+"}$${Math.abs(Math.round(est))}${tag}`;
+  return `scored ${o.state}${r}${tag}`;
+}
 export function coachLogText(weekStart: string, weekEnd: string, items: LogItem[], extra: { account_start?: number | null; ranges?: string; working?: string } = {}): string {
   const L: string[] = [];
   const money = (n: number | null) => n == null ? "n/a" : `${n >= 0 ? "+" : "-"}$${Math.abs(n).toFixed(0)}`;
@@ -3048,13 +3075,13 @@ export async function coachLog(build = false): Promise<{ week_start: string; wee
   }
   // 2. practice trades Josh approved (v3.35)
   const prac: any[] = (await db("otto_actions?select=id,title,created_at,decided_at,decided_by,plan,outcome,summary&status=eq.paper_taken&order=created_at.asc&limit=200").catch(() => [])) || [];
-  for (const a of prac.filter((a) => inWeek(a.decided_at || a.created_at))) {
+  for (const a of prac.filter((a) => inWeek(a.decided_at || a.created_at) && !a.plan?.duplicate_of)) {   // v4.2.3 fix 1: a voided twin is not a trade
     const p = a.plan || {}, pf = p.paper_fill || {}, o = a.outcome || {}, tk = String(p.tv_symbol || "").split(":").pop() || "";
     const at = pf.at || a.decided_at || a.created_at, od = etParts(new Date(at)).date;
     items.push({ day: od, who: String(a.decided_by || "Josh"), source: o.practice_close ? "PRACTICE · approved on Otto, closed by hand" : "PRACTICE · approved on Otto", ticker: tk, contract: String(a.title || "").replace(/^(PAPER|PRACTICE|LIVE)\s*[—-]\s*/i, "").slice(0, 40), side: p.direction === "down" ? "short" : "long",
       entry: pf.ask != null ? Number(pf.ask) : null, exit: o.practice_close && o.exit_px != null ? Number(o.exit_px) : null, pnl: o.pnl_est != null ? Number(o.pnl_est) : null, entry_time: t12(at), exit_time: o.practice_close ? t12(o.closed_at) : o.state && o.state !== "pending" ? "(scored by rule)" : "",
       level: p.level ?? p.stop ?? null, vwap: tk ? await vwapAt(tk, od, Date.parse(at)) : null, why: String(a.summary || "").split("\n")[0].slice(0, 200), overnight: "no (practice, same day)",
-      note: o.state ? `scored ${o.state}${o.r != null ? " (" + o.r + "R)" : ""}` : undefined });
+      note: practiceNote(o) });   // v4.2.3 fix 2 + 7
   }
   // 3. trades Josh logged himself through Jarvis
   const logs: any[] = (await db(`otto_activity?select=day,at,who,data&kind=eq.trade&day=gte.${ws}&day=lte.${we}&order=at.asc&limit=100`).catch(() => [])) || [];
@@ -3116,7 +3143,7 @@ export async function reportCard(apiKey: string, build = false): Promise<any> {
   const trades: any[] = ((await db("otto_trades?select=*&order=opened_at.asc&limit=300").catch(() => [])) || []).filter((t: any) => inWeek(t.opened_at));
   const livePnl = Math.round(trades.reduce((s, t) => s + (t.pnl != null ? Number(t.pnl) : 0), 0));
   const liveActs = acts.filter((a) => a.status === "done" && (a.calls || []).some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open")));
-  const ov = acts.filter((a) => a.plan?.override && (a.status === "done" || a.status === "paper_taken"));
+  const ov = acts.filter((a) => a.plan?.override && (a.status === "done" || a.status === "paper_taken") && !a.plan?.duplicate_of);   // v4.2.3 fix 1
   // the coach's calls this week vs what was taken
   const posts: any[] = (await db(`otto_jason?select=id,day,ticker,direction,kind&day=gte.${ws}&day=lte.${we}&order=id.asc&limit=200`).catch(() => [])) || [];
   const calls = posts.filter((p) => p.kind === "call" && p.direction && p.ticker);
@@ -3124,7 +3151,8 @@ export async function reportCard(apiKey: string, build = false): Promise<any> {
   const hk = await hkWeek(ws, we).catch(() => null);   // v3.45: the week's homework (Josh)
   // last week's rule followed? the model judges from the numbers; a plain default is used when the call fails
   const facts = { week: `${ws} to ${we}`, practice_book: st, live: { trades: trades.length, pnl: livePnl, cards_taken: liveActs.length },
-    overrides: ov.map((a) => ({ title: String(a.title).slice(0, 60), read: String(a.plan.override_read || "").slice(0, 120), result: a.outcome?.state || null })),
+    expired: st.expired, scored_cards: st.answered,   // v4.2.3 fix 4: the model sees expired cards as their own number
+    overrides: ov.map((a) => ({ title: practiceLabel(a.title), read: String(a.plan.override_read || "").slice(0, 120), result: a.outcome?.state || null, est: a.outcome?.est_no_contract ? "est. (no contract)" : undefined })),
     whys: whyRows.slice(0, 12).map((w) => w.why_not ? { why_not: w.why_not } : { setup: w.setup, why_now: w.why_now, kills: w.kills }),
     exits: cards.concat(liveActs).map((a) => a.plan?.josh_exit_why?.text).filter(Boolean).slice(0, 8),
     coach: { calls_with_direction: calls.length, taken_from_coach: tookCoach, tickers: [...new Set(calls.map((c) => c.ticker))].slice(0, 10) },
@@ -3132,7 +3160,7 @@ export async function reportCard(apiKey: string, build = false): Promise<any> {
   let rule = REPORT_RULE_DEFAULT, comment = "", followed: boolean | null = null;
   if (apiKey) {
     try {
-      const sys = `You are Jarvis writing Josh's Friday report card from the numbers below — only from them. Talk to Josh directly, plain words, no praise padding, fair and direct. Respond with JSON only: {"followed": true|false|null, "comment": "two sentences on what the numbers say about this week", "rule": "ONE rule for next week, one sentence, specific and checkable from Otto's data"}. "followed" = did he follow last week's rule, judged from the numbers (null if the numbers can't say). Never name the coach.` + NAME_RULE;
+      const sys = `You are Jarvis writing Josh's Friday report card from the numbers below — only from them. Talk to Josh directly, plain words, no praise padding, fair and direct. Respond with JSON only: {"followed": true|false|null, "comment": "two sentences on what the numbers say about this week", "rule": "ONE rule for next week, one sentence, specific and checkable from Otto's data"}. Never write "answered N of N" or "of N scored" when expired > 0 — expired cards were offered and left unanswered; say "answered A of O, E expired". "followed" = did he follow last week's rule, judged from the numbers (null if the numbers can't say). Never name the coach.` + NAME_RULE;
       const r = await withTimeout(fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model: MODEL, max_tokens: 500, system: sys, messages: [{ role: "user", content: JSON.stringify(facts) }] }) }), 40_000, "report card");
       const j = await r.json();
@@ -3152,7 +3180,7 @@ export async function reportCard(apiKey: string, build = false): Promise<any> {
     `Last week's rule: ${lastRule} — ${followed == null ? "can't tell from the numbers" : followed ? "followed ✓" : "not followed ✗"}`,
     `Cards: ${st.offered} offered, ${st.answered} answered (${st.taken} taken, ${st.rejected} rejected), ${st.expired} expired${st.expired ? " — expired counts against you" : ""}.`,
     `Live (Robinhood): ${trades.length} trade${trades.length === 1 ? "" : "s"}, ${money(livePnl)}. Practice book: $${book.start.toLocaleString("en-US")} → $${st.balance.toLocaleString("en-US")}${st.scoring ? ` (${st.scoring} still scoring)` : ""}.`,
-    `Overrode Baby J: ${ov.length}${ov.length ? " — " + ov.map((a) => `${String(a.title).replace(/^(PAPER|PRACTICE|LIVE)\s*[—-]\s*/i, "").slice(0, 28)} (${a.outcome?.state || "open"})`).join(", ") : ""}.`,
+    `Overrode Baby J: ${ov.length}${ov.length ? " — " + ov.map((a) => `${practiceLabel(a.title)} (${a.outcome?.state || "open"}${a.outcome?.est_no_contract ? ", est. no contract" : ""})`).join(", ") : ""}.`,   // v4.2.3 fix 3 + 7
     `Coach posted ${calls.length} call${calls.length === 1 ? "" : "s"} with a direction${calls.length ? ` (${facts.coach.tickers.join(", ")})` : ""}; you took ${tookCoach}.`,
     `Your whys: ${whyRows.length} written, ${good} named a level and a kill.${whyRows.length ? "" : " None — the gate is on now, so next week this line fills in."}`,
     hk ? `Homework: ${hk.done} of ${hk.nights} night${hk.nights === 1 ? "" : "s"} on time${hk.late ? `, ${hk.late} late` : ""}${hk.missed ? `, ${hk.missed} skipped` : ""} (20% of the grade). Call right ${hk.right} of ${hk.judged}; levels touched ${hk.touched} of ${hk.of}; Watcher fired on ${hk.used}.${hkTrades ? ` Trades taken on a skipped-homework day: ${hkTrades}.` : ""}` : "",
@@ -3235,7 +3263,16 @@ async function evalIdea(a: any) {
   const dm = /Delta (\d?\.\d+)/.exec((a.checks || []).map((c: any) => c.text).join(" "));
   const g: any = gradeIdea({ created, direction: p.direction === "down" ? "down" : "up", tp1, wrong, entry: Number(pf?.underlying) || Number(p.entry_underlying) || null,
     delta: Number(pf?.delta) || (dm ? Number(dm[1]) : null), premium: Number(pf?.ask) || Number(ex.entry_limit) || (a.risk?.cost ? a.risk.cost / 100 : null), tf: Number(p.wrong_tf || ex.wrong_tf) || 15 }, bars);
-  return g.state === "open" ? { state: "pending" } : { ...g, at: g.at ? Math.round(g.at / 1000) : undefined };
+  const noContract = hasNoContract(a);                                       // v4.2.3 fix 7
+  return g.state === "open" ? { state: "pending" } : { ...g, at: g.at ? Math.round(g.at / 1000) : undefined, ...(noContract ? { est_no_contract: true } : {}) };
+}
+/* v4.2.3 fix 7: a card whose opening leg has no option_id (AAPL 355C, Coach #352, 23 Oct) is scored on the underlying at the card's
+   price — there is no real option price behind the number. Tag it so every report says "est. (no contract)". */
+export function hasNoContract(a: any): boolean {
+  const legs = (a?.calls || []).filter((c: any) => c.tool === "place_option_order").flatMap((c: any) => c.args?.legs || []);
+  const open = legs.filter((l: any) => l.position_effect === "open");
+  if (!open.length) return false;
+  return open.every((l: any) => !l.option_id) && !a?.plan?.option_id && !a?.exit?.option_id;
 }
 // v3.14: grade a few open ideas every 5 minutes from the cron, so the Scoreboard is current without opening it.
 export async function scoreTick(budget = 6) {
@@ -3258,17 +3295,28 @@ export async function scoreTick(budget = 6) {
     if (!(a.calls || []).some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open"))) continue;
     n++;
     const o = await evalIdea(a).catch(() => null);
-    if (o && ["win", "loss", "scratch", "unscored"].includes(o.state))
+    if (o && ["win", "loss", "scratch", "unscored"].includes(o.state)) {
       // v3.43: the extra filter means a hand close that landed while this was grading is never overwritten
-      await db("otto_actions?id=eq." + a.id + "&outcome->>practice_close=is.null", { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ outcome: o }) }).catch(() => {});
+      const r = await db("otto_actions?id=eq." + a.id + "&outcome->>practice_close=is.null", { method: "PATCH", headers: { prefer: "return=representation" }, body: JSON.stringify({ outcome: o }) }).catch(() => null);
+      // v4.2.3 fix 5 (AMGN 457.5C, 23 Oct 11:40): a practice trade stopped or finished by its own rule tells Josh on the Desk — once.
+      if (a.status === "paper_taken" && Array.isArray(r) && r.length && (o.state === "win" || o.state === "loss")) await logDesk("system", "Otto", practiceStopLine(a, o), a.id).catch(() => {});
+    }
   }
   return { ok: true, graded: n };
+}
+export function practiceStopLine(a: any, o: any): string {
+  const p = a?.plan || {}, lab = practiceLabel(a?.title);
+  const est = o?.pnl_est != null ? Number(o.pnl_est) : null;
+  const money = est == null ? "" : ` — scored ${est < 0 ? "−" : "+"}$${Math.abs(Math.round(est))}${o?.r != null ? ` (${o.r}R)` : ""}${o?.est_no_contract ? ", est. (no contract)" : ""}`;
+  const tf = Number(p.wrong_tf) || 5, dir = p.direction === "down" ? "over" : "under";
+  const why = o?.state === "win" ? `hit TP1 ${p.tp1 ?? ""}`.trim() : `${tf}-min close ${dir} ${p.stop ?? "its wrong-if"}`;
+  return `⏹ Practice trade ${lab} ${o?.state === "win" ? "finished" : "stopped"} by its rule — ${why}${money}. Nothing was sent to Robinhood.`;
 }
 /* v3.34: every opening option card, compact, so the Scoreboard can total each day (paper = pnl_est, real = pnl from otto_trades). */
 export function scoreRows(ideas: any[], pnlBy: Record<string, number>) {
   return (ideas || []).slice(0, 400).map((a: any) => ({
     id: a.id, title: a.title, at: a.created_at, status: a.status, source: srcOf(a),
-    state: a.outcome?.state ?? null, est: a.outcome?.pnl_est ?? null, r: a.outcome?.r ?? null,
+    state: a.outcome?.state ?? null, est: a.outcome?.pnl_est ?? null, r: a.outcome?.r ?? null, est_no_contract: !!a.outcome?.est_no_contract,   // v4.2.3 fix 7
     pnl: pnlBy[a.id] ?? null, by: a.decided_by ?? null,
     // v3.41: the practice book, overrides and Josh's whys ride along for the Scoreboard and the report card
     practice: isPracticeCard(a), override: !!a.plan?.override, override_read: a.plan?.override_read ?? null,
@@ -5025,7 +5073,7 @@ export async function whyOut(body: any, who: string) {
 const PRAC_PREFIX = "P:";
 const practiceFinal = (a: any) => !!(a?.outcome && (["win", "loss", "scratch", "unscored"].includes(a.outcome.state) || a.outcome.practice_close));
 const practiceLeg = (a: any) => (a?.calls || []).flatMap((c: any) => c?.args?.legs || []).find((l: any) => l?.position_effect === "open") || null;
-const practiceLabel = (t: any) => String(t || "").replace(/^\s*(PAPER|PRACTICE|LIVE)(\s*[·-]\s*[A-Z]+)?\s*[—-]\s*/i, "").trim().slice(0, 40) || "practice trade";
+export const practiceLabel = (t: any) => String(t || "").replace(/^\s*(PAPER|PRACTICE|LIVE)(\s*[·-]\s*[A-Z]+)?\s*[—-]\s*/i, "").trim().slice(0, 40) || "practice trade";
 /* The practice trades Josh took today that are still open (not scored by rule, not closed by hand). Never reads Robinhood account data. */
 export async function practiceOpen(): Promise<any[]> {
   const since = new Date(Date.now() - 20 * 3600e3).toISOString();
@@ -5950,7 +5998,7 @@ ${r.ticker} level ${Number(r.level)} (${r.source === "signal" ? "a Signal level"
 Trigger: ${TRIG_LABEL[f.trigger]} on the ${d === "up" ? "calls" : "puts"} side, on the ${f.tf}-minute bar that closed at ${etLabel(f.close_at)} ET — O ${b.o} H ${b.h} L ${b.l} C ${b.c}.${f.crossings >= 4 ? ` The 5-minute closes have crossed this level ${f.crossings} times today: treat it as chop unless the read is clear.` : ""}
 Is this a real ${d === "up" ? "call" : "put"} setup RIGHT NOW under the Otto Rules and the House Rules? The contract list above is live (server-fetched); check the banner and any binary event.
 - Call propose_action ONCE, every time (v3.36, Ifoma: flag, never block — the people decide, not you): one opening option card. Title starts with "SCALP · " when it's a quick trade. plan.setup "${SETUP_FOR[f.trigger + "|" + d] || "other"}", plan.direction "${d}", plan.signal_level ${r.source === "signal"}, TP1 at the next level, plan.stop (wrong-if) just beyond ${Number(r.level)}, stop_option sized for their max loss. If the best contract is over buying power or the max, make the cheaper ALT too, as usual. Guardrails flag, never block.
-- If your read says it's weak (too little room to TP1 for the premium, a Choppy banner, the confirmation bar already ran well past the level, a binary event), STILL build the card and put the reason in plan.weak as one plain sentence — it shows as a red line on the card. When the bar already ran: say so, and say the coach's answer: wait for the retest of ${Number(r.level)} that holds; that is the entry, not the chase.
+- plan.weak (v4.2.3, tightened): set it ONLY if the banner/read is No Edge or Choppy, or the confirmation bar already ran well past the level (a chase) — one plain sentence naming which. Thin room to TP1, a binary event or ordinary doubt go in the summary, not in weak; most cards leave weak EMPTY. When the bar already ran: say so, and say the coach's answer: wait for the retest of ${Number(r.level)} that holds; that is the entry, not the chase. The card is still built either way — flag, never block.
 - The only time there is no card: the level's direction contradicts the close (e.g. a rejection fired but the close is on the wrong side). Then say exactly why in the READ.
 Work quietly. Finish with a line that is exactly READ: and then 2 short plain sentences: what happened at the level and why you made the card — or why not.
 (Robinhood tools only in this run.)`;

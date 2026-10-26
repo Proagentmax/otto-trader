@@ -517,7 +517,7 @@ Deno.test("replay 13: the watch touches the target inside a still-forming bar (e
   eq(TABLES.winston_trades.length, 1, "opened by the tick");
   // 10:24: the 10:20 bar is still forming and has already touched 204 -> the 10-minute tick ignores it, the watch takes it
   setNow("2026-10-14T14:24:00Z"); W.bars.NVDA.push(barRow("2026-10-14T14:20:00Z", 201, 204.3, 200.8, 203.5)); W.opts.opt1.bid = 3.6; W.opts.opt1.ask = 3.8; W.ai.n = 0; aiScript = null;
-  await X.tick(); eq(TABLES.winston_trades[0].status, "open", "the 10-minute tick does not read a forming bar");
+  await X.tick(); eq(TABLES.winston_trades[0].status, "open", "the 10-minute tick does not read a forming bar"); W.ai.n = 0;   // v4.3: the tick itself may re-read a coach name in the first hour; the assertion below is about the watch
   const r = await X.watch(); eq(r.closed, 1, "watch closed it: " + JSON.stringify(r));
   const c = TABLES.winston_trades[0];
   eq([c.status, c.exit_reason, c.exit_fill, c.pnl_realistic, c.flags], ["closed", "target", 3.6, 110, ["intrabar_touch"]], "target touch, exit at the bid, flagged");
@@ -854,4 +854,131 @@ Deno.test("replay 22 Oct (v3.44): defensive tape, LRCX -10.5% after earnings —
   eq(TABLES.winston_trades.length, 0, "strict mode: no trade");
   assert(TABLES.winston_ideas.some((i) => i.status === "blocked" && /^W26:/.test(i.reason || "")), "blocked by W26: " + JSON.stringify(TABLES.winston_ideas.map((i) => i.reason)));
   aiScript = null; (W as any).earnings = [];
+});
+
+/* =========================== v4.3 (26 Oct 2026): the Winston pack =========================== */
+const ROW = (id: string, bid: number, ask: number, extra: Partial<any> = {}) => ({ id, exp: "2026-10-16", strike: 200, type: "call", bid, ask, delta: 0.35, vol: 900, oi: 400, label: id, ...extra });
+Deno.test("v4.3 spread tiers: ≤8% first; 8–15% only on a coach call (stamped); wider is never picked; an own idea with only wide contracts is passed", () => {
+  const tight = ROW("t", 2.40, 2.50), mid = ROW("m", 2.20, 2.50), wide = ROW("w", 2.00, 2.50);         // 4.1%, 12.8%, 22.2%
+  eq(X.spreadPctOf(tight), 4.08, "spread % of mid");
+  eq(X.pickContract([mid, tight, wide], 1000, 4000, false, false).row?.id, "t", "own idea picks the tight one");
+  const own = X.pickContract([mid, wide], 1000, 4000, false, false); assert(!own.row && /wider than 8%/.test(own.why), "own idea, only wide contracts: passed — " + own.why);
+  const coach = X.pickContract([mid, wide], 1000, 4000, false, true); eq([coach.row?.id, coach.flags], ["m", ["picker:spread_8_15"]], "coach call may take 8–15%, stamped");
+  const never = X.pickContract([wide], 1000, 4000, true, true); assert(!never.row && /wider than 15%/.test(never.why), "22% is never picked, even loose + coach");
+  eq(X.pickContract([tight], 1000, 4000, false, false).flags, [], "no stamp on a tight contract");
+});
+Deno.test("v4.3 winner protection: breakeven at +0.5R, trail at 75% of the way to target, never backwards; the moved stop only reads later bars", () => {
+  const base = { dir: "up" as const, wrong_if_level: 198, wrong_if_orig: 198, target_level: 204 };      // entry 200: R = 2, to target = 4
+  eq(X.protectWinner(base, 200, 0.9, NOW).moved, null, "+0.45R: nothing");
+  const be = X.protectWinner(base, 200, 1.0, NOW); eq([be.moved, be.plan.wrong_if_level, be.stamps, be.plan.stop_from_ms], ["breakeven", 200, ["stamp:breakeven"], NOW], "+0.5R: stop to entry");
+  eq(X.protectWinner(be.plan, 200, 1.4, NOW + 1).moved, null, "already at breakeven, not yet 75%: nothing");
+  const tr = X.protectWinner(be.plan, 200, 3.0, NOW + 2); eq([tr.moved, tr.plan.wrong_if_level, tr.stamps, tr.plan.trail], ["trail", 201.5, ["stamp:trail"], true], "75% of the way: trail at half the gain");
+  const tr2 = X.protectWinner(tr.plan, 200, 3.5, NOW + 3); eq([tr2.moved, tr2.plan.wrong_if_level], ["trail", 201.75], "trails higher as it goes");
+  eq(X.protectWinner(tr2.plan, 200, 3.1, NOW + 4).moved, null, "never moves the stop backwards");
+  const put = X.protectWinner({ dir: "down", wrong_if_level: 202, target_level: 196 }, 200, 3.2, NOW); eq([put.moved, put.plan.wrong_if_level], ["trail", 198.4], "put: stamps go the other way (and breakeven is skipped straight to trail)");
+  assert(put.stamps.includes("stamp:breakeven") && put.stamps.includes("stamp:trail"), "a straight-to-trail move carries both stamps");
+  eq(X.protectWinner(base, 200, null, NOW).moved, null, "no excursion = nothing");
+  // evalBars: bars before the move are judged on the ORIGINAL level only via the caller; with stop_from_ms set, an earlier bar under the moved level does not stop
+  const b = (iso: string, c: number) => ({ t: RealDate.parse(iso), o: c, h: c + 0.5, l: c - 0.5, c, v: 1 });
+  const bars = [b("2026-10-14T14:00:00Z", 199.5), b("2026-10-14T14:10:00Z", 201.2), b("2026-10-14T14:20:00Z", 199.0)];
+  const moved = { dir: "up" as const, wrong_if_level: 200, target_level: 204, stop_from_ms: RealDate.parse("2026-10-14T14:15:00Z") };
+  const ev = X.evalBars(moved, bars, RealDate.parse("2026-10-14T13:55:00Z"), RealDate.parse("2026-10-14T14:31:00Z"));
+  eq([ev?.reason, ev?.bar.c], ["wrong_if", 199.0], "the 14:00 bar (199.5 < 200) is ignored because it began before the move; the 14:20 bar stops it");
+});
+Deno.test("v4.3 trigger state: fire on a close through, drop on a close through the wrong-if, otherwise wait; needsTrigger only when price is not past it", () => {
+  const b = (iso: string, c: number) => ({ t: RealDate.parse(iso), o: c, h: c + 0.3, l: c - 0.3, c, v: 1 });
+  const now = RealDate.parse("2026-10-14T14:21:00Z"), a = { side: "call" as const, trigger_level: 201, wrong_if_level: 198 };
+  eq(X.triggerState(a, [b("2026-10-14T14:00:00Z", 200.5)], now), "wait", "below the trigger");
+  eq(X.triggerState(a, [b("2026-10-14T14:00:00Z", 201.5)], now), "fire", "closed above");
+  eq(X.triggerState(a, [b("2026-10-14T14:00:00Z", 197.5)], now), "drop", "closed under the wrong-if");
+  eq(X.triggerState(a, [b("2026-10-14T14:20:00Z", 203)], now), "wait", "a forming bar does not count");
+  eq(X.triggerState({ side: "put", trigger_level: 199, wrong_if_level: 202 }, [b("2026-10-14T14:00:00Z", 198.5)], now), "fire", "put fires on a close below");
+  assert(X.needsTrigger({ side: "call", trigger_level: 201 }, 200) && !X.needsTrigger({ side: "call", trigger_level: 201 }, 201.4) && !X.needsTrigger({ side: "call", trigger_level: null }, 200), "needsTrigger");
+});
+Deno.test("v4.3 armed ideas end to end: a named trigger arms instead of filling; a later close through it fills with the armed thesis; a close through the wrong-if drops it; last-entry time drops it", async () => {
+  seed(); setNow("2026-10-14T14:11:00Z"); await setupCall();
+  aiScript = () => ({ decisions: [{ ticker: "NVDA", side: "call", source: "coach:1", thesis: "Coach: calls above 201", wrong_if_level: 198, target_level: 204, trigger_level: 201, time_exit_min: 120, cites: [{ type: "coach_post", ref: "1" }] }], passes: [] });
+  const r1 = await X.tick();
+  eq(TABLES.winston_trades.length, 0, "no fill ahead of the trigger: " + JSON.stringify(r1.results));
+  const armedRow = TABLES.winston_settings.find((s) => s.key === "armed_ideas"); eq(armedRow?.value?.length, 1, "one armed idea stored");
+  assert(TABLES.winston_ideas.some((i) => /^Armed: waiting for a 10-minute close above 201/.test(i.reason)), "logged as armed: " + JSON.stringify(TABLES.winston_ideas.map((i) => i.reason)));
+  // next look: the 10:00 bar closes 201.5 -> fire (the AI is not asked about it again)
+  setNow("2026-10-14T14:21:00Z"); W.bars.NVDA.push(barRow("2026-10-14T14:00:00Z", 200.5, 201.8, 200.2, 201.5)); W.spot.NVDA = 201.5; aiScript = () => ({ decisions: [], passes: [] });
+  const r2 = await X.tick();
+  eq(TABLES.winston_trades.length, 1, "filled on the trigger: " + JSON.stringify(r2.armed));
+  assert(/^\[armed .*triggered by a 10-minute close above 201\]/.test(TABLES.winston_trades[0].plan.thesis), "thesis says it was armed and what fired it");
+  eq(TABLES.winston_trades[0].source, "coach:1", "coach source kept");
+  eq(TABLES.winston_settings.find((s) => s.key === "armed_ideas")?.value?.length, 0, "removed from the armed list");
+  // drop: wrong-if first
+  seed(); setNow("2026-10-14T14:11:00Z"); await setupCall();
+  aiScript = () => ({ decisions: [{ ticker: "NVDA", side: "call", source: "own", thesis: "reclaim 201", wrong_if_level: 198, target_level: 204, trigger_level: 201, cites: [{ type: "chart" }] }], passes: [] });
+  await X.tick(); eq(TABLES.winston_trades.length, 0, "armed, not filled");
+  setNow("2026-10-14T14:21:00Z"); W.bars.NVDA.push(barRow("2026-10-14T14:00:00Z", 200, 200.2, 197.2, 197.5)); aiScript = () => ({ decisions: [], passes: [] });
+  await X.tick();
+  eq(TABLES.winston_trades.length, 0, "dropped, never filled");
+  assert(TABLES.winston_ideas.some((i) => /Armed idea dropped: wrong-if 198 hit before the trigger 201/.test(i.reason)), "drop reason logged");
+  eq(TABLES.winston_settings.find((s) => s.key === "armed_ideas")?.value?.length, 0, "armed list empty after the drop");
+  // expiry: past the last-entry time
+  seed(); setNow("2026-10-14T14:11:00Z"); await setupCall();
+  aiScript = () => ({ decisions: [{ ticker: "NVDA", side: "call", source: "own", thesis: "reclaim 201", wrong_if_level: 198, target_level: 204, trigger_level: 201, cites: [{ type: "chart" }] }], passes: [] });
+  await X.tick(); setNow("2026-10-14T19:41:00Z"); aiScript = () => ({ decisions: [], passes: [] }); await X.tick();   // 3:41 PM ET > last_entry 3:30
+  assert(TABLES.winston_ideas.some((i) => /past the last-entry time/.test(i.reason)) && TABLES.winston_trades.length === 0, "expired at the last-entry time");
+  // a trigger already closed through at decision time fills right away (no arming)
+  seed(); setNow("2026-10-14T14:11:00Z"); await setupCall();
+  aiScript = () => ({ decisions: [{ ticker: "NVDA", side: "call", source: "coach:1", thesis: "above 199", wrong_if_level: 198, target_level: 204, trigger_level: 199, cites: [{ type: "coach_post", ref: "1" }] }], passes: [] });
+  await X.tick(); eq(TABLES.winston_trades.length, 1, "price already past the trigger: fills now");
+  eq(TABLES.winston_trades[0].plan.trigger_level, 199, "trigger kept on the plan");
+  assert(TABLES.winston_trades[0].plan.spread_pct === 4.08 && TABLES.winston_trades[0].plan.wrong_if_orig === 198, "plan carries spread_pct and wrong_if_orig");
+});
+Deno.test("v4.3 earnings expiry: dated callouts on last night's reporters are marked EXPIRED; other lines untouched", () => {
+  const brain = "THIS WEEK'S COACH CALLOUTS:\n[callout 2026-10-19 04:03] TSLA 354/350 support, avoid chasing\n[callout 2026-10-19] SPY 760 gap level\n\nRULES:\n[call 2026-10-19, rules PB-1] TSLA consolidates into earnings";
+  const out = X.expireBrainForEarnings(brain, ["TSLA"]);
+  assert(/^\[EXPIRED — TSLA reported earnings; re-read it fresh\] \[callout 2026-10-19 04:03\] TSLA/m.test(out), "TSLA callout expired: " + out);
+  assert(/^\[callout 2026-10-19\] SPY 760/m.test(out) && /^\[call 2026-10-19, rules PB-1\] TSLA/m.test(out), "SPY callout and the rules line untouched");
+  eq(X.expireBrainForEarnings(brain, []), brain, "nothing reported = unchanged");
+});
+Deno.test("v4.3 daily context: 20-day range, 5-day trend, yesterday; pre-market range; unavailable renders as such", () => {
+  const b = (d: string, o: number, h: number, l: number, c: number) => ({ t: RealDate.parse(d + "T13:30:00Z"), o, h, l, c, v: 1 });
+  const daily = [b("2026-10-06", 190, 192, 189, 191), b("2026-10-07", 191, 195, 190, 194), b("2026-10-08", 194, 196, 193, 195), b("2026-10-09", 195, 197, 194, 196), b("2026-10-10", 196, 199, 195, 198), b("2026-10-13", 198, 201, 197, 200), b("2026-10-14", 200, 205, 199, 204)];
+  const s = X.dailySummary(daily, "2026-10-14");
+  eq([s.h20, s.l20, s.trend5, s.y_h, s.y_l, s.y_c, s.days], [201, 189, "up", 201, 197, 200, 6], "today's own bar is excluded; yesterday is the 13th");
+  eq(X.dailySummary([daily[0]], "2026-10-14"), null, "one bar is not context");
+  const pm = X.premarketRange([{ t: RealDate.parse("2026-10-14T11:00:00Z"), o: 1, h: 203, l: 199, c: 2, v: 1 }, { t: RealDate.parse("2026-10-14T13:35:00Z"), o: 1, h: 210, l: 190, c: 2, v: 1 }], "2026-10-14");
+  eq(pm, { pm_h: 203, pm_l: 199 }, "only bars before 9:30 ET count");
+  eq(X.ctxLine(null), "daily context unavailable", "unavailable line");
+  assert(/20d 189-201 · 5d up · yday H 201 L 197 C 200 · pre-mkt 199-203/.test(X.ctxLine({ ...s, ...pm })), "the one-line context");
+});
+Deno.test("v4.3 full scan + re-reads: every universe name is in the snapshot with a context line; a coach name is re-read every look in the first hour, then quiet again", async () => {
+  seed(); setNow("2026-10-14T14:11:00Z"); await setupCall();
+  for (const s of ["TSLA", "AAPL", "MSFT", "META", "AMZN", "GOOGL", "AMD", "PLTR", "MU"]) { W.spot[s] = 100; W.prev[s] = 100; }
+  aiScript = () => ({ decisions: [], passes: [] });
+  await X.tick(); eq(W.ai.n, 1, "first look");
+  const snap = JSON.parse(W.ai.last.user.match(/CHART SNAPSHOT[^:]*: (\[.*?\])\n/s)[1]);
+  const names = snap.map((x: any) => x.ticker);
+  for (const s of ["SPY", "QQQ", "NVDA", "TSLA", "AAPL", "MSFT", "META", "AMZN", "GOOGL", "AMD", "PLTR", "MU"]) assert(names.includes(s), "snapshot has " + s + ": " + names.join(","));
+  assert(snap.every((x: any) => typeof x.context === "string"), "every row carries a context line");
+  assert(/SPREAD \(v4\.3\)/.test(W.ai.last.user) && /TRIGGERS \(v4\.3\)/.test(W.ai.last.user), "prompt carries the spread and trigger notes");
+  setNow("2026-10-14T14:21:00Z"); await X.tick(); eq(W.ai.n, 2, "10:21: a coach post exists today -> re-read in the first hour even though nothing moved");
+  setNow("2026-10-14T14:41:00Z"); await X.tick(); eq(W.ai.n, 2, "10:41: past the first hour, nothing changed -> no call");
+  // no coach post, first hour: the old rule holds (quiet)
+  seed(); setNow("2026-10-14T14:11:00Z"); await setupCall(); TABLES.otto_jason.length = 0; aiScript = () => ({ decisions: [], passes: [] });
+  await X.tick(); setNow("2026-10-14T14:21:00Z"); await X.tick(); eq(W.ai.n, 1, "no coach post, nothing moved: one look only");
+  const dc = TABLES.winston_settings.find((s) => s.key === "daily_ctx"); assert(dc && dc.value.day === "2026-10-14" && Object.keys(dc.value.by).length >= 3, "daily context cached per day");
+});
+Deno.test("v4.3 config_set: own_idea_from_min 570..900 and a universe of 1..20 tickers are accepted; bad values throw; nothing else changes", async () => {
+  seed();
+  const a = await X.setEnabled({ own_idea_from_min: 585 }); eq([a.ok, a.own_idea_from_min], [true, 585], "9:45 set");
+  eq((await X.getConfig()).own_idea_from_min, 585, "read back");
+  let threw = false; try { await X.setEnabled({ own_idea_from_min: 500 }); } catch { threw = true; } assert(threw, "500 refused");
+  const u = await X.setEnabled({ universe: ["spy", "qqq", "qqq", "iwm "] }); eq(u.universe, ["SPY", "QQQ", "IWM"], "uppercased, de-duplicated, cleaned");
+  eq((await X.getConfig()).universe, ["SPY", "QQQ", "IWM"], "universe read back");
+  threw = false; try { await X.setEnabled({ universe: [] }); } catch { threw = true; } assert(threw, "empty refused");
+  threw = false; try { await X.setEnabled({ universe: Array.from({ length: 21 }, (_, i) => "T" + String.fromCharCode(65 + i)) }); } catch { threw = true; } assert(threw, "21 refused");
+  eq((await X.getConfig()).own_idea_from_min, 585, "the window survived the universe change");
+  assert(TABLES.winston_log.filter((l) => l.kind === "config").length === 2, "both changes logged");
+});
+Deno.test("v4.3 the time-window reason names the real window", () => {
+  const h = X.runGatesAll({ rules: [], d: { ticker: "SPY", side: "call", source: "own", thesis: "", wrong_if_level: 1, target_level: 3, cites: [] }, cap: 1e9, maxLoss: 1e9, planned_loss: 1, cost: 1, cash: 1e9, stop_option: 0.5, ask: 1,
+    openCount: 0, maxOpen: 4, tickerTakenToday: false, sameTickerOpen: false, spreadPct: 1, quoteAgeSec: 1, blackout: null, coachCall: false, etMin: 580, lastEntryMin: 930, ownFromMin: 585, coachFromMin: 571 });
+  assert(h.some((x) => x.rule === "time" && /own ideas wait until 9:45 AM/.test(x.why)), JSON.stringify(h));
 });

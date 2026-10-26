@@ -207,10 +207,11 @@ export const completedBars = (bars: Bar[], mins: number, now = nowMs()) => bars.
 // Exits are the plan's own rules, checked on COMPLETED 10-minute bars of the underlying, first trigger in time order wins.
 //   wrong-if = a 10-minute CLOSE through the level; target = the level touched (high/low).
 //   If both happen inside one bar, the stop is assumed to hit first and the trade is flagged (rule W8).
-export function evalBars(plan: { dir: "up" | "down"; wrong_if_level: number; target_level: number }, bars: Bar[], enteredAtMs: number, now = nowMs()) {
+export function evalBars(plan: { dir: "up" | "down"; wrong_if_level: number; target_level: number; stop_from_ms?: number | null }, bars: Bar[], enteredAtMs: number, now = nowMs()) {
   const done = completedBars(bars, 10, now).filter((b) => b.t >= enteredAtMs).sort((a, b) => a.t - b.t);
+  const stopFrom = num(plan.stop_from_ms) || 0;                     // v4.3: a stop that was moved (breakeven / trail) only reads bars that began after the move
   for (const b of done) {
-    const stop = plan.dir === "up" ? b.c < plan.wrong_if_level : b.c > plan.wrong_if_level;
+    const stop = b.t >= stopFrom && (plan.dir === "up" ? b.c < plan.wrong_if_level : b.c > plan.wrong_if_level);
     const tgt = plan.dir === "up" ? b.h >= plan.target_level : b.l <= plan.target_level;
     if (stop && tgt) return { reason: "wrong_if", flags: ["both_hit_same_bar_stop_first"], bar: b };
     if (stop) return { reason: "wrong_if", flags: [] as string[], bar: b };
@@ -235,9 +236,20 @@ export function intrabarTarget(plan: { dir: "up" | "down"; target_level: number 
 export type Row = { id: string; exp: string; strike: number; type: string; bid: number; ask: number; delta: number; vol: number; oi: number; label: string };
 // Otto's own contract rule: delta .30–.40 and volume above open interest; the one that fits the cap. Never shrink the stop to fit (W2): if
 // nothing fits the size cap and the cash, the idea is passed.
-export function pickContract(rows: Row[], capUsd: number, cashUsd: number, loose = false) {
-  const ok = rows.filter((r) => r.bid > 0 && r.ask >= r.bid && r.ask * 100 <= capUsd && r.ask * 100 <= cashUsd);
-  if (!ok.length) return { row: null as Row | null, by: "none", why: rows.length ? "nothing fits the size cap / cash (cap $" + Math.round(Math.min(capUsd, cashUsd)) + ")" : "no tradable contracts", flags: [] as string[] };
+export const spreadPctOf = (r: { bid: number; ask: number }) => { const mid = (r.bid + r.ask) / 2; return mid > 0 ? round2((r.ask - r.bid) / mid * 100) : 999; };
+// v4.3 SPREAD PREFERENCE (26 Oct: $757.50 paid in spread against +$591 net — the spread is his biggest opponent). Contracts with a spread
+// ≤ 8% of mid come first; 8–15% is allowed only on a coach call (stamped picker:spread_8_15); wider than that is never picked here (W12 is
+// still the hard 15% wall at fill time). An own idea whose every contract is wider than 8% is passed: liquid names only.
+export function pickContract(rows: Row[], capUsd: number, cashUsd: number, loose = false, coach = false) {
+  const fits = rows.filter((r) => r.bid > 0 && r.ask >= r.bid && r.ask * 100 <= capUsd && r.ask * 100 <= cashUsd);
+  if (!fits.length) return { row: null as Row | null, by: "none", why: rows.length ? "nothing fits the size cap / cash (cap $" + Math.round(Math.min(capUsd, cashUsd)) + ")" : "no tradable contracts", flags: [] as string[] };
+  let ok = fits.filter((r) => spreadPctOf(r) <= 8), spreadFlag: string[] = [];
+  if (!ok.length && coach) { ok = fits.filter((r) => spreadPctOf(r) <= 15); spreadFlag = ["picker:spread_8_15"]; }
+  if (!ok.length) return { row: null as Row | null, by: "none", why: `every contract that fits has a spread wider than ${coach ? 15 : 8}% of mid (${coach ? "the hard wall" : "own ideas need liquid names"})`, flags: [] as string[] };
+  const picked = pickContractTiers(ok, loose);
+  return { ...picked, flags: [...spreadFlag, ...picked.flags] };
+}
+function pickContractTiers(ok: Row[], loose: boolean) {
   const dist = (r: Row) => Math.abs(Math.abs(r.delta) - 0.35);
   const band = ok.filter((r) => Math.abs(r.delta) >= 0.30 && Math.abs(r.delta) <= 0.40 && r.vol > r.oi).sort((a, b) => dist(a) - dist(b) || b.vol - a.vol);
   if (band.length) return { row: band[0], by: "band", why: "", flags: [] as string[] };
@@ -260,7 +272,8 @@ export function pickContract(rows: Row[], capUsd: number, cashUsd: number, loose
 /* ------------------------------------------------------------------ plan checks + gates (pure) */
 
 export type Decision = { ticker: string; side: "call" | "put"; source: string; thesis: string; wrong_if_level: number; target_level: number;
-  time_exit_min?: number; experiment?: string | null; cites: { type: string; ref?: string; note?: string }[]; rule_ids?: string[] };
+  time_exit_min?: number; experiment?: string | null; cites: { type: string; ref?: string; note?: string }[]; rule_ids?: string[];
+  trigger_level?: number | null };   // v4.3: optional — the code waits for a 10-minute CLOSE through it before filling (an "armed" idea)
 
 // Levels must make sense against the live price (call: wrong-if below, target above; put: the reverse). Returns the reason it is bad, or null.
 export function planProblem(d: Decision, spot: number): string | null {
@@ -328,7 +341,7 @@ export function runGatesAll(c: GateCtx): GateHit[] {
   if (ruleOn(R, "W3") && c.sameTickerOpen) hit("W3", "already in this ticker (no adding, no averaging)");
   if (c.openCount >= c.maxOpen) hit("max_open", `already holding ${c.openCount} position${c.openCount === 1 ? "" : "s"} (max ${c.maxOpen})`);
   if (c.etMin > c.lastEntryMin) hit("time", "too late in the day for a new entry");
-  if (c.etMin < (c.coachCall ? c.coachFromMin : c.ownFromMin)) hit("time", c.coachCall ? "before the coach-idea window opens" : "own ideas wait until 10:00 (no entry just because the market opened)");
+  if (c.etMin < (c.coachCall ? c.coachFromMin : c.ownFromMin)) hit("time", c.coachCall ? "before the coach-idea window opens" : `own ideas wait until ${fmtMin(c.ownFromMin)} (no entry just because the market opened)`);
   if (ruleOn(R, "W12")) {
     const mx = ruleParams(R, "W12").max_spread_pct;
     if (mx != null && c.spreadPct > mx) hit("W12", `spread ${c.spreadPct.toFixed(1)}% is wider than ${mx}%`);
@@ -486,6 +499,29 @@ export function excursion(plan: { dir: "up" | "down"; delta?: number; planned_lo
   return { mfe_under: mfe, mae_under: mae, mfe_r: perR ? round2(mfe * perR) : null, mae_r: perR ? round2(mae * perR) : null, bars: d.length };
 }
 
+/* ------------------------------------------------------------------ v4.3: winner protection on one contract (pure) */
+
+// One contract cannot scale out, so the stop does the work: once the underlying has gone ≥ 0.5R in his favour (R = entry − original wrong-if)
+// the wrong-if moves to the entry price (breakeven); once it is ≥ 75% of the way to the target the wrong-if trails at half the gained distance.
+// A moved stop only ever moves in the trade's favour, and only reads bars that begin after the move (evalBars.stop_from_ms).
+// 23 Oct: SPCX 150C came within $0.25 of its target and gave it all back to a time exit (−$45).
+export function protectWinner(plan: { dir: "up" | "down"; wrong_if_level: number; wrong_if_orig?: number; target_level: number; breakeven_at?: string | null; trail?: boolean },
+  entryUnder: number, mfeUnder: number | null, now = nowMs()): { plan: any; moved: "breakeven" | "trail" | null; stamps: string[] } {
+  const orig = num(plan.wrong_if_orig) || num(plan.wrong_if_level), R = Math.abs(entryUnder - orig), toTarget = Math.abs(num(plan.target_level) - entryUnder);
+  if (!(R > 0) || !(entryUnder > 0) || mfeUnder == null || !(mfeUnder > 0)) return { plan, moved: null, stamps: [] };
+  const up = plan.dir === "up", stamps: string[] = [];
+  let p: any = { ...plan, wrong_if_orig: orig }, moved: "breakeven" | "trail" | null = null;
+  const better = (lvl: number) => up ? lvl > num(p.wrong_if_level) : lvl < num(p.wrong_if_level);
+  if (toTarget > 0 && mfeUnder >= 0.75 * toTarget) {
+    const lvl = round2(up ? entryUnder + mfeUnder * 0.5 : entryUnder - mfeUnder * 0.5);
+    if (better(lvl)) { p = { ...p, wrong_if_level: lvl, trail: true, stop_from_ms: now, breakeven_at: p.breakeven_at || new Date(now).toISOString() }; moved = "trail"; stamps.push("stamp:trail"); if (!plan.breakeven_at) stamps.push("stamp:breakeven"); }
+  } else if (mfeUnder >= 0.5 * R && !plan.breakeven_at) {
+    const lvl = round2(entryUnder);
+    if (better(lvl)) { p = { ...p, wrong_if_level: lvl, stop_from_ms: now, breakeven_at: new Date(now).toISOString() }; moved = "breakeven"; stamps.push("stamp:breakeven"); }
+  }
+  return { plan: p, moved, stamps };
+}
+
 /* ------------------------------------------------------------------ audit + stats (pure) */
 
 export function auditTrade(t: any, closeEtMin: number | null, flatMin: number): { followed: boolean; broke: string[] } {
@@ -620,6 +656,7 @@ const DECIDE_TOOL = {
         thesis: { type: "string", description: "one or two plain sentences" },
         wrong_if_level: { type: "number", description: "underlying price: a 10-minute CLOSE through this means the idea is wrong" },
         target_level: { type: "number", description: "underlying price target" },
+        trigger_level: { type: "number", description: "v4.3 OPTIONAL: if the entry needs a 10-minute CLOSE through a level first (the coach's 'above X' / 'below X'), put that level here and the code WAITS for the close — never enter ahead of a trigger you name" },
         time_exit_min: { type: "number", description: "minutes to hold at most (10-330)" },
         experiment: { type: "string", description: "E1 or E2 only if that experiment rule is active and this is that setup" },
         rule_ids: { type: "array", items: { type: "string" } },
@@ -753,7 +790,7 @@ export async function tryOpen(ctx: Ctx, d: Decision, spot: number, coachCall: bo
   const dataMode = isDataMode(cfg);
   let rows: Row[];
   try { rows = await optionRows(d.ticker, d.side, spot, day); } catch (e) { const m = "Could not read the option chain: " + String((e as Error).message).slice(0, 120); await recordIdea(day, d, "blocked", m); return { opened: false, why: m }; }
-  const pick = pickContract(rows, lim.capUsd, eq.cash, dataMode);
+  const pick = pickContract(rows, lim.capUsd, eq.cash, dataMode, coachCall);   // v4.3: spread tiers know whether the coach called it
   if (!pick.row) { const m = "No contract: " + pick.why; await recordIdea(day, d, "passed", m, null); return { opened: false, why: m }; }
   const row = pick.row;
   // Fresh quote right before the fill (W10): the price he pays is the ask NOW, not the one from the chain scan.
@@ -782,7 +819,9 @@ export async function tryOpen(ctx: Ctx, d: Decision, spot: number, coachCall: bo
   const plan = { dir: d.side === "call" ? "up" : "down", wrong_if_level: d.wrong_if_level, target_level: d.target_level, time_exit_min: timeExit,
     stop_option: risk.stop_option, planned_loss: risk.planned_loss, thesis: String(d.thesis || "").slice(0, 1500), picked_by: pick.by,   // v3.42: was 400 — too short to audit a fact stamp delta: q!.delta || row.delta,
     contract: { exp: row.exp, strike: row.strike }, last_mark: { bid: ef.bid, ask: ef.ask, under: spot, at: new Date(nowMs()).toISOString() },
-    mode: dataMode ? "data" : "strict", stamps, index: ctx.index ?? null, tape: ctx.tape ?? null, vwap_at_entry: ctx.vwaps?.[d.ticker] ?? null };
+    mode: dataMode ? "data" : "strict", stamps, index: ctx.index ?? null, tape: ctx.tape ?? null, vwap_at_entry: ctx.vwaps?.[d.ticker] ?? null,
+    spread_pct: ef.mid > 0 ? round2((ef.ask - ef.bid) / ef.mid * 100) : null,                     // v4.3: what the spread cost him at the fill
+    wrong_if_orig: d.wrong_if_level, trigger_level: num(d.trigger_level) > 0 ? num(d.trigger_level) : null };   // v4.3: winner protection moves wrong_if; the original is kept
   const ideaId = await recordIdea(day, d, "taken", (stamps.length ? "[stamped: " + stamps.map((s) => s.split(":")[0]).join(", ") + "] " : "") + (d.thesis || "taken"), plan);
   const t = await db("winston_trades", { method: "POST", body: JSON.stringify({ day, opened_at: new Date(nowMs()).toISOString(), status: "open", ticker: d.ticker, side: d.side, option_id: row.id, label: row.label, qty: 1,
     source: d.source || "own", idea_id: ideaId, experiment: d.experiment || null, plan, entry_bid: ef.bid, entry_ask: ef.ask, entry_mid: round2(ef.mid * 1000) / 1000, entry_fill: ef.fill, entry_under: spot,
@@ -832,15 +871,27 @@ export async function manageOpen(cfg: any, day: string, min: number, closeMin: n
   for (const t of open) {
     t.plan = { ...(t.plan || {}), flat_min: flatMin };
     const entered = Date.parse(t.opened_at);
-    const ev = bars[String(t.ticker).toUpperCase()] ? evalBars({ dir: t.plan.dir, wrong_if_level: num(t.plan.wrong_if_level), target_level: num(t.plan.target_level) }, bars[String(t.ticker).toUpperCase()], entered) : null;
-    let reason: string | null = null, flags: string[] = [];
     const tb = bars[String(t.ticker).toUpperCase()] || null;
-    if (ev) { reason = ev.reason; flags = ev.flags; }
+    const ev = tb ? evalBars({ dir: t.plan.dir, wrong_if_level: num(t.plan.wrong_if_level), target_level: num(t.plan.target_level), stop_from_ms: t.plan.stop_from_ms }, tb, entered) : null;
+    let reason: string | null = null, flags: string[] = [];
+    if (ev) { reason = ev.reason === "wrong_if" && t.plan.trail ? "trail" : ev.reason === "wrong_if" && t.plan.breakeven_at ? "breakeven" : ev.reason; flags = ev.flags; }   // v4.3: a moved stop that fires is "trail" / "breakeven"
     else if (opt.intrabar && tb && intrabarTarget({ dir: t.plan.dir, target_level: num(t.plan.target_level) }, tb, entered)) { reason = "target"; flags = ["intrabar_touch"]; }
     else if (min >= flatMin || t.day !== day) reason = "flat_close";
     else if (w22 && tb && coachExit({ dir: t.plan.dir }, tb, entered)) { reason = "coach_exit"; flags = ["W22_indecision_then_no_new_high"]; }   // v3.36
     else if (nowMs() >= entered + num(t.plan.time_exit_min || 180) * 60e3) reason = "time";
     if (reason) { await closeTrade(t, reason, flags, tb); closed++; continue; }
+    // v4.3 winner protection (only when no exit fired): read how far it went for him, move the stop if earned; the moved level reads bars that begin from now.
+    if (tb) {
+      try {
+        const exc0 = excursion({ dir: t.plan.dir, delta: t.plan.delta, planned_loss: t.plan.planned_loss }, tb, entered, num(t.entry_under), nowMs());
+        const pw = protectWinner(t.plan, num(t.entry_under), exc0 ? exc0.mfe_under : null, nowMs());
+        if (pw.moved) {
+          t.plan = pw.plan; t.flags = [...new Set([...(t.flags || []), ...pw.stamps])];
+          await db(`winston_trades?id=eq.${t.id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ plan: t.plan, flags: t.flags }) });
+          await wlog("protect", { id: t.id, moved: pw.moved, wrong_if: t.plan.wrong_if_level });
+        }
+      } catch { /* protection never stops an exit */ }
+    }
     try {                                                    // still open: remember the latest mark for the app
       const q = await freshOptionQuote(t.option_id);
       const under = (bars[String(t.ticker).toUpperCase()] || []).slice(-1)[0]?.c;
@@ -881,6 +932,104 @@ async function reportedToday(day: string): Promise<string[]> {
   } catch { return []; }                                                          // unavailable = nothing known (logged as none)
 }
 
+/* ------------------------------------------------------------------ v4.3: context around today's bars, expired callouts, armed ideas */
+
+// The coach reads the daily chart and yesterday; Winston only saw today's 10-minute bars. Per name: 20-day high/low, 5-day trend,
+// yesterday's high/low/close and the pre-market high/low (when the broker returns extended-hours bars). Fetched once per name per day
+// and cached in winston_settings `daily_ctx`; anything that fails is "unavailable" in the prompt, never an exception.
+export function dailySummary(daily: Bar[], day: string) {
+  const d = (daily || []).filter((b) => new Date(b.t).toISOString().slice(0, 10) < day).sort((a, b) => a.t - b.t).slice(-20);
+  if (d.length < 2) return null;
+  const y = d[d.length - 1], c5 = d.slice(-5).map((b) => b.c);
+  const trend5 = c5.length >= 2 ? (c5[c5.length - 1] > c5[0] * 1.005 ? "up" : c5[c5.length - 1] < c5[0] * 0.995 ? "down" : "flat") : "n/a";
+  return { h20: Math.max(...d.map((b) => b.h)), l20: Math.min(...d.map((b) => b.l)), trend5, y_h: y.h, y_l: y.l, y_c: y.c, days: d.length };
+}
+export function premarketRange(bars5: Bar[], day: string) {
+  const open = etToUtcMs(day, 570);
+  const pm = (bars5 || []).filter((b) => b.t < open && b.t >= etToUtcMs(day, 240));
+  return pm.length ? { pm_h: Math.max(...pm.map((b) => b.h)), pm_l: Math.min(...pm.map((b) => b.l)) } : null;
+}
+async function dailyContext(symbols: string[], day: string): Promise<Record<string, any>> {
+  let cache: any = null; try { cache = await getSetting("daily_ctx"); } catch { cache = null; }
+  const by: Record<string, any> = cache?.day === day && cache.by ? { ...cache.by } : {};
+  const missing = [...new Set(symbols)].filter((s) => !by[s]);
+  if (missing.length) {
+    let daily: Record<string, Bar[]> = {}, pm: Record<string, Bar[]> = {};
+    try { daily = parseBars(await md("rh", "get_equity_historicals", { symbols: missing.slice(0, 20), interval: "day", start_time: new Date(etToUtcMs(addDays(day, -35), 570)).toISOString() })); } catch { /* unavailable */ }
+    try { pm = parseBars(await md("rh", "get_equity_historicals", { symbols: missing.slice(0, 20), interval: "5minute", start_time: new Date(etToUtcMs(day, 240)).toISOString() })); } catch { /* unavailable */ }
+    for (const s of missing) by[s] = { ...(dailySummary(daily[s] || [], day) || { unavailable: true }), ...(premarketRange(pm[s] || [], day) || {}) };
+    try { await putSetting("daily_ctx", { day, by, at: new Date(nowMs()).toISOString() }); } catch { /* cache miss is fine */ }
+  }
+  return by;
+}
+export const ctxLine = (c: any) => !c || c.unavailable ? "daily context unavailable" :
+  `20d ${c.l20}-${c.h20} · 5d ${c.trend5} · yday H ${c.y_h} L ${c.y_l} C ${c.y_c}${c.pm_h != null ? ` · pre-mkt ${c.pm_l}-${c.pm_h}` : ""}`;
+
+// A dated callout on a name that has just reported earnings is stale (22 Oct: Monday's TSLA 354/350 lines, read after Thursday's report).
+export function expireBrainForEarnings(brain: string, reported: string[]): string {
+  if (!brain || !reported?.length) return brain;
+  const names = reported.map((s) => String(s).toUpperCase());
+  return brain.split("\n").map((l) => {
+    if (!/^\[callout /.test(l)) return l;
+    const hit = names.find((n) => new RegExp("\\b" + n.replace(".", "\\.") + "\\b").test(l));
+    return hit ? `[EXPIRED — ${hit} reported earnings; re-read it fresh] ${l}` : l;
+  }).join("\n");
+}
+
+// ARMED IDEAS: the AI names a trigger_level; the code waits for a 10-minute CLOSE through it (call: above, put: below) before filling.
+// 23 Oct: QQQ 713C — "a 10-min close above 710 would be the trigger" and he entered at 708.2. Armed ideas live in winston_settings `armed_ideas`.
+export type Armed = { day: string; ticker: string; side: "call" | "put"; source: string; thesis: string; trigger_level: number; wrong_if_level: number; target_level: number;
+  time_exit_min?: number; cites: any[]; rule_ids?: string[]; armed_at: string };
+export function triggerState(a: { side: "call" | "put"; trigger_level: number; wrong_if_level: number }, bars: Bar[], now = nowMs()): "fire" | "drop" | "wait" {
+  const done = completedBars(bars, 10, now).sort((x, y) => x.t - y.t);
+  if (!done.length) return "wait";
+  const last = done[done.length - 1];
+  const up = a.side === "call";
+  if (up ? last.c < a.wrong_if_level : last.c > a.wrong_if_level) return "drop";
+  if (up ? last.c > a.trigger_level : last.c < a.trigger_level) return "fire";
+  return "wait";
+}
+export const needsTrigger = (d: { side: "call" | "put"; trigger_level?: number | null }, spot: number) =>
+  num(d.trigger_level) > 0 && (d.side === "call" ? spot <= num(d.trigger_level) : spot >= num(d.trigger_level));
+async function getArmed(day: string): Promise<Armed[]> { try { const a = await getSetting("armed_ideas"); return (Array.isArray(a) ? a : []).filter((x: any) => x && x.day === day); } catch { return []; } }
+async function putArmed(list: Armed[]) { try { await putSetting("armed_ideas", list); } catch { /* best effort */ } }
+async function armIdea(ctx: Ctx, d: Decision, coach: boolean) {
+  const list = await getArmed(ctx.day);
+  if (list.some((a) => a.ticker === d.ticker && a.side === d.side)) { await recordIdea(ctx.day, d, "passed", `Armed already: waiting for a 10-minute close ${d.side === "call" ? "above" : "below"} ${d.trigger_level} on ${d.ticker}`); return; }
+  list.push({ day: ctx.day, ticker: d.ticker, side: d.side, source: coach ? d.source : "own", thesis: String(d.thesis || "").slice(0, 1500), trigger_level: num(d.trigger_level),
+    wrong_if_level: d.wrong_if_level, target_level: d.target_level, time_exit_min: d.time_exit_min, cites: d.cites || [], rule_ids: d.rule_ids || [], armed_at: new Date(nowMs()).toISOString() });
+  await putArmed(list);
+  await recordIdea(ctx.day, d, "passed", `Armed: waiting for a 10-minute close ${d.side === "call" ? "above" : "below"} ${d.trigger_level} on ${d.ticker} (wrong-if ${d.wrong_if_level}, target ${d.target_level})`);
+  await wlog("armed", { ticker: d.ticker, side: d.side, trigger: d.trigger_level, source: d.source });
+}
+// Runs every tick before the AI: fire, drop or keep each armed idea. Never throws.
+export async function checkArmed(ctx: Ctx, blackoutFn: () => Promise<string | null>): Promise<{ fired: string[]; dropped: string[]; waiting: number }> {
+  const out = { fired: [] as string[], dropped: [] as string[], waiting: 0 };
+  let list: Armed[] = [];
+  try { list = await getArmed(ctx.day); } catch { return out; }
+  if (!list.length) return out;
+  const keep: Armed[] = [];
+  let bars: Record<string, Bar[]> = {}, quotes: Record<string, { spot: number; prev: number }> = {};
+  try { bars = await bars10(list.map((a) => a.ticker), ctx.day); } catch { /* no bars = keep waiting */ }
+  try { quotes = await equityQuotes(list.map((a) => a.ticker)); } catch { /* no quote = keep waiting */ }
+  let blackout: string | null | undefined;                                        // read only when something actually fires (one TradingView call, not one per tick)
+  for (const a of list) {
+    const d: Decision = { ticker: a.ticker, side: a.side, source: a.source, thesis: a.thesis, wrong_if_level: a.wrong_if_level, target_level: a.target_level, time_exit_min: a.time_exit_min, cites: a.cites, rule_ids: a.rule_ids, trigger_level: a.trigger_level };
+    if (ctx.min > num(ctx.cfg.last_entry_min)) { await recordIdea(ctx.day, d, "passed", "Armed idea dropped: past the last-entry time, never triggered"); out.dropped.push(a.ticker); continue; }
+    if (ctx.lim.locked) { await recordIdea(ctx.day, d, "blocked", "Armed idea dropped: " + ctx.lim.locked.why); out.dropped.push(a.ticker); continue; }
+    const tb = bars[a.ticker];
+    const st = tb ? triggerState(a, tb) : "wait";
+    if (st === "drop") { await recordIdea(ctx.day, d, "passed", `Armed idea dropped: wrong-if ${a.wrong_if_level} hit before the trigger ${a.trigger_level}`); out.dropped.push(a.ticker); continue; }
+    if (st === "wait") { keep.push(a); out.waiting++; continue; }
+    const spot = quotes[a.ticker]?.spot || tb![tb!.length - 1].c;
+    if (blackout === undefined) { try { blackout = await blackoutFn(); } catch { blackout = null; } }
+    const r = await tryOpen(ctx, { ...d, thesis: `[armed ${a.armed_at.slice(11, 16)}Z, triggered by a 10-minute close ${a.side === "call" ? "above" : "below"} ${a.trigger_level}] ` + a.thesis }, spot, a.source.startsWith("coach:"), blackout);
+    out.fired.push(a.ticker + (r.opened ? "" : " (not filled: " + r.why + ")"));
+  }
+  await putArmed(keep);
+  return out;
+}
+
 export async function tick(opts: { force?: boolean } = {}): Promise<any> {
   const cfg = await getConfig();
   const c = marketClock();
@@ -903,6 +1052,12 @@ export async function tick(opts: { force?: boolean } = {}): Promise<any> {
     const lastDay = st.day === day;
     const posts = await coachPostsToday(day);
     ctx.posts = posts;
+    // v4.3: ARMED ideas are checked on every tick, before anything else that could spend an AI call (needs today's posts for W21/result checks).
+    let armed = { fired: [] as string[], dropped: [] as string[], waiting: 0 };
+    try {
+      ctx.reported = await reportedToday(day);
+      armed = await checkArmed(ctx, async () => ruleOn(rules, "W14") ? await econBlackout(day, c.min, num(ruleParams(rules, "W14").window_min) || 15) : null);
+    } catch (e) { await wlog("armed_error", { msg: String((e as Error).message).slice(0, 160) }); }
     const lastId = lastDay ? num(st.last_jason_id) : 0;
     const newPosts = posts.filter((p) => num(p.id) > lastId);
     const universe = [...new Set<string>([...posts.map((p) => String(p.ticker || "").toUpperCase()).filter(Boolean), ...cfg.universe])].slice(0, 24);
@@ -910,9 +1065,12 @@ export async function tick(opts: { force?: boolean } = {}): Promise<any> {
     const lastSnap: Record<string, number> = lastDay ? (st.snap || {}) : {};
     const movers = universe.filter((s) => quotes[s] && lastSnap[s] && Math.abs(quotes[s].spot - lastSnap[s]) / lastSnap[s] >= 0.006);
     const heartbeat = !lastDay || nowMs() - num(st.last_ai_ms) >= 60 * 60e3;
-    const changed = newPosts.length > 0 || movers.length > 0 || heartbeat;
+    // v4.3 RE-READS: for the first hour a name with a coach post today or last night's earnings is re-read every look (22 Oct: TSLA looked at once, at 9:31).
+    const hot = [...new Set<string>([...posts.map((p) => String(p.ticker || "").toUpperCase()).filter(Boolean), ...(ctx.reported || [])])].filter((s) => quotes[s]);
+    const firstHour = c.min >= 570 && c.min <= 630 && hot.length > 0;
+    const changed = newPosts.length > 0 || movers.length > 0 || heartbeat || firstHour || armed.fired.length > 0;
     const snap: Record<string, number> = {}; for (const s of universe) if (quotes[s]) snap[s] = quotes[s].spot;
-    if (!changed) { await putSetting("tick_state", { ...st, day, snap: lastDay ? { ...lastSnap } : snap, last_jason_id: Math.max(lastId, ...posts.map((p) => num(p.id)), 0) }); return { ok: true, skipped: "nothing changed", closed: mgd.closed }; }
+    if (!changed) { await putSetting("tick_state", { ...st, day, snap: lastDay ? { ...lastSnap } : snap, last_jason_id: Math.max(lastId, ...posts.map((p) => num(p.id)), 0) }); return { ok: true, skipped: "nothing changed", closed: mgd.closed, armed }; }
 
     // 3. coach posts that count as actionable ideas (a call, or a level with a direction)
     const actionable = newPosts.filter((p) => p.ticker && (p.kind === "call" || (p.kind === "level" && p.direction)));
@@ -924,19 +1082,22 @@ export async function tick(opts: { force?: boolean } = {}): Promise<any> {
     if (c.min > num(cfg.last_entry_min)) { await putSetting("tick_state", { ...st, day, snap, last_jason_id: Math.max(lastId, ...posts.map((p) => num(p.id)), 0) }); return { ok: true, skipped: "past the last-entry time", closed: mgd.closed }; }
 
     // 4. snapshot for the AI
-    const focus = [...new Set<string>([...actionable.map((p) => String(p.ticker).toUpperCase()), ...movers, ...cfg.universe.slice(0, 6)])].filter((s) => quotes[s]).slice(0, 10);
+    // v4.3 FULL SCAN: every universe name, every look (was the first six), plus the coach's tickers, the movers and the hot names; cap 16.
+    const focus = [...new Set<string>([...actionable.map((p) => String(p.ticker).toUpperCase()), ...hot, ...movers, ...cfg.universe])].filter((s) => quotes[s]).slice(0, 16);
     let bars: Record<string, Bar[]> = {};
     try { bars = await bars10([...new Set(["SPY", ...focus])], day); } catch { /* the AI is told there are no bars */ }
+    let dctx: Record<string, any> = {};
+    try { dctx = await dailyContext(focus, day); } catch { /* unavailable */ }                   // v4.3 CONTEXT: 20-day range, 5-day trend, yesterday, pre-market
     const nowT = nowMs();
-    const snapshot = focus.map((s) => ({ ticker: s, price: quotes[s].spot, prev_close: quotes[s].prev, day: barsSummary(bars[s] || [], nowT) }));
+    const snapshot = focus.map((s) => ({ ticker: s, price: quotes[s].spot, prev_close: quotes[s].prev, context: ctxLine(dctx[s]), day: barsSummary(bars[s] || [], nowT) }));
     ctx.index = indexRead(bars.SPY || [], nowT);                                                       // v3.36 W23
     ctx.quotes = quotes;                                                                              // v3.44 W26 day change
     ctx.tape = tapeRead(quotes.QQQ, quotes.TLT, ruleParams(rules, "W24"));                             // v3.44 W24
-    ctx.reported = await reportedToday(day);                                                          // v3.44 W25
+    ctx.reported = ctx.reported || await reportedToday(day);                                          // v3.44 W25 (v4.3: already read for the armed check)
     ctx.vwaps = Object.fromEntries(snapshot.map((x) => [x.ticker, num(x.day?.vwap)]).filter(([, v]) => num(v) > 0));   // v3.36 fact check
     const dayRow = ((await db(`winston_days?day=eq.${day}&select=routine,sentiment`)) || [])[0] || {};
     const todays = (await db(`winston_ideas?day=eq.${day}&select=ticker,side,status,reason,source&order=id.asc&limit=60`)) || [];
-    const brain = await brainExcerpt();
+    const brain = expireBrainForEarnings(await brainExcerpt(), ctx.reported || []);                   // v4.3: callouts on last night's reporters are marked EXPIRED
     const ruleText = rules.map((r) => `${r.id} [${r.active ? "ON" : "OFF"}; ${r.source}] ${r.title}: ${r.body}`).join("\n");
     const user = `It is ${fmtMin(c.min)} ET on ${day}. Winston's paper balance is $${eq.equity} ($${eq.cash} cash). Size cap $${isFinite(lim.capUsd) ? lim.capUsd : "none"} per contract; max planned loss per trade $${isFinite(lim.maxLossUsd) ? lim.maxLossUsd : "none"}. Open positions: ${eq.open.length ? eq.open.map((t: any) => t.ticker).join(", ") : "none"}.
 RULES:\n${ruleText}
@@ -949,6 +1110,8 @@ TAPE READ (W24, bonds first): ${ctx.tape ? `${ctx.tape.why} — ${ctx.tape.defen
 REPORTED EARNINGS SINCE YESTERDAY'S CLOSE (W25 waits the full 30 minutes on these): ${ctx.reported?.length ? ctx.reported.join(", ") : "none known"}
 SPY READ (W23): ${ctx.index ? `last ${ctx.index.last} vs VWAP ${ctx.index.vwap} — ${ctx.index.above_vwap ? "above" : "below"} VWAP, closes ${ctx.index.rising ? "rising" : ctx.index.falling ? "falling" : "mixed"}` : "unavailable"}
 READ THE COACH'S POST KINDS: a "result" post (sold, trimmed, took profit, stopped) is his EXIT on that name, not a fresh entry — a tail like "and play the bounce" after a sale is not a new buy unless he gives a new level. A "level" post names where he SELLS TO or buys from; do not enter a call within $0.50 of a level he sells into (W21). Let price come to you (W20): no re-entry on a name above where the last trade got out. Don't chase a move that's done (W26): a name already down big today is not a fresh put.
+SPREAD (v4.3): the bid/ask spread is your biggest cost — $757 paid in spread against $591 net profit so far. Prefer liquid names; a contract wider than 8% of mid is only taken on a coach call, and 15% is the wall. Each snapshot row carries "context": the 20-day range, 5-day trend, yesterday's high/low/close and the pre-market range — the chart the coach reads.
+TRIGGERS (v4.3): if your entry needs a 10-minute CLOSE through a level first (the coach's "above X" / "below X", a reclaim, a break), put it in trigger_level and the code waits for the close — never enter ahead of a trigger you name. ${armed.waiting ? `${armed.waiting} armed idea(s) are already waiting for their trigger. ` : ""}${armed.fired.length ? `Armed and fired this tick: ${armed.fired.join(", ")}. ` : ""}${armed.dropped.length ? `Armed and dropped this tick: ${armed.dropped.join(", ")}. ` : ""}${(ctx.reported || []).length ? `EXPIRED: callouts on ${ctx.reported!.join(", ")} were written before their earnings — re-read those names fresh from today's bars and context only.` : ""}
 Decide now. Act on NEW coach posts (take or pass, with a reason) and on any idea of your own that the chart and brain support.`;
     let out: any, usage = { input: 0, output: 0 };
     try { const r = await aiJson(SYSTEM, user, DECIDE_TOOL); out = r.out; usage = r.usage; } catch (e) { await wlog("ai_error", { msg: String((e as Error).message).slice(0, 200) }); return { ok: false, error: "AI: " + String((e as Error).message).slice(0, 120), closed: mgd.closed }; }
@@ -962,6 +1125,7 @@ Decide now. Act on NEW coach posts (take or pass, with a reason) and on any idea
     for (const raw of (Array.isArray(out?.decisions) ? out.decisions : []).slice(0, 3)) {
       const d: Decision = { ticker: String(raw.ticker || ""), side: raw.side, source: String(raw.source || "own"), thesis: String(raw.thesis || ""), wrong_if_level: num(raw.wrong_if_level),
         target_level: num(raw.target_level), time_exit_min: raw.time_exit_min != null ? num(raw.time_exit_min) : undefined, experiment: raw.experiment || null,
+        trigger_level: num(raw.trigger_level) > 0 ? num(raw.trigger_level) : null,
         cites: Array.isArray(raw.cites) ? raw.cites.slice(0, 8) : [], rule_ids: (Array.isArray(raw.rule_ids) ? raw.rule_ids : []).map(String).filter((id: string) => rules.some((r) => r.id === id)) };
       d.ticker = d.ticker.toUpperCase().replace(/[^A-Z.]/g, "");
       let coach = false;
@@ -973,6 +1137,12 @@ Decide now. Act on NEW coach posts (take or pass, with a reason) and on any idea
       } else d.source = "own";
       const spot = quotes[d.ticker]?.spot;
       if (!spot) { await recordIdea(day, d, "passed", "No live price for " + d.ticker); continue; }
+      // v4.3 ARMED: a named trigger that has not been closed through yet means wait, not fill.
+      if (needsTrigger(d, spot) && triggerState({ side: d.side, trigger_level: num(d.trigger_level), wrong_if_level: d.wrong_if_level }, bars[d.ticker] || []) !== "fire") {
+        const bad = planProblem(d, spot);
+        if (bad) { await recordIdea(day, d, "passed", "Plan rejected: " + bad); results.push({ t: d.ticker, ok: false, why: bad }); continue; }
+        await armIdea(ctx, d, coach); results.push({ t: d.ticker, ok: false, why: "armed" }); continue;
+      }
       const r = await tryOpen(ctx, d, spot, coach, blackout);
       results.push({ t: d.ticker, ok: r.opened, why: r.why });
     }
@@ -984,7 +1154,7 @@ Decide now. Act on NEW coach posts (take or pass, with a reason) and on any idea
     }
     for (const p of actionable) if (!handled.has(String(p.id))) await recordIdea(day, { ticker: p.ticker, side: p.direction === "short" ? "put" : "call", source: "coach:" + p.id }, "passed", "Winston gave no decision on this post");
     await putSetting("tick_state", { day, snap, last_jason_id: Math.max(lastId, ...posts.map((p) => num(p.id)), 0), last_ai_ms: nowMs() });
-    return { ok: true, closed: mgd.closed, results, notes: out?.notes || null };
+    return { ok: true, closed: mgd.closed, results, armed, notes: out?.notes || null };
   } finally { await freeLock("tick_lock"); }
 }
 
@@ -1180,6 +1350,22 @@ export async function setEnabled(body: any) {
     await putSetting("config", { ...cfg, max_open: n });
     await wlog("config", { max_open: n });
     return { ok: true, max_open: n, enabled: cfg.enabled };
+  }
+  // v4.3 (26 Oct): the own-idea window and the universe are settable from the app / a paste — no deploy, no SQL.
+  if (body?.own_idea_from_min != null) {
+    const n = Math.round(Number(body.own_idea_from_min));
+    if (!(n >= 570 && n <= 900)) throw new Error("own_idea_from_min must be 570 (9:30) to 900 (3:00)");
+    await putSetting("config", { ...cfg, own_idea_from_min: n });
+    await wlog("config", { own_idea_from_min: n });
+    return { ok: true, own_idea_from_min: n, enabled: cfg.enabled };
+  }
+  if (body?.universe != null) {
+    const u = (Array.isArray(body.universe) ? body.universe : []).map((s: any) => String(s).toUpperCase().replace(/[^A-Z.]/g, "")).filter(Boolean);
+    const uniq = [...new Set<string>(u)];
+    if (!(uniq.length >= 1 && uniq.length <= 20)) throw new Error("universe must be 1 to 20 tickers");
+    await putSetting("config", { ...cfg, universe: uniq });
+    await wlog("config", { universe: uniq });
+    return { ok: true, universe: uniq, enabled: cfg.enabled };
   }
   if (typeof body?.enabled !== "boolean") throw new Error("enabled must be true or false");
   await putSetting("config", { ...cfg, enabled: body.enabled });
