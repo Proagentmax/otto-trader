@@ -1234,14 +1234,57 @@ Deno.test("v4.5 no shadow when the plan is broken or has no levels, and the SQL 
   assert(/winShadowLine/.test(html) && /winShadowBox/.test(html), "Winston page shows the ledger");
 });
 
-Deno.test("v4.7 Ears → Winston: only today's ARMED levels reach the prompt, with the call minute; drafts and other days do not", () => {
+Deno.test("v4.7/v4.8 Ears → Winston: today's ARMED levels reach the prompt with the call minute, DRAFTS follow marked UNCONFIRMED; other days do not", () => {
   const st = { started: "2026-10-26T13:36:00Z", levels: [
     { ticker: "PLTR", level: 171.5, dir: "up", meaning: "needs to reclaim 171.5", min: 6, status: "armed" },
     { ticker: "NVDA", level: 217, dir: "both", meaning: "support", min: 7, status: "draft" },
     { ticker: "AMD", level: 515, dir: "down", meaning: "below 515 negated", min: 9, status: "armed" } ] };
   const a = X.earsLines(st, "2026-10-26");
-  assert(a.length === 2 && /\[heard live, call minute 6\] PLTR 171.5 \(break ABOVE\) — needs to reclaim 171.5/.test(a[0]) && /AMD 515 \(break BELOW\)/.test(a[1]), JSON.stringify(a));
+  // v4.8: drafts reach him too, marked UNCONFIRMED and listed after the armed ones
+  assert(a.length === 3 && /\[heard live, call minute 6\] PLTR 171.5 \(break ABOVE\) — needs to reclaim 171.5/.test(a[0]) && /AMD 515 \(break BELOW\)/.test(a[1]) && /\[heard live, call minute 7, UNCONFIRMED\] NVDA 217 \(level\)/.test(a[2]), JSON.stringify(a));
+  assert(!/UNCONFIRMED/.test(a[0]) && !/UNCONFIRMED/.test(a[1]), "armed lines carry no UNCONFIRMED tag");
+  assert(X.earsLines({ ...st, levels: st.levels.concat([{ ticker: "MU", level: 900, dir: "up", min: 8, status: "dismissed" }, { ticker: "SKHY", level: 140, dir: "up", min: 8, status: "skipped" }]) }, "2026-10-26").length === 3, "dismissed / skipped never reach him");
   assert(X.earsLines(st, "2026-10-27").length === 0 && X.earsLines(null, "2026-10-26").length === 0, "other day / empty");
   assert(X.dbGuard("otto_settings?key=eq.ears_state&select=value", "GET") === undefined, "wall lets Winston READ ears_state");
   let blocked = false; try { X.dbGuard("otto_settings?key=eq.ears_state", "POST"); } catch { blocked = true; } assert(blocked, "never write it");
+});
+
+/* =========================== v4.8 (27 Oct 2026): what happened AFTER an early exit =========================== */
+const B = (iso: string, o: number, h: number, l: number, c: number) => ({ t: RealDate.parse(iso), o, h, l, c, v: 1000 });
+Deno.test("v4.8 afterExit: original target printed first after a coach exit = the exit was wrong; wrong-if first = right; neither = neither; MFE/MAE and the close move are measured from the exit price", () => {
+  const plan = { dir: "up" as const, target_level: 204, wrong_if_level: 200, wrong_if_orig: 198, delta: 0.35, planned_loss: 70 };   // breakeven had moved the stop to 200; the ORIGINAL 198 is what counts
+  const exitMs = RealDate.parse("2026-10-14T14:40:00Z"), endMs = RealDate.parse("2026-10-14T19:50:00Z"), now = RealDate.parse("2026-10-14T20:20:00Z");
+  const bars = [B("2026-10-14T14:30:00Z", 200, 203, 199, 201), B("2026-10-14T14:40:00Z", 201, 202, 200.5, 201.5), B("2026-10-14T14:50:00Z", 201.5, 204.2, 201, 203.8), B("2026-10-14T15:00:00Z", 203.8, 205, 203, 204.5)];
+  const a: any = X.afterExit(plan, bars, exitMs, 201, endMs, now);
+  eq([a.would, a.at, a.bars], ["target", "2026-10-14T14:50:00.000Z", 3], "target first; the 14:30 bar (before the exit) is skipped");
+  eq([a.mfe_after, a.mae_after, a.close_move, a.close_under], [4, 0.5, 3.5, 204.5], "excursions from the exit price 201");
+  eq([a.mfe_after_r, a.close_move_r], [2, 1.75], "R via delta .35 / planned loss 70 = 0.5R per point");
+  const down = X.afterExit(plan, [B("2026-10-14T14:40:00Z", 201, 201.5, 197.5, 197.8), B("2026-10-14T14:50:00Z", 197.8, 206, 197, 205)], exitMs, 201, endMs, now) as any;
+  eq([down.would, down.mfe_after], ["wrong_if", 5], "a close under the ORIGINAL wrong-if comes first even though the target printed a bar later");
+  const flat = X.afterExit(plan, [B("2026-10-14T14:40:00Z", 201, 202, 200.5, 201.2)], exitMs, 201, endMs, now) as any;
+  eq([flat.would, flat.close_move], ["neither", 0.2], "neither");
+  eq(X.afterExit(plan, [B("2026-10-14T14:40:00Z", 201, 202, 200.5, 201.2)], exitMs, 201, endMs, RealDate.parse("2026-10-14T14:45:00Z")), null, "a bar still forming does not count");
+  eq(X.afterExit(plan, [B("2026-10-14T19:50:00Z", 201, 209, 200.5, 208)], exitMs, 201, endMs, now), null, "bars after the flat time are ignored");
+  const put = X.afterExit({ dir: "down", target_level: 196, wrong_if_level: 203 }, [B("2026-10-14T14:40:00Z", 201, 201.5, 195.9, 196.5)], exitMs, 201, endMs, now) as any;
+  eq([put.would, put.mfe_after, put.mfe_after_r], ["target", 5.1, null], "puts read the low; no R without delta/loss");
+});
+Deno.test("v4.8 afterTally + scoreAfterExits + after_score route: early exits get their 'after' once, the report carries the ledger, wrong-if/target exits are left alone", async () => {
+  seed(); setNow("2026-10-14T20:20:00Z");
+  const mk = (id: number, reason: string, exitUnder: number, extra: any = {}) => ({ id, day: "2026-10-14", status: "closed", ticker: "NVDA", side: "call", qty: 1, entry_ask: 2.5, pnl_realistic: -20, opened_at: "2026-10-14T14:11:00Z", closed_at: "2026-10-14T14:41:00Z", exit_under: exitUnder, exit_reason: reason, flags: [], broke: [],
+    plan: { dir: "up", target_level: 204, wrong_if_level: 198, delta: 0.35, planned_loss: 70, ...extra } });
+  TABLES.winston_trades.push(mk(201, "coach_exit", 201), mk(202, "time", 201), mk(203, "wrong_if", 197.5), mk(204, "coach_exit", 201, { after: { would: "wrong_if", close_move: -2, close_move_r: -1 } }));
+  W.bars = { NVDA: [barRow("2026-10-14T14:40:00Z", 201, 202, 200.5, 201.5), barRow("2026-10-14T14:50:00Z", 201.5, 204.5, 201, 204)] };
+  eq(await X.scoreAfterExits("2026-10-14", 960), 2, "two early exits scored; the wrong_if exit and the already-scored one are skipped");
+  const t1 = TABLES.winston_trades.find((t) => t.id === 201), t3 = TABLES.winston_trades.find((t) => t.id === 203);
+  eq([t1.plan.after.would, t1.plan.after.close_move, t3.plan.after], ["target", 3, undefined], "stored on the plan");
+  eq(await X.scoreAfterExits("2026-10-14", 960), 0, "idempotent");
+  const tally: any = X.afterTally(TABLES.winston_trades);
+  eq([tally.coach_exit.n, tally.coach_exit.would_target, tally.coach_exit.would_wrong_if, tally.coach_exit.avg_close_move, tally.coach_exit.left_on_table_r, tally.time.n, tally.wrong_if], [2, 1, 1, 0.5, 0.25, 1, undefined], "ledger per exit reason");
+  const rep: any = (await X.reportJob()).report;
+  eq([rep.after_exits.today.coach_exit.n, rep.taken.find((x: any) => x.id === 201).after.would], [2, "target"], "the 4:15 report carries after_exits and each trade's after");
+  const GOODJWT = "x." + btoa(JSON.stringify({ role: "authenticated", email: "ottotrader@vinecreativestudio.com", sub: "u" })).replace(/=+$/, "") + ".y";
+  const r = await (await X.handle(new Request("https://x.test/functions/v1/winston?fn=after_score&day=2026-10-14", { headers: { authorization: "Bearer " + GOODJWT } }))).json();
+  eq([r.ok, r.scored, r.rows.length, r.after_exits.coach_exit.n], [true, 0, 3, 2], "route answers with the ledger and the day's rows");
+  const bad = await (await X.handle(new Request("https://x.test/functions/v1/winston?fn=after_score&day=nope", { headers: { authorization: "Bearer " + GOODJWT } }))).json();
+  eq(bad.ok, false, "needs a day");
 });

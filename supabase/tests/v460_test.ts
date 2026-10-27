@@ -197,3 +197,29 @@ Deno.test("v4.7 static: the extension popup shows the stop result + Open the Des
   const html = await Deno.readTextFile(U("index.html"));
   assert(/earsHandledAt/.test(html) && /handled · /.test(html), "handled posts fold");
 });
+
+/* =========================== v4.8 (27 Oct 2026): the previous piece's tail rides along =========================== */
+Deno.test("v4.8 earsTail: last ~400 chars on a word boundary, minute stamps stripped, empty when there is nothing", () => {
+  assert(M.earsTail("") === "" && M.earsTail("[0m] short one") === "short one", "short / empty");
+  const long = "[0m] " + Array.from({ length: 120 }, (_, i) => "word" + i).join(" ") + " [1m] INTC ninety two ninety eighty seven";
+  const t = M.earsTail(long);
+  assert(t.length <= 400 && /^word\d+ /.test(t) && /INTC ninety two ninety eighty seven$/.test(t) && !/\[\dm\]/.test(t), t);
+});
+Deno.test("v4.8 ears: the tail of the previous piece reaches Whisper's prompt and the extractor's NEWEST text, and the context no longer repeats it; a level in the straddle is caught once", async () => {
+  reset(); await dropBrain();
+  const seen: { tail: string; newest: string; ctx: string }[] = [];
+  const T = (globalThis as any).__OTTO_TEST__;
+  T.transcribe = (_a: string, _m: string, tail: string) => { TRANS.push(_a); seen.push({ tail, newest: "", ctx: "" }); return Promise.resolve(SAY.shift() ?? ""); };
+  T.earsExtract = (newest: string, ctx: string) => { seen[seen.length - 1].newest = newest; seen[seen.length - 1].ctx = ctx; return Promise.resolve(LEV.shift() ?? []); };
+  SAY = ["Intel is the one to watch this week, levels are ninety two, ninety, eighty seven and", "ninety five on the upside. Nvidia two fourteen is support."];
+  LEV = [[L("INTC", "92", "watch")], [L("INTC", "95", "upside"), L("INTC", "92", "watch again"), L("NVDA", "214", "support")]];
+  await M.earsIn({ kind: "start", session: "s9" });
+  const r1 = await M.earsIn(chunk("s9", 1)); const r2 = await M.earsIn(chunk("s9", 2));
+  assert(seen[0].tail === "" && seen[0].newest === SAY_0(), "first piece: no tail");
+  assert(/eighty seven and$/.test(seen[1].tail) && seen[1].newest.startsWith("(…") && /eighty seven and\) ninety five on the upside/.test(seen[1].newest), "second piece: the tail is inside NEWEST: " + seen[1].newest);
+  assert(!/eighty seven and/.test(seen[1].ctx), "the context does not repeat the tail");
+  assert(r1.new === 1 && r2.new === 2 && r2.levels === 3, "INTC 92 heard once, 95 and NVDA 214 added: " + JSON.stringify([r1, r2]));
+  T.transcribe = (a: string) => { TRANS.push(a); if (BOOM) throw new Error("transcription failed: OpenAI HTTP 401"); return Promise.resolve(SAY.shift() ?? ""); };
+  T.earsExtract = (_t: string) => Promise.resolve(LEV.shift() ?? []);
+  function SAY_0() { return "Intel is the one to watch this week, levels are ninety two, ninety, eighty seven and"; }
+});

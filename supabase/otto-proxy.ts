@@ -6126,15 +6126,24 @@ const EARS_TOOL = { name: "record_levels", description: "Record price levels the
 export type EarsLevel = { id: number; ticker: string; level: number; dir: string; meaning: string; min: number; status: "draft" | "armed" | "dismissed" | "skipped" };
 export type EarsState = { session: string; started: string; last: string; chunks: number; seqs: number[]; levels: EarsLevel[]; transcript: string; ended?: string | null; n?: number; unsure?: string[]; handled_at?: string };
 export async function earsMode(): Promise<"draft" | "auto"> { return (await setting("ears_mode").catch(() => null)) === "auto" ? "auto" : "draft"; }
-async function earsTranscribe(audioB64: string, mime: string, known: string[] = []): Promise<string> {
+/* v4.8: the tail of the previous piece rides along — as Whisper's prompt (continuity across the 60 s cut) and inside the extractor's NEWEST text
+   (a list like "INTC 92, 90, 87, 95" that straddles a cut was lost on 26 Oct: 10 levels missed, mostly fast lists). Dedupe by ticker+level keeps repeats out. */
+export function earsTail(transcript: string, n = 400): string {
+  const s = String(transcript || "").replace(/\[\d+m\]\s*/g, " ").replace(/\s+/g, " ").trim();
+  if (!s) return "";
+  const t = s.slice(-n);
+  const i = t.indexOf(" ");
+  return i > 0 && t.length === n ? t.slice(i + 1) : t;      // start on a whole word
+}
+async function earsTranscribe(audioB64: string, mime: string, known: string[] = [], tail = ""): Promise<string> {
   const T = (globalThis as any).__OTTO_TEST__;
-  if (T?.transcribe) return T.transcribe(audioB64, mime);
+  if (T?.transcribe) return T.transcribe(audioB64, mime, tail);
   const key = Deno.env.get("OPENAI_KEY") || "";
   if (!key) throw new Error("OPENAI_KEY is not set in Supabase (Edge Functions → Secrets)");
   const bin = Uint8Array.from(atob(audioB64), (c) => c.charCodeAt(0));
   const fd = new FormData();
   fd.append("file", new Blob([bin], { type: mime || "audio/webm" }), "chunk." + (/mp4|m4a/.test(mime) ? "m4a" : "webm"));
-  fd.append("model", "whisper-1"); fd.append("language", "en"); fd.append("response_format", "text"); fd.append("prompt", (known.length ? "Tickers: " + known.slice(0, 60).join(", ") + ". " : "") + EARS_VOCAB);
+  fd.append("model", "whisper-1"); fd.append("language", "en"); fd.append("response_format", "text"); fd.append("prompt", ((known.length ? "Tickers: " + known.slice(0, 60).join(", ") + ". " : "") + EARS_VOCAB + (tail ? " " + tail.slice(-200) : "")).slice(0, 900));
   const r = await fetch("https://api.openai.com/v1/audio/transcriptions", { method: "POST", headers: { authorization: "Bearer " + key }, body: fd, signal: AbortSignal.timeout(45_000) });
   if (!r.ok) throw new Error("transcription failed: OpenAI HTTP " + r.status + " " + (await r.text()).slice(0, 160));
   return (await r.text()).trim();
@@ -6206,12 +6215,14 @@ export async function earsIn(body: any) {
   const audio = String(body.audio || "");
   if (audio.length < 200 || audio.length > 6_000_000) throw new Error("bad audio size");
   const known = await earsKnownTickers().catch(() => [] as string[]);
-  const text = earsClean(await earsTranscribe(audio, String(body.mime || "audio/webm"), known));
+  const tail = earsTail(st.transcript);
+  const text = earsClean(await earsTranscribe(audio, String(body.mime || "audio/webm"), known, tail));
   const tmin = Math.max(0, Number(body.min) || st.chunks);
   st.chunks++; st.seqs = st.seqs.concat(seq).slice(-300); st.last = new Date().toISOString();
   let found: { instrument: string; value: string; meaning: string }[] = [];
   if (text) {
-    found = await earsExtract(text, st.transcript, known).catch((e) => { console.error("ears extract", e); return []; });
+    const newest = tail ? `(…${tail}) ${text}` : text;        // v4.8: the cut-off end of the last piece is part of "newest" so a straddling level is caught
+    found = await earsExtract(newest, st.transcript.slice(0, Math.max(0, st.transcript.length - tail.length)), known).catch((e) => { console.error("ears extract", e); return []; });
     st.transcript = (st.transcript + `\n[${tmin}m] ${text}`).slice(-90_000);
   }
   const fresh: EarsLevel[] = []; const unsure: string[] = [];

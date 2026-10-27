@@ -501,6 +501,58 @@ export function excursion(plan: { dir: "up" | "down"; delta?: number; planned_lo
   return { mfe_under: mfe, mae_under: mae, mfe_r: perR ? round2(mfe * perR) : null, mae_r: perR ? round2(mae * perR) : null, bars: d.length };
 }
 
+/* ------------------------------------------------------------------ v4.8: what happened AFTER an exit (pure) */
+
+// 27 Oct 2026: the W22 (coach exit) measurement showed MFE/MAE stop at the exit, so nobody could say whether an early exit was right.
+// After the close, every trade that left early (coach_exit, time, trail, breakeven) gets the underlying's path from its exit to the flat time:
+// did the ORIGINAL target print first, the ORIGINAL wrong-if first, or neither; how far it went for / against after the exit (points and R); where it closed.
+// Reads completed 10-minute bars that began after the exit. Never changes the trade's money; it only tells the ledger what the exit cost or saved.
+export function afterExit(plan: { dir: "up" | "down"; target_level: number; wrong_if_orig?: number; wrong_if_level: number; delta?: number; planned_loss?: number },
+  bars: Bar[], exitMs: number, exitUnder: number, endMs: number, now = nowMs()) {
+  const d = completedBars(bars, 10, Math.min(now, endMs)).filter((b) => b.t >= exitMs && b.t <= endMs).sort((a, b) => a.t - b.t);
+  if (!d.length || !(exitUnder > 0)) return null;
+  const up = plan.dir === "up", tgt = num(plan.target_level), stop = num(plan.wrong_if_orig) || num(plan.wrong_if_level);
+  let would: "target" | "wrong_if" | "neither" = "neither", at: number | null = null;
+  for (const b of d) {
+    const hitT = tgt > 0 && (up ? b.h >= tgt : b.l <= tgt), hitS = stop > 0 && (up ? b.c < stop : b.c > stop);
+    if (hitT && !hitS) { would = "target"; at = b.t; break; }
+    if (hitS) { would = "wrong_if"; at = b.t; break; }          // both in one bar = stop first, same as evalBars
+  }
+  const hi = Math.max(...d.map((b) => b.h)), lo = Math.min(...d.map((b) => b.l));
+  const mfe = round2(up ? hi - exitUnder : exitUnder - lo), mae = round2(up ? exitUnder - lo : hi - exitUnder);
+  const perR = num(plan.planned_loss) > 0 && num(plan.delta) ? Math.abs(num(plan.delta)) * 100 / num(plan.planned_loss) : 0;
+  const closeUnder = d[d.length - 1].c, closeMove = round2(up ? closeUnder - exitUnder : exitUnder - closeUnder);
+  return { would, at: at ? new Date(at).toISOString() : null, mfe_after: mfe, mae_after: mae, mfe_after_r: perR ? round2(mfe * perR) : null, close_move: closeMove, close_move_r: perR ? round2(closeMove * perR) : null, close_under: closeUnder, bars: d.length };
+}
+export const EARLY_EXITS = ["coach_exit", "time", "trail", "breakeven"];
+export async function scoreAfterExits(day: string, closeMin: number): Promise<number> {
+  const rows: any[] = (await db(`winston_trades?day=eq.${day}&status=eq.closed&select=*&order=id.asc`)) || [];
+  const todo = rows.filter((t) => EARLY_EXITS.includes(String(t.exit_reason)) && !t.plan?.after && t.closed_at && num(t.exit_under) > 0 && num(t.plan?.target_level) > 0);
+  if (!todo.length) return 0;
+  const bars = await bars10([...new Set(todo.map((t) => String(t.ticker).toUpperCase()))], day);
+  const endMs = etToUtcMs(day, Math.min(950, closeMin - 10));
+  let done = 0;
+  for (const t of todo) {
+    const a = afterExit(t.plan, bars[String(t.ticker).toUpperCase()] || [], Date.parse(t.closed_at), num(t.exit_under), endMs, nowMs());
+    if (!a) continue;
+    await db(`winston_trades?id=eq.${t.id}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ plan: { ...(t.plan || {}), after: a } }) });
+    done++;
+  }
+  return done;
+}
+// The ledger: per exit reason, how often the early exit was right (price then hit the wrong-if), wrong (price then hit the target), or neither, and the average move after.
+export function afterTally(trades: any[]) {
+  const by: Record<string, { n: number; would_target: number; would_wrong_if: number; neither: number; left_on_table_r: number | null; avg_close_move: number }> = {};
+  for (const t of trades || []) {
+    const a = t?.plan?.after; if (!a || !EARLY_EXITS.includes(String(t.exit_reason))) continue;
+    const b = by[t.exit_reason] || (by[t.exit_reason] = { n: 0, would_target: 0, would_wrong_if: 0, neither: 0, left_on_table_r: null, avg_close_move: 0 });
+    b.n++; if (a.would === "target") b.would_target++; else if (a.would === "wrong_if") b.would_wrong_if++; else b.neither++;
+    b.avg_close_move = round2(((b.avg_close_move * (b.n - 1)) + num(a.close_move)) / b.n);
+    if (a.close_move_r != null) b.left_on_table_r = round2(((b.left_on_table_r || 0) * (b.n - 1) + num(a.close_move_r)) / b.n);
+  }
+  return by;
+}
+
 /* ------------------------------------------------------------------ v4.3: winner protection on one contract (pure) */
 
 // One contract cannot scale out, so the stop does the work: once the underlying has gone ≥ 0.5R in his favour (R = entry − original wrong-if)
@@ -635,22 +687,25 @@ export function buildBrainText(calls: any[], now: number): string {
   return parts.join("\n\n");
 }
 /* v4.7 (26 Oct 2026): EARS — levels the coach SAID on today's live call, transcribed by the Ears listener and armed by Ifoma (or auto-armed).
-   Read fresh on every tick (no cache): a level heard at 9:36 must be in the 9:40 read. Only armed levels count; drafts are not his to act on. */
+   Read fresh on every tick (no cache): a level heard at 9:36 must be in the 9:40 read.
+   v4.8 (27 Oct, Ifoma: "more data, don't limit him"): DRAFT levels reach him too, marked UNCONFIRMED (heard, not yet checked by a person), listed after the armed ones;
+   dismissed / skipped levels never do. Armed lines first so a truncated list keeps the confirmed ones. */
 export function earsLines(st: any, day: string): string[] {
-  const out: string[] = [];
-  if (!st || !Array.isArray(st.levels) || String(st.started || "").slice(0, 10) !== day) return out;
+  const armed: string[] = [], drafts: string[] = [];
+  if (!st || !Array.isArray(st.levels) || String(st.started || "").slice(0, 10) !== day) return [];
   for (const l of st.levels) {
-    if (l?.status !== "armed" || !l.ticker || !(num(l.level) > 0)) continue;
+    if (!l || (l.status !== "armed" && l.status !== "draft") || !l.ticker || !(num(l.level) > 0)) continue;
     const dir = l.dir === "up" ? "break ABOVE" : l.dir === "down" ? "break BELOW" : "level";
-    out.push(`[heard live, call minute ${num(l.min)}] ${String(l.ticker).toUpperCase()} ${num(l.level)} (${dir}) — ${String(l.meaning || "").replace(/\s+/g, " ").slice(0, 160)}`);
+    const line = `[heard live, call minute ${num(l.min)}${l.status === "draft" ? ", UNCONFIRMED" : ""}] ${String(l.ticker).toUpperCase()} ${num(l.level)} (${dir}) — ${String(l.meaning || "").replace(/\s+/g, " ").slice(0, 160)}`;
+    (l.status === "draft" ? drafts : armed).push(line);
   }
-  return out.slice(0, 40);
+  return armed.concat(drafts).slice(0, 40);
 }
 export async function earsExcerpt(day: string): Promise<string> {
   try {
     const r = await db("otto_settings?key=eq.ears_state&select=value");
     const lines = earsLines(r?.[0]?.value, day);
-    return lines.length ? "HEARD ON TODAY'S LIVE CALL (the coach said these out loud during the call; transcribed by voice and confirmed by Ifoma — treat them like this week's callouts but FRESHER; a number can still be misheard, so check it against the chart before you lean on it):\n" + lines.join("\n") : "";
+    return lines.length ? "HEARD ON TODAY'S LIVE CALL (the coach said these out loud during the call, transcribed by voice — treat them like this week's callouts but FRESHER. A line without UNCONFIRMED was checked by Ifoma. A line marked UNCONFIRMED was heard by the machine only: the ticker or the number can be wrong, so before you lean on one, check that the level sits near the chart and makes sense for that stock, and say in your thesis that it was an unconfirmed heard level):\n" + lines.join("\n") : "";
   } catch { return ""; }
 }
 let BRAIN_TXT: string | null = null, BRAIN_AT = 0;
@@ -1503,6 +1558,7 @@ export async function flatten(opts: { force?: boolean } = {}) {
 
 export async function buildReport(day: string, cfg: any) {
   try { await scoreShadows(day, marketClock().closeMin); } catch { /* the report still builds */ }   // v4.5
+  try { await scoreAfterExits(day, marketClock().closeMin); } catch (e) { await wlog("after_error", { msg: String((e as Error).message).slice(0, 160) }).catch(() => {}); }   // v4.8
   const trades: any[] = (await db("winston_trades?select=*&order=id.asc")) || [];
   const today = trades.filter((t) => t.day === day);
   const ideas: any[] = (await db(`winston_ideas?day=eq.${day}&select=*&order=id.asc`)) || [];
@@ -1513,7 +1569,7 @@ export async function buildReport(day: string, cfg: any) {
   const taken = today.map((t) => ({ id: t.id, label: t.label, source: t.source, experiment: t.experiment, status: t.status, opened_at: t.opened_at, closed_at: t.closed_at,
     entry: { bid: t.entry_bid, ask: t.entry_ask, fill: t.entry_fill }, exit: { bid: t.exit_bid, ask: t.exit_ask, fill: t.exit_fill }, exit_reason: t.exit_reason,
     pnl_realistic: t.pnl_realistic, pnl_mid: t.pnl_mid, spread_cost: t.spread_cost, pnl_double: t.pnl_double, r: t.r_multiple, followed_rules: t.followed_rules, broke: t.broke, flags: t.flags,
-    thesis: t.plan?.thesis, wrong_if: t.plan?.wrong_if_level, target: t.plan?.target_level, stamps: t.plan?.stamps || [], excursion: t.plan?.excursion || null, mode: t.plan?.mode || "strict" }));
+    thesis: t.plan?.thesis, wrong_if: t.plan?.wrong_if_level, target: t.plan?.target_level, stamps: t.plan?.stamps || [], excursion: t.plan?.excursion || null, after: t.plan?.after || null, mode: t.plan?.mode || "strict" }));
   const passed = ideas.filter((i) => i.status !== "taken").map((i) => ({ ticker: i.ticker, side: i.side, source: i.source, status: i.status, reason: i.reason, rule_ids: i.rule_ids }));
   // v3.36: what stopped him, counted; and what the soft gates stamped on the trades he did take (so each gate can be scored over time).
   const passedBy: Record<string, number> = {};
@@ -1529,7 +1585,8 @@ export async function buildReport(day: string, cfg: any) {
   if (stillOpen) lines.push(`WARNING: ${stillOpen} trade(s) still open at the report. They should have been flat by 3:50 PM.`);
   const report = { day, built_at: new Date(nowMs()).toISOString(), summary: lines, taken, passed, day_stats: dayStats, all_time: stats, balance: eqAll.equity, start_balance: row.start_balance ?? cfg.paper_balance,
     ai: row.ai || null, routine_done: !!row.routine, sentiment_done: !!row.sentiment, kill: row.kill || null, coach_posts_seen: ideas.filter((i) => String(i.source).startsWith("coach:")).length,
-    passed_by_reason: passedBy, stamp_stats: stampStats, mode: isDataMode(cfg) ? "data" : "strict", scanner: await scanReport(day).catch(() => null), shadow: await shadowState().catch(() => null),   // v4.4 shadow scanner score; v4.5 rule-cost ledger
+    passed_by_reason: passedBy, stamp_stats: stampStats, after_exits: { today: afterTally(today), all_time: afterTally(trades) },   // v4.8: was the early exit right?
+    mode: isDataMode(cfg) ? "data" : "strict", scanner: await scanReport(day).catch(() => null), shadow: await shadowState().catch(() => null),   // v4.4 shadow scanner score; v4.5 rule-cost ledger
     balance_note: "balance = paper start + every closed trade since day one (all days), not today's P&L alone" };
   await db("winston_days?on_conflict=day", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ day, report, end_balance: eqAll.equity, updated_at: new Date(nowMs()).toISOString() }) });
   return report;
@@ -1653,6 +1710,13 @@ export async function handle(req: Request): Promise<Response> {
     if (fn === "live") return json(await liveForApp());
     if (fn === "rule_set" && req.method === "POST") return json(await setRule(await req.json().catch(() => ({}))));
     if (fn === "config_set" && req.method === "POST") return json(await setEnabled(await req.json().catch(() => ({}))));
+    if (fn === "after_score") {                                                              // v4.8: score (or back-fill) "what happened after the exit" for one past day
+      const day = String(u.searchParams.get("day") || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ ok: false, error: "need day=YYYY-MM-DD" }, 400);
+      const scored = await scoreAfterExits(day, 960);
+      const all: any[] = (await db("winston_trades?status=eq.closed&select=id,day,ticker,exit_reason,pnl_realistic,plan&order=id.asc")) || [];
+      return json({ ok: true, day, scored, after_exits: afterTally(all), rows: all.filter((t) => t.day === day && t.plan?.after).map((t) => ({ id: t.id, ticker: t.ticker, exit_reason: t.exit_reason, pnl: t.pnl_realistic, after: t.plan.after })) });
+    }
     return json({ ok: false, error: "unknown route" }, 404);
   } catch (e) { return json({ ok: false, error: String((e as Error).message || e).slice(0, 300) }, 500); }
 }
