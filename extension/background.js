@@ -280,7 +280,7 @@ async function earsMsg(m) {
     }
     if (m.type === "ears-error") { await earsStatus({ err: String(m.error || "").slice(0, 160) + (((await store.get("ears")) || {}).firstErr ? " | first try: " + ((await store.get("ears")) || {}).firstErr : ""), on: false }); chrome.offscreen.closeDocument().catch(() => {}); return { ok: true }; }
     if (m.type === "ears-state") return { ok: true, ears: (await store.get("ears")) || {} };
-    if (m.type === "ears-open-desk") { await chrome.tabs.create({ url: "https://proagentmax.github.io/otto-trader/#desk" }); return { ok: true }; }
+    if (m.type === "ears-open-desk") { await chrome.tabs.create({ url: "https://vinespaces.github.io/otto-trader/#desk" }); return { ok: true }; }
   } catch (e) { await earsStatus({ err: String(e.message || e).slice(0, 160) }); return { ok: false, error: String(e.message || e) }; }
   return { ok: false };
 }
