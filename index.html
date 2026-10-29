@@ -2625,7 +2625,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="4.7.0";
+const BUILD="4.8.1";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -6685,6 +6685,150 @@ const _v4RenderRead=v4RenderRead;v4RenderRead=function(){
   addEventListener("resize",v4TopDraw);
   if(DK.open)v4TopBuild();
 }
+
+
+/* ───────── v4.8.1 TOUR MODE (28 Oct) ─────────
+   A guided walk for showing Otto to someone for the first time. App-only: nothing here talks to the
+   server, writes data, or touches Winston. Tour on → gold ⓘ chips on the key boxes + "Start the tour"
+   (5 stops, spotlight + a card with what it is and one line to say) + "Show me a card" (REPLAY cards
+   built from Winston's own past trades, labelled REPLAY, not real cards — nothing can be approved).
+   Tour off → everything is removed. Never remembered across reloads. */
+const TOUR={on:false,step:-1,replay:[],t:null};
+const TOUR_CSS=`
+.v4top .st.tour{gap:8px;padding:4px 9px 4px 11px}.v4top .st.tour .tg{width:30px;height:16px;border-radius:8px;background:#2a2f38;position:relative;transition:.2s}.v4top .st.tour .tg:after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#98A1AD;transition:.2s}
+body.tour .v4top .st.tour{color:var(--gold);border-color:rgba(245,196,81,.5);box-shadow:0 0 0 1px rgba(245,196,81,.25)}body.tour .v4top .st.tour .tg{background:rgba(245,196,81,.35)}body.tour .v4top .st.tour .tg:after{left:16px;background:var(--gold)}
+.tour-host{position:relative}.v4hero>.tour-chip{top:10px;right:10px}
+.tour-chip{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:var(--gold);color:#1a1300;font-weight:800;font-size:12px;display:grid;place-items:center;box-shadow:0 0 0 3px #0B0C0E,0 0 14px rgba(245,196,81,.5);z-index:7;cursor:pointer;animation:tourPop .35s;font-family:var(--body);line-height:1}
+@keyframes tourPop{from{transform:scale(.4);opacity:0}}
+.tour-ipop{position:fixed;z-index:120;background:#1B1F27;border:1px solid rgba(245,196,81,.5);border-radius:12px;padding:10px 14px;max-width:360px;font-size:13px;line-height:1.45;box-shadow:0 12px 40px rgba(0,0,0,.6);color:var(--ink-2)}.tour-ipop b{display:block;color:var(--gold);margin-bottom:3px}
+#tourDim{position:fixed;inset:0;z-index:100;pointer-events:none}
+#tourBox{position:absolute;border-radius:14px;box-shadow:0 0 0 9999px rgba(5,6,8,.74),0 0 0 2px rgba(245,196,81,.75),0 0 40px rgba(245,196,81,.25);transition:all .35s cubic-bezier(.2,.8,.2,1)}
+#tourCard{position:fixed;z-index:110;width:390px;background:#15171B;border:1px solid rgba(245,196,81,.55);border-radius:14px;padding:14px 16px 12px;box-shadow:0 20px 60px rgba(0,0,0,.7);transition:left .35s,top .35s;color:var(--ink)}
+#tourCard .n{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:700}#tourCard h3{font-size:16px;margin:4px 0 6px}#tourCard p{margin:0 0 6px;font-size:13px;color:var(--ink-2);line-height:1.45}#tourCard p.say{color:var(--ink);border-left:2px solid #C9962B;padding-left:10px;font-style:italic}
+#tourCard .nav{display:flex;gap:8px;align-items:center;margin-top:12px}#tourCard .nav .sp{flex:1;display:flex;gap:4px}#tourCard .nav .sp i{width:6px;height:6px;border-radius:50%;background:#2b3240}#tourCard .nav .sp i.on{background:var(--gold)}
+#tourCard .nav button{border-radius:9px;padding:7px 14px;font-size:13px;font-weight:600;border:1px solid #2b3240;background:#1b1f27;color:var(--ink-2);min-height:0}#tourCard .nav button.go{background:rgba(245,196,81,.12);color:var(--gold);border-color:rgba(245,196,81,.45)}
+#tourFab{position:fixed;right:22px;bottom:22px;z-index:90;display:flex;gap:8px}#tourFab button{border-radius:999px;padding:10px 16px;font-weight:700;font-size:13px;min-height:0;background:linear-gradient(180deg,#F8E3A6,#C9962B);color:#1a1300;box-shadow:0 8px 30px rgba(245,196,81,.35)}#tourFab button.ghost{background:#1B1F27;color:var(--gold);border:1px solid rgba(245,196,81,.5);box-shadow:none}
+.tour-replay{border:1px solid #2b3240;border-radius:12px;background:linear-gradient(180deg,#171A20,#13161B);padding:12px 14px;max-width:660px;position:relative;animation:tourSlide .4s;font-size:13px}@keyframes tourSlide{from{transform:translateY(10px);opacity:0}}
+.tour-replay .tag{position:absolute;top:10px;right:12px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;padding:3px 8px;border-radius:999px;background:rgba(245,196,81,.15);color:var(--gold);border:1px solid rgba(245,196,81,.4)}
+.tour-replay .tt{font-size:15px;font-weight:700;padding-right:150px}.tour-replay .sub{color:var(--ink-2);font-size:12.5px;margin:2px 0 8px}
+.tour-replay .kv{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 12px;margin:8px 0}.tour-replay .kv span{display:block;color:var(--ink-3);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase}.tour-replay .kv b{font-family:var(--mono);font-weight:600}
+.tour-replay .bar{height:8px;border-radius:4px;background:#23272f;position:relative;margin:10px 0 22px}.tour-replay .bar i{position:absolute;top:0;bottom:0;left:0;border-radius:4px;background:linear-gradient(90deg,rgba(0,200,5,.25),var(--up))}.tour-replay .bar .pt{position:absolute;top:-4px;width:2px;height:16px;background:var(--ink)}.tour-replay .bar .lb{position:absolute;top:13px;font-size:9.5px;color:var(--ink-3);font-family:var(--mono);transform:translateX(-50%);white-space:nowrap}
+.tour-replay .btns{display:flex;gap:8px;margin-top:12px;align-items:center}.tour-replay .btns button{border-radius:9px;padding:7px 14px;font-size:13px;font-weight:600;border:1px solid #2b3240;background:#1b1f27;color:var(--ink-2);min-height:0;cursor:default}.tour-replay .btns .ok{background:rgba(0,200,5,.14);color:var(--up);border-color:rgba(0,200,5,.4)}.tour-replay .btns .no{background:rgba(255,80,0,.1);color:var(--down);border-color:rgba(255,80,0,.4)}
+.tour-replay .banner{background:rgba(255,80,0,.12);border:1px solid rgba(255,80,0,.4);border-radius:8px;padding:6px 10px;font-size:12px;color:#ffb08a;margin:6px 0}
+.tour-note{position:fixed;left:50%;transform:translateX(-50%);top:62px;z-index:95;background:#1B1F27;border:1px solid #2b3240;border-radius:999px;padding:6px 14px;font-size:12px;color:var(--ink-2);pointer-events:none}`;
+const TOUR_INFO={
+ hero:["Market Read","The 8:45 read, done the way the coach teaches: bonds first. The verdict is mechanical (Nasdaq against TLT, copper and BTC as tells) — not a feeling. Seven tiles, never more."],
+ desk:["The Desk","Jarvis is the desk assistant. Every ⚡ Signal post becomes a card in seconds; Josh approves or rejects — nothing enters without a human tap. Exits run by the card's own rules, checked by the server."],
+ book:["Winston's book","Paper money, real fills: he buys the ask and sells the bid, so the spread is paid like real life. Nothing here is estimated."],
+ gate:["Road to live","Five conditions before a single real dollar: 30+ trades, positive expectancy, last 10 clean, three green weeks, five clean dry-run days. Then two human acts to switch him on."],
+ rh:["The live account","Where Winston trades once he clears the gate. One contract, hard caps per trade and per day, a kill link on two phones."],
+ read:["Today's read","His 8:45 plan and 9:15 pre-open read, written before the bell: bias, events, the names, the risks."],
+ now:["Winston now","He only thinks when something changed — a new bar, a new post, a level. Every look is a note you can read."],
+ sess:["Last session","Every trade he took, with the exit reason and the rule stamps. Click a trade and he shows his work: what he read, the plan, what happened."]};
+const TOUR_CHIPS=[[".v4hero","hero"],["#dkMsgs","desk",1],[".win43-strip>.dk-cardx:nth-child(1)","book"],[".win43-strip>.dk-cardx:nth-child(2)","gate"],[".win43-strip>.dk-cardx:nth-child(3)","rh"],[".win43-strip>.dk-cardx:nth-child(4)","read"],[".win43-main>.dk-cardx:nth-child(1)","now"],[".win43-main>.dk-cardx:nth-child(2)","sess"]];
+const TOUR_STEPS=[
+ {view:"desk",sel:[".v4hero"],n:"Stop 1 of 5",h:"Every morning starts the way you teach",p:"The 8:45 Market Read: bonds first, then the tape. The verdict is mechanical — no sentiment dials, no made-up numbers. The homework levels sit on the Watcher and fire only on the 10-minute close.",s:"“We read bonds first, same as you. If TLT is bid and tech is down a point, he's defensive. Today it's neutral.”"},
+ {view:"desk",sel:["#dkMsgs"],host:1,n:"Stop 2 of 5",h:"When you post, this happens",p:"A ⚡ Signal post becomes a card in seconds — the contract picked to fit the account, the wrong-if and target on the card, a red banner if it breaks a rule. Josh taps Approve or Reject. Press “Show me a card” (bottom right) to drop a replay of a real one in.",s:"“That's your post from Tuesday. Here's the card it became. Nothing trades without a human tap.”"},
+ {view:"winston",sel:[".win43-strip>.dk-cardx:nth-child(1)",".win43-main>.dk-cardx:nth-child(2)"],n:"Stop 3 of 5",h:"Meet Winston",p:"The autonomous one. Paper money, real fills, pays the spread. He runs on the coaching calls and his own reads, inside the rules. Click a trade in the list and he shows his work — the thesis word for word, the plan, what happened.",s:"“He isn't a bot following a script. Click TSLA — that's your ‘above 400’ call. Read why he took it.”"},
+ {view:"winston",pop:"score",sel:["[data-tour=ledger]"],n:"Stop 4 of 5",h:"Your rules, with receipts",p:"When a rule blocks him we don't just block — we book a shadow trade and score it with the same exits. So every rule has a ledger. The coach-exit rule has cost zero targets in 14 exits — keep. Re-entry chasing has cost money — tighten.",s:"“Nobody's ever audited your rules like this. This week he's trading only his own ideas and your posts are being shadow-scored — so we can see the difference, honestly.”"},
+ {view:"winston",sel:[".win43-strip>.dk-cardx:nth-child(2)"],n:"Stop 5 of 5",h:"Road to live",p:"Five conditions before a real dollar. Then two human acts to switch him on, a hard cap per trade and per day, and a kill link on two phones.",s:"“Discipline first. He goes live when the numbers say so, not when we feel like it.”"}];
+function tourNote(t,ms=2600){let n=$("#tourNote");if(!n){n=document.createElement("div");n.id="tourNote";n.className="tour-note";document.body.appendChild(n)}n.textContent=t;clearTimeout(n._t);n._t=setTimeout(()=>n.remove(),ms)}
+function tourInstall(){
+  if(!$("#tourCss")){const s=document.createElement("style");s.id="tourCss";s.textContent=TOUR_CSS;document.head.appendChild(s)}
+  const r=$("#v4top .r");if(!r||$("#v4tour"))return;
+  const b=document.createElement("span");b.className="st tour";b.id="v4tour";b.title="Tour mode — a guided walk for showing Otto to someone. Changes nothing.";b.innerHTML=`Tour<span class="tg"></span>`;
+  b.addEventListener("click",()=>tourSet(!TOUR.on));r.insertBefore(b,r.firstChild);
+}
+function tourSet(on){
+  TOUR.on=on;document.body.classList.toggle("tour",on);
+  if(on){
+    if(!$("#tourFab")){const f=document.createElement("div");f.id="tourFab";f.innerHTML=`<button class="ghost" id="tourCards">Show me a card</button><button id="tourStart">▶ Start the tour</button>`;document.body.appendChild(f);
+      f.querySelector("#tourCards").onclick=tourReplayAdd;f.querySelector("#tourStart").onclick=()=>tourGo(0)}
+    tourChips();if(!TOUR.t)TOUR.t=setInterval(tourChips,1200);
+    tourNote("Tour on — tap a gold ⓘ to explain anything. Winston keeps trading underneath.",3600);
+  }else{
+    tourEnd();clearInterval(TOUR.t);TOUR.t=null;const f=$("#tourFab");if(f)f.remove();
+    document.querySelectorAll(".tour-chip,.tour-ipop").forEach(x=>x.remove());document.querySelectorAll(".tour-host").forEach(x=>x.classList.remove("tour-host"));
+    TOUR.replay=[];document.querySelectorAll(".tour-replay").forEach(x=>x.remove());tourNote("Tour off — back to the live desk");
+  }
+}
+function tourChips(){
+  if(!TOUR.on)return;
+  TOUR_CHIPS.forEach(([sel,key,host])=>{let el=$(sel);if(!el)return;if(host)el=el.parentElement;if(!el||el.querySelector(":scope>.tour-chip"))return;
+    el.classList.add("tour-host");const c=document.createElement("span");c.className="tour-chip";c.textContent="i";c.dataset.tour=key;c.title=TOUR_INFO[key][0];
+    c.addEventListener("click",e=>{e.stopPropagation();e.preventDefault();tourInfo(c,key)});el.appendChild(c)});
+}
+function tourInfo(chip,key){
+  document.querySelectorAll(".tour-ipop").forEach(x=>x.remove());const d=TOUR_INFO[key];const p=document.createElement("div");p.className="tour-ipop";p.innerHTML=`<b>${esc(d[0])}</b>${esc(d[1])}`;
+  const r=chip.getBoundingClientRect();p.style.left=Math.max(12,Math.min(innerWidth-380,r.left-170))+"px";p.style.top=(r.bottom+8)+"px";document.body.appendChild(p);
+  setTimeout(()=>document.addEventListener("click",function h(e){if(!e.target.closest(".tour-ipop")){p.remove();document.removeEventListener("click",h)}}),0);
+}
+function tourGo(i){
+  if(!TOUR.on)return;const s=TOUR_STEPS[i];if(!s){tourEnd();tourNote("Tour finished — the ⓘ chips stay until you switch Tour off",3600);return}
+  TOUR.step=i;document.body.classList.add("tour-step");
+  if(DK.view!==s.view)dkShow(s.view);
+  if(s.pop){if(!$("#v4ov")||!$("[data-tour=ledger]")){v4Close();try{winPop(s.pop)}catch(e){}}}else if($("#v4ov"))v4Close();
+  if(s.pop){let n=0;const w=()=>{const ov=$("#v4ov");const h=ov&&[...ov.querySelectorAll(".dk-h")].find(x=>/What each rule costs/i.test(x.textContent));if((h||n>12)&&TOUR.step===i){tourPlace();return}n++;setTimeout(w,250)};setTimeout(w,200)}else setTimeout(tourPlace,60);
+}
+function tourPlace(){
+  const s=TOUR_STEPS[TOUR.step];if(!s||!TOUR.on)return;
+  if(s.pop){const ov=$("#v4ov");if(ov&&!$("[data-tour=ledger]")){const h=[...ov.querySelectorAll(".dk-h")].find(x=>/What each rule costs/i.test(x.textContent));const box=h?h.closest(".dk-cardx"):ov.querySelector(".v4pop, .dk-pop, [class*=pop]");if(box)box.dataset.tour="ledger";if(h)h.scrollIntoView({block:"center"})}}
+  let dim=$("#tourDim");if(!dim){dim=document.createElement("div");dim.id="tourDim";dim.innerHTML=`<div id="tourBox"></div>`;document.body.appendChild(dim)}
+  let c=$("#tourCard");if(!c){c=document.createElement("div");c.id="tourCard";c.innerHTML=`<div class="n"></div><h3></h3><p class="p"></p><p class="say"></p><div class="nav"><button id="tourBack">Back</button><span class="sp"></span><button class="go" id="tourNext">Next</button></div>`;document.body.appendChild(c);
+    c.querySelector("#tourBack").onclick=()=>tourGo(TOUR.step-1);c.querySelector("#tourNext").onclick=()=>tourGo(TOUR.step+1)}
+  const els=s.sel.map(x=>{let e=$(x);if(e&&s.host)e=e.parentElement;return e}).filter(Boolean);
+  let r;if(els.length){const rs=els.map(e=>e.getBoundingClientRect());r={left:Math.min(...rs.map(x=>x.left)),top:Math.min(...rs.map(x=>x.top)),right:Math.max(...rs.map(x=>x.right)),bottom:Math.max(...rs.map(x=>x.bottom))}}else r={left:innerWidth/2-200,top:innerHeight/2-100,right:innerWidth/2+200,bottom:innerHeight/2+100};
+  const b=$("#tourBox");b.style.left=(r.left-8)+"px";b.style.top=(r.top-8)+"px";b.style.width=(r.right-r.left+16)+"px";b.style.height=(r.bottom-r.top+16)+"px";
+  let left=r.right+18,top=r.top;if(left+400>innerWidth){left=Math.max(16,Math.min(r.left,innerWidth-410));top=r.bottom+18}if(top+280>innerHeight)top=Math.max(16,innerHeight-290);
+  c.style.left=left+"px";c.style.top=top+"px";
+  c.querySelector(".n").textContent=s.n;c.querySelector("h3").textContent=s.h;c.querySelector(".p").textContent=s.p;c.querySelector(".say").textContent=s.s;
+  c.querySelector(".sp").innerHTML=TOUR_STEPS.map((x,i)=>`<i class="${i===TOUR.step?"on":""}"></i>`).join("");
+  c.querySelector("#tourBack").style.visibility=TOUR.step?"visible":"hidden";c.querySelector("#tourNext").textContent=TOUR.step===TOUR_STEPS.length-1?"Done":"Next";
+}
+function tourEnd(){TOUR.step=-1;document.body.classList.remove("tour-step");["#tourDim","#tourCard"].forEach(s=>{const e=$(s);if(e)e.remove()})}
+document.addEventListener("keydown",e=>{if(TOUR.step<0)return;if(e.target&&/input|textarea|select/i.test(e.target.tagName))return;if(e.key==="ArrowRight"||e.key==="Enter"){e.preventDefault();tourGo(TOUR.step+1)}else if(e.key==="ArrowLeft"){e.preventDefault();tourGo(TOUR.step-1)}else if(e.key==="Escape")tourEnd()});
+addEventListener("resize",()=>{if(TOUR.step>=0)tourPlace()});
+/* REPLAY cards — built from Winston's own past trades (real fills), labelled REPLAY. Not otto_actions rows: the buttons do nothing. */
+async function tourReplayData(){
+  let j=WIN.j;if(!j){try{j=await winApi("state");WIN.j=j}catch(e){j=null}}
+  const T=((j&&j.trades)||[]).filter(t=>t.status!=="open"&&+t.pnl_realistic>0&&t.plan&&t.plan.target_level!=null);
+  const t=T.filter(t=>/^coach/.test(t.source||"")).sort((a,b)=>+b.pnl_realistic-+a.pnl_realistic)[0]||T.sort((a,b)=>+b.pnl_realistic-+a.pnl_realistic)[0]||null;
+  const sh=((j&&j.shadow&&j.shadow.recent)||[]).find(x=>x.status==="win")||null;
+  return {t,sh,j};
+}
+function tourReplayHtml(kind,d){
+  const t=d.t,p=t&&t.plan||{},sh=d.sh,n2=x=>x==null?"—":(+x).toFixed(2),dt=x=>{try{return winET(x)}catch(e){return ""}},dayS=x=>{try{return wDay(x)}catch(e){return x||""}};
+  if(kind===0){if(!t)return `<div class="tour-replay"><span class="tag">Replay</span><div class="tt">No past trade to replay yet</div><div class="sub">Open the Winston tab once so his trades are loaded.</div></div>`;
+    const risk=p.planned_loss!=null?`$${Math.round(+p.planned_loss)}`:"—",src=/^coach/.test(t.source||"")?`⚡ Signal · post ${esc(String(t.source).replace("coach:",""))}`:"Winston's own idea";
+    return `<div class="tour-replay"><span class="tag">Replay · ⚡ Signal</span><div class="tt">${esc(t.ticker)} — ${t.side==="put"?"short":"long"} ${p.trigger_level!=null?"through "+esc(String(p.trigger_level)):"off the level"}</div><div class="sub">${src} · ${esc(dayS(t.day))} ${esc(dt(t.opened_at))}</div>
+      <div class="kv"><div><span>Contract</span><b>${esc(t.label||"")}</b></div><div><span>Ask</span><b>$${n2(t.entry_ask)}</b></div><div><span>Fits</span><b class="up">★ ${t.qty||1} contract</b></div><div><span>Spread</span><b>${p.spread_pct!=null?(+p.spread_pct).toFixed(1)+"%":"—"}</b></div></div>
+      <div class="kv"><div><span>Wrong-if</span><b class="dn">${n2(p.wrong_if_orig!=null?p.wrong_if_orig:p.wrong_if_level)} (10-min close)</b></div><div><span>Target</span><b class="up">${n2(p.target_level)}</b></div><div><span>Risk</span><b>${risk}</b></div><div><span>Stock then</span><b>${n2(t.entry_under)}</b></div></div>
+      <div class="btns"><button class="ok">Approve</button><button class="no">Reject</button><span class="mut" style="font-size:11px">replay — buttons do nothing · a live card expires in 15 min</span></div></div>`}
+  if(kind===1){if(!t)return "";const lo=+(p.wrong_if_orig!=null?p.wrong_if_orig:p.wrong_if_level),hi=+p.target_level,eu=+t.entry_under,xu=+t.exit_under,span=hi-lo||1,pc=v=>Math.max(0,Math.min(100,(v-lo)/span*100)),mid=eu+(xu-eu)*0.5,pos=pc(mid),be=pc(eu);
+    const pnlMid=Math.round((+t.pnl_realistic||0)*0.5);
+    return `<div class="tour-replay"><span class="tag">Replay · in trade</span><div class="tt">${esc(t.label||t.ticker)} · ${t.side==="put"?"short":"long"} · ${t.qty||1} contract</div><div class="sub">filled $${n2(t.entry_fill)} at ${esc(dt(t.opened_at))} · halfway to the target it looked like this · <b class="up">about ${wm(pnlMid)}</b></div>
+      <div class="bar"><i style="width:${pos.toFixed(0)}%"></i><span class="pt" style="left:0"></span><span class="lb" style="left:0">${n2(lo)} wrong-if</span><span class="pt" style="left:${be.toFixed(0)}%;background:var(--gold)"></span><span class="lb" style="left:${be.toFixed(0)}%">BE ${n2(eu)}</span><span class="pt" style="left:${pos.toFixed(0)}%;background:var(--up)"></span><span class="lb" style="left:${pos.toFixed(0)}%">now ${n2(mid)}</span><span class="pt" style="left:100%"></span><span class="lb" style="left:100%">${n2(hi)} target</span></div>
+      <div class="mut" style="font-size:12px">Stop moves to breakeven at +0.5R${p.breakeven_at?" (it did, "+esc(dt(p.breakeven_at))+")":""}. Trail arms at 75% of the way to target. The server checks the wrong-if on every 10-minute close. This one closed ${esc(dt(t.closed_at))} by ${esc(WIN_WHY[t.exit_reason]||t.exit_reason||"")}: <b class="up">${wm(+t.pnl_realistic)}</b>${t.r_multiple!=null?" · "+(+t.r_multiple).toFixed(2)+"R":""}.</div>
+      <div class="btns"><button>Close Now</button><button>Chart</button><span class="mut" style="font-size:11px">replay — buttons do nothing</span></div></div>`}
+  if(kind===2){if(!sh)return `<div class="tour-replay"><span class="tag">Replay · shadow</span><div class="tt">No shadow trade yet</div><div class="sub">A shadow appears the first time a rule blocks an idea.</div></div>`;
+    const rl=(d.j&&d.j.shadow&&d.j.shadow.by_rule||{})[sh.rule]||{};
+    return `<div class="tour-replay"><span class="tag">Replay · blocked → shadow</span><div class="tt">${esc(sh.ticker)} ${sh.side==="put"?"put":"call"} — the rule said no</div><div class="sub">${esc(dayS(sh.day))} · stock at ${n2(sh.spot)} · wrong-if ${n2(sh.wrong_if)} · target ${n2(sh.target)}</div>
+      <div class="banner">Rule <b>${esc(sh.rule)}</b>: ${esc(sh.why||"")} — not sent. Booked as a SHADOW trade and scored with the same exits.</div>
+      <div class="kv"><div><span>Exit</span><b>${esc(sh.status==="win"?"target "+n2(sh.target):sh.status)}</b></div><div><span>Result</span><b class="up">${wm(+sh.pnl_est)} est${sh.r!=null?" · "+(+sh.r).toFixed(1)+"R":""}</b></div><div><span>This rule so far</span><b>${rl.n||1} blocked · ${wm(+rl.est||+sh.pnl_est)} est</b></div><div><span>Counts in his book?</span><b>No — ledger only</b></div></div>
+      <div class="mut" style="font-size:12px;margin-top:6px">This is how a rule earns its keep — or loses it.</div></div>`}
+  return "";
+}
+async function tourReplayAdd(){
+  if(!TOUR.on)return;if(DK.view!=="desk")dkShow("desk");
+  const d=await tourReplayData();const k=TOUR.replay.length%3;const html=tourReplayHtml(k,d);if(!html)return;
+  TOUR.replay.push(html);tourReplayRestore(true);
+  tourNote(["A ⚡ Signal card — replay of a real post Winston took","The in-trade card — what Josh sees while it works","A blocked idea → shadow trade. Tap again to cycle."][k],3200);
+}
+function tourReplayRestore(scroll){const m=$("#dkMsgs");if(!m||!TOUR.replay.length)return;m.querySelectorAll(".tour-replay").forEach(x=>x.remove());m.insertAdjacentHTML("beforeend",TOUR.replay.join(""));if(scroll)m.scrollTop=m.scrollHeight}
+(function(){const _b=v4TopBuild;v4TopBuild=function(){_b();tourInstall()};
+  const _s=dkShow;dkShow=function(v){_s(v);if(TOUR.on){tourChips();tourReplayRestore()}};
+  if(typeof dkRenderMsgs==="function"){const _m=dkRenderMsgs;dkRenderMsgs=function(){const r=_m.apply(this,arguments);if(TOUR.on)tourReplayRestore();return r}}
+  if($("#v4top"))tourInstall();})();
 
 </script>
 </body>
