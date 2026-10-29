@@ -1187,8 +1187,8 @@ svg.nc-svg{width:100%;height:auto;display:block}
 .sb-dchip .a::before,.sb-dchip .b::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}.sb-dchip .a::before{background:#5AA9FF}.sb-dchip .b::before{background:#C58BFF}
 .sb-keyline{font-size:12.5px;color:var(--ink-2);margin:0 0 6px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}.sb-keyline i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
 .dk-expand{margin-left:auto;align-self:center;font-size:12px;font-weight:700;color:var(--gold);border:1px solid rgba(245,196,81,.45);background:rgba(245,196,81,.08);border-radius:9px;padding:5px 11px;cursor:pointer;margin-bottom:6px}.dk-expand+.sg-watch{margin-left:12px}
-#deskBack{position:fixed;inset:0;background:rgba(5,6,8,.74);z-index:139}
-.dk-desk.pop{position:fixed;inset:5vh 6vw;z-index:140;background:var(--bg);border:1px solid #2b3240;border-radius:16px;box-shadow:0 30px 90px rgba(0,0,0,.8);overflow:hidden;grid-column:auto;grid-row:auto}.dk-desk.pop .dk-msgs{font-size:16px;line-height:1.55}.dk-desk.pop .dk-head{display:none}
+#deskBack{position:fixed;inset:0;background:rgba(5,6,8,.7);z-index:139;backdrop-filter:blur(2px)}
+.dk-desk.pop{position:fixed;inset:58px 4vw 3vh;z-index:140;background:var(--bg);border:1px solid #2b3240;border-radius:16px;box-shadow:0 30px 90px rgba(0,0,0,.8);overflow:hidden;grid-column:auto;grid-row:auto;display:flex;flex-direction:column;min-height:0}.dk-desk.pop .dk-msgs{font-size:16px;line-height:1.55;flex:1 1 auto;min-height:0;overflow:auto;padding-inline:max(22px,calc((100% - 1080px)/2))}.dk-desk.pop .dk-head{display:none}.dk-desk.pop .dk-ctabs,.dk-desk.pop .dk-quick{padding-inline:max(22px,calc((100% - 1080px)/2));flex:0 0 auto}.dk-desk.pop .dk-compose{margin-inline:max(22px,calc((100% - 1080px)/2));flex:0 0 auto;margin-bottom:12px}.dk-desk.pop .dk-expand{margin-right:14px}
 body.deskpop .v4ov{position:fixed;z-index:200}
 .v4top .st.q2{cursor:pointer}
 .v4-tip{position:fixed;z-index:120;background:#1B1F27;border:1px solid #2b3240;border-radius:12px;padding:10px 14px;max-width:340px;font-size:13px;line-height:1.45;color:var(--ink-2);box-shadow:0 12px 40px rgba(0,0,0,.6)}.v4-tip b{display:block;color:var(--ink);margin-bottom:3px}
@@ -1208,7 +1208,7 @@ body.deskpop .v4ov{position:fixed;z-index:200}
     <button data-go="prep" title="Pre-market: Prep, Market and Night Charts"><svg viewBox="0 0 24 24"><path d="M17 18a5 5 0 0 0-10 0"/><path d="M12 2v7M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1M8 6l4-4 4 4"/></svg>Pre-market</button>
     <button data-go="journal"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Journal</button>
     <button data-go="playbook"><svg viewBox="0 0 24 24"><path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/></svg>Playbook</button>
-    <button data-go="winston" title="Winston: a separate paper-only trader on its own $4,000 that collects data"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M9 16l3 2 3-2"/></svg>Winston</button>
+    <button data-go="winston" title="Winston: a separate paper-only trader on its own paper book that collects data"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M9 16l3 2 3-2"/></svg>Winston</button>
     <button data-go="jason"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Calls</button>
     <button data-go="quiz" title="Pop Quiz: the coach's five questions, graded from the calls"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Quiz</button>
     <button data-go="homework" title="Homework: the coach's after-close read — Otto fills the numbers, you write the read"><svg viewBox="0 0 24 24"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z"/><path d="M8 9h8M8 13h6"/><path d="M4 16a4 4 0 0 1 4-4"/></svg>Homework</button>
@@ -2640,7 +2640,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="4.8.2";
+const BUILD="4.8.3";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3077,9 +3077,11 @@ if("serviceWorker" in navigator && location.protocol==="https:"){
     const b=$("#updbar"); if(!b)return;
     fetch("sw.js",{cache:"no-store"}).then(r=>r.text()).then(t=>{
       const m=t.match(/VERSION\s*=\s*'otto-v([^']+)'/);
+      // v4.8.3: the page already IS that version (a worker finished installing behind us) — nothing to nag about
+      if(m&&m[1]===BUILD)return;
       if(m)$("#updbarVer").textContent="v"+m[1];
-    }).catch(()=>{});
-    b.hidden=false;
+      b.hidden=false;
+    }).catch(()=>{b.hidden=false});
   };
   window.addEventListener("load",()=>{
     navigator.serviceWorker.register("sw.js").then(reg=>{
@@ -3106,7 +3108,10 @@ if("serviceWorker" in navigator && location.protocol==="https:"){
       if(reg.waiting && navigator.serviceWorker.controller) showUpdateBar();
     }).catch(()=>{});
   });
-  $("#updbarBtn").addEventListener("click",()=>location.reload());
+  $("#updbarBtn").addEventListener("click",()=>{
+    $("#updbar").hidden=true;
+    navigator.serviceWorker.getRegistration().then(r=>{if(r&&r.waiting)r.waiting.postMessage("SKIP_WAITING")}).catch(()=>{}).finally(()=>setTimeout(()=>location.reload(),200));
+  });
 }
 /* Offline is normal for this app, so say so rather than letting calls fail silently. */
 window.addEventListener("offline",()=>toast("Offline — homework and journal still work"));
@@ -4455,6 +4460,7 @@ function winHead(j){
     <span style="flex:1"></span>
     <button class="dk-btn go" data-wpop="report">Today report</button><button class="dk-btn sec" data-wpop="score">Scorecard</button><button class="dk-btn sec" data-wpop="rules">${data?"Switch to strict":"Switch to data"} · rules</button><button class="dk-btn sec" id="winPause">${c.enabled?"Pause":"Resume"}</button></div>`;
 }
+function winStart(){const c=(typeof WIN!=="undefined"&&WIN.j&&WIN.j.config)||{};return(+c.paper_balance||4000).toLocaleString()}
 function winTabs(){return ""}
 function winStrip(j){
   const st=j.stats||{},eq=+j.equity||0,start=+(j.config&&j.config.paper_balance)||4000,gain=eq-start,pct=start?gain/start*100:0;
@@ -4483,7 +4489,7 @@ function winStrip(j){
     <div class="dk-cardx"><div class="dk-h">Robinhood ••7012 <b>live</b></div>
       <div class="win43-big">${tot==null?"—":"$"+tot.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
       <div class="mut" style="font-size:11.5px;margin-top:4px">${tot==null?"open the Desk once to load it":`cash · ${pos?pos+" position"+(pos===1?"":"s"):"no positions"}`}</div>
-      <div class="win43-kv" style="margin-top:8px"><span>Started</span><b>$4,000</b><span>Buying power</span><b>${bp==null?"—":"$"+bp.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div>
+      <div class="win43-kv" style="margin-top:8px"><span>Started</span><b>$${winStart()}</b><span>Buying power</span><b>${bp==null?"—":"$"+bp.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div>
       <div class="mut" style="font-size:11px;margin-top:8px">Where Winston trades once he clears the gate · 1 contract.</div></div>
     <div class="dk-cardx win43-click" data-wpop="report"><div class="dk-h">Today's read <b>${esc(wDay(day))}</b><span class="x">open ↗</span></div>
       <div class="win43-line"><span class="k">8:45 plan</span><span class="clamp">${rt?esc(rt.bias||""):"Not written yet — Winston writes it between 8:30 and 9:25."}</span></div>
@@ -4607,7 +4613,7 @@ function winShadowBox(j){const sh=j.shadow||{},by=Object.entries(sh.by_rule||{})
     <div style="margin-top:10px">${rec.map(x=>`<div class="dk-row"><span>${esc(x.ticker)} ${x.side==="call"?"call":"put"} · ${esc(x.rule)} · ${esc(wDay(x.day).split(",")[0])}</span><span class="mono">${x.status==="open"?"open":x.status+" "+wm(x.pnl_est)}</span></div>`).join("")}</div>`
     :`<div class="mut">Nothing yet. The first idea a rule blocks (with a side and a plan) shows up here and is scored the same day.</div>`}</div>`}
 async function winScore(j){
-  let cc=null,ccErr=null;try{cc=await dkApi("coach_corner",null,"&range=all")}catch(e){ccErr=e.message}
+  let cc=null,ccErr=null;const _h=CC.cache&&CC.cache.all;if(_h&&Date.now()-_h.at<6e5)cc=_h.j;else try{cc=await dkApi("coach_corner",null,"&range=all");(CC.cache=CC.cache||{}).all={j:cc,at:Date.now()}}catch(e){ccErr=e.message}
   const st=j.stats||{},u=cc&&cc.us,c=cc&&cc.coach;
   const curve=(j.curve||[]).filter(p=>p.end!=null);
   let spark="";
@@ -4616,7 +4622,7 @@ async function winScore(j){
   const row=(a,b,cc2)=>`<tr><td>${a}</td><td class="mono">${b}</td><td class="mono">${cc2}</td></tr>`;
   return `
     <div class="dk-cardx" style="margin-bottom:12px"><div class="dk-h">Winston vs Josh + Baby J <b>side by side</b></div>
-      <div style="overflow:auto"><table class="dkt"><tr><th></th><th>Winston (paper, own $4,000, 1 contract)</th><th>Josh + Baby J (real account)</th></tr>
+      <div style="overflow:auto"><table class="dkt"><tr><th></th><th>Winston (paper, own $${winStart()}, 1 contract)</th><th>Josh + Baby J (real account)</th></tr>
         ${row("Realized P&amp;L",winM(st.pnl_realistic),u?winM(u.pnl):"—")}
         ${row("Wins – losses",`${st.wins||0}–${st.losses||0}`,u?`${u.wins}–${u.losses}`:"—")}
         ${row("Trades counted",st.trades||0,u?(u.wins+u.losses):"—")}
@@ -5051,10 +5057,13 @@ function ccSideHtml(sd){
   const how=sd.exit_why&&["win","loss","flat"].includes(sd.state)?`<div class="mut" style="font-size:11.5px">${esc(sd.entry_px)} → ${esc(sd.exit_px)} · ${esc(sd.exit_why)}${sd.opt?` · ${esc(sd.opt.label||"option")} ${sd.opt.entry}→${sd.opt.exit}`:""}</div>`:sd.why?`<div class="mut" style="font-size:11.5px">${esc(sd.why)}</div>`:"";
   return `<div>${ccState(sd.state)}${$p}${how}</div>`;
 }
+/* v4.8.3: the 30-day and All ranges are slow on the server — fetch them quietly in the background once Coach's Corner has loaded, so the tap is instant */
+function ccWarm(){if(CC.warming)return;CC.warming=true;
+  (async()=>{try{for(const r of["30","all"]){const h=(CC.cache||{})[r];if(h&&Date.now()-h.at<6e5)continue;await new Promise(x=>setTimeout(x,1500));try{const j=await dkApi("coach_corner",null,"&range="+r);(CC.cache=CC.cache||{})[r]={j,at:Date.now()}}catch(e){}}}finally{CC.warming=false}})()}
 async function dkCoach(cached){
   const pg=$("#dkPage");
   if(!(cached&&CC.j))pg.innerHTML=`<div class="dkp">${dkRTabs("coach")}${dkLoading("Scoring every coach post…")}</div>`;
-  let j,wj=WIN.j;if(cached&&CC.j)j=CC.j;else try{const [a,b]=await Promise.allSettled([dkApi("coach_corner",null,"&range="+CC.range),WIN.j?Promise.resolve(WIN.j):winApi("state")]);if(a.status!=="fulfilled")throw a.reason;j=a.value;CC.j=j;if(b.status==="fulfilled"&&b.value){wj=b.value;WIN.j=wj}}catch(e){if(DK.view==="coach")pg.innerHTML=`<div class="dkp">${dkRTabs("coach")}${dkErr(e)}</div>`;return}
+  let j,wj=WIN.j;const _hit=CC.cache&&CC.cache[CC.range];if(cached&&CC.j)j=CC.j;else if(_hit&&Date.now()-_hit.at<6e5&&(CC.range==="30"||CC.range==="all")){j=_hit.j;CC.j=j}else try{const [a,b]=await Promise.allSettled([dkApi("coach_corner",null,"&range="+CC.range),WIN.j?Promise.resolve(WIN.j):winApi("state")]);if(a.status!=="fulfilled")throw a.reason;j=a.value;CC.j=j;(CC.cache=CC.cache||{})[CC.range]={j,at:Date.now()};ccWarm();if(b.status==="fulfilled"&&b.value){wj=b.value;WIN.j=wj}}catch(e){if(DK.view==="coach")pg.innerHTML=`<div class="dkp">${dkRTabs("coach")}${dkErr(e)}</div>`;return}
   if(DK.view!=="coach")return;
   const c=j.coach,u=j.us,RL=[["today","Today"],["week","This week"],["30","30 days"],["all","All"]],rl=Object.fromEntries(RL);
   /* v4.8.2: what Winston did with each post — matched on the post id in his trade / passed source ("coach:<id>"). No match = a dash, never a guess. */
@@ -5065,7 +5074,7 @@ async function dkCoach(cached){
   const pk=x=>x.unclear?"unclear":x.type==="call"?"call":"level",all=(j.posts||[]),cnt=k=>all.filter(x=>k==="all"||pk(x)===k).length;
   const rows=all.filter(x=>CC.f==="all"||pk(x)===CC.f).map(x=>{
     const sides=x.cc&&x.cc.sides?x.cc.sides:[];
-    const coachCell=!x.cc?`<span class="cc-chip">pending</span>`:x.cc.state==="unscored"?`<span class="cc-chip">not scored — ${esc(x.cc.why||"")}</span>`:
+    const coachCell=!x.cc?(x.day&&x.day<new Date().toLocaleDateString("en-CA",{timeZone:"America/New_York"})?`<span class="cc-chip" title="The server hasn't scored this post yet — it will fill in when it does">not scored yet</span>`:`<span class="cc-chip">pending</span>`):x.cc.state==="unscored"?`<span class="cc-chip">not scored — ${esc(x.cc.why||"")}</span>`:
       sides.length>1?sides.map(sd=>`<div style="margin-bottom:4px">If it ${sd.side==="up"?(/RES/i.test(x.words)?"broke":"held"):(/RES/i.test(x.words)?"held":"broke")}: ${ccSideHtml(sd)}</div>`).join(""):sides.map(ccSideHtml).join("");
     const did=x.cards.length?x.cards.map(a=>`<div>${esc(a.title)}${a.wrong_side?` · <b style="color:#ff8a5c">wrong side</b>`:""}${a.origin==="coach_level"||a.origin==="coach_post"?` · <b style="color:#ffc27a">direction picked by Jarvis</b>`:""}</div>`).join(""):`<span class="mut">no card</span>`;
     const we=x.cards.length?x.cards.map(a=>esc(a.we)).join("<br>"):`<span class="mut">—</span>`;
@@ -5098,10 +5107,12 @@ async function dkCoach(cached){
   pg.querySelectorAll("[data-ccr]").forEach(b=>b.onclick=()=>{CC.range=b.dataset.ccr;dkCoach()});
   pg.querySelectorAll("[data-ccf]").forEach(b=>b.onclick=()=>{CC.f=b.dataset.ccf;dkCoach(true)});
 }
-async function dkPerf(force){
+async function dkPerf(force,have){
   const pg=$("#dkPage");
-  if(!DK.perf||force)pg.innerHTML=dkLoading("Reading both Robinhood accounts…");
-  let j;try{j=await dkApi("performance",null,force?"&fresh=1":"");DK.perf=j}catch(e){if(DK.view==="perf")pg.innerHTML=dkErr(e);return}
+  if(!have&&(!DK.perf||force))pg.innerHTML=dkLoading("Reading both Robinhood accounts…");
+  /* v4.8.3: the numbers come back first (read=0); Jarvis's written summary is a slow AI call, so it fills in a moment later instead of holding the whole page */
+  let j;try{if(have)j=have;else{j=await dkApi("performance",null,"&read=0"+(force?"&fresh=1":""));DK.perf=j;
+    if(!j.read)dkApi("performance",null,"").then(j2=>{if(j2&&j2.read){DK.perf=j2;if(DK.view==="perf")dkPerf(false,j2)}}).catch(()=>{})}}catch(e){if(DK.view==="perf")pg.innerHTML=dkErr(e);return}
   if(DK.view!=="perf")return;
   const L=j.limits,g=j.goals,r=j.realized;
   // weekly bars, last 12 weeks, zero in the middle, yellow line at −weekly limit
@@ -5445,7 +5456,7 @@ async function dkTradeLoad(){
 }
 function trBtn(t,big){
   const c=DK.cn[t.option_id]||{step:"idle"},cl=big?" big":"",o=esc(t.option_id),n=t.qty||1;
-  if(DK.tl&&DK.tl.rth===false)return `<button class="tr-cn${cl}" disabled>CLOSE NOW</button><div class="tr-msg bad"><b>Market is closed.</b> Close Now works 9:30 AM to 4:00 PM ET. ${t.practice?"The practice trade stays open until it is scored at the close.":"The trade stays open until 9:30 tomorrow, or close it in Robinhood."}</div>`;
+  if(!t.demo&&DK.tl&&DK.tl.rth===false)return `<button class="tr-cn${cl}" disabled>CLOSE NOW</button><div class="tr-msg bad"><b>Market is closed.</b> Close Now works 9:30 AM to 4:00 PM ET. ${t.practice?"The practice trade stays open until it is scored at the close.":"The trade stays open until 9:30 tomorrow, or close it in Robinhood."}</div>`;
   if(c.step==="confirm")return `<div class="tr-two${big?" big":""}"><button class="tr-yes" data-cn="yes" data-opt="${o}">Yes, sell ${n} contract${n>1?"s":""} now</button><button class="tr-no" data-cn="no" data-opt="${o}">Cancel</button></div><div class="mut" style="font-size:12px;margin-top:4px">Goes back in 5 seconds if you do nothing.${t.bid!=null?` Sell price now about $${t.bid.toFixed(2)}.`:""}${t.practice?" Practice: nothing goes to Robinhood.":""}</div>`;
   if(c.step==="selling")return `<button class="tr-cn${cl}" disabled>Selling…</button><div class="mut" style="font-size:12px;margin-top:4px">${t.practice?"Reading the live sell price…":"Stop cancelled. Sell order sent to Robinhood. Waiting for the fill."}</div>`;
   const err=c.step==="err"?`<div class="tr-msg bad"><b>Not closed.</b> ${esc(c.msg||"")}</div>`:"";
@@ -5453,6 +5464,7 @@ function trBtn(t,big){
 }
 function trDone(d){
   const r=d.r||{},f=r.fill_px;
+  if(r.demo)return `<div class="tr-msg ok"><span class="tr-prac" style="color:var(--gold);border-color:var(--gold)">DEMO</span> <b>Closed (practice).</b> Sold 1 ${esc(d.label)} at <b>$${f.toFixed(2)}</b> (the live sell price at the tap). Practice result <b class="${trCls(r.pnl)}">${trMoney(r.pnl)}</b>. Demo only — nothing was sent to Robinhood and nothing was saved.</div>`;
   if(r.practice)return `<div class="tr-msg ok"><b>Closed (practice).</b> Sold 1 ${esc(d.label)} at <b>$${f!=null?f.toFixed(2):"?"}</b> (the live sell price at your tap). Practice result <b class="${trCls(r.pnl)}">${trMoney(r.pnl)}</b>. Written to the Desk and the Activity log as "Closed by ${esc(r.by||"you")} (Close Now, practice)". Nothing was sent to Robinhood.</div>`;
   const txt=r.state==="filled"&&f!=null?`Sold ${r.qty||1} ${esc(d.label)} at <b>$${f.toFixed(2)}</b>.${r.pnl!=null?` Real result <b class="${trCls(r.pnl)}">${trMoney(r.pnl)}</b> (fill from Robinhood).`:""}`
     :`Sell order sent for ${esc(d.label)} (${esc(r.state||"sent")}). Robinhood has not reported the fill yet. The trade row goes away when the position is gone; check Robinhood if it stays.`;
@@ -5463,7 +5475,7 @@ function trCard(){
   if(!ts.length&&!d)return"";
   let h=`<div class="dk-cardx tr-card"><div class="dk-h">In a trade <b>${ts.length?"live":"closed"}</b></div>`;
   h+=ts.map(t=>{const e=t.est_pnl;
-    return `<div class="tr-row" data-trade="${esc(t.option_id)}" role="button" tabindex="0"><div><b>IN A TRADE</b> ${t.practice?`<span class="tr-prac">PRACTICE</span>`:""}${esc(t.label)}<small>tap to open the chart and Close Now</small></div><b class="${trCls(e)}">${e==null?"price unavailable":trMoney(e)+" est."}</b></div>`+trBtn(t,false)}).join("");
+    return `<div class="tr-row" data-trade="${esc(t.option_id)}" role="button" tabindex="0"><div><b>IN A TRADE</b> ${t.demo?`<span class="tr-prac" style="color:var(--gold);border-color:var(--gold)">DEMO</span> `:""}${t.practice?`<span class="tr-prac">PRACTICE</span>`:""}${esc(t.label)}<small>tap to open the chart and Close Now</small></div><b class="${trCls(e)}">${e==null?"price unavailable":trMoney(e)+" est."}</b></div>`+trBtn(t,false)}).join("");
   if(d)h+=trDone(d);
   return h+`</div>`;
 }
@@ -5489,7 +5501,7 @@ function trBig(){
   const lad=pl&&trN(pl.wrong_if)!=null&&trN(pl.tp1)!=null?winLadder({ticker:t.sym,entry_under:t.under_entry,plan:{wrong_if_level:pl.wrong_if,target_level:pl.tp1}},trN(t.under)):"";
   const say=pl?`<b>Plan on this trade:</b> exit if a ${pl.tf}-minute candle closes ${pl.dir==="down"?"over":"under"} ${pl.wrong_if}, or take profit at ${pl.tp1}. Flat by 3:50 PM.`
     :`<b>No exit plan on file.</b> This trade was not opened from an Otto card, so Otto has no lines for it. Close Now still works.`;
-  return `${t.practice?`<div class="tr-pracbn"><b>Practice trade.</b> Nothing was sent to Robinhood. Closing it sells at the option's live sell price and scores it on the practice book.</div>`:""}<div class="win-banner on"><div class="win-big"><span class="win-dot"></span>IN A TRADE NOW — ${esc(t.label)}</div>
+  return `${t.demo?`<div class="tr-pracbn" style="border-color:var(--gold);color:var(--gold)"><b>DEMO · practice.</b> A pretend trade for the walkthrough. Nothing goes to Robinhood and nothing is saved.</div>`:""}${t.practice&&!t.demo?`<div class="tr-pracbn"><b>Practice trade.</b> Nothing was sent to Robinhood. Closing it sells at the option's live sell price and scores it on the practice book.</div>`:""}<div class="win-banner on"><div class="win-big"><span class="win-dot"></span>IN A TRADE NOW — ${esc(t.label)}</div>
     <div class="mut" style="font-size:12.5px">Josh + Baby J · ${qty} contract${qty>1?"s":""} · ${t.practice?"practice book":"Agentic account"}${t.exp?" · exp "+esc(t.exp):""}</div>
     <div class="win-row"><div><span class="mut">${t.practice?"Pretend fill":"Bought"}</span><b>${t.entry!=null?"$"+t.entry.toFixed(2):"—"}</b></div><div><span class="mut">Since</span><b>${t.opened_at?esc(winET(t.opened_at)):"—"}</b></div><div><span class="mut">Costs</span><b>${t.entry!=null?"$"+Math.round(t.entry*100*qty):"—"}</b></div>
     <div><span class="mut">Option now (sell price)</span><b>${t.bid!=null?"$"+t.bid.toFixed(2):"—"}</b></div>
@@ -5511,10 +5523,10 @@ async function trCn(act,opt){
   else if(act==="yes"){
     c.step="selling";dkRenderRight();trRefreshDialog();
     const lab=(trCur().find(t=>t.option_id===opt)||{}).label||"the trade";
-    try{const r=await dkApi("close_now",{option_id:opt,author:dkWho()});
+    try{const r=String(opt).startsWith("DEMO:")?await demoClose():await dkApi("close_now",{option_id:opt,author:dkWho()});
       DK.cnDone={at:Date.now(),r,label:lab};c.step="idle";if(r.practice&&r.card&&DK.acts[r.card])DK.acts[r.card].outcome={...(DK.acts[r.card].outcome||{}),practice_close:true,state:r.pnl>0?"win":r.pnl<0?"loss":"scratch",pnl_est:r.pnl};toast(r.state==="filled"?"Closed":"Close sent");
       // v3.41: the line after Close Now — asked AFTER the sell, never before it
-      setTimeout(async()=>{const w=await whyAsk("out",{card:{title:lab},fill:r.fill_px});if(w==null)return;
+      setTimeout(async()=>{const w=await whyAsk("out",{card:{title:lab},fill:r.fill_px});if(w==null||r.demo)return;
         try{await dkApi("why_out",{id:r.card,option_id:opt,text:w});toast("Saved")}catch(e){toast(String(e.message).slice(0,100))}},300)}
     catch(e){c.step="err";c.msg=e.message;if(String(opt).startsWith("P:"))toast(String(e.message).slice(0,140))}
     setTimeout(()=>dkPanel(true),1500);
@@ -6803,9 +6815,9 @@ function tourCkMenu(keep){
 async function tourCardMenu(){
   const a=$("#v4cards");if(!a)return;tourMenuOpen("cards",a,`<div class="hh"><span>SHOW ME A CARD</span></div><div class="mut" style="padding:8px 12px;font-size:12px">Loading real trades…</div>`);
   const d=await tourReplayData();if(!$("#tourMenu")||$("#tourMenu").dataset.k!=="cards")return;
-  const t=d.t,o=d.own,sh=d.sh,I=[[0,"⚡ A card from his post",t?`${t.ticker} ${t.side==="put"?"short":"long"} · the contract Josh sees`:"no past trade yet"],[1,"▶ The in-trade card",t?`${t.label||t.ticker} · what Josh sees while it works`:"no past trade yet"],[2,"⛔ The rule said no → shadow",sh?`${sh.ticker} ${sh.side==="put"?"put":"call"} · blocked, then scored`:"no shadow trade yet"],[3,"💡 Winston's own idea",o?`${o.label||o.ticker} · took it on his own read`:"no own-idea win yet"]];
-  const m=$("#tourMenu");m.innerHTML=`<div class="hh"><span>SHOW ME A CARD · REAL TRADES, LABELLED REPLAY</span></div>`+I.map(([k,l,s])=>`<div class="it" data-k="${k}"><span class="l"><b>${esc(l)}</b><small>${esc(s)}</small></span></div>`).join("")+`<div class="it" data-k="clear"><span class="l"><b>Clear replay cards</b></span></div>`;
-  m.querySelectorAll(".it").forEach(el=>el.onclick=()=>{const k=el.dataset.k;tourMenuClose();if(k==="clear"){TOUR.replay=[];document.querySelectorAll(".tour-replay").forEach(x=>x.remove());tourNote("Replay cards cleared");return}tourReplayAdd(+k)});
+  const t=d.t,o=d.own,sh=d.sh,I=[[0,"⚡ A card from his post",t?`${t.ticker} ${t.side==="put"?"short":"long"} · the contract Josh sees`:"no past trade yet"],[1,"▶ The in-trade card",t?`${t.label||t.ticker} · what Josh sees while it works`:"no past trade yet"],[2,"⛔ The rule said no → shadow",sh?`${sh.ticker} ${sh.side==="put"?"put":"call"} · blocked, then scored`:"no shadow trade yet"],[3,"💡 Winston's own idea",o?`${o.label||o.ticker} · took it on his own read`:"no own-idea win yet"],[4,"📉 A loss — the exit rule at work",d.loss?`${d.loss.label||d.loss.ticker} · ${wm(+d.loss.pnl_realistic)}`:"no past loss yet"],[5,"🙅 Winston passed on a coach post",d.pass?`${d.pass.p.ticker||"coach post"} · with his reason`:"no passed post yet"]];
+  const m=$("#tourMenu");m.innerHTML=`<div class="hh"><span>SHOW ME A CARD · REAL TRADES, LABELLED REPLAY</span></div>`+I.map(([k,l,s])=>`<div class="it" data-k="${k}"><span class="l"><b>${esc(l)}</b><small>${esc(s)}</small></span></div>`).join("")+`<div class="hh" style="margin-top:6px"><span>DEMO TRADES · PRETEND, NOTHING SAVED</span></div><div class="it" data-k="d1"><span class="l"><b>🟢 Josh + Baby J in a trade</b><small>open-trade card with CLOSE NOW</small></span></div><div class="it" data-k="d2"><span class="l"><b>🔴 Closing the trade</b><small>confirm, result, the why line</small></span></div><div class="it" data-k="d3"><span class="l"><b>🟣 Winston in a trade</b><small>what he watches, three ways it ends</small></span></div><div class="it" data-k="clear"><span class="l"><b>Clear replay + demo cards</b></span></div>`;
+  m.querySelectorAll(".it").forEach(el=>el.onclick=()=>{const k=el.dataset.k;tourMenuClose();if(/^d\d$/.test(k)){demoRun(k);return}if(k==="clear"){demoClear();TOUR.replay=[];document.querySelectorAll(".tour-replay").forEach(x=>x.remove());tourNote("Replay cards cleared");return}tourReplayAdd(+k)});
 }
 function tourInstall(){
   if(!$("#tourCss")){const s=document.createElement("style");s.id="tourCss";s.textContent=TOUR_CSS;document.head.appendChild(s)}
@@ -6826,7 +6838,7 @@ function tourSet(on){
     tourNote(TOUR.seen?"Tour on — picked up where you left off":"Tour on — tap a gold ⓘ to explain anything. Winston keeps trading underneath.",3200);
     tourGo(TOUR.last||0,TOUR.seen);
   }else{
-    tourEnd();tourMenuClose();clearInterval(TOUR.t);TOUR.t=null;
+    tourEnd();tourMenuClose();clearInterval(TOUR.t);TOUR.t=null;demoClear();
     document.querySelectorAll(".tour-chip,.tour-ipop").forEach(x=>x.remove());document.querySelectorAll(".tour-host").forEach(x=>x.classList.remove("tour-host"));
     document.querySelectorAll(".tour-replay").forEach(x=>x.remove());tourNote("Tour off — back to the live desk. Switch it on and you're back where you were.");
   }
@@ -6894,7 +6906,7 @@ document.addEventListener("click",e=>{if(!TOUR.on)return;if(e.target.closest('[d
 function deskPop(on){
   const d=$(".dk-desk"),b=$("#dkExpand");if(!d||!b)return;if(on===undefined)on=!d.classList.contains("pop");
   d.classList.toggle("pop",on);document.body.classList.toggle("deskpop",on);let bk=$("#deskBack");
-  if(on){if(!bk){bk=document.createElement("div");bk.id="deskBack";bk.addEventListener("click",()=>deskPop(false));document.body.appendChild(bk)}}else if(bk)bk.remove();
+  if(on){if(!bk){bk=document.createElement("div");bk.id="deskBack";bk.addEventListener("click",()=>deskPop(false));(d.closest(".dk")||document.body).appendChild(bk)}}else if(bk)bk.remove();
   b.textContent=on?"✕ Close":"⤢ Expand";const m=$("#dkMsgs");if(m)setTimeout(()=>{m.scrollTop=m.scrollHeight},30);
   if(typeof TOUR!=="undefined"&&TOUR.step>=0)setTimeout(tourPlace,60);
 }
@@ -6907,7 +6919,11 @@ async function tourReplayData(){
   const t=T.filter(t=>/^coach/.test(t.source||"")).sort((a,b)=>+b.pnl_realistic-+a.pnl_realistic)[0]||T.sort((a,b)=>+b.pnl_realistic-+a.pnl_realistic)[0]||null;
   const sh=((j&&j.shadow&&j.shadow.recent)||[]).find(x=>x.status==="win")||null;
   const own=((j&&j.trades)||[]).filter(t=>t.status!=="open"&&+t.pnl_realistic>0&&t.plan&&t.plan.target_level!=null&&!/^coach/.test(t.source||"")).sort((a,b)=>+b.pnl_realistic-+a.pnl_realistic)[0]||null;
-  return {t,sh,j,own};
+  const L=((j&&j.trades)||[]).filter(t=>t.status!=="open"&&+t.pnl_realistic<0&&t.plan);
+  const loss=L.find(t=>/^META$/i.test(t.ticker))||L.slice().sort((a,b)=>+a.pnl_realistic-+b.pnl_realistic)[0]||null;
+  let pass=null;const DY=((j&&j.days)||[]).slice().sort((a,b)=>String(b.day).localeCompare(String(a.day)));
+  for(const dd of DY){const r=dd.report,p=r&&(r.passed||[]).find(x=>/^coach:/.test(String(x.source||"")));if(p){pass={p,day:dd.day};break}}
+  return {t,sh,j,own,loss,pass};
 }
 function tourReplayHtml(kind,d){
   const t=d.t,p=t&&t.plan||{},sh=d.sh,n2=x=>x==null?"—":(+x).toFixed(2),dt=x=>{try{return winET(x)}catch(e){return ""}},dayS=x=>{try{return wDay(x)}catch(e){return x||""}};
@@ -6929,6 +6945,17 @@ function tourReplayHtml(kind,d){
       <div class="banner">Rule <b>${esc(sh.rule)}</b>: ${esc(sh.why||"")} — not sent. Booked as a SHADOW trade and scored with the same exits.</div>
       <div class="kv"><div><span>Exit</span><b>${esc(sh.status==="win"?"target "+n2(sh.target):sh.status)}</b></div><div><span>Result</span><b class="up">${wm(+sh.pnl_est)} est${sh.r!=null?" · "+(+sh.r).toFixed(1)+"R":""}</b></div><div><span>This rule so far</span><b>${rl.n||1} blocked · ${wm(+rl.est||+sh.pnl_est)} est</b></div><div><span>Counts in his book?</span><b>No — ledger only</b></div></div>
       <div class="mut" style="font-size:12px;margin-top:6px">This is how a rule earns its keep — or loses it.</div></div>`}
+  if(kind===4){const L=d.loss;if(!L)return `<div class="tour-replay"><span class="tag">Replay · a loss</span><div class="tt">No past loss to replay yet</div></div>`;
+    const lp=L.plan||{},pl=+L.pnl_realistic,why=WIN_WHY[L.exit_reason]||L.exit_reason||"closed";
+    return `<div class="tour-replay"><span class="tag" style="background:rgba(255,90,46,.16);color:var(--down)">Replay · a loss</span><div class="tt">${esc(L.label||L.ticker)} · ${L.side==="put"?"short":"long"} · ${L.qty||1} contract</div><div class="sub">${esc(dayS(L.day))} · in ${esc(dt(L.opened_at))} · out ${esc(dt(L.closed_at))} · ${esc(why)}</div>
+      <div class="kv"><div><span>In</span><b>$${n2(L.entry_fill!=null?L.entry_fill:L.entry_ask)}</b></div><div><span>Out</span><b>$${n2(L.exit_fill)}</b></div><div><span>Result</span><b class="dn">${wm(pl)}</b></div><div><span>Planned loss</span><b>${lp.planned_loss!=null?"$"+Math.round(+lp.planned_loss):"—"}</b></div></div>
+      <div class="banner">${L.exit_reason==="wrong_if"?"The wrong-if did its job: a 10-minute close through the line and he was out — no hoping, no moving the stop.":"He followed the plan and the exit rule decided, not a feeling."} ${lp.planned_loss!=null&&Math.abs(pl)<=+lp.planned_loss*1.25?"The loss stayed close to what the card said it would cost.":""}</div>
+      <div class="mut" style="font-size:12px;margin-top:6px">replay of a real paper trade — nothing here is live</div></div>`}
+  if(kind===5){const P=d.pass;if(!P)return `<div class="tour-replay"><span class="tag">Replay · passed</span><div class="tt">No passed coach post to replay yet</div></div>`;
+    const id=String(P.p.source||"").replace("coach:",""),post=((typeof CC!=="undefined"&&CC.j&&CC.j.posts)||[]).find(x=>String(x.id)===id);
+    return `<div class="tour-replay"><span class="tag">Replay · passed on a coach post</span><div class="tt">${esc(P.p.ticker||"")} ${P.p.side?(P.p.side==="put"?"put":"call"):""} — Winston said no</div><div class="sub">${esc(dayS(P.day))} · coach post ${esc(id)}${post&&post.words?" · “"+esc(String(post.words).slice(0,110))+"”":""}</div>
+      <div class="banner">Why: ${esc(String(P.p.reason||P.p.status||"no reason recorded").slice(0,220))}</div>
+      <div class="mut" style="font-size:12px;margin-top:6px">Passing is a decision too — every skipped post is written down with its reason. Replay of a real day report.</div></div>`}
   return "";
 }
 async function tourReplayAdd(k){
@@ -6937,11 +6964,50 @@ async function tourReplayAdd(k){
   if(k===3)html=d.own?tourReplayHtml(0,{...d,t:d.own}).replace("Replay · ⚡ Signal","Replay · his own idea"):"";else html=tourReplayHtml(k,d);
   if(!html){tourNote("Nothing real to replay for that one yet");return}
   TOUR.replay.push(html);tourReplayRestore(true);tourMark(1);
-  tourNote(["A ⚡ Signal card — replay of a real post Winston took","The in-trade card — what Josh sees while it works","A blocked idea → shadow trade","Winston's own idea — replay of a real fill"][k],3200);
+  tourNote(["A ⚡ Signal card — replay of a real post Winston took","The in-trade card — what Josh sees while it works","A blocked idea → shadow trade","Winston's own idea — replay of a real fill","A loss — replay of a real paper trade","A coach post Winston passed on — with his reason"][k],3200);
 }
 function tourReplayRestore(scroll){const m=$("#dkMsgs");if(!m||!TOUR.replay.length)return;m.querySelectorAll(".tour-replay").forEach(x=>x.remove());m.insertAdjacentHTML("beforeend",TOUR.replay.join(""));if(scroll)m.scrollTop=m.scrollHeight}
+
+/* ===== v4.8.3 DEMO TRADES — pretend trades for showing the in-trade screens when the market is closed.
+   Nothing is sent to the server, nothing is saved. Every card wears a DEMO tag. ===== */
+const DEMO={on:false,done:false,win:false,ws:"hold"};
+function demoTrade(){
+  const bars=[];let p=402.4;for(let i=0;i<18;i++){const o=p,c=o+Math.sin(i/2.3)*.5+.18,h=Math.max(o,c)+.25,l=Math.min(o,c)-.25;bars.push([i,o,h,l,c]);p=c}
+  const iso=m=>new Date(Date.now()-m*60e3).toISOString();
+  return {option_id:"DEMO:TSLA",demo:true,practice:true,label:"TSLA 410C 10/30",sym:"TSLA",qty:1,entry:3.85,bid:4.40,est_pnl:55,under:404.8,under_entry:403.2,opened_at:iso(55),quote_at:iso(0),exp:"Oct 30",
+    plan:{tf:5,dir:"up",wrong_if:399.5,tp1:407},bars};
+}
+(function(){const _t=trCur;trCur=function(){const r=_t();return DEMO.on&&!DEMO.done?[demoTrade()].concat(r):r}})();
+async function demoClose(){await new Promise(r=>setTimeout(r,1200));DEMO.done=true;return {practice:true,demo:true,pnl:55,fill_px:4.40,qty:1,state:"filled",by:"Josh"}}
+function demoClear(){const was=DEMO.on||DEMO.win||DK.cnDone&&DK.cnDone.r&&DK.cnDone.r.demo;DEMO.on=false;DEMO.done=false;DEMO.win=false;DEMO.ws="hold";
+  if(DK.cnDone&&DK.cnDone.r&&DK.cnDone.r.demo)DK.cnDone=null;const dl=$("#dlgOpenTrade");if(dl&&dl.open&&DK.trOpen==="DEMO:TSLA")dl.close();
+  if(was){try{dkRenderRight()}catch(e){}if(DK.view==="winston")try{dkWinston(true)}catch(e){}}}
+function demoRun(k){
+  if(k==="d3"){DEMO.win=true;DEMO.ws="hold";if(DK.view!=="winston")dkShow("winston");else dkWinston(true);tourNote("Demo: Winston in a pretend trade",3200);return}
+  DEMO.on=true;DEMO.done=false;DK.cnDone=null;DK.cn={};if(DK.view!=="desk")dkShow("desk");dkRenderRight();
+  trOpen("DEMO:TSLA");
+  if(k==="d2")setTimeout(()=>trCn("start","DEMO:TSLA"),250);
+  tourMark(1);tourNote(k==="d2"?"Demo: tap Yes to sell the pretend contract":"Demo: a pretend trade — press CLOSE NOW",3200);
+}
+function demoWinSet(k){DEMO.ws=k;dkWinston(true)}
+function demoWinPanel(){
+  const W={hold:{t:"Still in it",say:"Price is between his exit line and his target, so he just watches. He looks at each 10-minute candle.",tl:[["Now","In TSLA 410C. Exit if a 10-minute candle closes under 399.50. Takes profit at 407."],["Each 10 min","Checks the candle. Nothing to do unless it crosses a line."],["3:50 PM","Flat by then, either way."]]},
+    tp:{t:"Target hit",say:"Price reached 407. He sells and records it. It lands on the Scoreboard's Winston lane and in his day report.",tl:[["10:40 AM","TSLA touches 407.00."],["10:40 AM","Sells at the live sell price. Result +$155 (estimate from the real quote)."],["10:41 AM","Row appears on the Scoreboard. He goes back to looking for the next idea."]],res:["+$155","up"]},
+    sl:{t:"Stop hit",say:"A 10-minute candle closed under 399.50, so the idea is wrong. He sells without arguing. The loss is capped at the planned amount.",tl:[["10:30 AM","10-minute candle closes at 399.20, under his line."],["10:30 AM","Sells at the live sell price. Result −$99."],["10:31 AM","Logged with the reason: wrong-if hit. Shows in the day report."]],res:["−$99","dn"]}}[DEMO.ws];
+  return `<div style="display:block;flex:none;border:1px dashed var(--gold);border-radius:14px;padding:14px 16px;background:var(--s1)"><div style="display:block;font-size:12px;letter-spacing:.06em;color:var(--mut);margin-bottom:8px"><span class="tr-prac" style="color:var(--gold);border-color:var(--gold)">DEMO</span> &nbsp;PRETEND WINSTON TRADE · nothing is saved · the real Winston is untouched</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0;align-items:center">${["hold","tp","sl"].map(k=>`<button class="dk-btn ${k===DEMO.ws?"go":"sec"}" style="height:auto;min-height:0;align-self:center;padding:8px 14px" onclick="demoWinSet('${k}')">${{hold:"Still in it",tp:"Target hit",sl:"Stop hit"}[k]}</button>`).join("")}<button class="dk-btn sec" onclick="demoClear()" style="margin-left:auto;height:auto;min-height:0;padding:8px 14px">Clear demo</button></div>
+    ${W.res?`<div class="win-banner" style="border-color:var(--${W.res[1]==="up"?"up":"down"})"><div class="win-big">WINSTON ${DEMO.ws==="tp"?"TOOK PROFIT":"GOT STOPPED OUT"} — TSLA 410C 10/30 <b class="${W.res[1]}">${W.res[0]}</b></div></div>`:""}
+    <div class="win-say"><b>${W.t}.</b> ${W.say}${DEMO.ws==="hold"?" <span class=\"mut\">His live position card is just below the Winston title.</span>":""}</div>
+    <div style="display:grid;gap:6px;margin-top:8px">${W.tl.map(r=>`<div style="display:grid;grid-template-columns:90px 1fr;gap:10px;padding:8px 10px;border:1px solid var(--rule);border-radius:9px"><b style="color:var(--gold)">${r[0]}</b><span>${r[1]}</span></div>`).join("")}</div></div>`;
+}
+(function(){const _w=winToday;winToday=function(j){
+  if(!DEMO.win)return _w(j);
+  const day=j.clock&&j.clock.day,iso=m=>new Date(Date.now()-m*60e3).toISOString();
+  const t={id:"demo",day,ticker:"TSLA",label:"TSLA 410C 10/30",side:"call",status:"open",opened_at:iso(55),entry_ask:3.85,entry_under:403.2,qty:1,source:"coach:101",plan:{wrong_if_level:399.5,target_level:407,last_mark:{bid:4.40,under:405.1,at:iso(0)}}};
+  const j2=DEMO.ws==="hold"?{...j,trades:(j.trades||[]).concat([t])}:j;
+  return demoWinPanel()+_w(j2)}})();
 (function(){const _b=v4TopBuild;v4TopBuild=function(){_b();tourInstall()};
-  const _s=dkShow;dkShow=function(v){_s(v);if(TOUR.on){tourChips();tourReplayRestore();if(v==="coach")tourMark(4)}};
+  const _s=dkShow;dkShow=function(v){if(v!=="desk"&&document.querySelector(".dk-desk.pop"))deskPop(false);_s(v);if(TOUR.on){tourChips();tourReplayRestore();if(v==="coach")tourMark(4)}};
   if(typeof dkRenderMsgs==="function"){const _m=dkRenderMsgs;dkRenderMsgs=function(){const r=_m.apply(this,arguments);if(TOUR.on)tourReplayRestore();return r}}
   if($("#v4top"))tourInstall();})();
 

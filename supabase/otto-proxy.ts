@@ -7700,18 +7700,32 @@ export async function coachCorner(range = "today") {
   const pnlBy: Record<string, number> = {};
   (trades || []).forEach((t: any) => { if (t.pnl != null) pnlBy[t.action_id] = (pnlBy[t.action_id] || 0) + Number(t.pnl); });
   const done = !["Sat", "Sun"].includes(etParts().wd) && etParts().min >= 965;
-  let budget = 12;
   const out: any[] = [];
-  for (const r of main) {
+  const cardsOf = (r: any) => {
     const wIds = new Set((watch || []).filter((w: any) => String(w.source_ref) === String(r.id)).map((w: any) => Number(w.id)));
-    const cards = (acts || []).filter((a: any) => a.id === r.action_id || Number(a.plan?.jason_id) === Number(r.id) || wIds.has(Number(a.plan?.watch_id)));
-    let cc = r.cc;
-    const finalDay = r.day < today || done;
-    if (!(cc && cc.state === "scored") && budget-- > 0) {
-      try { cc = await coachScore(r, cards, exits); } catch (e) { cc = { state: "unscored", why: String((e as Error).message).slice(0, 100) }; }
-      if (finalDay && cc && (cc.state === "scored" || cc.state === "unscored"))
-        await db("otto_jason?id=eq." + r.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ cc }) }).catch(() => {});
-    }
+    return (acts || []).filter((a: any) => a.id === r.action_id || Number(a.plan?.jason_id) === Number(r.id) || wIds.has(Number(a.plan?.watch_id)));
+  };
+  // v4.8.3: score the NEWEST unscored posts first, four at a time. It used to walk oldest-first with a budget of 12, so posts that never
+  // finish (no bars) ate the budget on every request and the posts people actually look at never got scored ("pending" forever).
+  const todo = main.filter((r: any) => !(r.cc && r.cc.state === "scored")).sort((a: any, b: any) => Date.parse(b.posted_at || 0) - Date.parse(a.posted_at || 0)).slice(0, 16);
+  const fresh = new Map<any, any>();
+  for (let i = 0; i < todo.length; i += 4) {
+    await Promise.all(todo.slice(i, i + 4).map(async (r: any) => {
+      let cc: any;
+      try { cc = await coachScore(r, cardsOf(r), exits); } catch (e) { cc = { state: "unscored", why: String((e as Error).message).slice(0, 100) }; }
+      fresh.set(r.id, cc);
+      const finalDay = r.day < today || done;
+      const stuck = finalDay && cc && cc.state === "live" && (cc.sides || []).every((s: any) => s.state === "pending") && r.day < addDays(today, -3);
+      if (finalDay && cc && (cc.state === "scored" || cc.state === "unscored" || stuck)) {
+        const keep = stuck ? { state: "unscored", why: "no price bars for that day", sides: [] } : cc;
+        if (stuck) fresh.set(r.id, keep);
+        await db("otto_jason?id=eq." + r.id, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ cc: keep }) }).catch(() => {});
+      }
+    }));
+  }
+  for (const r of main) {
+    const cards = cardsOf(r);
+    const cc = fresh.has(r.id) ? fresh.get(r.id) : r.cc;
     const cd = dirOfCoach(r.direction);
     const did = cards.map((a: any) => {
       const d = a.plan?.direction === "down" ? "down" : "up";
@@ -7731,7 +7745,8 @@ export async function coachCorner(range = "today") {
     return { n: sides.length, wins: w, losses: lo, win_pct: w + lo ? Math.round(w / (w + lo) * 100) : null, pnl: Math.round(sides.reduce((t, s) => t + (Number(s.pnl) || 0), 0)) }; };
   const min = (x: any) => x.at ? etParts(new Date(x.at)).min : 0;
   const bannerCache: Record<string, string | null> = {};
-  for (const x of out.slice(-60)) if (x.at) bannerCache[x.id] = await bannerAt(x.at).catch(() => null);
+  { const last = out.slice(-60).filter((x: any) => x.at);
+    for (let i = 0; i < last.length; i += 10) await Promise.all(last.slice(i, i + 10).map(async (x: any) => { bannerCache[x.id] = await bannerAt(x.at).catch(() => null); })); }
   const tone = (v: string | null) => !v ? null : /long/i.test(v) ? "up" : /short/i.test(v) ? "down" : null;
   const splits = [
     { key: "Calls (he gives direction)", ...agg(scoredSides(out, (x) => x.type === "call")) },
