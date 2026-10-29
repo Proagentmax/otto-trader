@@ -1182,6 +1182,20 @@ svg.nc-svg{width:100%;height:auto;display:block}
 @media(max-width:1099px){.dk.v4 .dk-rail .v4more{display:none}}
 @media(min-width:1100px){.dk.v4 .dk-strip{grid-row:2}}
 </style>
+<style id="v482css">
+@media(min-width:1100px){.dk.v4.v-page .dk-strip,.dk.v4.v-page .dk-banner{display:none}.dk.v4.v-page .dk-page{grid-row:2/5}.dk.v4 .sg-watch{display:none}}
+.sb-dchip .a::before,.sb-dchip .b::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}.sb-dchip .a::before{background:#5AA9FF}.sb-dchip .b::before{background:#C58BFF}
+.sb-keyline{font-size:12.5px;color:var(--ink-2);margin:0 0 6px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}.sb-keyline i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.dk-expand{margin-left:auto;align-self:center;font-size:12px;font-weight:700;color:var(--gold);border:1px solid rgba(245,196,81,.45);background:rgba(245,196,81,.08);border-radius:9px;padding:5px 11px;cursor:pointer;margin-bottom:6px}.dk-expand+.sg-watch{margin-left:12px}
+#deskBack{position:fixed;inset:0;background:rgba(5,6,8,.74);z-index:139}
+.dk-desk.pop{position:fixed;inset:5vh 6vw;z-index:140;background:var(--bg);border:1px solid #2b3240;border-radius:16px;box-shadow:0 30px 90px rgba(0,0,0,.8);overflow:hidden;grid-column:auto;grid-row:auto}.dk-desk.pop .dk-msgs{font-size:16px;line-height:1.55}.dk-desk.pop .dk-head{display:none}
+body.deskpop .v4ov{position:fixed;z-index:200}
+.v4top .st.q2{cursor:pointer}
+.v4-tip{position:fixed;z-index:120;background:#1B1F27;border:1px solid #2b3240;border-radius:12px;padding:10px 14px;max-width:340px;font-size:13px;line-height:1.45;color:var(--ink-2);box-shadow:0 12px 40px rgba(0,0,0,.6)}.v4-tip b{display:block;color:var(--ink);margin-bottom:3px}
+.dk-sub{position:relative}.dk-sub .more-wrap{position:relative;display:inline-block}.dk-sub .more-box{position:absolute;left:0;top:100%;z-index:30;min-width:190px;background:#15171B;border:1px solid #2b3240;border-radius:12px;padding:6px;box-shadow:0 16px 40px rgba(0,0,0,.6)}.dk-sub .more-box[hidden]{display:none}.dk-sub .more-box button{display:block;width:100%;text-align:left;border-radius:8px}
+.cc-sent{font-size:15.5px;line-height:1.55;color:var(--ink-2);background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;margin:0 0 12px}.cc-sent b{color:var(--ink)}
+.cc-filter{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px}.cc-filter .lb{font-size:12px;color:var(--ink-3);margin-right:2px}.cc-filter .dk-btn{padding:5px 12px;font-size:12.5px;min-height:0}
+</style>
 </head>
 <body>
 
@@ -1231,6 +1245,7 @@ svg.nc-svg{width:100%;height:auto;display:block}
       <button data-ct="jarvis" class="on">Jarvis</button>
       <button data-ct="signals">⚡ Otto Signals<span class="sg-badge" id="sgBadge" hidden></span></button>
       <button data-ct="alerts">🔔 TradingView Alerts<span class="sg-badge" id="alBadge" hidden></span></button>
+      <span class="dk-expand" id="dkExpand" role="button" tabindex="0" data-avoid title="Pop the conversation out to a big window — same feed, easier to read and scroll">⤢ Expand</span>
       <span class="sg-watch" id="sgWatch"></span>
     </div>
     <div class="sg-feed" id="sgFeed" hidden></div>
@@ -2625,7 +2640,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="4.8.1";
+const BUILD="4.8.2";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -4090,7 +4105,7 @@ async function dkScore(){
    Grouped tabs: Scoreboard holds Results, Weekly review, Score detail, Coaches Corner; Pre-market holds Prep, Market, Night Charts. */
 const DK_GROUPS=[
   {rail:"prep",items:[["prep","Prep"],["market","Market"],["charts","Night Charts"]]},
-  {rail:"scoreboard",items:[["scoreboard","Scoreboard"],["perf","Results"],["review","Weekly review"],["score","Score detail"],["coach","Coaches Corner"]]}];
+  {rail:"scoreboard",items:[["scoreboard","Scoreboard"],["coach","Coach's Corner"],["perf","Results"],["review","Weekly review"],["score","Score detail"]]}];
 const dkGroupOf=v=>DK_GROUPS.find(g=>g.items.some(i=>i[0]===v));
 const dkRailKey=v=>{const g=dkGroupOf(v);return g?g.rail:v};
 function dkSubBar(){
@@ -4100,12 +4115,16 @@ function dkSubBar(){
   if(cur&&cur.dataset.v===DK.view)return;
   if(cur)cur.remove();
   const nav=document.createElement("nav");nav.className="rtabs dk-sub";nav.dataset.v=DK.view;nav.setAttribute("aria-label","Sections");
-  nav.innerHTML=g.items.map(([k,l])=>`<button data-sub="${k}" class="${DK.view===k?"on":""}">${esc(l)}</button>`).join("");
+  if(g.rail==="scoreboard"){const main=g.items.slice(0,2),more=g.items.slice(2),inMore=more.some(i=>i[0]===DK.view);
+    nav.innerHTML=main.map(([k,l])=>`<button data-sub="${k}" class="${DK.view===k?"on":""}">${esc(l)}</button>`).join("")+`<span class="more-wrap"><button data-submore="1" class="${inMore?"on":""}">${inMore?esc(more.find(i=>i[0]===DK.view)[1]):"More"} ▾</button><div class="more-box" hidden>${more.map(([k,l])=>`<button data-sub="${k}" class="${DK.view===k?"on":""}">${esc(l)}</button>`).join("")}</div></span>`}
+  else nav.innerHTML=g.items.map(([k,l])=>`<button data-sub="${k}" class="${DK.view===k?"on":""}">${esc(l)}</button>`).join("");
   pg.insertBefore(nav,pg.firstChild);
 }
 (function(){const pg=document.getElementById("dkPage");if(!pg)return;
   new MutationObserver(()=>dkSubBar()).observe(pg,{childList:true});
-  pg.addEventListener("click",e=>{const b=e.target.closest(".dk-sub [data-sub]");if(b&&DK.open)dkShow(b.dataset.sub)});})();
+  pg.addEventListener("click",e=>{const mb=e.target.closest(".dk-sub [data-submore]");if(mb){const bx=mb.parentElement.querySelector(".more-box");bx.hidden=!bx.hidden;e.stopPropagation();return}
+    const b=e.target.closest(".dk-sub [data-sub]");if(b&&DK.open)dkShow(b.dataset.sub)});
+  document.addEventListener("click",e=>{if(!e.target.closest(".more-wrap"))document.querySelectorAll(".dk-sub .more-box").forEach(x=>x.hidden=true)});})();
 
 const SB={range:"day",day:null,tab:"j",j:null,w:null,werr:null};
 const sbEt=t=>{try{return new Date(t).toLocaleDateString("en-CA",{timeZone:"America/New_York"})}catch(e){return ""}};
@@ -4261,17 +4280,17 @@ function sbDraw(keep){
   const lead=J.n&&W.n&&J.net!==W.net?(J.net>W.net?["Josh + Baby J",J.net-W.net,"lead"]:["Winston",W.net-J.net,"leads"]):null;
   const ix=r.i,prev=m.keys[ix-1],next=m.keys[ix+1];
   const strip=m.keys.slice(-60).map(d=>{const a=sbDayNet(m,d,"J"),b=sbDayNet(m,d,"W");
-    return `<div class="sb-dchip ${d===r.sel?"on":r.ks.includes(d)?"inr":""}" data-d="${d}"><div class="d">${sbDow(d)} ${sbMD(d)}</div><div class="a ${sbC(a)}">${sbM(a,true)}</div><div class="b ${sbC(b)}">${sbM(b,true)}</div></div>`}).join("")+
-    `<div class="sb-dchip key"><div class="d">top: Josh + Baby J</div><div class="d">bottom: Winston</div></div>`;
+    return `<div class="sb-dchip ${d===r.sel?"on":r.ks.includes(d)?"inr":""}" data-d="${d}"><div class="d">${sbDow(d)} ${sbMD(d)}</div><div class="a ${sbC(a)}">${sbM(a,true)}</div><div class="b ${sbC(b)}">${sbM(b,true)}</div></div>`}).join("");
   const realTxt=r.ks.length===1&&r.sel===m.today&&!RR.length?"No live trades placed today.":RR.length?`${RS.wins} winning and ${RS.losses} losing real trade${RS.n===1?"":"s"}${ropen?`, ${ropen} still open`:""}.`:"No live trades in this period.";
   pg.innerHTML=`<div class="dkp sb">
     <div class="sb-bar"><div class="sb-nav"><button id="sbPrev" ${prev?"":"disabled"} aria-label="Previous trading day">◀</button><div class="lbl">${sbDow(r.sel)} ${sbMD(r.sel)}${r.sel===m.today?" (today)":""}</div><button id="sbNext" ${next?"":"disabled"} aria-label="Next trading day">▶</button></div>
       <button class="sb-btn" id="sbToday">Today</button>
       <div class="sb-seg" id="sbSeg">${[["day","Day"],["week","Week"],["all","All"]].map(([k,l])=>`<button data-r="${k}" class="${SB.range===k?"on":""}">${l}</button>`).join("")}</div>
       <button class="sb-btn" id="sbRefresh" title="Reload the numbers">Refresh</button></div>
+    <div class="sb-keyline"><span><i style="background:#5AA9FF"></i>top number = <b>Josh + Baby J</b></span><span><i style="background:#C58BFF"></i>bottom number = <b>Winston</b></span><span class="mut">each tile is one day's net · click a day to open it</span></div>
     <div class="sb-strip">${strip}</div>
     <div class="sb-verdict"><b>${esc(lab)}:</b> Josh + Baby J ${v(J,"had no trades")}. Winston ${SB.werr?"is unavailable right now":v(W,"had no trades").replace("are ","is ")}. ${lead?`<b>${lead[0]}</b> ${lead[2]} by ${sbM(lead[1])}.`:""}${scoring?` <span class="mut" style="font-size:14px">${scoring} trade${scoring===1?" is":"s are"} still being scored and ${scoring===1?"is":"are"} not in the totals yet.</span>`:""}${wopen?` <span class="mut" style="font-size:14px">Winston has ${wopen} trade${wopen===1?"":"s"} open; counted when closed.</span>`:""}</div>
-    <div class="sb-lanes">${sbLane("j","Josh + Baby J","Practice trades Josh approved, on the $4,000 practice book. Dollars are estimates for 1 contract.",J)}${sbLane("w","Winston",SB.werr?"Unavailable: "+esc(SB.werr):"Practice (paper), own $4,000, real quotes in and out.",W)}</div>
+    <div class="sb-lanes">${sbLane("j","Josh + Baby J",`Practice trades Josh approved, on the $${(+(SB.j&&SB.j.practice&&SB.j.practice.start)||4000).toLocaleString()} practice book. Dollars are estimates for 1 contract.`,J)}${sbLane("w","Winston",SB.werr?"Unavailable: "+esc(SB.werr):`Paper money on his own $${(+(SB.w&&SB.w.config&&SB.w.config.paper_balance)||4000).toLocaleString()} book — real quotes in and out, the spread is paid.`,W)}</div>
     ${sbPractice()}
     ${sbSkipped(m,r)}
     <div class="sb-real"><div><div class="sb-k">Real money · ${esc(lab)}</div><div class="sb-rn ${RS.n?sbC(RS.net):""}">${RS.n?sbM(RS.net,true):"$0"}</div>${RS.n?`<div class="sb-note" style="margin:4px 0 0">${sbM(RS.won,true)} won · ${sbM(RS.lost)} lost</div>`:""}</div>
@@ -5023,22 +5042,28 @@ const dk$0=n=>n==null||!isFinite(n)?"—":`${n<0?"−":n>0?"+":""}$${Math.abs(Ma
 const dkMD=d=>{try{return new Date(d+"T12:00:00Z").toLocaleDateString([], {month:"short",day:"numeric"})}catch(e){return d}};
 
 /* v3.26: Results › Overview | Coaches Corner */
-const dkRTabs=v=>`<nav class="rtabs" aria-label="Results sections"><button data-rt="perf" class="${v==="perf"?"on":""}">Overview</button><button data-rt="coach" class="${v==="coach"?"on":""}">Coaches Corner</button></nav>`;
+const dkRTabs=v=>"";   // v4.8.2: the Scoreboard sub-bar already carries these tabs; the second copy was a duplicate
 document.addEventListener("click",e=>{const b=e.target.closest("[data-rt]");if(b&&DK.open)dkShow(b.dataset.rt)});
-const CC={range:"today",j:null};
+const CC={range:"today",j:null,f:"all"};
 const ccState=s=>s==="win"?`<span class="cc-chip win">WIN</span>`:s==="loss"?`<span class="cc-chip loss">LOSS</span>`:s==="flat"?`<span class="cc-chip">FLAT</span>`:s==="no_entry"?`<span class="cc-chip">never triggered</span>`:s==="open"?`<span class="cc-chip">open</span>`:`<span class="cc-chip">pending</span>`;
 function ccSideHtml(sd){
   const $p=sd.pnl!=null&&["win","loss","flat"].includes(sd.state)?` <span class="mono ${sd.pnl>=0?"up":"dn"}">${sd.pnl>=0?"+":"−"}$${Math.abs(sd.pnl)}${sd.est?" est.":""}</span>`:"";
   const how=sd.exit_why&&["win","loss","flat"].includes(sd.state)?`<div class="mut" style="font-size:11.5px">${esc(sd.entry_px)} → ${esc(sd.exit_px)} · ${esc(sd.exit_why)}${sd.opt?` · ${esc(sd.opt.label||"option")} ${sd.opt.entry}→${sd.opt.exit}`:""}</div>`:sd.why?`<div class="mut" style="font-size:11.5px">${esc(sd.why)}</div>`:"";
   return `<div>${ccState(sd.state)}${$p}${how}</div>`;
 }
-async function dkCoach(){
+async function dkCoach(cached){
   const pg=$("#dkPage");
-  pg.innerHTML=`<div class="dkp">${dkRTabs("coach")}${dkLoading("Scoring every coach post…")}</div>`;
-  let j;try{j=await dkApi("coach_corner",null,"&range="+CC.range);CC.j=j}catch(e){if(DK.view==="coach")pg.innerHTML=`<div class="dkp">${dkRTabs("coach")}${dkErr(e)}</div>`;return}
+  if(!(cached&&CC.j))pg.innerHTML=`<div class="dkp">${dkRTabs("coach")}${dkLoading("Scoring every coach post…")}</div>`;
+  let j,wj=WIN.j;if(cached&&CC.j)j=CC.j;else try{const [a,b]=await Promise.allSettled([dkApi("coach_corner",null,"&range="+CC.range),WIN.j?Promise.resolve(WIN.j):winApi("state")]);if(a.status!=="fulfilled")throw a.reason;j=a.value;CC.j=j;if(b.status==="fulfilled"&&b.value){wj=b.value;WIN.j=wj}}catch(e){if(DK.view==="coach")pg.innerHTML=`<div class="dkp">${dkRTabs("coach")}${dkErr(e)}</div>`;return}
   if(DK.view!=="coach")return;
   const c=j.coach,u=j.us,RL=[["today","Today"],["week","This week"],["30","30 days"],["all","All"]],rl=Object.fromEntries(RL);
-  const rows=(j.posts||[]).map(x=>{
+  /* v4.8.2: what Winston did with each post — matched on the post id in his trade / passed source ("coach:<id>"). No match = a dash, never a guess. */
+  const wmap={};try{((wj&&wj.trades)||[]).forEach(t=>{const m=/^coach:(.+)$/.exec(String(t.source||""));if(m)wmap[m[1]]=wmap[m[1]]||{took:t}});((wj&&wj.days)||[]).forEach(d=>{const r=d.report;((r&&r.passed)||[]).forEach(p=>{const m=/^coach:(.+)$/.exec(String(p.source||""));if(m&&!(wmap[m[1]]&&wmap[m[1]].took))wmap[m[1]]={passed:p}})})}catch(e){}
+  const winCell=x=>{const w=wmap[String(x.id!=null?x.id:x.post_id!=null?x.post_id:"")];if(!w)return `<span class="mut">—</span>`;
+    if(w.took){const t=w.took,p=+t.pnl_realistic;return `<div>took it</div><div class="mono ${t.status==="open"?"":p>=0?"up":"dn"}" style="font-weight:600">${t.status==="open"?"open":(p>=0?"+":"−")+"$"+Math.abs(Math.round(p))}</div>`}
+    return `<div>passed</div><div class="mut" style="font-size:11.5px">${esc(String(w.passed.reason||w.passed.status||"").slice(0,70))}</div>`};
+  const pk=x=>x.unclear?"unclear":x.type==="call"?"call":"level",all=(j.posts||[]),cnt=k=>all.filter(x=>k==="all"||pk(x)===k).length;
+  const rows=all.filter(x=>CC.f==="all"||pk(x)===CC.f).map(x=>{
     const sides=x.cc&&x.cc.sides?x.cc.sides:[];
     const coachCell=!x.cc?`<span class="cc-chip">pending</span>`:x.cc.state==="unscored"?`<span class="cc-chip">not scored — ${esc(x.cc.why||"")}</span>`:
       sides.length>1?sides.map(sd=>`<div style="margin-bottom:4px">If it ${sd.side==="up"?(/RES/i.test(x.words)?"broke":"held"):(/RES/i.test(x.words)?"held":"broke")}: ${ccSideHtml(sd)}</div>`).join(""):sides.map(ccSideHtml).join("");
@@ -5047,12 +5072,13 @@ async function dkCoach(){
     const usP=x.us_pnl!=null?`<span class="mono ${x.us_pnl>=0?"up":"dn"}" style="font-weight:600">${x.us_pnl>=0?"+":"−"}$${Math.abs(x.us_pnl).toFixed(0)}</span>`:`<span class="mut">—</span>`;
     const bad=x.cards.some(a=>a.wrong_side||(a.pnl||0)<0);
     const typ=x.unclear?`<span class="cc-chip warn">UNCLEAR</span>`:x.type==="call"?`<span class="cc-chip win">CALL ${x.direction==="short"?"▼":"▲"}</span>`:x.type==="bounce"?`<span class="cc-chip">BOUNCE</span>`:`<span class="cc-chip">LEVEL</span>`;
-    return `<tr class="${bad?"bad":""}"><td class="mono">${esc(x.label||dkTime(x.at))}${CC.range!=="today"?`<div class="mut" style="font-size:11px">${esc(dkMD(x.day))}</div>`:""}</td><td><b>${esc(x.ticker)}</b> “${esc(String(x.words||"").slice(0,140))}”</td><td>${typ}</td><td>${did}</td><td>${we}</td><td>${coachCell}</td><td>${usP}</td></tr>`;
+    return `<tr class="${bad?"bad":""}"><td class="mono">${esc(x.label||dkTime(x.at))}${CC.range!=="today"?`<div class="mut" style="font-size:11px">${esc(dkMD(x.day))}</div>`:""}</td><td><b>${esc(x.ticker)}</b> “${esc(String(x.words||"").slice(0,140))}”</td><td>${typ}</td><td>${did}</td><td>${we}</td><td>${coachCell}</td><td>${usP}</td><td>${winCell(x)}</td></tr>`;
   }).join("");
   const sp=(j.splits||[]).map(x=>`<div class="dk-cardx"><div style="font-size:13px;font-weight:600">${esc(x.key)}</div>${x.n>=5?`<div class="mono" style="font-size:20px;margin-top:4px">${x.win_pct==null?"—":x.win_pct+"%"}</div><div class="mut mono" style="font-size:12px">${x.n} scored · ${dk$(x.pnl)}</div><div style="height:6px;background:var(--surface-3);border-radius:3px;margin-top:6px"><i style="display:block;height:6px;border-radius:3px;width:${x.win_pct||0}%;background:${(x.win_pct||0)>=50?"var(--up)":"var(--down)"}"></i></div>`:`<div class="mut" style="font-size:12px;margin-top:6px">${x.n} scored — shows at 5</div>`}</div>`).join("");
   pg.innerHTML=`<div class="dkp">${dkRTabs("coach")}
-    <div class="dkp-head"><h2>Coaches Corner</h2><span class="mut">Every post from the Coach, scored as if we had played it: 1 contract, real option prices when we had the contract (else an estimate). Coach on one side, Jarvis + Us on the other.</span>
+    <div class="dkp-head"><h2>Coach's Corner</h2><span class="mut">Every post from the Coach, scored as if we had played it: 1 contract, real option prices when we had the contract (else an estimate). Coach on one side, Jarvis + Us on the other.</span>
       <span role="group" aria-label="Time range" style="margin-left:auto;display:flex;gap:4px">${RL.map(([k,v])=>`<button class="dk-btn ${CC.range===k?"go":"sec"}" data-ccr="${k}">${v}</button>`).join("")}</span></div>
+    <div class="cc-sent"><b>${c.posts} post${c.posts===1?"":"s"}</b> in this range${c.pending?`, ${c.pending} still open (scored at the close)`:""}. On the ones already scored, playing every post at 1 contract would have been <b>${c.wins} win${c.wins===1?"":"s"}, ${c.losses} loss${c.losses===1?"":"es"}, ${c.posts?dkMoney(c.pnl):"—"}</b> (estimate). We actually traded <b>${(u.wins||0)+(u.losses||0)}</b> of them — ${u.wins} win${u.wins===1?"":"s"}, ${u.losses} loss${u.losses===1?"":"es"}, ${dkMoney(u.pnl)} in real fills — and passed on <b>${u.passed}</b>.</div>
     <div class="cc-g2">
       <div class="dk-cardx"><div class="dk-h"><span class="cc-chip coach">COACH</span> had we played every post</div>
         <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:baseline"><div><div class="n" style="font-size:30px;font-weight:700">${c.posts?dkMoney(c.pnl):"—"}</div><div class="mut" style="font-size:12px">est. P&amp;L, 1 contract each</div></div>
@@ -5062,13 +5088,15 @@ async function dkCoach(){
         <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:baseline"><div><div class="n" style="font-size:30px;font-weight:700">${dkMoney(u.pnl)}</div><div class="mut" style="font-size:12px">realized</div></div>
         <div><div class="mono" style="font-size:20px">${u.wins}–${u.losses}</div><div class="mut" style="font-size:12px">wins – losses</div></div><div><div class="mono" style="font-size:20px">${u.passed}</div><div class="mut" style="font-size:12px">posts we didn't trade</div></div>
         <div><div class="mono" style="font-size:20px;${u.wrong_side?"color:#ff8a5c":""}">${u.wrong_side}</div><div class="mut" style="font-size:12px">cards on the wrong side</div></div></div></div></div>
+    <div class="cc-filter"><span class="lb">Show</span>${[["all","All"],["call","Calls"],["level","Levels"],["unclear","Unclear"]].map(([k,l])=>`<button class="dk-btn ${CC.f===k?"go":"sec"}" data-ccf="${k}">${l} · ${cnt(k)}</button>`).join("")}</div>
     <div class="dk-cardx" style="padding:0;overflow:hidden"><div style="display:flex;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--rule);flex-wrap:wrap;gap:6px"><b>Every coach post · ${esc(rl[CC.range])}</b><span class="mut" style="font-size:12px">Exit: his own follow-up post when he gives one, otherwise TP1 / 5-min wrong-if / 3:50 PM. Levels with no direction are scored both ways.</span></div>
-      <div style="overflow-x:auto"><table class="cc-t"><thead><tr><th>Time</th><th style="min-width:220px">Coach said</th><th>Type</th><th style="min-width:170px">Otto did</th><th>We did</th><th style="min-width:200px">Coach · had we played it</th><th>Jarvis + Us</th></tr></thead>
-      <tbody>${rows||`<tr><td colspan="7" class="mut" style="padding:24px">No coach posts with a ticker in this range.</td></tr>`}</tbody></table></div></div>
+      <div style="overflow-x:auto"><table class="cc-t"><thead><tr><th>Time</th><th style="min-width:220px">Coach said</th><th>Type</th><th style="min-width:170px">Otto did</th><th>We did</th><th style="min-width:200px">Coach · had we played it</th><th>Jarvis + Us</th><th>Winston</th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="8" class="mut" style="padding:24px">No coach posts with a ticker in this range.</td></tr>`}</tbody></table></div></div>
     <div class="dk-h" style="margin-top:16px">Which coach posts work · splits <span class="mut" style="font-weight:400">— each shows once it has 5 scored posts</span></div>
     <div class="cc-split">${sp}</div>
   </div>`;
   pg.querySelectorAll("[data-ccr]").forEach(b=>b.onclick=()=>{CC.range=b.dataset.ccr;dkCoach()});
+  pg.querySelectorAll("[data-ccf]").forEach(b=>b.onclick=()=>{CC.f=b.dataset.ccf;dkCoach(true)});
 }
 async function dkPerf(force){
   const pg=$("#dkPage");
@@ -6612,18 +6640,30 @@ function v4TopBuild(){
   const t=document.createElement("div");t.id="v4top";t.className="v4top";
   t.innerHTML=`<div class="mk"></div><div class="nm"><b>OTTO</b><small>Trader · The Desk</small></div>
     <div class="mid"><button data-v4go="watchlist">${v4Svg("list")}Watchlist</button><button data-v4go="watcher">${v4Svg("watch")}Watcher</button><button data-v4go="morning">${v4Svg("sun")}Morning read</button><button data-v4go="journal">${v4Svg("journal")}Journal</button></div>
-    <div class="r"><span class="st" id="v4w" title="The Desk's level watcher (Josh + Baby J cards) — runs 9:30 to 4:00"><i></i>Levels</span><span class="st" id="v4tv" data-set="1" title="TradingView"><i></i>TradingView</span><span class="st" id="v4rh" data-set="1" title="Robinhood"><i></i>Robinhood</span><span class="st q" id="v4clock"></span><span class="who"><span class="av" id="v4av">J</span><span id="v4whoSlot"></span></span><button class="gear" id="v4gear" aria-label="Settings" hidden></button></div>`;
+    <div class="r"><span class="st" id="v4w" title="The Desk's level watcher (Josh + Baby J cards) — runs 9:30 to 4:00"><i></i>Levels</span><span class="st" id="v4tv" data-set="1" title="TradingView"><i></i>TradingView</span><span class="st" id="v4rh" data-set="1" title="Robinhood"><i></i>Robinhood</span><span class="st q2" id="v4sw" title="Josh's signal watcher — the Discord watcher on Ifoma's PC"><i class="off"></i>Watcher</span><span class="st q" id="v4clock"></span><span class="who"><span class="av" id="v4av">J</span><span id="v4whoSlot"></span></span><button class="gear" id="v4gear" aria-label="Settings" hidden></button></div>`;
   dk.insertBefore(t,dk.firstChild);
   const who=$("#dkWho");if(who)who.addEventListener("change",()=>{$("#v4av").textContent=(who.value||"J")[0]});
   t.querySelectorAll("[data-v4go]").forEach(b=>b.addEventListener("click",()=>v4Go(b.dataset.v4go)));
   t.querySelector("#v4gear").addEventListener("click",openSettings);
-  t.querySelector("#v4w").addEventListener("click",()=>v4Pop("watcher"));t.querySelectorAll("[data-set]").forEach(x=>x.addEventListener("click",openSettings));
+  t.querySelector("#v4w").addEventListener("click",()=>v4Pop("watcher"));t.querySelector("#v4sw").addEventListener("click",e=>{e.stopPropagation();v4SwTip(e.currentTarget)});t.querySelectorAll("[data-set]").forEach(x=>x.addEventListener("click",openSettings));
   // ★ Menu and ⚙ Settings live at the bottom, next to + Chart and Order ticket
   // v4.2: ★ Menu and ⚙ Settings both live on the rail (Settings at the bottom, where the arrow pointed); the bottom bar is + Chart · Order ticket · ask · Send
   // the ★ Menu on the rail — opens the launcher with everything
   const rail=$(".dk-rail");if(rail&&!$("#v4menuBtn")){const m=document.createElement("button");m.id="v4menuBtn";m.className="v4more";m.innerHTML=`<svg viewBox="0 0 24 24">${V4_ICON.star}</svg>Menu`;m.addEventListener("click",v4Launcher);const sp=rail.querySelector(".sp");rail.insertBefore(m,sp||null)}
   v4TopDraw();if(!V4.clockT)V4.clockT=setInterval(v4TopDraw,30e3);
+  try{sgWatch()}catch(e){}
 }
+function v4SwDraw(){
+  const el=$("#sgWatch"),p=$("#v4sw");if(!el||!p)return;const d=el.querySelector(".sg-dot"),ok=!!(d&&d.classList.contains("ok")),none=/not set up/.test(el.textContent);
+  p.innerHTML=`<i class="${none?"off":ok?"":"bad"}"></i>Watcher${ok?" · on":none?" · not set up":" · offline"}`;p.dataset.tip=el.textContent.trim();
+}
+function v4SwTip(anchor){
+  const o=$(".v4-tip");if(o){o.remove();return}
+  const p=document.createElement("div");p.className="v4-tip";p.innerHTML=`<b>Signal watcher</b>${esc(anchor.dataset.tip||"No status yet")}<div class="mut" style="font-size:12px;margin-top:6px">It reads the coach's Discord posts on Ifoma's PC and turns them into cards. Fix it in Settings → Otto Signals.</div>`;
+  const r=anchor.getBoundingClientRect();document.body.appendChild(p);p.style.top=(r.bottom+8)+"px";p.style.left=Math.max(10,Math.min(innerWidth-p.offsetWidth-10,r.left-120))+"px";
+  setTimeout(()=>document.addEventListener("click",function h(){p.remove();document.removeEventListener("click",h)}),0);
+}
+{const _w=sgWatch;sgWatch=function(){_w();v4SwDraw()}}
 function v4TopDraw(){
   const t=$("#v4top");if(!t)return;const wide=V4.on&&innerWidth>=1100;t.style.display=wide?"flex":"none";
   // "At the desk" lives in the top bar on a laptop and back in the Desk head on a phone / Classic
@@ -6715,7 +6755,19 @@ body.tour .v4top .st.tour{color:var(--gold);border-color:rgba(245,196,81,.5);box
 .tour-replay .bar{height:8px;border-radius:4px;background:#23272f;position:relative;margin:10px 0 22px}.tour-replay .bar i{position:absolute;top:0;bottom:0;left:0;border-radius:4px;background:linear-gradient(90deg,rgba(0,200,5,.25),var(--up))}.tour-replay .bar .pt{position:absolute;top:-4px;width:2px;height:16px;background:var(--ink)}.tour-replay .bar .lb{position:absolute;top:13px;font-size:9.5px;color:var(--ink-3);font-family:var(--mono);transform:translateX(-50%);white-space:nowrap}
 .tour-replay .btns{display:flex;gap:8px;margin-top:12px;align-items:center}.tour-replay .btns button{border-radius:9px;padding:7px 14px;font-size:13px;font-weight:600;border:1px solid #2b3240;background:#1b1f27;color:var(--ink-2);min-height:0;cursor:default}.tour-replay .btns .ok{background:rgba(0,200,5,.14);color:var(--up);border-color:rgba(0,200,5,.4)}.tour-replay .btns .no{background:rgba(255,80,0,.1);color:var(--down);border-color:rgba(255,80,0,.4)}
 .tour-replay .banner{background:rgba(255,80,0,.12);border:1px solid rgba(255,80,0,.4);border-radius:8px;padding:6px 10px;font-size:12px;color:#ffb08a;margin:6px 0}
-.tour-note{position:fixed;left:50%;transform:translateX(-50%);top:62px;z-index:95;background:#1B1F27;border:1px solid #2b3240;border-radius:999px;padding:6px 14px;font-size:12px;color:var(--ink-2);pointer-events:none}`;
+.tour-note{position:fixed;left:50%;transform:translateX(-50%);top:62px;z-index:95;background:#1B1F27;border:1px solid #2b3240;border-radius:999px;padding:6px 14px;font-size:12px;color:var(--ink-2);pointer-events:none}
+#tourCard{z-index:150;padding:0;overflow:hidden}#tourCard .hd{display:flex;align-items:center;gap:6px;padding:9px 10px 9px 16px;cursor:grab;border-bottom:1px solid #232831;background:#181B21;user-select:none}#tourCard .hd:active{cursor:grabbing}#tourCard .hd .n{flex:1}
+#tourCard .hd button{border:1px solid #2b3240;background:#1b1f27;color:var(--ink-2);border-radius:7px;width:26px;height:26px;padding:0;min-height:0;font-size:14px;line-height:1}#tourCard .bd{padding:12px 16px 12px}#tourCard.min .bd{display:none}#tourCard.min{width:280px}
+#tourCard .resumed{background:rgba(245,196,81,.1);border:1px solid rgba(245,196,81,.35);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--gold);margin-bottom:8px}#tourCard .resumed a{color:var(--ink);text-decoration:underline;cursor:pointer}
+#tourCard .nav .sp i{cursor:pointer;width:8px;height:8px}#tourCard .nav .sp i.seen{background:#3b6f55}
+.v4top .st.tour-pill{display:none;color:var(--gold);border-color:rgba(245,196,81,.45)}body.tour .v4top .st.tour-pill{display:flex}
+.tour-menu{position:fixed;z-index:160;width:330px;max-height:70vh;overflow:auto;background:#15171B;border:1px solid rgba(245,196,81,.5);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.7);padding:6px 0}
+.tour-menu .hh{display:flex;justify-content:space-between;padding:8px 14px;font-size:10.5px;letter-spacing:.12em;color:var(--gold);font-weight:700}.tour-menu .hh a{cursor:pointer;color:var(--gold);letter-spacing:0;text-transform:none;font-weight:600}
+.tour-menu .bar0{height:4px;background:#23272f;margin:0 14px 6px;border-radius:2px}.tour-menu .bar0 i{display:block;height:4px;border-radius:2px;background:#2EE59D}
+.tour-menu .it{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer}.tour-menu .it:hover{background:#1d2128}.tour-menu .it .l{flex:1}.tour-menu .it b{display:block;font-size:13.5px}.tour-menu .it small{display:block;font-size:11.5px;color:var(--ink-3);margin-top:1px}
+.tour-menu .ck{width:20px;height:20px;border-radius:6px;border:1.5px solid #3a4250;display:grid;place-items:center;font-size:12px;color:transparent;flex:none}.tour-menu .it.done .ck{background:#2EE59D;border-color:#2EE59D;color:#06251a}.tour-menu .it.done b{text-decoration:line-through;color:var(--ink-3)}
+.tour-menu .kind{font-size:9.5px;letter-spacing:.1em;border:1px solid rgba(245,196,81,.5);color:var(--gold);border-radius:6px;padding:2px 6px;font-weight:700}
+`;
 const TOUR_INFO={
  hero:["Market Read","The 8:45 read, done the way the coach teaches: bonds first. The verdict is mechanical (Nasdaq against TLT, copper and BTC as tells) — not a feeling. Seven tiles, never more."],
  desk:["The Desk","Jarvis is the desk assistant. Every ⚡ Signal post becomes a card in seconds; Josh approves or rejects — nothing enters without a human tap. Exits run by the card's own rules, checked by the server."],
@@ -6727,29 +6779,56 @@ const TOUR_INFO={
  sess:["Last session","Every trade he took, with the exit reason and the rule stamps. Click a trade and he shows his work: what he read, the plan, what happened."]};
 const TOUR_CHIPS=[[".v4hero","hero"],["#dkMsgs","desk",1],[".win43-strip>.dk-cardx:nth-child(1)","book"],[".win43-strip>.dk-cardx:nth-child(2)","gate"],[".win43-strip>.dk-cardx:nth-child(3)","rh"],[".win43-strip>.dk-cardx:nth-child(4)","read"],[".win43-main>.dk-cardx:nth-child(1)","now"],[".win43-main>.dk-cardx:nth-child(2)","sess"]];
 const TOUR_STEPS=[
- {view:"desk",sel:[".v4hero"],n:"Stop 1 of 5",h:"Every morning starts the way you teach",p:"The 8:45 Market Read: bonds first, then the tape. The verdict is mechanical — no sentiment dials, no made-up numbers. The homework levels sit on the Watcher and fire only on the 10-minute close.",s:"“We read bonds first, same as you. If TLT is bid and tech is down a point, he's defensive. Today it's neutral.”"},
- {view:"desk",sel:["#dkMsgs"],host:1,n:"Stop 2 of 5",h:"When you post, this happens",p:"A ⚡ Signal post becomes a card in seconds — the contract picked to fit the account, the wrong-if and target on the card, a red banner if it breaks a rule. Josh taps Approve or Reject. Press “Show me a card” (bottom right) to drop a replay of a real one in.",s:"“That's your post from Tuesday. Here's the card it became. Nothing trades without a human tap.”"},
- {view:"winston",sel:[".win43-strip>.dk-cardx:nth-child(1)",".win43-main>.dk-cardx:nth-child(2)"],n:"Stop 3 of 5",h:"Meet Winston",p:"The autonomous one. Paper money, real fills, pays the spread. He runs on the coaching calls and his own reads, inside the rules. Click a trade in the list and he shows his work — the thesis word for word, the plan, what happened.",s:"“He isn't a bot following a script. Click TSLA — that's your ‘above 400’ call. Read why he took it.”"},
- {view:"winston",pop:"score",sel:["[data-tour=ledger]"],n:"Stop 4 of 5",h:"Your rules, with receipts",p:"When a rule blocks him we don't just block — we book a shadow trade and score it with the same exits. So every rule has a ledger. The coach-exit rule has cost zero targets in 14 exits — keep. Re-entry chasing has cost money — tighten.",s:"“Nobody's ever audited your rules like this. This week he's trading only his own ideas and your posts are being shadow-scored — so we can see the difference, honestly.”"},
- {view:"winston",sel:[".win43-strip>.dk-cardx:nth-child(2)"],n:"Stop 5 of 5",h:"Road to live",p:"Five conditions before a real dollar. Then two human acts to switch him on, a hard cap per trade and per day, and a kill link on two phones.",s:"“Discipline first. He goes live when the numbers say so, not when we feel like it.”"}];
+ {k:"Market Read",sub:"bonds first",view:"desk",sel:[".v4hero"],h:"Every morning starts the way you teach",p:"The 8:45 Market Read: bonds first, then the tape. The verdict is mechanical — no sentiment dials, no made-up numbers. The homework levels sit on the Watcher and fire only on the 10-minute close.",s:"“We read bonds first, same as you. If TLT is bid and tech is down a point, he's defensive. Today it's neutral.”"},
+ {k:"A card from his post",sub:"pick one with Show me a card",view:"desk",sel:["#dkMsgs"],host:1,h:"When you post, this happens",p:"A ⚡ Signal post becomes a card in seconds — the contract picked to fit the account, the wrong-if and target on the card, a red banner if it breaks a rule. Josh taps Approve or Reject. Use “▤ Show me a card” in the top bar to pick which replay drops in.",s:"“That's your post. Here's the card it became. Nothing trades without a human tap.”"},
+ {k:"Winston's reasoning",sub:"click a trade",view:"winston",sel:[".win43-strip>.dk-cardx:nth-child(1)",".win43-main>.dk-cardx:nth-child(2)"],h:"Meet Winston",p:"The autonomous one. Paper money, real fills, pays the spread. He runs on the coaching calls and his own reads, inside the rules. Click a trade in the list and he shows his work — the thesis word for word, the plan, what happened.",s:"“He isn't a bot following a script. Click a trade that came from your post. Read why he took it.”"},
+ {k:"Rules ledger",sub:"every rule has a receipt",view:"winston",pop:"score",sel:["[data-tour=ledger]"],loading:"Loading the ledger…",h:"Your rules, with receipts",p:"When a rule blocks him we don't just block — we book a shadow trade and score it with the same exits. So every rule has a ledger. The coach-exit rule has cost zero targets — keep. Re-entry chasing has cost money — tighten.",s:"“Nobody's ever audited your rules like this. This week he's trading only his own ideas and your posts are being shadow-scored — so we can see the difference, honestly.”"},
+ {k:"Coach's Corner",sub:"his posts, scored",view:"coach",wait:".cc-g2",sel:[".cc-g2"],loading:"Scoring his posts…",h:"Your posts, scored",p:"Every post you make, scored as if we had played it — 1 contract, real option prices when we had the contract. Your side on the left, what we actually did on the right. Filter to Calls, Levels or Unclear, and the Winston column shows what he did with each post.",s:"“This is the one screen that's only about your work. Calls and levels scored separately, so we can see what works.”"},
+ {k:"Road to live",sub:"the gate + the kill link",view:"winston",sel:[".win43-strip>.dk-cardx:nth-child(2)"],h:"Road to live",p:"Five conditions before a real dollar. Then two human acts to switch him on, a hard cap per trade and per day, and a kill link on two phones.",s:"“Discipline first. He goes live when the numbers say so, not when we feel like it.”"}];
+const TOUR_LIST=[...TOUR_STEPS.map((s,i)=>({l:s.k,s:s.sub,i})),{l:"Say it plainly: the own-ideas week",s:"Winston trades only his own ideas this week; the coach posts are shadow-scored",talk:1},{l:"Ask: What would you change?",s:"let him tell you what to measure next",talk:1}];
+TOUR.done=new Set();TOUR.last=0;TOUR.seen=false;TOUR.min=false;
 function tourNote(t,ms=2600){let n=$("#tourNote");if(!n){n=document.createElement("div");n.id="tourNote";n.className="tour-note";document.body.appendChild(n)}n.textContent=t;clearTimeout(n._t);n._t=setTimeout(()=>n.remove(),ms)}
+function tourMark(j,on=true){if(on)TOUR.done.add(j);else TOUR.done.delete(j);tourCkDraw()}
+function tourCkDraw(){const b=$("#v4ck");if(b)b.textContent=`✓ Must-see ${TOUR.done.size}/${TOUR_LIST.length}`;const m=$("#tourMenu");if(m&&m.dataset.k==="ck")tourCkMenu(true)}
+function tourMenuClose(){const m=$("#tourMenu");if(m)m.remove()}
+function tourMenuOpen(k,anchor,html){tourMenuClose();const m=document.createElement("div");m.id="tourMenu";m.className="tour-menu";m.dataset.k=k;m.innerHTML=html;document.body.appendChild(m);const r=anchor.getBoundingClientRect();m.style.top=(r.bottom+8)+"px";m.style.left=Math.max(10,Math.min(innerWidth-m.offsetWidth-10,r.right-m.offsetWidth))+"px";return m}
+function tourCkMenu(keep){
+  const a=$("#v4ck");if(!a)return;const n=TOUR.done.size,html=`<div class="hh"><span>MUST-SEE · CLICK TO JUMP</span><a id="tourCkReset">reset</a></div><div class="bar0"><i style="width:${n/TOUR_LIST.length*100}%"></i></div>`+TOUR_LIST.map((it,j)=>`<div class="it ${TOUR.done.has(j)?"done":""}" data-j="${j}"><span class="ck" data-c="${j}">✓</span><span class="l"><b>${esc(it.l)}</b><small>${esc(it.s)}</small></span>${it.talk?'<span class="kind">TALK</span>':""}</div>`).join("");
+  const m=keep&&$("#tourMenu");if(m){m.innerHTML=html}else tourMenuOpen("ck",a,html);
+  const mm=$("#tourMenu");mm.querySelector("#tourCkReset").onclick=()=>{TOUR.done.clear();tourCkDraw()};
+  mm.querySelectorAll(".it").forEach(el=>{const j=+el.dataset.j,it=TOUR_LIST[j];
+    el.querySelector(".ck").onclick=e=>{e.stopPropagation();tourMark(j,!TOUR.done.has(j))};
+    el.querySelector(".l").onclick=()=>{if(it.talk){tourMark(j,!TOUR.done.has(j));tourNote(it.s,3200)}else{tourMenuClose();tourGo(it.i)}}});
+}
+async function tourCardMenu(){
+  const a=$("#v4cards");if(!a)return;tourMenuOpen("cards",a,`<div class="hh"><span>SHOW ME A CARD</span></div><div class="mut" style="padding:8px 12px;font-size:12px">Loading real trades…</div>`);
+  const d=await tourReplayData();if(!$("#tourMenu")||$("#tourMenu").dataset.k!=="cards")return;
+  const t=d.t,o=d.own,sh=d.sh,I=[[0,"⚡ A card from his post",t?`${t.ticker} ${t.side==="put"?"short":"long"} · the contract Josh sees`:"no past trade yet"],[1,"▶ The in-trade card",t?`${t.label||t.ticker} · what Josh sees while it works`:"no past trade yet"],[2,"⛔ The rule said no → shadow",sh?`${sh.ticker} ${sh.side==="put"?"put":"call"} · blocked, then scored`:"no shadow trade yet"],[3,"💡 Winston's own idea",o?`${o.label||o.ticker} · took it on his own read`:"no own-idea win yet"]];
+  const m=$("#tourMenu");m.innerHTML=`<div class="hh"><span>SHOW ME A CARD · REAL TRADES, LABELLED REPLAY</span></div>`+I.map(([k,l,s])=>`<div class="it" data-k="${k}"><span class="l"><b>${esc(l)}</b><small>${esc(s)}</small></span></div>`).join("")+`<div class="it" data-k="clear"><span class="l"><b>Clear replay cards</b></span></div>`;
+  m.querySelectorAll(".it").forEach(el=>el.onclick=()=>{const k=el.dataset.k;tourMenuClose();if(k==="clear"){TOUR.replay=[];document.querySelectorAll(".tour-replay").forEach(x=>x.remove());tourNote("Replay cards cleared");return}tourReplayAdd(+k)});
+}
 function tourInstall(){
   if(!$("#tourCss")){const s=document.createElement("style");s.id="tourCss";s.textContent=TOUR_CSS;document.head.appendChild(s)}
   const r=$("#v4top .r");if(!r||$("#v4tour"))return;
-  const b=document.createElement("span");b.className="st tour";b.id="v4tour";b.title="Tour mode — a guided walk for showing Otto to someone. Changes nothing.";b.innerHTML=`Tour<span class="tg"></span>`;
+  const b=document.createElement("span");b.className="st tour";b.id="v4tour";b.title="Tour mode — a guided walk for showing Otto to someone. Changes nothing. Switch it off and on again and it picks up where you were.";b.innerHTML=`Tour<span class="tg"></span>`;
   b.addEventListener("click",()=>tourSet(!TOUR.on));r.insertBefore(b,r.firstChild);
+  const ck=document.createElement("span");ck.className="st tour-pill";ck.id="v4ck";ck.textContent=`✓ Must-see 0/${TOUR_LIST.length}`;ck.title="Your must-show list. Items tick themselves; click one to jump to it.";
+  ck.addEventListener("click",e=>{e.stopPropagation();if($("#tourMenu")&&$("#tourMenu").dataset.k==="ck")tourMenuClose();else tourCkMenu()});
+  const cd=document.createElement("span");cd.className="st tour-pill";cd.id="v4cards";cd.textContent="▤ Show me a card";cd.title="Pick which replay card drops into the Desk";
+  cd.addEventListener("click",e=>{e.stopPropagation();if($("#tourMenu")&&$("#tourMenu").dataset.k==="cards")tourMenuClose();else tourCardMenu()});
+  b.after(ck);ck.after(cd);
+  document.addEventListener("click",e=>{if(!e.target.closest("#tourMenu,.tour-pill"))tourMenuClose()});
 }
 function tourSet(on){
   TOUR.on=on;document.body.classList.toggle("tour",on);
   if(on){
-    if(!$("#tourFab")){const f=document.createElement("div");f.id="tourFab";f.innerHTML=`<button class="ghost" id="tourCards">Show me a card</button><button id="tourStart">▶ Start the tour</button>`;document.body.appendChild(f);
-      f.querySelector("#tourCards").onclick=tourReplayAdd;f.querySelector("#tourStart").onclick=()=>tourGo(0)}
-    tourChips();if(!TOUR.t)TOUR.t=setInterval(tourChips,1200);
-    tourNote("Tour on — tap a gold ⓘ to explain anything. Winston keeps trading underneath.",3600);
+    tourChips();if(!TOUR.t)TOUR.t=setInterval(tourChips,1200);tourCkDraw();
+    tourNote(TOUR.seen?"Tour on — picked up where you left off":"Tour on — tap a gold ⓘ to explain anything. Winston keeps trading underneath.",3200);
+    tourGo(TOUR.last||0,TOUR.seen);
   }else{
-    tourEnd();clearInterval(TOUR.t);TOUR.t=null;const f=$("#tourFab");if(f)f.remove();
+    tourEnd();tourMenuClose();clearInterval(TOUR.t);TOUR.t=null;
     document.querySelectorAll(".tour-chip,.tour-ipop").forEach(x=>x.remove());document.querySelectorAll(".tour-host").forEach(x=>x.classList.remove("tour-host"));
-    TOUR.replay=[];document.querySelectorAll(".tour-replay").forEach(x=>x.remove());tourNote("Tour off — back to the live desk");
+    document.querySelectorAll(".tour-replay").forEach(x=>x.remove());tourNote("Tour off — back to the live desk. Switch it on and you're back where you were.");
   }
 }
 function tourChips(){
@@ -6763,38 +6842,72 @@ function tourInfo(chip,key){
   const r=chip.getBoundingClientRect();p.style.left=Math.max(12,Math.min(innerWidth-380,r.left-170))+"px";p.style.top=(r.bottom+8)+"px";document.body.appendChild(p);
   setTimeout(()=>document.addEventListener("click",function h(e){if(!e.target.closest(".tour-ipop")){p.remove();document.removeEventListener("click",h)}}),0);
 }
-function tourGo(i){
-  if(!TOUR.on)return;const s=TOUR_STEPS[i];if(!s){tourEnd();tourNote("Tour finished — the ⓘ chips stay until you switch Tour off",3600);return}
-  TOUR.step=i;document.body.classList.add("tour-step");
-  if(DK.view!==s.view)dkShow(s.view);
+const tourWaitEl=s=>{if(s.wait)return $(s.wait);if(s.pop){const ov=$("#v4ov");return ov&&[...ov.querySelectorAll(".dk-h")].find(x=>/What each rule costs/i.test(x.textContent))}return true};
+function tourGo(i,resumed){
+  if(!TOUR.on)return;const s=TOUR_STEPS[i];if(!s){tourEnd();tourMark(TOUR_STEPS.length-1);tourNote("Tour finished — the ⓘ chips stay until you switch Tour off",3600);return}
+  TOUR.step=i;TOUR.last=i;TOUR.seen=true;TOUR.resumed=!!resumed;TOUR.manual=false;document.body.classList.add("tour-step");tourMark(i);
+  if(s.view==="coach"&&(CC.range==="today"||CC.range==="all"))CC.range="30";
+  if(DK.view!==s.view||s.view==="coach")dkShow(s.view);
   if(s.pop){if(!$("#v4ov")||!$("[data-tour=ledger]")){v4Close();try{winPop(s.pop)}catch(e){}}}else if($("#v4ov"))v4Close();
-  if(s.pop){let n=0;const w=()=>{const ov=$("#v4ov");const h=ov&&[...ov.querySelectorAll(".dk-h")].find(x=>/What each rule costs/i.test(x.textContent));if((h||n>12)&&TOUR.step===i){tourPlace();return}n++;setTimeout(w,250)};setTimeout(w,200)}else setTimeout(tourPlace,60);
+  const wait=!!(s.pop||s.wait);let n=0;
+  tourPlace(wait&&!tourWaitEl(s));
+  if(wait){const w=()=>{if(TOUR.step!==i||!TOUR.on)return;if(tourWaitEl(s)||n>80){tourPlace();return}n++;setTimeout(w,250)};setTimeout(w,250)}
 }
-function tourPlace(){
+function tourOverlap(a,b){return Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))*Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top))}
+function tourBest(r,cw,ch){
+  const W=innerWidth,H=innerHeight,m=14,cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const avoid=[...document.querySelectorAll("[data-avoid]")].map(e=>e.getBoundingClientRect()).filter(x=>x.width>0&&x.height>0);
+  const C=[[r.right+18,r.top],[r.left-cw-18,r.top],[r.left,r.bottom+18],[r.left,r.top-ch-18],[W-cw-m,H-ch-m],[m,H-ch-m],[W-cw-m,64],[m,64]].map(([x,y])=>[cl(x,m,W-cw-m),cl(y,58,Math.max(58,H-ch-m))]);   // never above y=58: the top bar (Must-see, Show me a card) stays clickable
+  let best=null;for(const [x,y] of C){const rc={left:x,top:y,right:x+cw,bottom:y+ch};let sc=tourOverlap(rc,r);for(const a of avoid)if(tourOverlap(rc,a)>0)sc+=1e7;sc-=y*0.5;if(!best||sc<best.sc)best={sc,x,y}}
+  return best;
+}
+function tourPlace(loading){
   const s=TOUR_STEPS[TOUR.step];if(!s||!TOUR.on)return;
-  if(s.pop){const ov=$("#v4ov");if(ov&&!$("[data-tour=ledger]")){const h=[...ov.querySelectorAll(".dk-h")].find(x=>/What each rule costs/i.test(x.textContent));const box=h?h.closest(".dk-cardx"):ov.querySelector(".v4pop, .dk-pop, [class*=pop]");if(box)box.dataset.tour="ledger";if(h)h.scrollIntoView({block:"center"})}}
+  if(s.pop){const ov=$("#v4ov");if(ov&&!$("[data-tour=ledger]")){const h=[...ov.querySelectorAll(".dk-h")].find(x=>/What each rule costs/i.test(x.textContent));const box=h?h.closest(".dk-cardx"):null;if(box)box.dataset.tour="ledger";if(h)h.scrollIntoView({block:"center"})}}
   let dim=$("#tourDim");if(!dim){dim=document.createElement("div");dim.id="tourDim";dim.innerHTML=`<div id="tourBox"></div>`;document.body.appendChild(dim)}
-  let c=$("#tourCard");if(!c){c=document.createElement("div");c.id="tourCard";c.innerHTML=`<div class="n"></div><h3></h3><p class="p"></p><p class="say"></p><div class="nav"><button id="tourBack">Back</button><span class="sp"></span><button class="go" id="tourNext">Next</button></div>`;document.body.appendChild(c);
-    c.querySelector("#tourBack").onclick=()=>tourGo(TOUR.step-1);c.querySelector("#tourNext").onclick=()=>tourGo(TOUR.step+1)}
+  let c=$("#tourCard");if(!c){c=document.createElement("div");c.id="tourCard";document.body.appendChild(c)}
+  const hasT=!loading&&s.sel.map(x=>$(x)).some(Boolean);
+  c.classList.toggle("min",!!TOUR.min);
+  c.innerHTML=`<div class="hd" id="tourHd"><span class="n">Stop ${TOUR.step+1} of ${TOUR_STEPS.length} · ${esc(s.k)}</span><span class="sp"></span><button id="tourMin" title="Collapse / expand">${TOUR.min?"+":"–"}</button><button id="tourX" title="Pause the tour — it remembers where you were">✕</button></div>
+    <div class="bd">${TOUR.resumed?`<div class="resumed">Picked up where you left off. <a id="tourStartOver">Start over</a></div>`:""}${s.loading&&!hasT?`<div class="resumed" style="color:var(--ink-2)">${esc(s.loading)}</div>`:""}<h3>${esc(s.h)}</h3><p class="p">${esc(s.p)}</p><p class="say">${esc(s.s)}</p>
+    <div class="nav"><button id="tourBack" style="visibility:${TOUR.step?"visible":"hidden"}">Back</button><span class="sp">${TOUR_STEPS.map((x,i)=>`<i data-i="${i}" title="${esc(x.k)}" class="${i===TOUR.step?"on":TOUR.done.has(i)?"seen":""}"></i>`).join("")}</span><button class="go" id="tourNext">${TOUR.step===TOUR_STEPS.length-1?"Done":"Next"}</button></div></div>`;
+  c.querySelector("#tourBack").onclick=()=>tourGo(TOUR.step-1);c.querySelector("#tourNext").onclick=()=>tourGo(TOUR.step+1);
+  c.querySelector("#tourX").onclick=()=>{tourEnd();tourNote("Tour paused — use ✓ Must-see to jump back in",3000)};
+  c.querySelector("#tourMin").onclick=()=>{TOUR.min=!TOUR.min;tourPlace()};
+  const so=c.querySelector("#tourStartOver");if(so)so.onclick=()=>tourGo(0);
+  c.querySelectorAll(".nav .sp i").forEach(d=>d.onclick=()=>tourGo(+d.dataset.i));
+  c.querySelector("#tourHd").onmousedown=e=>{if(e.target.closest("button"))return;const r=c.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top;
+    const mv=ev=>{TOUR.manual=true;c.style.transition="none";c.style.left=Math.max(0,Math.min(innerWidth-c.offsetWidth,ev.clientX-dx))+"px";c.style.top=Math.max(0,Math.min(innerHeight-60,ev.clientY-dy))+"px"};
+    const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);c.style.transition=""};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);e.preventDefault()};
   const els=s.sel.map(x=>{let e=$(x);if(e&&s.host)e=e.parentElement;return e}).filter(Boolean);
-  let r;if(els.length){const rs=els.map(e=>e.getBoundingClientRect());r={left:Math.min(...rs.map(x=>x.left)),top:Math.min(...rs.map(x=>x.top)),right:Math.max(...rs.map(x=>x.right)),bottom:Math.max(...rs.map(x=>x.bottom))}}else r={left:innerWidth/2-200,top:innerHeight/2-100,right:innerWidth/2+200,bottom:innerHeight/2+100};
-  const b=$("#tourBox");b.style.left=(r.left-8)+"px";b.style.top=(r.top-8)+"px";b.style.width=(r.right-r.left+16)+"px";b.style.height=(r.bottom-r.top+16)+"px";
-  let left=r.right+18,top=r.top;if(left+400>innerWidth){left=Math.max(16,Math.min(r.left,innerWidth-410));top=r.bottom+18}if(top+280>innerHeight)top=Math.max(16,innerHeight-290);
-  c.style.left=left+"px";c.style.top=top+"px";
-  c.querySelector(".n").textContent=s.n;c.querySelector("h3").textContent=s.h;c.querySelector(".p").textContent=s.p;c.querySelector(".say").textContent=s.s;
-  c.querySelector(".sp").innerHTML=TOUR_STEPS.map((x,i)=>`<i class="${i===TOUR.step?"on":""}"></i>`).join("");
-  c.querySelector("#tourBack").style.visibility=TOUR.step?"visible":"hidden";c.querySelector("#tourNext").textContent=TOUR.step===TOUR_STEPS.length-1?"Done":"Next";
+  if(els.length&&!loading){const e0=els[0];try{if(!s.pop&&!s.host)e0.scrollIntoView({block:"nearest"})}catch(e){}}
+  let r;if(els.length&&!loading){const rs=els.map(e=>e.getBoundingClientRect());r={left:Math.min(...rs.map(x=>x.left)),top:Math.min(...rs.map(x=>x.top)),right:Math.max(...rs.map(x=>x.right)),bottom:Math.max(...rs.map(x=>x.bottom))}}else r={left:innerWidth/2-200,top:innerHeight/2-100,right:innerWidth/2+200,bottom:innerHeight/2+100};
+  const b=$("#tourBox");b.style.opacity=els.length&&!loading?"1":"0";b.style.left=(r.left-8)+"px";b.style.top=(r.top-8)+"px";b.style.width=(r.right-r.left+16)+"px";b.style.height=(r.bottom-r.top+16)+"px";
+  if(!TOUR.manual){const p=tourBest({left:r.left-8,top:r.top-8,right:r.right+8,bottom:r.bottom+8},c.offsetWidth,c.offsetHeight);c.style.left=p.x+"px";c.style.top=p.y+"px"}
 }
 function tourEnd(){TOUR.step=-1;document.body.classList.remove("tour-step");["#tourDim","#tourCard"].forEach(s=>{const e=$(s);if(e)e.remove()})}
-document.addEventListener("keydown",e=>{if(TOUR.step<0)return;if(e.target&&/input|textarea|select/i.test(e.target.tagName))return;if(e.key==="ArrowRight"||e.key==="Enter"){e.preventDefault();tourGo(TOUR.step+1)}else if(e.key==="ArrowLeft"){e.preventDefault();tourGo(TOUR.step-1)}else if(e.key==="Escape")tourEnd()});
-addEventListener("resize",()=>{if(TOUR.step>=0)tourPlace()});
+document.addEventListener("keydown",e=>{if(TOUR.step<0)return;if(e.target&&/input|textarea|select/i.test(e.target.tagName))return;if(e.key==="ArrowRight"||e.key==="Enter"){e.preventDefault();tourGo(TOUR.step+1)}else if(e.key==="ArrowLeft"){e.preventDefault();tourGo(TOUR.step-1)}else if(e.key==="Escape"&&!$("#v4ov")&&!$(".dk-desk.pop"))tourEnd()});
+addEventListener("resize",()=>{if(TOUR.step>=0){TOUR.manual=false;tourPlace()}});
+/* the checklist ticks itself: a Winston trade opened, Coach's Corner opened */
+document.addEventListener("click",e=>{if(!TOUR.on)return;if(e.target.closest('[data-wpop="trade"]'))tourMark(2)},true);
+/* v4.8.2: the Desk conversation pops out to a big window (same feed, same composer — not a copy) */
+function deskPop(on){
+  const d=$(".dk-desk"),b=$("#dkExpand");if(!d||!b)return;if(on===undefined)on=!d.classList.contains("pop");
+  d.classList.toggle("pop",on);document.body.classList.toggle("deskpop",on);let bk=$("#deskBack");
+  if(on){if(!bk){bk=document.createElement("div");bk.id="deskBack";bk.addEventListener("click",()=>deskPop(false));document.body.appendChild(bk)}}else if(bk)bk.remove();
+  b.textContent=on?"✕ Close":"⤢ Expand";const m=$("#dkMsgs");if(m)setTimeout(()=>{m.scrollTop=m.scrollHeight},30);
+  if(typeof TOUR!=="undefined"&&TOUR.step>=0)setTimeout(tourPlace,60);
+}
+(function(){const b=document.getElementById("dkExpand");if(!b)return;b.addEventListener("click",()=>deskPop());b.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();deskPop()}});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&document.querySelector(".dk-desk.pop")&&!document.getElementById("v4ov"))deskPop(false)});})();
 /* REPLAY cards — built from Winston's own past trades (real fills), labelled REPLAY. Not otto_actions rows: the buttons do nothing. */
 async function tourReplayData(){
   let j=WIN.j;if(!j){try{j=await winApi("state");WIN.j=j}catch(e){j=null}}
   const T=((j&&j.trades)||[]).filter(t=>t.status!=="open"&&+t.pnl_realistic>0&&t.plan&&t.plan.target_level!=null);
   const t=T.filter(t=>/^coach/.test(t.source||"")).sort((a,b)=>+b.pnl_realistic-+a.pnl_realistic)[0]||T.sort((a,b)=>+b.pnl_realistic-+a.pnl_realistic)[0]||null;
   const sh=((j&&j.shadow&&j.shadow.recent)||[]).find(x=>x.status==="win")||null;
-  return {t,sh,j};
+  const own=((j&&j.trades)||[]).filter(t=>t.status!=="open"&&+t.pnl_realistic>0&&t.plan&&t.plan.target_level!=null&&!/^coach/.test(t.source||"")).sort((a,b)=>+b.pnl_realistic-+a.pnl_realistic)[0]||null;
+  return {t,sh,j,own};
 }
 function tourReplayHtml(kind,d){
   const t=d.t,p=t&&t.plan||{},sh=d.sh,n2=x=>x==null?"—":(+x).toFixed(2),dt=x=>{try{return winET(x)}catch(e){return ""}},dayS=x=>{try{return wDay(x)}catch(e){return x||""}};
@@ -6818,15 +6931,17 @@ function tourReplayHtml(kind,d){
       <div class="mut" style="font-size:12px;margin-top:6px">This is how a rule earns its keep — or loses it.</div></div>`}
   return "";
 }
-async function tourReplayAdd(){
+async function tourReplayAdd(k){
   if(!TOUR.on)return;if(DK.view!=="desk")dkShow("desk");
-  const d=await tourReplayData();const k=TOUR.replay.length%3;const html=tourReplayHtml(k,d);if(!html)return;
-  TOUR.replay.push(html);tourReplayRestore(true);
-  tourNote(["A ⚡ Signal card — replay of a real post Winston took","The in-trade card — what Josh sees while it works","A blocked idea → shadow trade. Tap again to cycle."][k],3200);
+  const d=await tourReplayData();let html;
+  if(k===3)html=d.own?tourReplayHtml(0,{...d,t:d.own}).replace("Replay · ⚡ Signal","Replay · his own idea"):"";else html=tourReplayHtml(k,d);
+  if(!html){tourNote("Nothing real to replay for that one yet");return}
+  TOUR.replay.push(html);tourReplayRestore(true);tourMark(1);
+  tourNote(["A ⚡ Signal card — replay of a real post Winston took","The in-trade card — what Josh sees while it works","A blocked idea → shadow trade","Winston's own idea — replay of a real fill"][k],3200);
 }
 function tourReplayRestore(scroll){const m=$("#dkMsgs");if(!m||!TOUR.replay.length)return;m.querySelectorAll(".tour-replay").forEach(x=>x.remove());m.insertAdjacentHTML("beforeend",TOUR.replay.join(""));if(scroll)m.scrollTop=m.scrollHeight}
 (function(){const _b=v4TopBuild;v4TopBuild=function(){_b();tourInstall()};
-  const _s=dkShow;dkShow=function(v){_s(v);if(TOUR.on){tourChips();tourReplayRestore()}};
+  const _s=dkShow;dkShow=function(v){_s(v);if(TOUR.on){tourChips();tourReplayRestore();if(v==="coach")tourMark(4)}};
   if(typeof dkRenderMsgs==="function"){const _m=dkRenderMsgs;dkRenderMsgs=function(){const r=_m.apply(this,arguments);if(TOUR.on)tourReplayRestore();return r}}
   if($("#v4top"))tourInstall();})();
 
