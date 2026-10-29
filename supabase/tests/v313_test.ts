@@ -37,7 +37,7 @@ function matches(row: any, params: URLSearchParams) {
     if (v === "is.null") { if (val(k) != null) return false; continue; }
     if (v === "not.is.null") { if (val(k) == null) return false; continue; }
     if (v.startsWith("neq.")) { if (String(val(k)) === v.slice(4)) return false; continue; }
-    if (v.startsWith("eq.")) { const want = decodeURIComponent(v.slice(3)); const have = k === "exit->>state" ? row.exit?.state : val(k); if (String(have) !== want) return false; }
+    if (v.startsWith("eq.")) { const want = decodeURIComponent(v.slice(3)); const have = k === "exit->>state" ? row.exit?.state : k === "owner" ? (row.owner ?? "ottotrader@vinecreativestudio.com") : val(k); if (String(have) !== want) return false; }   // v5.0: a row without owner is the house's (the SQL DEFAULT)
     else if (v.startsWith("gte.")) { if (!(String(row[k]) >= v.slice(4))) return false; }
     else if (v.startsWith("lte.")) { if (!(String(row[k]) <= v.slice(4))) return false; }
     else if (v.startsWith("lt.")) { if (!(String(row[k]) < v.slice(3))) return false; }

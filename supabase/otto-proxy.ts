@@ -62,12 +62,37 @@
 // nothing on any phone breaks. And the Coach's retrieval loop cannot run in a
 // browser — it needs several round trips to Claude before it has an answer.
 //
-// Secrets required:  ANTHROPIC_KEY  (console.anthropic.com)
+// Secrets required:  ANTHROPIC_KEY  (console.anthropic.com) — the HOUSE room's key; every other room brings its own (v5.0)
 // TD_KEY is no longer used — ?fn=market moved to Yahoo (yq()) on 18 Sep 2026,
 // same free source ?fn=routine already used. See "Bug confirmed, 18 Sep 2026"
 // in the project deploy-state doc for why.
 
 const MODEL = "claude-sonnet-4-6";
+
+/* ===================================================================== v5.0 ROOMS (29 Oct 2026)
+   One project, one app, one brain — and every signed-in person gets a walled-off ROOM: their own broker/chart connections
+   (otto_conn), their own Desk conversation (otto_desk), their own cards (otto_actions), their own Anthropic key + model
+   (otto_users). The room is the lower-cased sign-in email. The HOUSE room (ottotrader@vinecreativestudio.com) is the one
+   that existed before v5.0: every old row belongs to it through the SQL column DEFAULT (032_v500_rooms.sql), so cron,
+   Winston and the Watcher — which carry no user — keep reading and writing house rows without a single change.
+   HOW IT WORKS: the request handler puts the caller's email in an AsyncLocalStorage (ROOM) once deskUserAsync has let
+   them in; owner() reads it anywhere downstream (tools, panel, scoring, journal, background work spawned in the request)
+   and falls back to HOUSE when there is no store — i.e. on every cron / anonymous path. Table reads add owner=eq.<owner()>
+   (OQ()), inserts carry owner: owner(), and the token / MCP-session caches are keyed owner|service (ck()).
+   Winston stays house-only in this build (otto-proxy never reads winston_* tables; the app hides the tab for members). */
+import { AsyncLocalStorage } from "node:async_hooks";
+const HOUSE = "ottotrader@vinecreativestudio.com";
+const ROOM = new AsyncLocalStorage<{ owner: string }>();
+const owner = () => ROOM.getStore()?.owner || HOUSE;
+const OQ = () => "owner=eq." + encodeURIComponent(owner()) + "&";                 // v5.0: PostgREST filter prefix for the room's rows
+const ck = (service: string) => owner() + "|" + service;                             // v5.0: TOK / MSESS / REFRESHING cache key
+export const ALLOWED_MODELS = ["claude-sonnet-4-6", "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1"];
+const MODEL_INFO = [                                                                  // v5.0: shown in Settings → Your AI key (rough, Desk-level use)
+  { id: "claude-sonnet-4-6", label: "Sonnet 4.6", cost: "about $10–25/mo — the house default" },
+  { id: "claude-sonnet-5-5", label: "Sonnet 5.5", cost: "about $20–40/mo" },
+  { id: "claude-opus-5-5",   label: "Opus 5.5",   cost: "about $60–120/mo — the deepest thinker" },
+  { id: "claude-fable-5-1",  label: "Fable 5.1",  cost: "about $40–80/mo" },
+];
 
 /* The Coach's prompt.
 
@@ -687,6 +712,13 @@ async function chat(req: Request, sys: string, cs: Chunk[], apiKey: string) {
 
    Locked down: every Desk route requires a signed-in email on
    OTTO_ALLOWED_EMAILS. Anonymous app sessions can't reach any of it.
+   v5.0 ROOMS: ...or an invited / active otto_users row. Allow-list emails
+   are owners (admins); everyone else is a member in their own room. The
+   handler runs each Desk request inside ROOM.run({ owner }), and owner()
+   scopes otto_conn / otto_desk / otto_actions reads + writes, the token and
+   MCP-session caches, and the Anthropic key + model (roomKey). See the
+   "v5.0 ROOMS" block at the top of the file. New routes: me, key_set,
+   key_clear, model_set; admin: invite, users, user_off.
 
    Robinhood orders are forced into the one agentic_allowed account (or
    OTTO_RH_ACCOUNT if set). The account number is never in this file — the
@@ -770,10 +802,136 @@ function allowedEmails(): string[] {
   return (Deno.env.get("OTTO_ALLOWED_EMAILS") || "ottotrader@vinecreativestudio.com")
     .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
-function deskUser(claims: any): string | null {
+// v5.0 ROOMS: allow-list emails are owners (admins); anyone else must have an otto_users row that is invited or active.
+// First entry flips invited → active (first_seen); last_seen is touched at most once per 10 minutes per instance.
+type DeskWho = { email: string; role: "owner" | "member"; name?: string | null };
+const SEEN: Record<string, number> = {};
+const uq = (email: string) => "otto_users?email=eq." + encodeURIComponent(email);
+async function deskUserAsync(claims: any): Promise<DeskWho | null> {
   const e = String(claims?.email || "").toLowerCase();
   if (!e || claims?.is_anonymous) return null;
-  return allowedEmails().includes(e) ? e : null;
+  const now = Date.now(), iso = new Date(now).toISOString();
+  if (allowedEmails().includes(e)) {
+    if (!SEEN[e] || now - SEEN[e] > 10 * 60_000) {
+      SEEN[e] = now;
+      const row = (await db(uq(e) + "&select=email").catch(() => []))?.[0];
+      (row ? db(uq(e), { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ last_seen: iso }) })
+           : db("otto_users", { method: "POST", headers: { prefer: "return=minimal" }, body: JSON.stringify({ email: e, role: "owner", status: "active", first_seen: iso, last_seen: iso }) })
+      ).catch(() => {});
+    }
+    return { email: e, role: "owner" };
+  }
+  const row = (await db(uq(e) + "&status=in.(invited,active)&select=email,name,role,status").catch(() => []))?.[0];
+  if (!row) return null;
+  if (row.status === "invited" || !SEEN[e] || now - SEEN[e] > 10 * 60_000) {
+    SEEN[e] = now;
+    const patch: any = { last_seen: iso };
+    if (row.status === "invited") { patch.status = "active"; patch.first_seen = iso; }
+    db(uq(e), { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify(patch) }).catch(() => {});
+  }
+  return { email: e, role: row.role === "owner" ? "owner" : "member", name: row.name || null };
+}
+// v5.0: the per-room Anthropic key + model. HOUSE = the ANTHROPIC_KEY secret; every other room = its sealed otto_users key.
+class NoKey extends Error {}
+const NO_KEY_MSG = "Add your Anthropic API key in Settings → Your AI key";
+type RoomKey = { key: string; model: string; source: "room" | "house" };
+const RK: Record<string, { at: number; v: RoomKey }> = {};
+async function roomKey(): Promise<RoomKey> {
+  const o = owner();
+  const c = RK[o];
+  if (c && Date.now() - c.at < 60_000 && Date.now() >= c.at) return c.v;
+  const row = (await db(uq(o) + "&select=anthropic_key,model").catch(() => []))?.[0];
+  const model = ALLOWED_MODELS.includes(row?.model) ? String(row.model) : MODEL;
+  let v: RoomKey;
+  if (o === HOUSE) {
+    const key = Deno.env.get("ANTHROPIC_KEY") || "";
+    if (!key) throw new Error("ANTHROPIC_KEY secret is not set");
+    v = { key, model, source: "house" };
+  } else {
+    if (!row?.anthropic_key) throw new NoKey(NO_KEY_MSG);
+    const key = String((await unseal(String(row.anthropic_key)).catch(() => "")) || "");
+    if (!key) throw new NoKey(NO_KEY_MSG);
+    v = { key, model, source: "room" };
+  }
+  RK[o] = { at: Date.now(), v };
+  return v;
+}
+const roomModel = async () => (await roomKey().catch(() => null))?.model || MODEL;        // v5.0: the model for a Desk-triggered call
+// Settings → Your AI key / model, and the admin's people list. The key is sealed at rest and NEVER returned or logged.
+async function userPatch(email: string, patch: any) {
+  await db("otto_users?on_conflict=email", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ email, ...patch }) });
+  delete RK[email];
+}
+async function meInfo(u: DeskWho) {
+  const row = (await db(uq(u.email) + "&select=name,key_last4,key_ok_at,model").catch(() => []))?.[0] || {};
+  return { role: u.role, name: row.name || u.name || null, house: u.email === HOUSE, paper_only: u.email !== HOUSE,   // v5.0: member rooms never place
+    has_key: u.email === HOUSE ? !!Deno.env.get("ANTHROPIC_KEY") : !!row.key_last4, key_last4: row.key_last4 || null, key_ok_at: row.key_ok_at || null,
+    model: ALLOWED_MODELS.includes(row.model) ? row.model : MODEL };
+}
+export async function keySet(email: string, key: string) {
+  key = String(key || "").trim();
+  if (!/^sk-ant-/.test(key) || key.length < 20) return { ok: false, error: "That doesn't look like an Anthropic API key (it starts with sk-ant-)." };
+  const r = await fetch("https://api.anthropic.com/v1/models?limit=1", { headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
+    signal: AbortSignal.timeout(15_000) }).catch(() => null);
+  if (!r) return { ok: false, error: "Couldn't reach Anthropic to check the key — try again." };
+  await r.body?.cancel().catch(() => {});
+  if (r.status === 401 || r.status === 403) return { ok: false, error: "Anthropic rejected that key — check it and paste it again." };
+  if (!r.ok) return { ok: false, error: "Anthropic answered " + r.status + " while checking the key — try again." };
+  const key_last4 = key.slice(-4);
+  await userPatch(email, { anthropic_key: await seal(key), key_last4, key_ok_at: new Date().toISOString() });
+  return { ok: true, key_last4 };
+}
+export async function keyClear(email: string) {
+  await userPatch(email, { anthropic_key: null, key_last4: null, key_ok_at: null });
+  return { ok: true, key_last4: null };
+}
+export async function modelSet(email: string, model: string) {
+  if (!ALLOWED_MODELS.includes(model)) return { ok: false, error: "pick one of: " + ALLOWED_MODELS.join(", ") };
+  await userPatch(email, { model });
+  return { ok: true, model };
+}
+export async function inviteUser(b: any, by: string) {
+  const email = String(b?.email || "").trim().toLowerCase(), name = String(b?.name || "").trim().slice(0, 80);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "that doesn't look like an email" };
+  const was = (await db(uq(email) + "&select=status").catch(() => []))?.[0];
+  const status = was && was.status !== "off" ? was.status : "invited";
+  await userPatch(email, { ...(name ? { name } : {}), status, invited_by: by, invited_at: new Date().toISOString() });
+  delete SEEN[email];
+  const base = Deno.env.get("SUPABASE_URL"), svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const site = Deno.env.get("OTTO_SITE") || "https://vinespaces.github.io/otto-trader/";
+  let auth = 0, note: string | null = null;
+  if (!base || !svc) note = "service role not available — no invite email was sent";
+  else {
+    const r = await fetch(base + "/auth/v1/invite?redirect_to=" + encodeURIComponent(site), { method: "POST",
+      headers: { apikey: svc, authorization: "Bearer " + svc, "content-type": "application/json" },
+      body: JSON.stringify({ email, data: { name: name || null } }), signal: AbortSignal.timeout(15_000) }).catch(() => null);
+    auth = r?.status || 0;
+    const t = r ? await r.text().catch(() => "") : "";
+    if (!r) note = "couldn't reach Supabase auth — no invite email was sent (they can still use the magic-link sign-in)";
+    else if (!r.ok) {
+      if (/already|exists|registered/i.test(t)) note = "already has a login — the magic-link sign-in works";
+      else return { ok: false, error: "invite email failed (" + auth + "): " + t.slice(0, 160), email, status, auth };
+    }
+  }
+  return { ok: true, email, status, auth, ...(note ? { note } : {}) };
+}
+export async function usersList() {
+  const rows = (await db("otto_users?select=email,name,role,status,anthropic_key,key_last4,model,invited_at,first_seen,last_seen&order=created_at.asc")) || [];
+  const conns = (await db("otto_conn?select=owner,service,connected_at").catch(() => [])) || [];
+  return { ok: true, users: rows.map((r: any) => ({ email: r.email, name: r.name, role: r.role, status: r.status, has_key: !!r.anthropic_key, key_last4: r.key_last4 || null,
+    model: r.model || null, invited_at: r.invited_at, first_seen: r.first_seen, last_seen: r.last_seen,
+    conn: conns.filter((c: any) => c.owner === r.email).map((c: any) => ({ service: c.service, connected_at: c.connected_at })) })) };
+}
+export async function userOff(email: string, by: string) {
+  email = String(email || "").trim().toLowerCase();
+  if (!email) return { ok: false, error: "email required" };
+  if (email === HOUSE || email === by || allowedEmails().includes(email)) return { ok: false, error: "that login can't be switched off here" };
+  await db(uq(email), { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ status: "off" }) });
+  delete SEEN[email]; delete RK[email];
+  for (const k of Object.keys(TOK)) if (k.startsWith(email + "|")) delete TOK[k];
+  for (const k of Object.keys(MSESS)) if (k.startsWith(email + "|")) delete MSESS[k];
+  return { ok: true, email, status: "off" };
 }
 
 /* ------------------------------------------------------------ database */
@@ -843,7 +1001,7 @@ async function oauthStart(service: string, who: string) {
   const challenge = b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", enc8.encode(verifier))));
   const state = service + "." + b64url(crypto.getRandomValues(new Uint8Array(18)));
   await db("otto_oauth", { method: "POST", body: JSON.stringify({
-    state, service, client_id: rj.client_id, verifier: await seal(verifier), started_by: who }) });
+    state, service, client_id: rj.client_id, verifier: await seal(verifier), started_by: who, owner: owner() }) });   // v5.0
   const q = new URLSearchParams({ response_type: "code", client_id: rj.client_id, redirect_uri: redirect,
     code_challenge: challenge, code_challenge_method: "S256", state, scope: s.scope, resource: s.resource });
   return s.authorize + "?" + q.toString();
@@ -865,12 +1023,12 @@ async function saveTokens(service: string, client_id: string, j: any, prev: any,
     refresh_token: j.refresh_token || prev?.refresh_token || null,
     expires_at: j.expires_in ? Date.now() + Number(j.expires_in) * 1000 : null,
   };
-  const row: any = { service, client_id, tokens: await seal(t), updated_at: new Date().toISOString() };
+  const row: any = { owner: owner(), service, client_id, tokens: await seal(t), updated_at: new Date().toISOString() };   // v5.0: one row per room + service
   if (who) { row.connected_by = who; row.connected_at = row.updated_at; }
-  await db("otto_conn?on_conflict=service", { method: "POST",
+  await db("otto_conn?on_conflict=owner,service", { method: "POST",
     headers: { prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(row) });
-  TOK[service] = { access: t.access_token, exp: t.expires_at || Date.now() + 30 * 60_000 };
-  delete MSESS[service];
+  TOK[ck(service)] = { access: t.access_token, exp: t.expires_at || Date.now() + 30 * 60_000 };
+  delete MSESS[ck(service)];
   return t;
 }
 
@@ -879,6 +1037,10 @@ async function oauthFinish(code: string, state: string, who: string) {
   const p = rows && rows[0];
   if (!p) throw new Error("that sign-in link expired or was already used — press Connect again");
   await db("otto_oauth?state=eq." + encodeURIComponent(state), { method: "DELETE" });
+  // v5.0: the state row must belong to the room finishing it. The safe choice is to REFUSE a mismatch rather than adopt the
+  // row's owner: a state value that leaked (pasted link, shared screen) could otherwise plant one person's broker tokens in
+  // another person's room. A room only ever finishes the sign-in it started.
+  if (p.owner && p.owner !== owner()) throw new Error("that sign-in link was started from another login — press Connect again");
   if (Date.now() - Date.parse(p.created_at) > 15 * 60_000) throw new Error("sign-in took longer than 15 minutes — press Connect again");
   const j = await tokenPost(p.service, { grant_type: "authorization_code", code, redirect_uri: redirectFor(p.service),
     client_id: p.client_id, code_verifier: await unseal(p.verifier), resource: SVC[p.service].resource });
@@ -889,37 +1051,37 @@ async function oauthFinish(code: string, state: string, who: string) {
 const TOK: Record<string, { access: string; exp: number }> = {};
 class NotConnected extends Error {}
 
-async function accessToken(service: string, force = false): Promise<string> {
-  const c = TOK[service];
+async function accessToken(service: string, force = false): Promise<string> {   // v5.0: everything here is per room (ck / OQ)
+  const c = TOK[ck(service)];
   if (!force && c && Date.now() < c.exp - 60_000) return c.access;
-  const rows = await db("otto_conn?service=eq." + service + "&select=*");
+  const rows = await db("otto_conn?" + OQ() + "service=eq." + service + "&select=*");
   const row = rows && rows[0];
   if (!row || !row.tokens) throw new NotConnected(SVC[service].name + " is not connected — Settings → Connections");
   const t = await unseal(row.tokens);
   const fresh = !force && (!t.expires_at || Date.now() < t.expires_at - 60_000);
-  if (fresh) { TOK[service] = { access: t.access_token, exp: t.expires_at || Date.now() + 30 * 60_000 }; return t.access_token; }
+  if (fresh) { TOK[ck(service)] = { access: t.access_token, exp: t.expires_at || Date.now() + 30 * 60_000 }; return t.access_token; }
   if (!t.refresh_token) throw new NotConnected(SVC[service].name + " sign-in expired — reconnect in Settings → Connections");
   // v3.16 (code review 6 Oct): one refresh at a time per instance, and if another instance refreshed first (the
   // provider rotates refresh tokens, so ours is now dead), use the tokens it saved instead of calling it expired.
-  if (REFRESHING[service]) return REFRESHING[service]!;
-  REFRESHING[service] = (async () => {
+  if (REFRESHING[ck(service)]) return REFRESHING[ck(service)]!;
+  REFRESHING[ck(service)] = (async () => {
     try {
       const j = await tokenPost(service, { grant_type: "refresh_token", refresh_token: t.refresh_token,
         client_id: row.client_id, resource: SVC[service].resource });
       return (await saveTokens(service, row.client_id, j, t)).access_token;
     } catch (e) {
-      const again = (await db("otto_conn?service=eq." + service + "&select=*").catch(() => []))?.[0];
+      const again = (await db("otto_conn?" + OQ() + "service=eq." + service + "&select=*").catch(() => []))?.[0];
       if (again?.tokens && again.tokens !== row.tokens) {
         const t2 = await unseal(again.tokens).catch(() => null);
         if (t2?.access_token && (!t2.expires_at || Date.now() < t2.expires_at - 60_000)) {
-          TOK[service] = { access: t2.access_token, exp: t2.expires_at || Date.now() + 30 * 60_000 };
+          TOK[ck(service)] = { access: t2.access_token, exp: t2.expires_at || Date.now() + 30 * 60_000 };
           return t2.access_token;
         }
       }
       throw new NotConnected(SVC[service].name + " sign-in expired — reconnect in Settings → Connections (" + (e as Error).message + ")");
-    } finally { delete REFRESHING[service]; }
+    } finally { delete REFRESHING[ck(service)]; }
   })();
-  return REFRESHING[service]!;
+  return REFRESHING[ck(service)]!;
 }
 const REFRESHING: Record<string, Promise<string> | undefined> = {};
 
@@ -959,15 +1121,15 @@ async function rpcOnce(service: string, method: string, params: any, token: stri
 }
 
 async function mcpSession(service: string, token: string) {
-  const s = MSESS[service];
+  const s = MSESS[ck(service)];
   if (s && Date.now() - s.at < 20 * 60_000) return s;
   const init = await rpcOnce(service, "initialize", {
-    protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "otto-trader", version: "3.0.0" } }, token, null);
+    protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "otto-trader", version: "5.0.0" } }, token, null);
   if (init.status === 401) throw Object.assign(new Error("401"), { auth: true });
   if (!init.msg || init.msg.error) throw new Error(SVC[service].name + " initialize failed: " + (init.err || JSON.stringify(init.msg?.error)).slice(0, 200));
   const sess = { id: init.sid, at: Date.now() };
   await rpcOnce(service, "notifications/initialized", {}, token, init.sid, true);
-  MSESS[service] = sess;
+  MSESS[ck(service)] = sess;
   return sess;
 }
 
@@ -976,10 +1138,10 @@ async function mcp(service: string, method: string, params: any): Promise<any> {
     const token = await accessToken(service, attempt === 1);
     let sess;
     try { sess = await mcpSession(service, token); }
-    catch (e: any) { if (e.auth && attempt === 0) { delete MSESS[service]; continue; } throw e; }
+    catch (e: any) { if (e.auth && attempt === 0) { delete MSESS[ck(service)]; continue; } throw e; }
     const r = await rpcOnce(service, method, params, token, sess.id);
-    if (r.status === 401 && attempt === 0) { delete MSESS[service]; continue; }       // refresh and retry
-    if ((r.status === 404 || r.status === 400) && sess.id && attempt < 2) { delete MSESS[service]; continue; } // session gone
+    if (r.status === 401 && attempt === 0) { delete MSESS[ck(service)]; continue; }       // refresh and retry
+    if ((r.status === 404 || r.status === 400) && sess.id && attempt < 2) { delete MSESS[ck(service)]; continue; } // session gone
     if (!r.msg) throw new Error(SVC[service].name + " HTTP " + r.status + " " + (r.err || ""));
     if (r.msg.error) throw new Error(SVC[service].name + ": " + (r.msg.error.message || JSON.stringify(r.msg.error)).slice(0, 300));
     return r.msg.result;
@@ -988,11 +1150,11 @@ async function mcp(service: string, method: string, params: any): Promise<any> {
 }
 
 async function mcpTools(service: string) {
-  const s = MSESS[service];
+  const s = MSESS[ck(service)];
   if (s?.tools && Date.now() - (s.toolsAt || 0) < 15 * 60_000) return s.tools;
   const res = await mcp(service, "tools/list", {});
   const tools = res?.tools || [];
-  if (MSESS[service]) { MSESS[service].tools = tools; MSESS[service].toolsAt = Date.now(); }
+  if (MSESS[ck(service)]) { MSESS[ck(service)].tools = tools; MSESS[ck(service)].toolsAt = Date.now(); }
   return tools;
 }
 
@@ -1031,12 +1193,22 @@ function tvCount() {
 }
 async function tvCallsLoad() { try { const v = await setting("tv_calls"); if (v?.day === etParts().date && v.n > TV_CALLS.n) TV_CALLS = v; } catch { /* */ } }
 const nextUtcMidnight = () => { const d = new Date(); d.setUTCHours(24, 0, 0, 0); return d.getTime(); };
+const PAPER_ONLY = "Rooms are paper-only in this version";
 async function call(service: string, tool: string, args: any) {
   let res: any;
+  // v5.0 ROOMS: a member's room never places, cancels or changes anything on Robinhood — whatever card, tool or sweep asked.
+  if (owner() !== HOUSE && service === "rh" && WRITE.rh.has(tool)) throw new Error(PAPER_ONLY + " — nothing is sent to Robinhood (" + tool + ")");
   if (service === "tv") tvCount();
   if (TEST?.call) res = await TEST.call(service, tool, args);
   else {
-    res = await mcp(service, "tools/call", { name: tool, arguments: args || {} });
+    try { res = await mcp(service, "tools/call", { name: tool, arguments: args || {} }); }
+    catch (e) {
+      // v5.0 ROOMS: a room with no sign-in of its own still gets PUBLIC market data (bars, quotes, chains) through the house's
+      // connection — the Winston allow-list only; accounts, positions and orders are never read across rooms.
+      if (e instanceof NotConnected && owner() !== HOUSE && WINSTON_ALLOW[service]?.has(tool))
+        res = await ROOM.run({ owner: HOUSE }, () => mcp(service, "tools/call", { name: tool, arguments: args || {} }));
+      else throw e;
+    }
     if (res?.isError) throw new Error(mcpText(res).slice(0, 400) || "tool error");
   }
   // v3.26: every cancel Otto sends is logged, so a cancel that isn't in the log shows up as "Outside Otto".
@@ -1046,10 +1218,11 @@ async function call(service: string, tool: string, args: any) {
 
 /* ------------------------------------------------------------ Robinhood account */
 
-let AGENTIC: { n: string; at: number } | null = null;
+const AGENTIC_BY: Record<string, { n: string; at: number }> = {};                     // v5.0: per room
 async function agenticAccount(): Promise<string> {
   const pinned = Deno.env.get("OTTO_RH_ACCOUNT");
-  if (pinned) return pinned;
+  if (pinned && owner() === HOUSE) return pinned;                                      // v5.0: the pin is the house's account; a member's is discovered from their own Robinhood
+  const AGENTIC = AGENTIC_BY[owner()];
   if (AGENTIC && Date.now() - AGENTIC.at < 30 * 60_000) return AGENTIC.n;
   const j = mcpJson(await call("rh", "get_accounts", {}));
   const found: string[] = [];
@@ -1062,7 +1235,7 @@ async function agenticAccount(): Promise<string> {
   walk(j);
   const uniq = [...new Set(found)];
   if (uniq.length !== 1) throw new Error(uniq.length ? "more than one agentic account — set OTTO_RH_ACCOUNT" : "no agentic_allowed Robinhood account found");
-  AGENTIC = { n: uniq[0], at: Date.now() };
+  AGENTIC_BY[owner()] = { n: uniq[0], at: Date.now() };
   return uniq[0];
 }
 const mask = (n: string) => "••" + String(n).slice(-4);
@@ -1166,6 +1339,10 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
   const opening = calls.some((c: any) => c.tool === "place_option_order" && (c.args?.legs || []).some((l: any) => l.position_effect === "open"));
   // v4.2.2 (23 Oct bug, AAPL 355C Coach #352): an opening leg with no option_id slipped through at 9:33 — no live quote at
   // approve, "price unavailable" on the trade row, Close Now refused. The self-test already required it; now the server does too.
+  // v5.0 ROOMS: a member's room is paper-only. An opening idea becomes a PRACTICE card below; any other Robinhood write
+  // (a close, a cancel, a stock order) has no practice form, so no card is made at all.
+  if (owner() !== HOUSE && !opening && calls.some((c: any) => c.service === "rh" && WRITE.rh.has(c.tool)))
+    throw new Error(PAPER_ONLY + " — a practice trade is closed with Close Now on the Desk; nothing is ever sent to Robinhood.");
   const openLeg = calls.flatMap((c: any) => c.tool === "place_option_order" ? (c.args?.legs || []) : []).find((l: any) => l.position_effect === "open");
   if (openLeg && !openLeg.option_id) throw new Error(`NO CARD — the opening leg has no option_id ("${String(input.title || "").slice(0, 80)}"). Look the contract up first (get_option_chains / get_option_instruments for the strike and expiry in the title) and propose again with legs[0].option_id set.`);
   // v3.14: the server stamps where the idea came from (signal / desk / scanner / alert / watcher trigger) for the Scoreboard.
@@ -1198,7 +1375,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
   // v3.21 (Ifoma, 7 Oct night): one card per ticker + direction. 7 Oct 10:32 two QQQ put cards went up at once.
   if (opening && !opts.manual && plan) {
     const tk = String(plan.tv_symbol || "").split(":").pop()?.toUpperCase() || "";
-    const recent = await db("otto_actions?select=id,title,status,plan,exit,created_at&order=created_at.desc&limit=40").catch(() => []);
+    const recent = await db("otto_actions?" + OQ() + "select=id,title,status,plan,exit,created_at&order=created_at.desc&limit=40").catch(() => []);
     const dup = (recent || []).find((r: any) => sameIdeaCard(r, tk, plan.direction));
     if (dup) throw new Error(`A ${tk} ${plan.direction === "down" ? "puts" : "calls"} card is already up: "${dup.title}" (${dup.status === "done" ? "filled, trade open" : dup.status}). Don't make a second one — point them to that card.`);
     // v3.22: levels more than 10% from the live price go back once, then no card.
@@ -1297,6 +1474,9 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
       if (!allowed27) { paper = `PRACTICE · ${ORIGIN_LABEL[og27] || og27} is not switched on to go LIVE (Settings, Limits & goals, Which ideas can go LIVE). Josh can Approve or Reject it as a practice trade: nothing is ever sent to Robinhood.`; practice = true; }
       else if (og27 === "coach_call" && originRow?.late) paper = "PAPER · the coach's post came after the move (marked late). Never chase a missed price. Practice only: scored, never sent to Robinhood.";
     }
+    // v5.0 ROOMS: in a member's room EVERY opening idea (Jarvis, the coach, the Order ticket) is a PRACTICE card on their own
+    // $5,000 practice book — the same card Josh answers (fills at the live ask on Approve, scored by the practice book).
+    if (owner() !== HOUSE) { paper = `PRACTICE · ${PAPER_ONLY}: Approve or Reject it as a practice trade on your practice book — nothing is ever sent to Robinhood.`; practice = true; }
     const capPct = Number(LIM.size_cap_pct) || 0;
     const capOn = LIM.size_cap_on !== false && capPct > 0 && costKnown;
     if (capOn && practice) {
@@ -1344,6 +1524,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
     if (exit) { const st = await staleEntry({ exit, plan }).catch(() => null); if (st) checks.unshift({ ok: false, guard: true, stale: true, text: st }); }
   }
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
+    owner: owner(),                                                                    // v5.0: the room's card
     title: (opening ? stampTitle(unname(input.title || "Action"), !!paper) : unstampTitle(unname(input.title || "Action")) || "Action").slice(0, 140),
     summary: unname(input.summary || "").slice(0, 4000),
     calls: out, risk, review: review.join("\n\n---\n\n"), status: practice ? "paper_wait" : paper ? "paper" : "pending", created_by: who,
@@ -1353,7 +1534,7 @@ export async function proposeAction(input: any, who: string, opts: { manual?: bo
   // v3.44 fix 4: the post-insert duplicate check (before any ping, Desk line or activity is written for this card)
   if (opening && !opts.manual && plan && rows?.[0] && ["pending", "paper_wait"].includes(rows[0].status)) {
     const tk44 = String(plan.tv_symbol || "").split(":").pop()?.toUpperCase() || "";
-    const again = await db("otto_actions?select=id,title,status,plan,exit,created_at&order=created_at.desc&limit=40").catch(() => null);
+    const again = await db("otto_actions?" + OQ() + "select=id,title,status,plan,exit,created_at&order=created_at.desc&limit=40").catch(() => null);
     const win = again ? dupWinner(again, rows[0], tk44, plan.direction) : null;
     if (win) {
       await db(`otto_actions?id=eq.${rows[0].id}&status=in.(pending,paper_wait)`, { method: "PATCH", headers: { prefer: "return=minimal" },
@@ -1564,7 +1745,7 @@ async function logDesk(role: string, author: string, content: string, action_id:
   if (role === "assistant") { try { content = numberCheck(content); } catch { /* fail open */ } }   // v3.39: above/below vs the numbers
   try {
     await db("otto_desk", { method: "POST", headers: { prefer: "return=minimal" },
-      body: JSON.stringify({ role, author: author.slice(0, 40), content: (role === "user" ? content : unname(content)).slice(0, 20000), action_id }) });
+      body: JSON.stringify({ owner: owner(), role, author: author.slice(0, 40), content: (role === "user" ? content : unname(content)).slice(0, 20000), action_id }) });   // v5.0: owner
   } catch { /* the log is a convenience; never break the chat over it */ }
   // v3.26: Otto's own system lines that are a break or a trade also land in the Activity log.
   if (role === "system" && /^(?:Otto|Jarvis \(auto\))$/.test(author)) {
@@ -1629,7 +1810,7 @@ async function settle<T>(p: Promise<T>): Promise<{ ok: true; v: T } | { ok: fals
 }
 
 async function panel() {
-  const conns = await db("otto_conn?select=service,connected_by,connected_at,updated_at").catch(() => []);
+  const conns = await db("otto_conn?" + OQ() + "select=service,connected_by,connected_at,updated_at").catch(() => []);   // v5.0: this room's
   const has = (s: string) => conns.some((c: any) => c.service === s);
   const out: any = { ok: true, at: Date.now(), conn: { tv: has("tv"), rh: has("rh") } };
 
@@ -1708,7 +1889,7 @@ async function panel() {
     const fq = await settle(fetchQuotes());
     if (fq.ok) out.fallback_quotes = fq.v.quotes;
   }
-  const pend = await settle(db("otto_actions?status=in.(pending,running,paper_wait)&order=created_at.desc&limit=20&select=*"));
+  const pend = await settle(db("otto_actions?" + OQ() + "status=in.(pending,running,paper_wait)&order=created_at.desc&limit=20&select=*"));
   // v3.10: a pending card past its 20 minutes can't be approved — mark it expired so it stops showing as waiting.
   const stale = pend.ok ? pend.v.filter((a: any) => (a.status === "pending" || a.status === "paper_wait") && Date.now() - Date.parse(a.created_at) > ACTION_TTL_MS) : [];
   if (stale.length) background(db("otto_actions?status=in.(pending,paper_wait)&id=in.(" + stale.map((a: any) => a.id).join(",") + ")", { method: "PATCH",
@@ -1716,7 +1897,7 @@ async function panel() {
   out.pending = pend.ok ? pend.v.filter((a: any) => !stale.includes(a)).slice(0, 10).map(publicAction) : [];
   out.card_ttl_min = ACTION_TTL_MS / 60000;
   out.auto_close = !!(await getLimits().catch(() => LIMIT_DEFAULTS)).auto_close;
-  const ex = await settle(db("otto_actions?select=id,title,exit,created_at&exit->>state=in.(waiting_fill,armed,closed)&order=created_at.desc&limit=8"));
+  const ex = await settle(db("otto_actions?" + OQ() + "select=id,title,exit,created_at&exit->>state=in.(waiting_fill,armed,closed)&order=created_at.desc&limit=8"));
   out.exits = ex.ok ? ex.v.filter((r: any) => ["waiting_fill", "armed"].includes(r.exit.state) ||
     Date.now() - Date.parse(r.exit.closed_at || r.created_at) < 18 * 3600e3).slice(0, 5) : [];
   if (has("rh") && out.exits.some((r: any) => ["waiting_fill", "armed"].includes(r.exit.state))) background(exitsTick());
@@ -1890,7 +2071,9 @@ type DeskResult = { said: string; cards: string[]; timedOut?: boolean; outOfRoun
 // v3.13: one Claude request, retried once on 429 / 5xx / overloaded, never past the run's deadline.
 async function claudeFetch(body: any, deadline: number): Promise<Response> {
   if (TEST?.claude) return TEST.claude(body);
-  const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
+  const rk = await roomKey();                                                          // v5.0: the room's key; the house's on cron paths
+  const apiKey = rk.key;
+  if (body?.model === MODEL && rk.model !== MODEL) body = { ...body, model: rk.model };   // v5.0: the room's model replaces the default only
   for (let attempt = 0; ; attempt++) {
     const left = deadline - Date.now();
     if (left < 8000) throw new Error("out of time before Claude answered");
@@ -2104,7 +2287,7 @@ async function deskSetup(opt: { fast?: boolean } = {}) {
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const bn = sent.ok ? `Banner: ${sent.v.verdict} (score ${sent.v.score}, ${sent.v.fresh}/${sent.v.total} legs fresh; fired: ${sent.v.rows.filter((r: any) => r.fired).map((r: any) => "row " + r.row).join(", ") || "none"}).` : "Banner: unavailable.";
   const LIM = await getLimits().catch(() => LIMIT_DEFAULTS);
-  const prot = await settle(db("otto_actions?select=title,exit&exit->>state=in.(waiting_fill,armed)&limit=5"));
+  const prot = await settle(db("otto_actions?" + OQ() + "select=title,exit&exit->>state=in.(waiting_fill,armed)&limit=5"));
   const protLine = prot.ok && prot.v.length ? " Protected trades (Otto runs their stop and alerts; to close one early, cancel_option_order its stop_order_id first, then sell, in one card): " +
     prot.v.map((r: any) => `${r.title} [${r.exit.state}${r.exit.stop_order_id ? `, stop_order_id ${r.exit.stop_order_id} at $${r.exit.stop_option}` : ""}, wrong-if ${r.exit.wrong_if}, TP1 ${r.exit.tp1}]`).join("; ") + "." : "";
   const jctx = await jasonContext().catch(() => "");
@@ -2319,7 +2502,9 @@ export function etAnnotate(text: string, now = new Date()): string {
 }
 
 const CACHE: Record<string, { at: number; v: any }> = {};
+const ROOM_CACHE = /^(accounts|agentic_value|dailypnl|lockstate|ord\||facts\|)/;   // v5.0: Robinhood-account-level entries live per room
 async function cached<T>(key: string, ms: number, f: () => Promise<T>): Promise<T> {
+  if (owner() !== HOUSE && ROOM_CACHE.test(key)) key = owner() + "|" + key;
   const c = CACHE[key];
   if (c && Date.now() - c.at < ms && Date.now() >= c.at) return c.v;   // v3.24: a clock that moved back never serves a stale copy
   const v = await f();
@@ -2923,7 +3108,7 @@ async function syncJournal(force = false) {
   if (!rows.length) return;
   // link to the Desk card that placed it
   try {
-    const acts = await db("otto_actions?select=id,order_id&order_id=not.is.null&order=created_at.desc&limit=300");
+    const acts = await db("otto_actions?" + OQ() + "select=id,order_id&order_id=not.is.null&order=created_at.desc&limit=300");
     const byOrder: Record<string, string> = Object.fromEntries(acts.map((a: any) => [a.order_id, a.id]));
     rows.forEach((r: any) => { r.action_id = byOrder[r.open_order_id] || null; });
   } catch { /* unlinked rows keep action_id null */ }
@@ -2979,7 +3164,7 @@ async function weeklyReview(apiKey: string, who = "Jarvis") {
     const sys = `You are Jarvis, writing Ifoma's Friday trade review on the Otto desk: direct, numbers first, no hype. Judge each trade against Jason Murray's method (material below). Cite Jason as (call date, MM:SS) only from the material given. Never invent a rule. Respond with JSON only: {"pattern": "2-4 sentences on what the winners and losers have in common", "one_thing": "one concrete thing to do differently next week", "rules": [{"rule": "short rule name", "followed": n, "broken": n}]}.\n\nJASON'S RULES:\n${alwaysOn(calls)}\n\nMATERIAL:\n${hits.slice(0, 18).map(fmt).join("\n\n")}`;
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 1500, system: sys + NAME_RULE,
+      body: JSON.stringify({ model: await roomModel(), max_tokens: 1500, system: sys + NAME_RULE,
         messages: [{ role: "user", content: `Week of ${ws}. Closed trades (P&L in $):\n${JSON.stringify(items, null, 1).slice(0, 40000)}` }] }),
     });
     const j = await r.json();
@@ -3074,7 +3259,7 @@ export async function coachLog(build = false): Promise<{ week_start: string; wee
       why: String(t.reason || (a?.summary || "").split("\n")[0] || "").slice(0, 200), overnight: cd && cd !== od ? "HELD OVERNIGHT (" + cd + ")" : "no (day trade)" });
   }
   // 2. practice trades Josh approved (v3.35)
-  const prac: any[] = (await db("otto_actions?select=id,title,created_at,decided_at,decided_by,plan,outcome,summary&status=eq.paper_taken&order=created_at.asc&limit=200").catch(() => [])) || [];
+  const prac: any[] = (await db("otto_actions?" + OQ() + "select=id,title,created_at,decided_at,decided_by,plan,outcome,summary&status=eq.paper_taken&order=created_at.asc&limit=200").catch(() => [])) || [];
   for (const a of prac.filter((a) => inWeek(a.decided_at || a.created_at) && !a.plan?.duplicate_of)) {   // v4.2.3 fix 1: a voided twin is not a trade
     const p = a.plan || {}, pf = p.paper_fill || {}, o = a.outcome || {}, tk = String(p.tv_symbol || "").split(":").pop() || "";
     const at = pf.at || a.decided_at || a.created_at, od = etParts(new Date(at)).date;
@@ -3133,7 +3318,7 @@ export async function reportCard(apiKey: string, build = false): Promise<any> {
   const prev = await setting("report_card_last").catch(() => null);
   const lastRule = String(prev?.rule || REPORT_RULE_DEFAULT);
   const book = await practiceBook().catch(() => PRACTICE_BOOK_DEFAULT);
-  const acts: any[] = (await db("otto_actions?select=*&created_at=gte." + ws + "T00:00:00Z&order=created_at.asc&limit=400").catch(() => [])) || [];
+  const acts: any[] = (await db("otto_actions?" + OQ() + "select=*&created_at=gte." + ws + "T00:00:00Z&order=created_at.asc&limit=400").catch(() => [])) || [];
   const cards = acts.filter((a) => inWeek(a.created_at) && isPracticeCard(a) && (!book.since || Date.parse(a.created_at) >= Date.parse(book.since)));
   const st = practiceStats(cards, { start: book.start, since: book.since || ws + "T00:00:00Z" });
   const whyRows = cards.filter((a) => a.plan?.josh_why || a.plan?.josh_reject_why).map((a) => a.plan.josh_why || a.plan.josh_reject_why);
@@ -3162,7 +3347,7 @@ export async function reportCard(apiKey: string, build = false): Promise<any> {
     try {
       const sys = `You are Jarvis writing Josh's Friday report card from the numbers below — only from them. Talk to Josh directly, plain words, no praise padding, fair and direct. Respond with JSON only: {"followed": true|false|null, "comment": "two sentences on what the numbers say about this week", "rule": "ONE rule for next week, one sentence, specific and checkable from Otto's data"}. Never write "answered N of N" or "of N scored" when expired > 0 — expired cards were offered and left unanswered; say "answered A of O, E expired". "followed" = did he follow last week's rule, judged from the numbers (null if the numbers can't say). Never name the coach.` + NAME_RULE;
       const r = await withTimeout(fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: MODEL, max_tokens: 500, system: sys, messages: [{ role: "user", content: JSON.stringify(facts) }] }) }), 40_000, "report card");
+        body: JSON.stringify({ model: await roomModel(), max_tokens: 500, system: sys, messages: [{ role: "user", content: JSON.stringify(facts) }] }) }), 40_000, "report card");
       const j = await r.json();
       const txt = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
       const out = JSON.parse(txt.slice(txt.indexOf("{"), txt.lastIndexOf("}") + 1));
@@ -3218,7 +3403,7 @@ export async function quizGrade(body: any, who: string, apiKey: string) {
   const sys = `You are Jarvis grading Josh's pop-quiz answers on ${ticker} against the Otto Rules (the coaching-call material below). Grade ONLY from that material: "ok" when the answer matches what the calls teach, "half" when it is partly right or missing the key part, "no" when it contradicts the calls or is the fear/chasing habit the calls warn about. If the calls never covered a question, say so in the note and grade "half". Every note cites (call date, MM:SS) from the material — never invent a citation or a rule. Plain words, two sentences max per note, talk to Josh directly. Respond with JSON only: {"grades":[{"id":"picture","grade":"ok|half|no","note":"...","source":"call date, MM:SS"}, ... one per question in order], "fixes":["...","..."]} — fixes = the two most important things to fix before the next call, one sentence each.\n\nOTTO RULES (always on):\n${alwaysOn(calls)}\n\nMATERIAL:\n${hits.slice(0, 24).map(fmt).join("\n\n")}` + NAME_RULE;
   const user = QUIZ_QUESTIONS.map((q, i) => `Q${i + 1} [${q.id}] ${q.q}\nJosh: ${answers[q.id] || "(no answer)"}`).join("\n\n");
   const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 1800, system: sys, messages: [{ role: "user", content: user }] }) });
+    body: JSON.stringify({ model: await roomModel(), max_tokens: 1800, system: sys, messages: [{ role: "user", content: user }] }) });
   const j = await r.json();
   const txt = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
   let out: any = null;
@@ -3277,7 +3462,7 @@ export function hasNoContract(a: any): boolean {
 // v3.14: grade a few open ideas every 5 minutes from the cron, so the Scoreboard is current without opening it.
 export async function scoreTick(budget = 6) {
   const since = new Date(Date.now() - 3 * 864e5).toISOString();
-  const acts = await db(`otto_actions?select=*&created_at=gte.${since}&order=created_at.desc&limit=100`).catch(() => []);
+  const acts = await db(`otto_actions?${OQ()}select=*&created_at=gte.${since}&order=created_at.desc&limit=100`).catch(() => []);
   let n = 0;
   for (const a of acts) {
     if (n >= budget) break;
@@ -3304,6 +3489,37 @@ export async function scoreTick(budget = 6) {
   }
   return { ok: true, graded: n };
 }
+// v5.0 ROOMS: after the house pass, the same tick runs in each member's room (their practice trades are closed / scored by
+// wrong-if, TP1 and 3:50 PM in evalIdea). Rooms with nothing open are skipped after one cheap read; at most `max` rooms per
+// tick, round-robin through a module cursor; each room in its own try/catch so one can't break the others; a time budget
+// keeps the whole pass well inside the function's limit. Morning / daily / charts / prep / alerts jobs do NOT fan out.
+let ROOM_CURSOR = 0;
+const practiceOpen5 = (a: any) => a.outcome?.practice_close
+  ? !(a.outcome.rule_grade && a.outcome.rule_grade.state !== "pending")
+  : !(a.outcome && ["win", "loss", "scratch", "unscored"].includes(a.outcome.state));
+export async function scoreTickRooms(max = 20, budgetMs = 45_000): Promise<{ visited: string[]; skipped: string[] }> {
+  const t0 = Date.now();
+  const visited: string[] = [], skipped: string[] = [];
+  const users: any[] = (await db("otto_users?select=email&status=eq.active&role=eq.member&order=email.asc").catch(() => [])) || [];
+  if (!users.length) return { visited, skipped };
+  const start = ROOM_CURSOR % users.length;
+  for (let i = 0; i < Math.min(max, users.length); i++) {
+    const email = String(users[(start + i) % users.length].email || "").toLowerCase();
+    ROOM_CURSOR = (start + i + 1) % users.length;
+    if (!email || email === HOUSE) continue;
+    if (Date.now() - t0 > budgetMs) break;
+    try {
+      await ROOM.run({ owner: email }, async () => {
+        const since = new Date(Date.now() - 3 * 864e5).toISOString();
+        const rows = await db(`otto_actions?${OQ()}select=id,outcome&status=eq.paper_taken&created_at=gte.${since}&limit=50`).catch(() => []);
+        if (!(rows || []).some(practiceOpen5)) { skipped.push(email); return; }
+        await scoreTick();
+        visited.push(email);
+      });
+    } catch (e) { console.error("score room", email, String((e as Error)?.message || e).slice(0, 200)); }
+  }
+  return { visited, skipped };
+}
 export function practiceStopLine(a: any, o: any): string {
   const p = a?.plan || {}, lab = practiceLabel(a?.title);
   const est = o?.pnl_est != null ? Number(o.pnl_est) : null;
@@ -3327,7 +3543,7 @@ export function scoreRows(ideas: any[], pnlBy: Record<string, number>) {
   }));
 }
 async function scorecard() {
-  const acts = await db("otto_actions?select=*&order=created_at.desc&limit=400");
+  const acts = await db("otto_actions?" + OQ() + "select=*&order=created_at.desc&limit=400");
   const ideas = acts.filter((a: any) => (a.calls || []).some((c: any) => c.tool === "place_option_order" &&
     (c.args?.legs || []).some((l: any) => l.position_effect === "open")));
   let budget = 12;                                   // keep one call bounded
@@ -4011,7 +4227,7 @@ let EXIT_TICK_AT = 0;
 async function exitsTick(force = false) {
   if (!force && Date.now() - EXIT_TICK_AT < 45_000) return { ok: true, skipped: "recent" };
   EXIT_TICK_AT = Date.now();
-  const rows = await db("otto_actions?select=*&exit->>state=in.(waiting_fill,armed)&order=created_at.asc&limit=10");
+  const rows = await db("otto_actions?" + OQ() + "select=*&exit->>state=in.(waiting_fill,armed)&order=created_at.asc&limit=10");
   const out: any[] = [];
   for (const a of rows || []) {
     try { out.push(await exitTick(a)); } catch (e) { out.push({ id: a.id, error: (e as Error).message.slice(0, 200) }); }
@@ -4081,7 +4297,7 @@ async function jasonExtract(apiKey: string, src: { image?: { media_type: string;
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 4000, system: JASON_READ_SYS, tools: [JASON_TOOL],
+    body: JSON.stringify({ model: await roomModel(), max_tokens: 4000, system: JASON_READ_SYS, tools: [JASON_TOOL],
       tool_choice: { type: "tool", name: "record_posts" }, messages: [{ role: "user", content }] }),
   });
   if (!r.ok) throw new Error("reading the signal failed: claude HTTP " + r.status + " " + (await r.text()).slice(0, 160));
@@ -4295,7 +4511,7 @@ async function jasonScorecard() {
 
 // 5 PM sweep: the scheduled task reads today's Jason posts in Discord and sends the texts here.
 async function jasonSweep(body: any, who: string) {
-  const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
+  const apiKey = (await roomKey()).key;                                                // v5.0
   const day = /^\d{4}-\d{2}-\d{2}$/.test(String(body.date || "")) ? String(body.date) : etParts().date;
   const posts = Array.isArray(body.posts) ? body.posts.slice(0, 200) : [];
   const before = await db(`otto_jason?select=id&day=eq.${day}`).catch(() => []);
@@ -4843,10 +5059,11 @@ export async function exitRuleCheck(a: any, now = Date.now()): Promise<{ met: bo
   return { met: false, why: "", detail: `wrong-if ${ex.wrong_if} on a ${tf}-minute close not hit${lastClose != null ? ` (last ${tf}-min close ${lastClose})` : " (no completed bar yet)"}; TP1 ${ex.tp1} not reached; before 3:50 PM` };
 }
 async function armedTradeFor(optId: string) {
-  const rows = await db("otto_actions?select=id,title,exit,decided_at,created_at&exit->>state=eq.armed&limit=20").catch(() => []);
+  const rows = await db("otto_actions?" + OQ() + "select=id,title,exit,decided_at,created_at&exit->>state=eq.armed&limit=20").catch(() => []);
   return (rows || []).find((r: any) => r.exit?.option_id === optId) || null;
 }
 async function closeNow(input: any, who: string, verified = false, human: string | null = null) {
+  if (owner() !== HOUSE) throw new Error(PAPER_ONLY + " — a practice trade is closed with Close Now on the Desk (its option id starts with P:).");   // v5.0
   const L = await getLimits();
   if (!L.auto_close && !human) throw new Error("Auto-close is OFF (Settings → Limits & goals). Use propose_action for a close card instead.");
   if (!rthNow()) throw new Error("Market is closed: auto-close only works 9:30 AM–4:00 PM ET. Use a close card.");
@@ -4917,6 +5134,7 @@ async function closeNow(input: any, who: string, verified = false, human: string
   } else throw new Error("Give option_id (for an option) or symbol (for shares).");
 
   const rows = await db("otto_actions", { method: "POST", body: JSON.stringify({
+    owner: owner(),                                                                    // v5.0
     title, summary: `Reason   ${ruleWhy ? "[card rule] " + ruleWhy + ". " : ""}${reason}\nOrder    sell to close at market (auto-close, no Approve)\nBy       ${human ? human + ", Close Now button (a person pressed it)" : who === "rules" ? "Otto (card rule, server-checked)" : "Jarvis, on " + who}`,
     calls, risk: { cost: 0, notes: ["closing order: no new risk"] }, review: "", status: "done", created_by: human ? human : "Jarvis (auto)",
     decided_by: human ? human + " (Close Now button)" : "auto-close", decided_at: new Date().toISOString(), result: results, ...(orderId ? { order_id: String(orderId) } : {}),
@@ -4965,7 +5183,7 @@ export async function tradeLive() {
     const since = new Date(Date.now() - 5 * 864e5).toISOString().slice(0, 10);
     const oj = await settle((async () => mcpJson(await call("rh", "get_option_orders", { account_number: acct, created_at_gte: since })))());
     const orders = oj.ok ? (oj.v?.data?.orders || []) : [];
-    const armed = await db("otto_actions?select=id,title,exit&exit->>state=eq.armed&limit=20").catch(() => []);
+    const armed = await db("otto_actions?" + OQ() + "select=id,title,exit&exit->>state=eq.armed&limit=20").catch(() => []);
     for (const p of longs) {
       const optId = String(p.option_id), sym = String(p.chain_symbol || "").toUpperCase(), qty = Math.floor(Number(p.quantity));
       const [qs, bs] = await Promise.all([
@@ -4995,6 +5213,7 @@ export async function tradeLive() {
 export async function closeByButton(body: any, who: string) {
   const optId = String(body?.option_id || "").trim();
   if (!optId) return { ok: false, error: "No trade was given." };
+  if (owner() !== HOUSE) return { ok: false, error: PAPER_ONLY + " — only practice trades (P:) can be closed here." };   // v5.0
   const human = String(body?.author || "").replace(/[^A-Za-z .'-]/g, "").trim().slice(0, 30) || "Josh";
   if (CLOSING.has(optId)) return { ok: false, error: "A close for this trade is already running." };
   CLOSING.add(optId);
@@ -5002,7 +5221,7 @@ export async function closeByButton(body: any, who: string) {
     const acct = await agenticAccount();
     const since = new Date(Date.now() - 5 * 864e5).toISOString().slice(0, 10);
     const oj = await settle((async () => mcpJson(await call("rh", "get_option_orders", { account_number: acct, created_at_gte: since })))());
-    const armed = await db("otto_actions?select=id,title,exit&exit->>state=eq.armed&limit=20").catch(() => []);
+    const armed = await db("otto_actions?" + OQ() + "select=id,title,exit&exit->>state=eq.armed&limit=20").catch(() => []);
     const ent = entryOf(oj.ok ? (oj.v?.data?.orders || []) : [], armed, optId);
     const r = await closeNow({ option_id: optId, reason: `${human} pressed Close Now on the Desk (${who})` }, "desk", true, human);
     let state = "sent", fillPx: number | null = null;
@@ -5060,7 +5279,7 @@ export async function whyOut(body: any, who: string) {
   if (id) await stamp(id);
   if (optId) {
     // the entry card: the newest armed/done opening card on this option
-    const rows = await db("otto_actions?select=id,plan,exit&exit->>option_id=eq." + encodeURIComponent(optId) + "&order=created_at.desc&limit=3").catch(() => []);
+    const rows = await db("otto_actions?" + OQ() + "select=id,plan,exit&exit->>option_id=eq." + encodeURIComponent(optId) + "&order=created_at.desc&limit=3").catch(() => []);
     const ent = (rows || []).find((r: any) => r.id !== id);
     if (ent) await stamp(ent.id);
   }
@@ -5085,7 +5304,7 @@ export const practiceLabel = (t: any) => String(t || "").replace(/^\s*(PAPER|PRA
 /* The practice trades Josh took today that are still open (not scored by rule, not closed by hand). Never reads Robinhood account data. */
 export async function practiceOpen(): Promise<any[]> {
   const since = new Date(Date.now() - 20 * 3600e3).toISOString();
-  const rows: any[] = (await db(`otto_actions?select=id,title,created_at,decided_by,plan,outcome,calls,exit,status&status=eq.paper_taken&created_at=gte.${since}&order=created_at.desc&limit=8`).catch(() => [])) || [];
+  const rows: any[] = (await db(`otto_actions?${OQ()}select=id,title,created_at,decided_by,plan,outcome,calls,exit,status&status=eq.paper_taken&created_at=gte.${since}&order=created_at.desc&limit=8`).catch(() => [])) || [];
   const today = etParts().date, out: any[] = [];
   for (const a of rows) {
     if (practiceFinal(a)) continue;
@@ -5169,7 +5388,7 @@ export async function closePractice(body: any, who: string) {
 
 // Scheduled / triggered check of everything open in the Agentic account.
 export async function ruleSweep() {
-  const armed = await db("otto_actions?select=id,title,exit,decided_at,created_at&exit->>state=eq.armed&limit=20").catch(() => []);
+  const armed = await db("otto_actions?" + OQ() + "select=id,title,exit,decided_at,created_at&exit->>state=eq.armed&limit=20").catch(() => []);
   const out: any[] = [];
   for (const a of armed || []) {
     try {
@@ -5202,7 +5421,7 @@ async function positionReview(trigger: string | null = null) {
   if (!opts.length && !shares.length) return { ok: true, skipped: "nothing open" };
   await db("otto_settings?on_conflict=key", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify({ key: "review_at", value: { at: Date.now() }, updated_by: "cron", updated_at: new Date().toISOString() }) }).catch(() => {});
-  const plans = await db("otto_actions?select=title,plan,exit&exit->>state=eq.armed&limit=10").catch(() => []);
+  const plans = await db("otto_actions?" + OQ() + "select=title,plan,exit&exit->>state=eq.armed&limit=10").catch(() => []);
   const calls = await loadBrain();
   const sys = DESK_SYS.replace("{{RULES}}", alwaysOn(calls));
   const { tools: mcpToolDefs } = await deskTools();
@@ -5331,7 +5550,17 @@ async function setting(key: string): Promise<any> {
 /* v3.41: Josh + Baby J's PRACTICE BOOK — $4,000 paper, like Winston's, counted from the night v3.41 shipped (SQL 025 writes
    `since`). Practice cards are sized against it (flag only) and scored on it. Nothing here touches the Agentic account. */
 export const PRACTICE_BOOK_DEFAULT = { start: 4000, since: null as string | null };
+export const ROOM_BOOK_START = 5000;                                                    // v5.0: a member's practice book
 export async function practiceBook(): Promise<{ start: number; since: string | null }> {
+  if (owner() !== HOUSE) {                                                               // v5.0 ROOMS: one entry per room in "practice_by_owner"
+    const map = (await setting("practice_by_owner").catch(() => null)) || {};
+    const mine = map?.[owner()];
+    const start = Number(mine?.start);
+    if (mine && typeof mine.since === "string" && mine.since) return { start: isFinite(start) && start > 0 ? start : ROOM_BOOK_START, since: mine.since };
+    const book = { start: isFinite(start) && start > 0 ? start : ROOM_BOOK_START, since: new Date().toISOString() };
+    await putSetting("practice_by_owner", { ...map, [owner()]: book }, "otto (room)").catch(() => {});
+    return book;
+  }
   const v = await setting("practice_book").catch(() => null);
   const start = Number(v?.start);
   return { start: isFinite(start) && start > 0 ? start : PRACTICE_BOOK_DEFAULT.start, since: typeof v?.since === "string" && v.since ? v.since : null };
@@ -5719,7 +5948,7 @@ async function performance(apiKey: string, wantRead: boolean, fresh = false) {
     try {
       const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST",
         headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: MODEL, max_tokens: 300,
+        body: JSON.stringify({ model: await roomModel(), max_tokens: 300,
           system: "You are Jarvis on the Otto trading desk, writing the 2–3 sentence summary at the top of Ifoma and Josh's Results page. They trade as one team. Plain words, numbers first, no hype, no lecturing. Say where they are against their limits and the one thing that matters most. Never give sizing beyond their own limits.",
           messages: [{ role: "user", content: JSON.stringify({ realized_since_start: out.realized.since_start, combined_value: out.combined, weeks: out.weeks.slice(-8),
             big_days: out.big_days, rest_total: out.rest_total, days: out.days, goals: out.goals, limits: { phase: L.phase, max_trade_loss: L.max_trade_loss, weekly_loss: L.weekly_loss, max_trades_day: L.max_trades_day } }) }] }) });
@@ -6450,7 +6679,7 @@ function playbookLabel(k: string) {
 }
 
 async function playbookIdeas() {
-  const acts = await db("otto_actions?select=id,created_at,status,calls,plan,outcome&order=created_at.desc&limit=600");
+  const acts = await db("otto_actions?" + OQ() + "select=id,created_at,status,calls,plan,outcome&order=created_at.desc&limit=600");
   return (acts || []).filter(isOpening);
 }
 
@@ -6513,7 +6742,7 @@ async function feedbackList(days = 14) {
 }
 async function feedbackDigest() {
   const items = await feedbackList(2);
-  const errs = await db("otto_desk?select=created_at,author,content&created_at=gte." + new Date(Date.now() - 26 * 3600e3).toISOString() +
+  const errs = await db("otto_desk?" + OQ() + "select=created_at,author,content&created_at=gte." + new Date(Date.now() - 26 * 3600e3).toISOString() +
     "&content=like.*%E2%9A%A0*&order=id.desc&limit=30").catch(() => []);
   return { feedback: items, desk_warnings: (errs || []).map((r: any) => ({ at: r.created_at, author: r.author, text: String(r.content).slice(0, 300) })) };
 }
@@ -6559,8 +6788,8 @@ export async function dailyRecap(force = false) {
   await putSetting("daily_recap_day", { day: c.date, at: new Date().toISOString() });
   const since = new Date(Date.now() - 14 * 3600e3).toISOString();
   const AL = "(" + ["TradingView", "Jarvis · alert read", "Jarvis · daily recap"].map((x) => '"' + x + '"').join(",") + ")";
-  const rows = await db("otto_desk?select=created_at,role,author,content&created_at=gte." + since + "&author=not.in." + encodeURIComponent(AL) + "&order=id.asc&limit=300").catch(() => []);
-  const acts = await db("otto_actions?select=title,status,created_by,created_at,plan,outcome,exit&created_at=gte." + since + "&order=created_at.asc&limit=60").catch(() => []);
+  const rows = await db("otto_desk?" + OQ() + "select=created_at,role,author,content&created_at=gte." + since + "&author=not.in." + encodeURIComponent(AL) + "&order=id.asc&limit=300").catch(() => []);
+  const acts = await db("otto_actions?" + OQ() + "select=title,status,created_by,created_at,plan,outcome,exit&created_at=gte." + since + "&order=created_at.asc&limit=60").catch(() => []);
   const trades = await db("otto_trades?select=*&order=closed_at.desc&limit=20").catch(() => []);
   const fb = await feedbackList(1).catch(() => []);
   let cal: any[] = [];
@@ -6580,7 +6809,7 @@ export async function dailyRecap(force = false) {
     await recapExtras(c.date).catch(() => ""),
   ].join("\n\n");
   // v3.22: the trades section comes from Robinhood, not from Jarvis.
-  const fullActs = await db("otto_actions?select=title,status,result,created_at,plan&created_at=gte." + since + "&order=created_at.asc&limit=200").catch(() => acts || []);   // v3.44: plan = practice / reject-why / duplicate; v3.45: the fallback is back out of the comment
+  const fullActs = await db("otto_actions?" + OQ() + "select=title,status,result,created_at,plan&created_at=gte." + since + "&order=created_at.asc&limit=200").catch(() => acts || []);   // v3.44: plan = practice / reject-why / duplicate; v3.45: the fallback is back out of the comment
   const ords = await dayOrders(c.date).catch(() => null);
   const block = ords ? recapTradesBlock(ords, fullActs || []) : "### Trades and cards\n⚠ Robinhood's order records couldn't be read just now — no trade results in this recap.";
   const raw = await claudeText({ model: MODEL, max_tokens: 1200, system: RECAP_SYS + NAME_RULE, messages: [{ role: "user", content: data + "\n\nSERVER TRADES SECTION (inserted as-is; don't repeat its numbers except the Realized line):\n" + block }] });
@@ -6601,7 +6830,7 @@ async function helpAnswer(body: any, apiKey: string) {
   const L = await getLimits();
   const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST",
     headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 700,
+    body: JSON.stringify({ model: await roomModel(), max_tokens: 700,
       system: [{ type: "text", text: HELP_SYS + NAME_RULE + `\n\nCURRENT LIMITS: ${JSON.stringify({ phase: L.phase, max_trade_loss: L.max_trade_loss, weekly_loss: L.weekly_loss, max_trades_day: L.max_trades_day, monthly_goal_pct: L.monthly_goal_pct, warn_pct: L.warn_pct, big_day: L.big_day })}`, cache_control: { type: "ephemeral" } }],
       messages: hist }) });
   const j = await r.json();
@@ -6721,7 +6950,7 @@ export async function runningNow(): Promise<string> {
   const [w, ch, prot, L, beat] = await Promise.all([
     db(`otto_watch?select=ticker,level,dir&day=eq.${day}&status=eq.watching&limit=30`).catch(() => []),
     db(`otto_checks?select=due_at,what&status=eq.pending&order=due_at.asc&limit=10`).catch(() => []),
-    db("otto_actions?select=title,exit&exit->>state=eq.armed&limit=5").catch(() => []),
+    db("otto_actions?" + OQ() + "select=title,exit&exit->>state=eq.armed&limit=5").catch(() => []),
     getLimits().catch(() => LIMIT_DEFAULTS),
     setting("signal_beat").catch(() => null),
   ]);
@@ -6842,7 +7071,7 @@ export function unbacked(promises: { kind: string; sentence: string }[], ctx: { 
 export async function promiseContext(did: string[], failed: string[]) {
   const day = etParts().date;
   const [prot, L, w] = await Promise.all([
-    db("otto_actions?select=id&exit->>state=eq.armed&limit=1").catch(() => []),
+    db("otto_actions?" + OQ() + "select=id&exit->>state=eq.armed&limit=1").catch(() => []),
     getLimits().catch(() => LIMIT_DEFAULTS),
     db(`otto_watch?select=ticker&day=eq.${day}&status=eq.watching&limit=50`).catch(() => []),
   ]);
@@ -6904,7 +7133,7 @@ export async function markPinged(ids: string[]) {
   await db("otto_actions?id=in.(" + list.join(",") + ")", { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ pinged_at: new Date().toISOString() }) }).catch(() => {});
 }
 export async function cardSweep(now = Date.now()) {
-  const rows = await db(`otto_actions?select=id,title,created_by,created_at&status=eq.pending&pinged_at=is.null&created_at=gte.${new Date(now - 20 * 60e3).toISOString()}&created_at=lt.${new Date(now - 3 * 60e3).toISOString()}&limit=10`).catch(() => []);
+  const rows = await db(`otto_actions?${OQ()}select=id,title,created_by,created_at&status=eq.pending&pinged_at=is.null&created_at=gte.${new Date(now - 20 * 60e3).toISOString()}&created_at=lt.${new Date(now - 3 * 60e3).toISOString()}&limit=10`).catch(() => []);
   for (const a of rows || []) {
     const claimed = await db(`otto_actions?id=eq.${a.id}&pinged_at=is.null&select=id`, { method: "PATCH", body: JSON.stringify({ pinged_at: new Date(now).toISOString() }) }).catch(() => []);
     if (!claimed?.length) continue;
@@ -7538,7 +7767,7 @@ export async function wrongIfFromCard(calls: any[], who: string): Promise<string
   for (const c of calls || []) {
     if (c.service !== "tv" || !/alert/.test(String(c.tool))) continue;
     const w = wrongIfFromAlertArgs(c.args); if (!w || !(w.price > 0)) continue;
-    const rows = await db("otto_actions?select=*&exit->>state=eq.armed&order=created_at.desc&limit=20").catch(() => []);
+    const rows = await db("otto_actions?" + OQ() + "select=*&exit->>state=eq.armed&order=created_at.desc&limit=20").catch(() => []);
     const a = (rows || []).find((r: any) => v322Sym(r.exit?.tv_symbol) === w.tk);
     if (!a) continue;
     const ex = { ...a.exit }, old = Number(ex.wrong_if);
@@ -7694,7 +7923,7 @@ export async function coachCorner(range = "today") {
   const exits = posts.filter((r: any) => isExitPost(r));
   const main = posts.filter((r: any) => r.kind !== "result" && !(isExitPost(r) && !dirOfCoach(r.direction) && !(Number(r.level) > 0)));
   // the cards for each post: its own card + Watcher cards on its levels
-  const acts = await db(`otto_actions?select=id,title,status,plan,exit,outcome,created_at,created_by,checks&created_at=gte.${since}T00:00:00Z&order=created_at.asc&limit=400`).catch(() => []);
+  const acts = await db(`otto_actions?${OQ()}select=id,title,status,plan,exit,outcome,created_at,created_by,checks&created_at=gte.${since}T00:00:00Z&order=created_at.asc&limit=400`).catch(() => []);
   const watch = await db(`otto_watch?select=id,source_ref&day=gte.${since}&source=eq.signal&limit=400`).catch(() => []);
   const trades = await db(`otto_trades?select=action_id,pnl&action_id=not.is.null`).catch(() => []);
   const pnlBy: Record<string, number> = {};
@@ -7828,7 +8057,10 @@ Deno.serve(async (req) => {
         const s = await setting("watch_scan_day").catch(() => null);
         if (s?.day !== c.date) { await putSetting("watch_scan_day", { day: c.date, by: "starting" }).catch(() => {}); try { await watchScan(); } catch (e) { console.error("scan", e); } }
       }
-      if (isTradingDay(c.date) && c.min >= 575 && c.min <= 975 && c.min % 5 === 0) { try { await scoreTick(); } catch (e) { console.error("score", e); } }
+      if (isTradingDay(c.date) && c.min >= 575 && c.min <= 975 && c.min % 5 === 0) {
+        try { await scoreTick(); } catch (e) { console.error("score", e); }
+        try { await scoreTickRooms(); } catch (e) { console.error("score rooms", e); }      // v5.0 ROOMS: member rooms, after the house
+      }
       // v3.16: scheduled check-ins, missed card pings, and the 9:10 Signal self-test.
       if (isTradingDay(c.date) && c.min >= 540 && c.min <= 980) {
         try { await checksTick(); } catch (e) { console.error("checks", e); }
@@ -7941,7 +8173,9 @@ Deno.serve(async (req) => {
   try {
     // ---- The Desk (v3.0). Locked to OTTO_ALLOWED_EMAILS, never anonymous.
     if (fn === "whoami") {
-      return json({ ok: true, email: claims.email || null, anonymous: !!claims.is_anonymous, desk: !!deskUser(claims) });
+      const u = await deskUserAsync(claims);                                             // v5.0: + role, name, has_key, key_last4, model, house
+      return json({ ok: true, email: claims.email || null, anonymous: !!claims.is_anonymous, desk: !!u,
+        ...(u ? await ROOM.run({ owner: u.email }, () => meInfo(u)) : {}) });
     }
     if (["desk", "act", "panel", "desk_log", "oauth_start", "oauth_finish", "conn_status", "disconnect",
          "sentiment", "market_desk", "journal", "why_out", "report_card", "trade_reason", "review_get", "review_build", "score", "morning_now", "ticket", "limits_get", "limits_set", "house_rules_get", "house_rules_set", "watch_get", "watch_set", "watch_scan", "arm_callouts", "ears_arm", "ears_dismiss", "ears_remove", "ears_mode", "ears_state", "performance", "help", "jason_today", "jason_sweep", "jason_score",
@@ -7951,28 +8185,48 @@ Deno.serve(async (req) => {
          "prep_get", "prep_submit", "prep_reply", "prep_watch", "prep_img", "score_extra", "check_cancel", "prep_lock",
          "charts_get", "chart_now", "chart_review", "chart_use", "chart_chat",
          "market_read",                                                                                                   // v4.0
-         "activity_get", "coach_corner", "coach_report", "lock_state", "trade_live", "close_now", "coach_log", "quiz_grade", "quiz_list", "hw_get", "hw_save", "hw_submit"].includes(fn)) {
-      const who = deskUser(claims);
-      if (!who) return json({ ok: false, locked: true,
-        error: "The Desk is locked to the Otto login. Sign in with the Otto email (Settings → Sign in)." }, 403);
+         "activity_get", "coach_corner", "coach_report", "lock_state", "trade_live", "close_now", "coach_log", "quiz_grade", "quiz_list", "hw_get", "hw_save", "hw_submit",
+         "me", "key_set", "key_clear", "model_set", "invite", "users", "user_off"].includes(fn)) {                                   // v5.0 ROOMS
+      const u = await deskUserAsync(claims);
+      if (!u) return json({ ok: false, locked: true,
+        error: "The Desk is locked. Sign in with an invited email (Settings → Sign in)." }, 403);
+      const who = u.email, isAdmin = u.role === "owner";
+      // v5.0 ROOMS: everything from here on runs in this person's room — owner() is their email for every await below,
+      // including background work started inside the request.
+      return await ROOM.run({ owner: who }, async () => {
       const body = req.method === "POST" && fn !== "desk" ? await req.json().catch(() => ({})) : {};
 
+      // ---- v5.0 ROOMS: me / my key / my model; admin: invite, users, user_off
+      if (fn === "me") return json({ ok: true, email: who, desk: true, ...(await meInfo(u)), allowed_models: MODEL_INFO,
+        conn: await db("otto_conn?" + OQ() + "select=service,connected_by,connected_at,updated_at").catch(() => []) });
+      if (["key_set", "key_clear", "model_set"].includes(fn)) {
+        const target = isAdmin && body?.email ? String(body.email).trim().toLowerCase() : who;       // admin may act for someone else; everyone for themselves
+        if (fn === "key_set") return json(await keySet(target, String(body?.key || "")));
+        if (fn === "key_clear") return json(await keyClear(target));
+        return json(await modelSet(target, String(body?.model || "")));
+      }
+      if (["invite", "users", "user_off"].includes(fn)) {
+        if (!isAdmin) return json({ ok: false, error: "admin only" }, 403);
+        if (fn === "invite") return json(await inviteUser(body, who));
+        if (fn === "users") return json(await usersList());
+        return json(await userOff(String(body?.email || ""), who));
+      }
+
       if (fn === "desk") {
-        const apiKey = Deno.env.get("ANTHROPIC_KEY");
-        if (!apiKey) return json({ ok: false, error: "ANTHROPIC_KEY secret is not set" }, 500);
-        return await desk(req, who, apiKey);
+        const rk = await roomKey();                                                      // v5.0: NoKey → the catch below
+        return await desk(req, who, rk.key);
       }
       if (fn === "act") return json({ ok: true, action: await actOn(String(body.id || ""), String(body.decision || ""), who, body.decision === "approve" ? body.why : (body.why_not ?? body.why)) });
       if (fn === "why_out") return json(await whyOut(body, who));                                   // v3.41: the line after Close Now
       if (fn === "panel") return json(await panel());
       if (fn === "trade_live") return json(await tradeLiveAll());                                                             // v3.43: + open practice trades
       if (fn === "coach_log") return json({ ok: true, ...(await coachLog(new URL(req.url).searchParams.get("build") === "1")) });
-      if (fn === "report_card") return json({ ok: true, ...(await reportCard(Deno.env.get("ANTHROPIC_KEY") || "", new URL(req.url).searchParams.get("build") === "1")) });   // v3.41   // v3.37
+      if (fn === "report_card") return json({ ok: true, ...(await reportCard((await roomKey().catch(() => ({ key: "" }))).key, new URL(req.url).searchParams.get("build") === "1")) });   // v5.0 room key   // v3.41   // v3.37
       if (fn === "hw_get") return json(await hkGet(new URL(req.url).searchParams.get("author") || body?.author));          // v3.45
       if (fn === "hw_save") return json(await hkSave(body));                                                                 // v3.45
       if (fn === "hw_submit") return json(await hkSubmit(body, who));                                                        // v3.45
       if (fn === "quiz_list") return json(await quizList());                                                                          // v3.38
-      if (fn === "quiz_grade") { const k = Deno.env.get("ANTHROPIC_KEY"); if (!k) return json({ ok: false, error: "ANTHROPIC_KEY secret is not set" }, 500); return json(await quizGrade(body, who, k)); }
+      if (fn === "quiz_grade") return json(await quizGrade(body, who, (await roomKey()).key));                                        // v5.0 room key
       if (fn === "close_now") return json(String(body?.option_id || "").startsWith(PRAC_PREFIX) ? await closePractice(body, who) : await closeByButton(body, who));   // v3.43: "P:" = practice
       // ---- v3.1
       if (fn === "sentiment") return json(await sentimentNow(new URL(req.url).searchParams.get("force") === "1"));
@@ -7990,10 +8244,7 @@ Deno.serve(async (req) => {
         const r = await db("otto_reviews?select=*&order=week_start.desc&limit=8");
         return json({ ok: true, reviews: r });
       }
-      if (fn === "review_build") {
-        const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
-        return json({ ok: true, review: await weeklyReview(apiKey, who) });
-      }
+      if (fn === "review_build") return json({ ok: true, review: await weeklyReview((await roomKey()).key, who) });             // v5.0 room key
       if (fn === "score") return json(await scorecard());
       // ---- v3.7 Jason's calls
       if (fn === "jason_today") return json(await jasonToday());
@@ -8058,12 +8309,12 @@ Deno.serve(async (req) => {
       if (fn === "push_remove") return json(await pushRemove(body));
       if (fn === "push_test") return json(await pushTest(body));
       if (fn === "limits_set") return json({ ok: true, limits: await setLimits(body, who) });
-      if (fn === "performance") return json(await performance(Deno.env.get("ANTHROPIC_KEY") || "", new URL(req.url).searchParams.get("read") !== "0", new URL(req.url).searchParams.get("fresh") === "1"));
-      if (fn === "help") return json({ ok: true, text: await helpAnswer(body, Deno.env.get("ANTHROPIC_KEY") || "") });
+      if (fn === "performance") return json(await performance((await roomKey().catch(() => ({ key: "" }))).key, new URL(req.url).searchParams.get("read") !== "0", new URL(req.url).searchParams.get("fresh") === "1"));   // v5.0: no key = numbers without the read
+      if (fn === "help") return json({ ok: true, text: await helpAnswer(body, (await roomKey()).key) });                             // v5.0 room key
       if (fn === "ticket") return json({ ok: true, action: await orderTicket(body, who, String(body.author || "Ifoma").slice(0, 30)) });
       if (fn === "selftest_now") return json(await signalSelfTest(true));     // v3.16: run the Signal self-test on demand
       if (fn === "morning_now") {
-        const apiKey = Deno.env.get("ANTHROPIC_KEY") || "";
+        const apiKey = (await roomKey()).key;                                            // v5.0 room key (the read lands in this room's log)
         background(morningRead(apiKey));
         return json({ ok: true, started: true });
       }
@@ -8071,7 +8322,7 @@ Deno.serve(async (req) => {
         const since = Number(new URL(req.url).searchParams.get("since")) || 0;
         // v3.12: alert rows live in their own tab, so the first load fetches chat and alerts separately —
         // a busy alert day never pushes the conversation out of view.
-        const cols = "otto_desk?select=id,created_at,role,author,content,action_id";
+        const cols = "otto_desk?" + OQ() + "select=id,created_at,role,author,content,action_id";   // v5.0: this room's log
         const AL = "(" + ["TradingView", "Jarvis · alert read"].map((x) => '"' + x + '"').join(",") + ")";
         const rows = since ? await db(cols + "&id=gt." + since + "&order=id.asc&limit=100")
           : [...await db(cols + "&author=not.in." + encodeURIComponent(AL) + "&order=id.desc&limit=80"),
@@ -8095,16 +8346,18 @@ Deno.serve(async (req) => {
         return json({ ok: true, service, name: SVC[service].name, tools, warn });
       }
       if (fn === "conn_status") {
-        const rows = await db("otto_conn?select=service,connected_by,connected_at,updated_at");
+        const rows = await db("otto_conn?" + OQ() + "select=service,connected_by,connected_at,updated_at");   // v5.0: this room's
         return json({ ok: true, conn: rows });
       }
       if (fn === "disconnect") {
         const s = String(body.service || "");
         if (!SVC[s]) return json({ ok: false, error: "unknown service" }, 400);
-        await db("otto_conn?service=eq." + s, { method: "DELETE" });
-        delete TOK[s]; delete MSESS[s];
+        await db("otto_conn?" + OQ() + "service=eq." + s, { method: "DELETE" });        // v5.0: this room's row only
+        delete TOK[ck(s)]; delete MSESS[ck(s)];
         return json({ ok: true });
       }
+      return json({ ok: false, error: "unknown fn" }, 400);
+      });   // ROOM.run
     }
 
     if (fn === "market") {
@@ -8243,6 +8496,7 @@ Deno.serve(async (req) => {
 
     return json({ ok: false, error: "unknown fn" }, 400);
   } catch (e) {
+    if (e instanceof NoKey) return json({ ok: false, no_key: true, error: e.message }, 400);   // v5.0: the room has no Anthropic key yet
     // Never fabricate. The app is built to say "not enough" rather than guess.
     return json({ ok: false, error: String((e as Error).message ?? e).slice(0, 300) }, 502);
   }
@@ -8256,6 +8510,15 @@ export const watchFromSignalsForTest = watchFromSignals;
 export const deskSetupForTest = deskSetup;
 
 export const closeNowForTest = closeNow;
+// v5.0 ROOMS test hooks
+export const deskUserAsyncForTest = deskUserAsync;
+export const roomKeyForTest = roomKey;
+export const accessTokenForTest = accessToken;
+export const roomRunForTest = <T>(o: string, f: () => Promise<T>) => ROOM.run({ owner: o }, f);
+export const ownerForTest = owner;
+export const sealForTest = seal;
+export const NoKeyForTest = NoKey;
+export const HOUSE_FOR_TEST = HOUSE;
 
 /* ============================================================ v3.22 (8 Oct 2026) — Jarvis never states made-up facts
    Decisions (Ifoma, 8 Oct; claude/otto-v322-facts.md):
@@ -8485,7 +8748,7 @@ export async function todayFacts(day = etParts().date): Promise<{ prep: any[] | 
 // v3.44: today's cards (ET day), for the tally Jarvis reads and the claim checker's practice list.
 async function todaysCards(day = etParts().date): Promise<any[]> {
   const start = nyIso(day, "12:00 AM") || `${day}T04:00:00Z`;
-  return (await db(`otto_actions?select=id,title,status,plan,created_at&created_at=gte.${start}&order=created_at.asc&limit=300`)) || [];
+  return (await db(`otto_actions?${OQ()}select=id,title,status,plan,created_at&created_at=gte.${start}&order=created_at.asc&limit=300`)) || [];
 }
 export function factsLine(f: { prep: any[] | null; sig: any[] | null; ord: any[] | null; cards?: any[] | null }): string {
   const pr = f.prep == null ? "unknown" : f.prep.length ? f.prep.map((p: any) => `${p.author} ${etHM(p.created_at)}`).join(", ") : "none";
@@ -8993,7 +9256,7 @@ export async function markStale(a: any): Promise<string | null> {
 }
 // Every cron minute from 9:00: pending opening cards get the red line while they're stale.
 export async function staleTick() {
-  const rows = await db("otto_actions?select=id,title,status,plan,exit,checks,created_at&status=eq.pending&order=created_at.desc&limit=20").catch(() => []);
+  const rows = await db("otto_actions?" + OQ() + "select=id,title,status,plan,exit,checks,created_at&status=eq.pending&order=created_at.desc&limit=20").catch(() => []);
   for (const a of (rows || []).filter((r: any) => r.exit?.state === "planned")) await markStale(a);
 }
 /** A8: the protective stop is sized from the actual fill, keeping the card's stop/limit ratio. */
@@ -9019,7 +9282,7 @@ export async function latestThrough(ex: any, now = Date.now()): Promise<{ throug
 
 /* ---- A12: a Watcher level on an open trade becomes its wrong-if ---- */
 export async function wrongIfFromWatch(ticker: string, level: number, by: string): Promise<any | null> {
-  const armed = await db("otto_actions?select=*&exit->>state=eq.armed&limit=20").catch(() => []);
+  const armed = await db("otto_actions?" + OQ() + "select=*&exit->>state=eq.armed&limit=20").catch(() => []);
   const mine = (armed || []).filter((a: any) => v322Sym(a.exit?.tv_symbol) === ticker);
   if (!mine.length) return null;
   const px = (await rhPrices([ticker]).catch(() => ({} as Record<string, number>)))[ticker];
@@ -9100,7 +9363,7 @@ export async function nothingToClose(calls: any[]): Promise<string | null> {
 }
 /** When a protected trade goes flat, its waiting close / stop cards expire. */
 export async function expireCloseCards(optionId: string) {
-  const rows = await db("otto_actions?select=id,title,calls&status=eq.pending&order=created_at.desc&limit=40").catch(() => []);
+  const rows = await db("otto_actions?" + OQ() + "select=id,title,calls&status=eq.pending&order=created_at.desc&limit=40").catch(() => []);
   for (const r of (rows || []).filter((x: any) => closeLegs(x.calls).includes(String(optionId)))) {
     const done = await db(`otto_actions?id=eq.${r.id}&status=eq.pending`, { method: "PATCH",
       body: JSON.stringify({ status: "expired", decided_by: "otto (trade closed)", decided_at: new Date().toISOString() }) }).catch(() => []);

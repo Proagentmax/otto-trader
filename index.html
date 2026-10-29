@@ -1210,6 +1210,26 @@ body.deskpop .v4ov{position:fixed;z-index:200}
 .cc-sent{font-size:15.5px;line-height:1.55;color:var(--ink-2);background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;margin:0 0 12px}.cc-sent b{color:var(--ink)}
 .cc-filter{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px}.cc-filter .lb{font-size:12px;color:var(--ink-3);margin-right:2px}.cc-filter .dk-btn{padding:5px 12px;font-size:12.5px;min-height:0}
 </style>
+<style id="v50css">
+/* ===== v5.0 Rooms (29 Oct 2026): per-person rooms — own key, model, connections; the house keeps Winston ===== */
+.rm-ok{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px;color:var(--ink);background:rgba(46,229,157,.08);border:1px solid rgba(46,229,157,.35);border-radius:12px;padding:10px 14px;margin-bottom:8px}.rm-ok b{color:var(--up)}
+.rm-keyrow{display:flex;gap:8px;align-items:center}.rm-keyrow input{flex:1;min-width:0}.rm-keyrow .btn{flex:none;min-height:40px}
+.rm-models{display:grid;gap:8px}.rm-model{display:flex;align-items:center;gap:12px;border:1px solid var(--rule);border-radius:12px;padding:10px 14px;cursor:pointer;background:var(--surface);transition:border-color .15s}.rm-model:hover{border-color:var(--ink-3)}.rm-model.on{border-color:rgba(245,196,81,.6);box-shadow:0 0 0 1px rgba(245,196,81,.25)}
+.rm-model input{accent-color:#F5C451;width:16px;height:16px;flex:none;margin:0}.rm-model span{display:flex;flex-direction:column;line-height:1.3}.rm-model b{font-size:14px;color:var(--ink)}.rm-model small{font-size:12px;color:var(--ink-3)}.rm-model .cur{margin-left:auto;font-size:11px;color:var(--up);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.rm-inv{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:12px}.rm-inv .btn{min-height:40px}@media(max-width:560px){.rm-inv{grid-template-columns:1fr}}
+.rm-u{border:1px solid var(--rule);border-radius:12px;padding:10px 14px;margin-bottom:8px;background:var(--surface)}.rm-u .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.rm-u .top b{font-size:14px;color:var(--ink)}.rm-u .top .em{font-size:12.5px;color:var(--ink-3)}.rm-u .top .btn{margin-left:auto;min-height:32px;font-size:12.5px;padding:4px 12px}
+.rm-u .meta{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:6px}.rm-u .meta i{font-style:normal;color:var(--ink-3)}.rm-u .meta .y{color:var(--up)}.rm-u .meta .n{color:var(--ink-3)}
+.rm-pill{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:2px 8px;border:1px solid var(--rule);color:var(--ink-2)}.rm-pill.active{color:var(--up);border-color:rgba(46,229,157,.45)}.rm-pill.invited{color:#F5C451;border-color:rgba(245,196,81,.45)}.rm-pill.off{color:var(--ink-3);opacity:.7}.rm-pill.owner{color:#9B8CFF;border-color:rgba(155,140,255,.45)}
+/* the set-up walk */
+#dlgWalk .wk-prog{display:flex;gap:6px;align-items:center;margin:0 0 14px;font-size:12.5px;color:var(--ink-3)}#dlgWalk .wk-prog i{flex:1;height:4px;border-radius:2px;background:var(--surface-3)}#dlgWalk .wk-prog i.on{background:#F5C451}#dlgWalk .wk-prog i.done{background:var(--up)}
+#dlgWalk .wk-steps{display:grid;gap:6px;margin-bottom:16px}#dlgWalk .wk-step{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--ink-3);padding:6px 10px;border-radius:10px}#dlgWalk .wk-step.cur{color:var(--ink);background:var(--surface)}#dlgWalk .wk-step .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;border:1px solid var(--rule);flex:none}#dlgWalk .wk-step.done .n{background:var(--up);color:#04140A;border-color:var(--up)}#dlgWalk .wk-step.cur .n{border-color:#F5C451;color:#F5C451}
+#dlgWalk .wk-body h4{margin:0 0 6px;font-size:16px}#dlgWalk .wk-conn{display:flex;align-items:center;gap:12px;border:1px solid var(--rule);border-radius:12px;padding:12px 14px;background:var(--surface)}#dlgWalk .wk-conn .btn{margin-left:auto;flex:none;min-height:38px}
+#dlgWalk:focus{outline:none}#dlgWalk .ft .btn.ghost{flex:0 0 auto;border-color:transparent;color:var(--ink-3)}
+.toast.act{pointer-events:auto}.toast .toast-act{margin-left:10px;border:1px solid rgba(245,196,81,.6);background:rgba(245,196,81,.12);color:#F5C451;border-radius:999px;padding:4px 12px;font-size:13px;font-weight:700;cursor:pointer;min-height:0}
+#v4name{color:var(--ink);font-weight:600;margin-left:2px}#v4name:empty{display:none}
+/* member rooms: no Winston, no house-PC-only controls. The house (owner) sees exactly what it saw before. */
+body.otto-member .dk-rail button[data-go="winston"],body.otto-member #v4wn,body.otto-member #v4sw,body.otto-member .v4launch [data-v4go="winston"],body.otto-member .sb-lane.w,body.otto-member .sb-tabs button[data-l="w"],body.otto-member .sb-keyline,body.otto-member .sb-leg span:nth-child(2),body.otto-member #sSigBox,body.otto-member #dkWho,body.otto-member .lay-row[data-tab="winston"]{display:none!important}
+</style>
 </head>
 <body>
 <script>document.documentElement.classList.add("boot-dk")</script>
@@ -1470,13 +1490,34 @@ body.deskpop .v4ov{position:fixed;z-index:200}
   <div class="bd">
     <div style="margin-bottom:20px">
       <p class="hint" style="margin-top:0">Signed in as <b id="sWho"></b>. Your homework, journal and Coach history live in your account — not on this device. Sign in anywhere and it follows you.</p>
-      <p class="hint">There are no API keys to enter. They live on the server, so they can be changed without touching a single phone.</p>
+      <p class="hint">Market-data keys live on the server. The only key that is yours is the AI key below.</p>
       <button class="btn wide" id="sOut" style="margin-top:10px">Sign out</button>
+    </div>
+    <div style="margin-bottom:20px" id="sKeyBox">
+      <label class="f">Your AI key</label>
+      <p class="hint" style="margin-top:0">Your key pays for your Jarvis. Otto stores it encrypted and can't read it back. <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get a key ↗</a></p>
+      <div id="sKeyState"><p class="hint">Checking…</p></div>
+    </div>
+    <div style="margin-bottom:20px" id="sModelBox">
+      <label class="f">Model</label>
+      <p class="hint" style="margin-top:0">Which Claude runs your Jarvis. Pick one — it saves on the spot. The cost line is a rough monthly figure at normal desk use, billed to your key.</p>
+      <div id="sModels" class="rm-models"><p class="hint">Checking…</p></div>
+    </div>
+    <div style="margin-bottom:20px" id="sPeopleBox" hidden>
+      <label class="f">People</label>
+      <p class="hint" style="margin-top:0">Everyone with a room on this Otto. Invite by email; they sign in with their own Otto login and set up their own key and connections.</p>
+      <div class="rm-inv"><div><label class="f" for="sInvEmail">Email</label><input class="f" id="sInvEmail" type="email" inputmode="email" autocapitalize="off" placeholder="name@example.com"></div><div><label class="f" for="sInvName">Name</label><input class="f" id="sInvName" placeholder="First name"></div><button class="btn solid" id="sInvGo">Invite</button></div>
+      <div id="sPeople" data-raw><p class="hint">Loading…</p></div>
+    </div>
+    <div style="margin-bottom:20px" id="sWalkBox">
+      <label class="f">Set-up walk</label>
+      <p class="hint" style="margin-top:0">The three-step first-run: your key, Robinhood, TradingView. Open it any time.</p>
+      <button class="btn wide" id="sWalk">Open the set-up walk</button>
     </div>
     <div style="margin-bottom:20px">
       <label class="f">The Desk</label>
       <p class="hint" style="margin-top:0">Desk login: <b id="sDeskWho">—</b></p>
-      <button class="btn solid wide" id="sDeskLogin" hidden>Sign in with the Otto email</button>
+      <button class="btn solid wide" id="sDeskLogin" hidden>Sign in with your Otto login</button>
       <div id="sConn"></div>
       <p class="hint">Connect once and the Desk keeps the sign-in (encrypted, on the server). Nothing is ever changed without an Approve click.</p>
     </div>
@@ -1495,7 +1536,7 @@ body.deskpop .v4ov{position:fixed;z-index:200}
       <p class="hint" style="margin-top:0">Your standing instructions. Jarvis reads them every time, and saves new ones when you say "from now on…".</p>
       <button class="btn wide" id="sHouse">Open House Rules</button>
     </div>
-    <div style="margin-bottom:20px">
+    <div style="margin-bottom:20px" id="sSigBox">
       <label class="f">Otto Signals</label>
       <p class="hint" style="margin-top:0" id="sSigSum">The Discord watcher: catches the mentor's calls live and has Jarvis build the card.</p>
       <button class="btn wide" id="sSig">Set up Otto Signals</button>
@@ -1677,6 +1718,16 @@ body.deskpop .v4ov{position:fixed;z-index:200}
     <p class="hint" id="rhMsg" style="margin-top:8px">The code in that address works once and expires in a few minutes. Otto exchanges it on the server and stores the sign-in encrypted.</p>
   </div>
   <div class="ft"><button class="btn" id="rhCancel">Cancel</button><button class="btn" id="rhAgain">Open Robinhood again</button><button class="btn solid" id="rhGo">Connect</button></div>
+</dialog>
+
+<dialog id="dlgWalk">
+  <div class="grip"></div><div class="hd"><h3>Set up your room</h3><span class="stamp" id="wkStamp"></span></div>
+  <div class="bd">
+    <div class="wk-prog" id="wkProg"></div>
+    <div class="wk-steps" id="wkSteps"></div>
+    <div class="wk-body" id="wkBody"></div>
+  </div>
+  <div class="ft" id="wkFt"></div>
 </dialog>
 
 <dialog id="dlgMail">
@@ -2654,7 +2705,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="4.8.7";
+const BUILD="5.0.0";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3063,6 +3114,7 @@ $("#clearRunBtn").addEventListener("click",()=>{RUN=null;LS.del("run");renderMar
 function openSettings(){
   $("#sWho").textContent=(USER&&USER.email)||"—";
   if(typeof dkRenderConn==="function")dkRenderConn();
+  if(typeof rmRenderSettings==="function")rmRenderSettings();
   $("#sKey").value=CFG.key;$("#sTen").value=CFG.ten;
   $("#sTenH").value=CFG.tenH;$("#sJpy").value=CFG.jpy;$("#sMax").value=CFG.maxDay;$("#sWatch").value=CFG.watch;
   $("#dlgSet").showModal();
@@ -3407,7 +3459,7 @@ function dkRenderStrip(){
   }else if(p.fallback_quotes){
     const f=p.fallback_quotes,one=(lab,o)=>o?`<span><span class="k">${lab}</span><span class="v">${dkNum(o.price)}</span> ${dkPct(o.pct)}</span>`:"";
     h=`<span class="mut">10Y needs TradingView</span>`+one("Crude (USO)",f.crude)+one("USD/JPY",f.jpy)+one("SPY",f.es)+one("QQQ",f.nq);
-  }else if(DK.locked){h=`<span class="mut">Sign in with the Otto login to load the desk.</span>`}
+  }else if(DK.locked){h=`<span class="mut">Sign in with your Otto login to load the desk.</span>`}
   else h=`<span class="mut">${p.error?esc(p.error):"Loading prices…"}</span>`;
   const c=p.conn||{},dot=(ok,err)=>`<span class="dk-dot ${err?"bad":ok?"on":""}"></span>`;
   const qs=p.quotes_source||(p.fallback_quotes?"free":"");
@@ -3455,7 +3507,7 @@ function dkWatchBind(box){
     if(DK.wtFocus)setTimeout(()=>{inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length)},0)}
   const sc=box.querySelector("#wtScan");if(sc)sc.addEventListener("click",async()=>{sc.disabled=true;sc.textContent="Scanning…";try{await dkApi("watch_scan",{author:dkWho()});toast("Jarvis is scanning — proposals land here in ~1 min");setTimeout(dkWatchLoad,60e3)}catch(e){toast(String(e.message).slice(0,80))}sc.disabled=false;sc.textContent="🔎 Scan now"});
 }
-function dkWho(){return ($("#dkWho")&&$("#dkWho").value)||"Josh"}
+function dkWho(){if(typeof rmMember==="function"&&rmMember()&&DK.whoami&&DK.whoami.name)return DK.whoami.name;return ($("#dkWho")&&$("#dkWho").value)||"Josh"}   // v5.0: a member signs with their own name
 document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-ears-arm],[data-ears-skip],[data-ears-rm],[data-ears-mode]");if(!t)return;
   const note=t.parentNode.querySelector("#earsNote")||t.closest(".dk-sys").querySelector("#earsNote");t.disabled=true;
   try{
@@ -3573,7 +3625,7 @@ function dkCard(a){
 function dkRenderMsgs(stick){
   const box=$("#dkMsgs");if(!box)return;
   if(DK.locked){
-    box.innerHTML=`<div class="dk-lock"><h3>The Desk is locked</h3><p class="mut">It can see your Robinhood and TradingView accounts, so it only opens for the Otto login. ${USER&&USER.email?"You're signed in as "+esc(USER.email)+".":"This device is on a guest session."}</p><button class="dk-btn go" id="dkLogin">Sign in with the Otto email</button></div>`;
+    box.innerHTML=`<div class="dk-lock"><h3>The Desk is locked</h3><p class="mut">It can see your Robinhood and TradingView accounts, so it only opens for an Otto login. ${USER&&USER.email?"You're signed in as "+esc(USER.email)+".":"This device is on a guest session."}</p><button class="dk-btn go" id="dkLogin">Sign in with your Otto login</button></div>`;
     $("#dkLogin").addEventListener("click",()=>{$("#gCodeWrap").hidden=false;showLogin()});
     return;
   }
@@ -3703,7 +3755,7 @@ async function dkSend(opts){
   if(jason&&!DK.img&&!q)return toast("Screenshot the post first, then click 📣");
   if(!q&&!DK.img)return;
   if(DK.streaming)return toast("One moment — the desk is still answering");
-  if(DK.locked)return toast("Sign in with the Otto login first");
+  if(DK.locked)return toast("Sign in with your Otto login first");
   const author=$("#dkWho").value||"Ifoma";
   const img=DK.img;DK.img=null;$("#dkPend").hidden=true;el.value="";el.style.height="auto";
   const hist=DK.rows.slice(-24).map(r=>r.role==="system"?{role:"user",content:"Otto (system): "+r.content}
@@ -3749,12 +3801,12 @@ async function dkSend(opts){
 async function dkRenderConn(){
   const box=$("#sConn");if(!box)return;
   const email=USER&&USER.email;
-  $("#sDeskWho").textContent=email||"guest session (not the Otto login)";
-  if(!email){box.innerHTML=`<p class="hint">Sign in with the Otto email to connect TradingView and Robinhood.</p>`;$("#sDeskLogin").hidden=false;return}
+  $("#sDeskWho").textContent=email||"guest session (not an Otto login)";
+  if(!email){box.innerHTML=`<p class="hint">Sign in with your Otto login to connect TradingView and Robinhood.</p>`;$("#sDeskLogin").hidden=false;return}
   box.innerHTML=`<p class="hint">Checking…</p>`;
   try{
     const w=await dkApi("whoami");
-    if(!w.desk){box.innerHTML=`<p class="hint">${esc(email)} isn't the Otto login, so the Desk stays locked on this device.</p>`;$("#sDeskLogin").hidden=false;return}
+    if(!w.desk){box.innerHTML=`<p class="hint">${esc(email)} doesn't have a room on this Otto yet, so the Desk stays locked. Ask the house to invite you.</p>`;$("#sDeskLogin").hidden=false;return}
     $("#sDeskLogin").hidden=true;
     const j=await dkApi("conn_status");
     const row=s=>(j.conn||[]).find(c=>c.service===s);
@@ -3762,19 +3814,7 @@ async function dkRenderConn(){
       return `<div class="dk-row" style="padding:8px 0"><span><span class="dk-dot ${r?"on":""}"></span><b>${name}</b><br><span class="hint" style="margin:0">${r?"Connected "+new Date(r.connected_at||r.updated_at).toLocaleDateString()+(r.connected_by?" by "+esc(r.connected_by.split("@")[0]):""):note}</span></span>`+
         (r?`<button class="btn" data-disc="${s}" style="min-height:34px">Disconnect</button>`:`<button class="btn solid" data-conn="${s}" style="min-height:34px">Connect</button>`)+`</div>`};
     box.innerHTML=line("tv","TradingView","Prices, watchlists, alerts")+line("rh","Robinhood","Accounts and positions. Orders go to the Agentic account only, after Approve.");
-    box.querySelectorAll("[data-conn]").forEach(b=>b.addEventListener("click",async()=>{
-      const svc=b.dataset.conn;
-      // Robinhood (v3.0.1): new tab + paste-back. Open the tab inside the click
-      // so the popup blocker allows it, then point it at Robinhood.
-      const tab=svc==="rh"?window.open("about:blank","_blank"):null;
-      b.disabled=true;b.textContent="Opening…";
-      try{
-        const r=await dkApi("oauth_start",{service:svc});
-        if(r.paste){DK.rhUrl=r.url;if(tab)tab.location=r.url;else window.open(r.url,"_blank");dkRhOpen()}
-        else location.href=r.url;
-      }catch(e){if(tab)tab.close();toast(String(e.message).slice(0,120))}
-      b.disabled=false;b.textContent="Connect";
-    }));
+    box.querySelectorAll("[data-conn]").forEach(b=>b.addEventListener("click",()=>dkConnectStart(b.dataset.conn,b)));
     box.querySelectorAll("[data-disc]").forEach(b=>b.addEventListener("click",async()=>{
       if(!confirm("Disconnect? The desk will stop seeing this account until you connect it again."))return;
       try{await dkApi("disconnect",{service:b.dataset.disc});toast("Disconnected");dkRenderConn();DK.panelAt=0}catch(e){toast(e.message)}
@@ -3782,6 +3822,19 @@ async function dkRenderConn(){
   }catch(e){box.innerHTML=`<p class="hint dk-err">${esc(e.message)}</p>`}
 }
 
+/* v5.0: the Connect click, shared by Settings and the set-up walk. Must run inside the click (popup blocker). */
+async function dkConnectStart(svc,b){
+  // Robinhood (v3.0.1): new tab + paste-back. Open the tab inside the click
+  // so the popup blocker allows it, then point it at Robinhood.
+  const tab=svc==="rh"?window.open("about:blank","_blank"):null;
+  b.disabled=true;b.textContent="Opening…";
+  try{
+    const r=await dkApi("oauth_start",{service:svc});
+    if(r.paste){DK.rhUrl=r.url;if(tab)tab.location=r.url;else window.open(r.url,"_blank");dkRhOpen()}
+    else location.href=r.url;
+  }catch(e){if(tab)tab.close();toast(String(e.message).slice(0,120))}
+  b.disabled=false;b.textContent="Connect";
+}
 /* Robinhood paste-back (v3.0.1). Robinhood only returns to localhost, which
    the browser can't load — so the code arrives as an address the user pastes. */
 function dkRhOpen(){
@@ -3802,7 +3855,7 @@ $("#rhGo").addEventListener("click",async()=>{
   try{
     const j=await dkApi("oauth_finish",{code,state});
     $("#dlgRh").close();toast(j.name+" connected"+(j.warn?" — but: "+String(j.warn).slice(0,60):""));
-    dkRenderConn();DK.panelAt=0;if(DK.open)dkPanel(true);
+    dkRenderConn();DK.panelAt=0;if(DK.open)dkPanel(true);if(typeof rmWalkRefresh==="function")rmWalkRefresh();
   }catch(e){m.className="hint dk-err";m.textContent="Didn't connect: "+String(e.message).slice(0,160)+" — press Open Robinhood again only if it says expired; otherwise Cancel and Connect again."}
   b.disabled=false;b.textContent="Connect";
 });
@@ -3834,7 +3887,7 @@ function dkShow(v){
   $$(".dk-rail button").forEach(b=>b.classList.toggle("on",b.dataset.go===dkRailKey(v)));
   if(v==="desk"){dkRenderMsgs(true);return}
   const pg=$("#dkPage");pg.scrollTop=0;
-  if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see this page.</p></div>`;return}
+  if(DK.locked){pg.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with your Otto login to see this page.</p></div>`;return}
   ({scoreboard:dkScoreboard,charts:dkCharts,prep:dkPrep,market:dkMarket,perf:dkPerf,coach:dkCoach,journal:dkJournal,review:dkReview,score:dkScore,playbook:dkPlaybook,jason:dkJason,winston:()=>dkWinston(),quiz:dkQuiz,homework:()=>dkHomework(),more:dkMore,help:dkHelp})[v]();
   dkSubBar();
 }
@@ -4356,7 +4409,7 @@ async function winApi(fn,body){
   const t=await token(); if(!t)throw new Error("signed out");
   const r=await fetch(SB_URL+"/functions/v1/winston?fn="+fn,{method:body?"POST":"GET",headers:{apikey:SB_ANON,authorization:"Bearer "+t,"content-type":"application/json"},body:body?JSON.stringify(body):undefined});
   const j=await r.json().catch(()=>({ok:false,error:"HTTP "+r.status}));
-  if(!j.ok)throw new Error(j.error||("HTTP "+r.status));
+  if(!j.ok)throw Object.assign(new Error(j.house_only?"Winston is house-only":(j.error||("HTTP "+r.status))),{house_only:!!j.house_only});   // v5.0: members get a quiet, named error
   return j;
 }
 const winM=n=>n==null||!isFinite(n)?"—":`<span class="${n>0?"up":n<0?"dn":"mut"}">${n<0?"−":n>0?"+":""}$${Math.abs(+n).toFixed(2)}</span>`;
@@ -5212,7 +5265,7 @@ async function puReg(){if(!("serviceWorker" in navigator))return null;return nav
 async function puSub(){const r=await puReg();return r&&r.pushManager?r.pushManager.getSubscription():null}
 function puMsg(t,bad){const m=$("#puMsg");m.className="hint"+(bad?" dk-err":"");m.textContent=t||""}
 async function openPush(){
-  if(DK.locked)return toast("Sign in with the Otto login first");
+  if(DK.locked)return toast("Sign in with your Otto login first");
   $("#dlgPush").showModal();puMsg("");
   $("#puIos").hidden=!(puIOS&&!puStandalone());
   const supported="PushManager" in window&&"Notification" in window&&"serviceWorker" in navigator;
@@ -5299,7 +5352,7 @@ const SG_ST={reading:"Reading the post…",jarvis:"Jarvis is building the card�
 const SG_CARD={paper_wait:"practice: waiting for Josh",paper_taken:"practice trade taken",pending:"waiting for Approve",running:"placing…",done:"taken",rejected:"passed",expired:"expired",failed:"failed",paper:"auto-rejected (paper)"};
 function sgRender(stick){
   const box=$("#sgFeed");if(!box)return;
-  if(DK.locked){box.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see Otto Signals.</p></div>`;return}
+  if(DK.locked){box.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with your Otto login to see Otto Signals.</p></div>`;return}
   const d=SG.data;
   if(!d){box.innerHTML=dkLoading("Loading Otto Signals…");return}
   const near=box.scrollHeight-box.scrollTop-box.clientHeight<120;
@@ -5371,7 +5424,7 @@ function alParse(c){
 }
 function alRender(stick){
   const box=$("#alFeed");if(!box)return;
-  if(DK.locked){box.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with the Otto email to see the alerts.</p></div>`;return}
+  if(DK.locked){box.innerHTML=`<div class="dk-lock"><h3>Locked</h3><p class="mut">Sign in with your Otto login to see the alerts.</p></div>`;return}
   const near=box.scrollHeight-box.scrollTop-box.clientHeight<120;
   const rows=(DK.rows||[]).filter(alIs);
   let h=`<div class="al-note">Every TradingView alert lands here. Jarvis checks a fresh one against the Otto Rules: a real setup gets a card and one ping; anything else is a quiet note. Late fires and repeats never ping.</div>`;
@@ -5409,7 +5462,7 @@ function sgFill(cfg,beat){
   $("#sgStat").textContent=beat&&beat.at?`Watcher last checked in ${dkDate(beat.at)} (${beat.state||"?"}).`:"No watcher has checked in yet.";
 }
 async function openSig(){
-  if(DK.locked)return toast("Sign in with the Otto login first");
+  if(DK.locked)return toast("Sign in with your Otto login first");
   $("#dlgSet").close();$("#dlgSig").showModal();$("#sgMsg").textContent="";
   try{const j=await dkApi("signals_cfg");sgFill(j.cfg,j.beat)}catch(e){$("#sgMsg").textContent=String(e.message)}
 }
@@ -5923,7 +5976,7 @@ function layRowDrag(e){
 }
 function layEdit(on){
   if(on){
-    if(DK.locked)return toast("Sign in with the Otto login first");
+    if(DK.locked)return toast("Sign in with your Otto login first");
     if(DK.view!=="desk")dkShow("desk");
     LAY_DRAFT={tabs:layTabs().map(t=>({...t})),home:layHome(),cards:(LAY&&LAY.cards)||{},min:(LAY&&LAY.min)||[]};
   } else LAY_DRAFT=null;
@@ -5979,7 +6032,7 @@ function lmWait(L){
     try{const j=await dkApi("limits_set",{cancel_pending:true,author:($("#dkWho")&&$("#dkWho").value)||"Ifoma"});LM=j.limits;lmWait(LM);toast("Waiting change cancelled")}catch(e){toast(String(e.message).slice(0,90))}});
 }
 async function openLimits(){
-  if(DK.locked)return toast("Sign in with the Otto login first");
+  if(DK.locked)return toast("Sign in with your Otto login first");
   const m=$("#lmMsg");m.className="hint";m.textContent="Loading…";
   $("#dlgLimits").showModal();
   try{const [j,ls]=await Promise.all([dkApi("limits_get"),dkApi("lock_state").catch(()=>null)]);const L=LM=j.limits;
@@ -6010,7 +6063,7 @@ function acRender(){
   box.innerHTML=h;
 }
 async function openActivity(){
-  if(DK.locked)return toast("Sign in with the Otto login first");
+  if(DK.locked)return toast("Sign in with your Otto login first");
   $("#acList").innerHTML=dkLoading("Loading the Activity log…");
   $("#dlgActivity").showModal();
   try{const j=await dkApi("activity_get",null,"&days="+AC.days);AC.rows=j.rows||[];acRender();
@@ -6028,7 +6081,7 @@ function hrRender(){
   $("#hrList").innerHTML=HR.length?HR.map((r,i)=>`<div class="dk-row" style="align-items:flex-start;gap:8px"><textarea class="f" data-hr="${i}" rows="2" style="flex:1;margin:0">${esc(r.text)}</textarea><button class="btn" data-hrdel="${i}" title="Remove" style="flex:none">✕</button></div><div class="mut" style="font-size:11px;margin:-2px 0 8px">${esc(r.by||"")}${r.at?" · "+esc(String(r.at).slice(0,10)):""}</div>`).join(""):`<p class="hint">No rules yet.</p>`;
 }
 async function openHouse(){
-  if(DK.locked)return toast("Sign in with the Otto login first");
+  if(DK.locked)return toast("Sign in with your Otto login first");
   const m=$("#hrMsg");m.className="hint";m.textContent="Loading…";$("#hrNew").value="";
   $("#dlgHouse").showModal();
   try{const j=await dkApi("house_rules_get");HR=j.rules||[];hrRender();m.textContent=""}catch(e){m.className="hint dk-err";m.textContent=String(e.message).slice(0,200)}
@@ -6092,7 +6145,7 @@ function dkHelpRender(){
 }
 async function dkHelpAsk(q){
   q=String(q||"").trim();if(!q||DK.helpBusy)return;
-  if(DK.locked)return toast("Sign in with the Otto login first");
+  if(DK.locked)return toast("Sign in with your Otto login first");
   DK.helpBusy=true;$("#hpIn")&&($("#hpIn").value="");
   const h=LS.get("help",[]).filter(m=>!m.pending&&!m.err);
   h.push({role:"user",content:q,who:($("#dkWho")&&$("#dkWho").value)||"You"});
@@ -6106,7 +6159,7 @@ async function dkHelpAsk(q){
 
 /* ---------- v3.2: order ticket ---------- */
 $("#dkTicketBtn").addEventListener("click",()=>{
-  if(DK.locked)return toast("Sign in with the Otto login first");
+  if(DK.locked)return toast("Sign in with your Otto login first");
   $("#tkMsg").className="hint";$("#tkMsg").textContent="A buy needs its exits. After the fill Otto puts the stop on the option and sets alerts at your wrong-if and TP1. When one fires you get a close card.";
   if(!$("#tkExp").value){const d=new Date();d.setDate(d.getDate()+((5-d.getDay()+7)%7||7)+(d.getDay()>=3?7:0));$("#tkExp").value=d.toISOString().slice(0,10)}
   $("#dlgTicket").showModal();
@@ -6731,7 +6784,7 @@ function v4TopBuild(){
   const t=document.createElement("div");t.id="v4top";t.className="v4top";
   t.innerHTML=`<div class="mk"></div><div class="nm"><b>OTTO</b><small>Trader · The Desk</small></div>
     <div class="mid"><button data-v4go="watchlist">${v4Svg("list")}Watchlist</button><button data-v4go="watcher">${v4Svg("watch")}Watcher</button><button data-v4go="morning">${v4Svg("sun")}Morning read</button><button data-v4go="journal">${v4Svg("journal")}Journal</button></div>
-    <div class="r"><span class="st" id="v4w" title="The Desk's level watcher (Josh + Baby J cards) — runs 9:30 to 4:00"><i></i>Levels</span><span class="st q2" id="v4wn" style="display:none;white-space:nowrap" title="Winston waits until 9:30. Tap to wake him early: he reads the coach's posts and plans — no orders."><i class="off"></i>Winston</span><span class="st" id="v4tv" data-set="1" title="TradingView"><i></i>TradingView</span><span class="st" id="v4rh" data-set="1" title="Robinhood"><i></i>Robinhood</span><span class="st q2" id="v4sw" title="Josh's signal watcher — the Discord watcher on Ifoma's PC"><i class="off"></i>Watcher</span><span class="st q" id="v4clock"></span><span class="who"><span class="av" id="v4av">J</span><span id="v4whoSlot"></span></span><button class="gear" id="v4gear" aria-label="Settings" hidden></button></div>`;
+    <div class="r"><span class="st" id="v4w" title="The Desk's level watcher (Josh + Baby J cards) — runs 9:30 to 4:00"><i></i>Levels</span><span class="st q2" id="v4wn" style="display:none;white-space:nowrap" title="Winston waits until 9:30. Tap to wake him early: he reads the coach's posts and plans — no orders."><i class="off"></i>Winston</span><span class="st" id="v4tv" data-set="1" title="TradingView"><i></i>TradingView</span><span class="st" id="v4rh" data-set="1" title="Robinhood"><i></i>Robinhood</span><span class="st q2" id="v4sw" title="Josh's signal watcher — the Discord watcher on Ifoma's PC"><i class="off"></i>Watcher</span><span class="st q" id="v4clock"></span><span class="who"><span class="av" id="v4av">J</span><span id="v4whoSlot"></span><span id="v4name" data-raw></span></span><button class="gear" id="v4gear" aria-label="Settings" hidden></button></div>`;
   dk.insertBefore(t,dk.firstChild);
   const who=$("#dkWho");if(who)who.addEventListener("change",()=>{$("#v4av").textContent=(who.value||"J")[0]});
   t.querySelectorAll("[data-v4go]").forEach(b=>b.addEventListener("click",()=>v4Go(b.dataset.v4go)));
@@ -6985,7 +7038,9 @@ function tourInfo(chip,key){
 }
 const tourWaitEl=s=>{if(s.wait)return $(s.wait);if(s.pop){const ov=$("#v4ov");return ov&&[...ov.querySelectorAll(".dk-h")].find(x=>/What each rule costs/i.test(x.textContent))}return true};
 function tourGo(i,resumed){
-  if(!TOUR.on)return;const s=TOUR_STEPS[i];if(!s){tourEnd();tourMark(TOUR_STEPS.length-1);tourNote("Tour finished — the ⓘ chips stay until you switch Tour off",3600);return}
+  if(!TOUR.on)return;const s=TOUR_STEPS[i];
+  if(s&&s.view==="winston"&&typeof rmMember==="function"&&rmMember())return tourGo(i+1,resumed);   // v5.0: Winston is house-only
+  if(!s){tourEnd();tourMark(TOUR_STEPS.length-1);tourNote("Tour finished — the ⓘ chips stay until you switch Tour off",3600);return}
   TOUR.step=i;TOUR.last=i;TOUR.seen=true;TOUR.resumed=!!resumed;TOUR.manual=false;document.body.classList.add("tour-step");tourMark(i);
   if(s.view==="coach"&&(CC.range==="today"||CC.range==="all"))CC.range="30";
   if(DK.view!==s.view||s.view==="coach")dkShow(s.view);
@@ -7168,6 +7223,154 @@ document.addEventListener("click",e=>{const el=e.target.closest("[data-dstep]");
   const _s=dkShow;dkShow=function(v){if(v!=="desk"&&document.querySelector(".dk-desk.pop"))deskPop(false);_s(v);if(TOUR.on){tourChips();tourReplayRestore();if(v==="coach")tourMark(4)}};
   if(typeof dkRenderMsgs==="function"){const _m=dkRenderMsgs;dkRenderMsgs=function(){const r=_m.apply(this,arguments);if(TOUR.on)tourReplayRestore();return r}}
   if($("#v4top"))tourInstall();})();
+
+/* ================================================================ v5.0 ROOMS (29 Oct 2026)
+   Same app, same project; each signed-in person has a room: own connections, Desk, cards,
+   Anthropic key and model. The house (owner) keeps Winston and the house-PC controls.
+   Server contract: whoami {role,name,has_key,key_last4,model,house}, me (+allowed_models, conn{tv,rh}),
+   key_set / key_clear / model_set, invite / users / user_off (owner only). Every field is read defensively:
+   an older server that returns none of them leaves the house view exactly as it was. */
+const RM={me:null,walkShown:false,walkStep:0,justSaved:false};
+const RM_MODELS=[{id:"claude-sonnet-4-6",label:"Sonnet 4.6",cost:"current"},{id:"claude-sonnet-5-5",label:"Sonnet 5.5",cost:"about $20–40/mo"},{id:"claude-opus-5-5",label:"Opus 5.5",cost:"about $35–70/mo"},{id:"claude-fable-5-1",label:"Fable 5.1",cost:"about $80+/mo"}];
+const rmMember=()=>{const w=DK.whoami;return !!w&&(w.role==="member"||w.house===false)};
+const rmOwner=()=>{const w=DK.whoami;return !!w&&w.role==="owner"};
+const rmMe=()=>Object.assign({},DK.whoami||{},RM.me||{});
+function rmApply(){document.body.classList.toggle("otto-member",rmMember());rmTopName()}
+function rmTopName(){const el=$("#v4name");if(!el)return;const w=DK.whoami;el.textContent=w&&rmMember()&&w.name?w.name:""}
+async function rmLoadMe(){try{RM.me=await dkApi("me")}catch(e){RM.me=RM.me||null}return rmMe()}
+/* a toast with one button — the "add your key" nudge */
+function toastAct(msg,label,fn){const t=$("#toast");t.innerHTML=esc(msg)+`<button class="toast-act">${esc(label)}</button>`;t.classList.add("on","act");
+  t.querySelector("button").onclick=()=>{t.classList.remove("on","act");fn()};clearTimeout(tT);tT=setTimeout(()=>t.classList.remove("on","act"),9000)}
+function rmKeyNudge(){if(RM.nudgeAt&&Date.now()-RM.nudgeAt<15e3)return;RM.nudgeAt=Date.now();toastAct("Jarvis needs your AI key first","Open Settings",()=>{openSettings();setTimeout(()=>{const b=$("#sKeyBox");if(b)b.scrollIntoView({block:"start"})},150)})}
+{const _api=dkApi;dkApi=async function(fn,body,qs){try{return await _api(fn,body,qs)}catch(e){if(/Anthropic API key/i.test(String(e&&e.message||"")))rmKeyNudge();throw e}}}
+
+/* ---- Your AI key: one widget, used by Settings and the walk ---- */
+function rmKeyForm(box,done){
+  if(!box)return;const me=rmMe();
+  if(me.has_key){
+    box.innerHTML=`<div class="rm-ok"><b>✓</b> Key saved · ends in ••••${esc(me.key_last4||"····")}${RM.justSaved?" · <b>✓ works</b>":""}<button class="btn" data-rmkeyrm style="margin-left:auto;min-height:32px;font-size:12.5px;padding:4px 12px">Remove</button></div>`;
+    box.querySelector("[data-rmkeyrm]").onclick=async()=>{if(!confirm("Remove your key? Jarvis stops answering in your room until you add one again."))return;
+      try{await dkApi("key_clear",{});RM.justSaved=false;if(RM.me){RM.me.has_key=false;RM.me.key_last4=""}if(DK.whoami){DK.whoami.has_key=false;DK.whoami.key_last4=""}toast("Key removed");rmKeyForm(box,done);rmWalkRefresh()}catch(e){toast(String(e.message).slice(0,120))}};
+    return;
+  }
+  box.innerHTML=`<div class="rm-keyrow"><input class="f" type="password" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Anthropic API key"><button class="btn solid">Save</button></div><p class="hint rm-keymsg" style="margin:6px 0 0">Paste the key, press Save. You won't see it again — only its last 4 digits.</p>`;
+  const inp=box.querySelector("input"),b=box.querySelector("button"),m=box.querySelector(".rm-keymsg");
+  const go=async()=>{const k=inp.value.trim();if(!k){m.textContent="Paste the key first.";inp.focus();return}
+    b.disabled=true;b.textContent="Checking…";m.className="hint rm-keymsg";m.textContent="Saving and testing the key…";
+    try{const r=await dkApi("key_set",{key:k});const l4=r.key_last4||k.slice(-4);RM.justSaved=true;
+      RM.me=Object.assign(RM.me||{},{has_key:true,key_last4:l4});if(DK.whoami){DK.whoami.has_key=true;DK.whoami.key_last4=l4}
+      toast("Key saved · ends in ••••"+l4);rmKeyForm(box,done);if(done)done()}
+    catch(e){m.className="hint rm-keymsg dk-err";m.textContent="Didn't save: "+String(e.message).slice(0,160);b.disabled=false;b.textContent="Save"}};
+  b.onclick=go;inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();go()}});
+}
+/* ---- Model picker ---- */
+function rmModels(box){
+  if(!box)return;const me=rmMe();
+  const list=(Array.isArray(me.allowed_models)&&me.allowed_models.length)?me.allowed_models:RM_MODELS,cur=me.model||"";
+  box.innerHTML=list.map(m=>`<label class="rm-model ${m.id===cur?"on":""}"><input type="radio" name="rmModel" value="${esc(m.id)}" ${m.id===cur?"checked":""}><span><b>${esc(m.label||m.id)}</b><small>${esc(m.cost||"")}</small></span>${m.id===cur?`<span class="cur">current</span>`:""}</label>`).join("")
+    +(cur&&!list.some(m=>m.id===cur)?`<p class="hint" style="margin:4px 0 0">Set now: ${esc(cur)}</p>`:"");
+  box.querySelectorAll("input").forEach(r=>r.addEventListener("change",async()=>{
+    box.querySelectorAll("input").forEach(x=>x.disabled=true);
+    try{const j=await dkApi("model_set",{model:r.value});const id=j.model||r.value;RM.me=Object.assign(RM.me||{},{model:id});if(DK.whoami)DK.whoami.model=id;
+      toast("Model: "+((list.find(x=>x.id===id)||{}).label||id))}
+    catch(e){toast("Didn't change: "+String(e.message).slice(0,100))}
+    rmModels(box);
+  }));
+}
+/* ---- People (owner only) ---- */
+const rmPill=st=>`<span class="rm-pill ${esc(st||"")}">${esc(st||"—")}</span>`;
+const rmSeen=t=>{if(!t)return "never";try{const d=new Date(t);if(isNaN(d))return esc(String(t));const h=(Date.now()-d)/36e5;return h<1?"just now":h<24?Math.round(h)+"h ago":d.toLocaleDateString("en-US",{month:"short",day:"numeric"})}catch(e){return "—"}};
+async function rmPeople(){
+  const wrap=$("#sPeopleBox"),box=$("#sPeople");if(!wrap||!box)return;
+  if(!rmOwner()){wrap.hidden=true;return}
+  wrap.hidden=false;box.innerHTML=`<p class="hint">Loading…</p>`;
+  let j;try{j=await dkApi("users")}catch(e){box.innerHTML=`<p class="hint dk-err">${esc(e.message)}</p>`;return}
+  const us=Array.isArray(j.users)?j.users:[];
+  if(!us.length){box.innerHTML=`<p class="hint">No one invited yet.</p>`;return}
+  const hasC=(u,s)=>{const c=u.conn;if(Array.isArray(c))return c.some(x=>x&&x.service===s);return !!(c&&c[s])};
+  const yn=(ok,lab)=>`<span class="${ok?"y":"n"}">${lab} ${ok?"✓":"—"}</span>`;
+  box.innerHTML=us.map(u=>{const st=u.status||(u.last_seen?"active":"invited");
+    return `<div class="rm-u"><div class="top"><b>${esc(u.name||u.email||"")}</b><span class="em">${esc(u.email||"")}</span>${rmPill(u.role||"member")}${rmPill(st)}${u.role!=="owner"&&st!=="off"?`<button class="btn" data-rmoff="${esc(u.email||"")}">Turn off</button>`:""}</div>
+      <div class="meta">${yn(!!u.has_key,"Key")}${u.has_key&&u.key_last4?`<i>••••${esc(u.key_last4)}</i>`:""}<i>${esc(((rmMe().allowed_models||RM_MODELS).find(m=>m.id===u.model)||{}).label||u.model||"—")}</i>${yn(hasC(u,"tv"),"TradingView")}${yn(hasC(u,"rh"),"Robinhood")}<i>seen ${rmSeen(u.last_seen)}</i></div></div>`}).join("");
+  box.querySelectorAll("[data-rmoff]").forEach(b=>b.onclick=async()=>{const em=b.dataset.rmoff;if(!confirm(`Turn off ${em}? They can't sign in to their room until you invite them again.`))return;
+    b.disabled=true;try{await dkApi("user_off",{email:em});toast("Turned off");rmPeople()}catch(e){toast(String(e.message).slice(0,120));b.disabled=false}});
+}
+function rmInviteBind(){
+  const b=$("#sInvGo");if(!b||b.dataset.rm)return;b.dataset.rm="1";
+  b.onclick=async()=>{const em=($("#sInvEmail").value||"").trim().toLowerCase(),nm=($("#sInvName").value||"").trim();
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){toast("Enter their email first");$("#sInvEmail").focus();return}
+    if(!nm){toast("Add their first name");$("#sInvName").focus();return}
+    b.disabled=true;b.textContent="Inviting…";
+    try{const j=await dkApi("invite",{email:em,name:nm});toast((j.status==="active"?"Already has a room: ":"Invited ")+(j.email||em)+(j.note?" — "+String(j.note).slice(0,80):""));$("#sInvEmail").value="";$("#sInvName").value="";rmPeople()}
+    catch(e){toast("Didn't invite: "+String(e.message).slice(0,120))}
+    b.disabled=false;b.textContent="Invite";
+  };
+}
+/* ---- Settings glue ---- */
+async function rmRenderSettings(){
+  rmInviteBind();const wb=$("#sWalk");if(wb&&!wb.dataset.rm){wb.dataset.rm="1";wb.onclick=()=>{$("#dlgSet").close();rmWalkOpen(0,true)}}
+  const kb=$("#sKeyState"),mb=$("#sModels"),pb=$("#sPeopleBox");
+  const email=USER&&USER.email;
+  if(!email||!DK.whoami||!DK.whoami.desk){if(kb)kb.innerHTML=`<p class="hint">Sign in with your Otto login to add a key.</p>`;if(mb)mb.innerHTML=`<p class="hint">Sign in with your Otto login to pick a model.</p>`;if(pb)pb.hidden=true;return}
+  await rmLoadMe();
+  rmKeyForm(kb);rmModels(mb);rmPeople();
+}
+/* ---- First-login set-up walk: key → Robinhood → TradingView ---- */
+const RM_SNOOZE="otto:setupSnooze";
+function rmWalkNeeded(){
+  const w=DK.whoami;if(!w||!w.desk)return false;const me=rmMe();
+  if(!me.has_key)return true;
+  if(!rmMember())return false;                                   // the house only gets nagged about a missing key
+  const c=me.conn;return !!(c&&typeof c==="object"&&(!c.rh||!c.tv));
+}
+function rmWalkConn(){const me=rmMe(),c=me.conn||{};const j=RM.conn||{};const row=s=>Array.isArray(j.conn)?j.conn.some(x=>x&&x.service===s):null;
+  const tv=row("tv"),rh=row("rh");return {tv:tv==null?!!c.tv:tv,rh:rh==null?!!c.rh:rh}}
+async function rmWalkOpen(step,manual){
+  const d=$("#dlgWalk");if(!d)return;RM.walkStep=step||0;RM.walkManual=!!manual;
+  if(!d.open)d.showModal();
+  rmWalkDraw();
+  try{const f=$("#wkBody input, #wkBody .btn");if(f)f.focus()}catch(e){}
+  try{RM.conn=await dkApi("conn_status")}catch(e){}
+  if(d.open)rmWalkDraw();
+}
+function rmWalkRefresh(){const d=$("#dlgWalk");if(!d||!d.open)return;dkApi("conn_status").then(j=>{RM.conn=j;if(d.open)rmWalkDraw()}).catch(()=>{if(d.open)rmWalkDraw()})}
+function rmWalkDraw(){
+  const d=$("#dlgWalk");if(!d)return;const me=rmMe(),c=rmWalkConn(),i=RM.walkStep;
+  const steps=[["Your AI key",!!me.has_key],["Connect Robinhood",!!c.rh],["Connect TradingView",!!c.tv]];
+  const done=steps.filter(s=>s[1]).length;
+  $("#wkStamp").textContent=`${done} of 3 done`;
+  $("#wkProg").innerHTML=steps.map((s,k)=>`<i class="${s[1]?"done":k===i?"on":""}"></i>`).join("")+`<span>Step ${i+1} of 3</span>`;
+  $("#wkSteps").innerHTML=steps.map((s,k)=>`<div class="wk-step ${k===i?"cur":""} ${s[1]?"done":""}" data-wk="${k}"><span class="n">${s[1]?"✓":k+1}</span><span>${s[0]}</span>${s[1]?`<span class="mut" style="margin-left:auto;font-size:12px">done</span>`:""}</div>`).join("");
+  $("#wkSteps").querySelectorAll("[data-wk]").forEach(el=>el.onclick=()=>{RM.walkStep=+el.dataset.wk;rmWalkDraw()});
+  const body=$("#wkBody");
+  if(i===0){body.innerHTML=`<h4>Your AI key</h4><p class="hint" style="margin-top:0">Your key pays for your Jarvis. Otto stores it encrypted and can't read it back. <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get a key ↗</a></p><div id="wkKey"></div>`;
+    rmKeyForm($("#wkKey"),()=>{RM.walkStep=1;rmWalkDraw()});}
+  else{const svc=i===1?"rh":"tv",nm=i===1?"Robinhood":"TradingView",ok=i===1?c.rh:c.tv;
+    body.innerHTML=`<h4>Connect ${nm}</h4><p class="hint" style="margin-top:0">${i===1?"Accounts and positions. Orders go to your account only, after you press Approve. Robinhood hands back a localhost address — you paste it here; the next screen walks you through it.":"Prices, your watchlist and alerts. You'll sign in on TradingView and come straight back."}</p>
+      <div class="wk-conn"><span class="dk-dot ${ok?"on":""}"></span><span><b>${nm}</b><br><span class="hint" style="margin:0">${ok?"Connected":"Not connected yet"}</span></span>${ok?`<button class="btn" data-wkdisc="${svc}">Disconnect</button>`:`<button class="btn solid" data-wkconn="${svc}">Connect</button>`}</div>`;
+    const cb=body.querySelector("[data-wkconn]");if(cb)cb.onclick=()=>dkConnectStart(svc,cb);
+    const db=body.querySelector("[data-wkdisc]");if(db)db.onclick=async()=>{if(!confirm("Disconnect? The desk will stop seeing this account until you connect it again."))return;try{await dkApi("disconnect",{service:svc});toast("Disconnected");DK.panelAt=0;rmWalkRefresh()}catch(e){toast(e.message)}};
+  }
+  const canSkip=i>0||!rmMember()||!!me.has_key,last=i===2;
+  $("#wkFt").innerHTML=`<button class="btn ghost" id="wkLater">Later</button>${i>0?`<button class="btn" id="wkBack">‹ Back</button>`:""}${!last?`<button class="btn ${steps[i][1]?"solid":""}" id="wkNext" ${!steps[i][1]&&!canSkip?"disabled":""}>${steps[i][1]?"Next ›":"Skip for now ›"}</button>`:`<button class="btn solid" id="wkDone">Done</button>`}`;
+  $("#wkLater").onclick=()=>rmWalkClose(true);
+  const bk=$("#wkBack");if(bk)bk.onclick=()=>{RM.walkStep=i-1;rmWalkDraw()};
+  const nx=$("#wkNext");if(nx)nx.onclick=()=>{RM.walkStep=i+1;rmWalkDraw()};
+  const dn=$("#wkDone");if(dn)dn.onclick=()=>{rmWalkClose(false);toast(done===3?"Your room is set up":"You can finish this any time in Settings → Set-up walk");if(DK.open){DK.panelAt=0;try{dkPanel(true)}catch(e){}}};
+}
+function rmWalkClose(snooze){const d=$("#dlgWalk");if(d&&d.open)d.close();try{localStorage.setItem(RM_SNOOZE,String(Date.now()))}catch(e){}if(!snooze)return;toast("Okay — Settings → Set-up walk whenever you're ready")}
+function rmWalkMaybe(){
+  if(RM.walkShown||!DK.whoami||!DK.whoami.desk)return;
+  let sn=0;try{sn=+localStorage.getItem(RM_SNOOZE)||0}catch(e){}
+  if(Date.now()-sn<24*3600e3)return;
+  if(!rmWalkNeeded())return;
+  RM.walkShown=true;const d=$("#dlgSet");if(d&&d.open)d.close();
+  rmWalkOpen(!rmMe().has_key?0:!rmWalkConn().rh?1:2,false);
+}
+/* ---- after whoami: role, name, the walk ---- */
+{const _ds=dkStart;dkStart=async function(){await _ds.apply(this,arguments);rmApply();if(DK.locked||!DK.whoami)return;
+  if(!RM.me||RM.meFor!==DK.whoami.email){RM.meFor=DK.whoami.email;await rmLoadMe()}rmApply();rmWalkMaybe()}}
+{const _td=v4TopDraw;v4TopDraw=function(){_td.apply(this,arguments);rmTopName()}}
 
 </script>
 </body>

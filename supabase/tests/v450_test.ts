@@ -113,7 +113,7 @@ Deno.test("v4.5 static: the Desk page shows the Arm button on callouts posts onl
   const html = await Deno.readTextFile(new URL("../../index.html", import.meta.url));
   assert(/data-arm-callouts/.test(html) && /arm_callouts/.test(html), "button wired");
   assert(/\^📣 This week's callouts/.test(html), "only on callouts posts");
-  assert(/const BUILD="4\.\d+\.\d+"/.test(html), "BUILD");   // v4.8.3: any 4.x build — this test is about the Arm button, not the version number
+  assert(/const BUILD="[45]\.\d+\.\d+"/.test(html), "BUILD");   // v4.8.3: any 4.x build — this test is about the Arm button, not the version number; v5.0: or 5.x
   const sw = await Deno.readTextFile(new URL("../../sw.js", import.meta.url));
-  assert(/otto-v4\.\d+\.\d+/.test(sw), "sw version");
+  assert(/otto-v[45]\.\d+\.\d+/.test(sw), "sw version");
 });
