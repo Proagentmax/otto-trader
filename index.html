@@ -2654,7 +2654,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="4.8.6";
+const BUILD="4.8.7";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -4418,6 +4418,8 @@ function winHeart(j){
   if(st!=="open")return `<div class="win-hb off"><i></i><span>Market ${esc(st||"closed")} · ${isFinite(at)?"last check "+esc(winET(at)):"no check recorded yet"}</span></div>`;
   if(!isFinite(at))return `<div class="win-hb bad"><i></i><span><b>No check recorded yet today.</b> If this is still here after 9:45 AM, something is wrong.</span></div>`;
   const age=Math.max(0,Math.round((Date.now()-at)/60000));
+  const _p=new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",hour:"numeric",minute:"numeric",hour12:false}).formatToParts(new Date()),opened=(+_p.find(x=>x.type==="hour").value%24)*60+(+_p.find(x=>x.type==="minute").value)-570; /* minutes since 9:30 ET */
+  if(age>15&&opened!=null&&opened<=12&&at<Date.now()-(opened+5)*60000)return `<div class="win-hb"><i></i><span>Market just opened · waiting for his first check of the day (last one was ${esc(winET(at))}, before the close)</span></div>`;
   if(age>15)return `<div class="win-hb bad"><i></i><span><b>No check since ${esc(winET(at))} (${age} min).</b> He may be stuck — tell Claude.</span></div>`;
   return `<div class="win-hb"><i></i><span>Winston is working · last checked <b>${esc(winET(at))}</b> (${age} min ago) · checks every minute while in a trade, every 10 minutes otherwise</span></div>`;
 }
