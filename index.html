@@ -371,6 +371,10 @@ pre.out{font-family:var(--mono);font-size:12.5px;line-height:1.75;white-space:pr
 :root{--warn:#F5B400;--blue:#5AA9FF;--s1:#131519}
 body.dk-on{overflow:hidden}
 body.dk-on>header.top,body.dk-on>nav.nav,body.dk-on>main{display:none!important}
+/* v4.8.5: Otto always opens on the Desk. The old Market/Plan/Bias screen is kept hidden (it is still there only for the Homework "Tick in Week" link) so it can never flash on a refresh. */
+html.boot-dk body>header.top,html.boot-dk body>nav.nav,html.boot-dk body>main{display:none!important}
+html.boot-dk body::before{content:"OTTO";position:fixed;inset:0;display:grid;place-items:center;background:#0B0C0E;color:#F5C451;letter-spacing:.4em;font:700 16px system-ui,sans-serif;z-index:1}
+body.dk-on::before,body.splash-off::before{display:none!important}
 .dk[hidden]{display:none!important}
 .dk{position:fixed;inset:0;z-index:40;background:var(--bg);display:grid;
   grid-template-columns:60px 290px minmax(0,1fr) 330px;grid-template-rows:auto auto minmax(0,1fr);font-size:13.5px;line-height:1.45}
@@ -1208,7 +1212,7 @@ body.deskpop .v4ov{position:fixed;z-index:200}
 </style>
 </head>
 <body>
-
+<script>document.documentElement.classList.add("boot-dk")</script>
 <div class="dk" id="dk" hidden>
   <nav class="dk-rail" aria-label="Otto">
     <div class="dk-logo">O</div>
@@ -1224,7 +1228,7 @@ body.deskpop .v4ov{position:fixed;z-index:200}
     <button data-go="homework" title="Homework: the coach's after-close read — Otto fills the numbers, you write the read"><svg viewBox="0 0 24 24"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z"/><path d="M8 9h8M8 13h6"/><path d="M4 16a4 4 0 0 1 4-4"/></svg>Homework</button>
     <button data-go="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
     <button data-go="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>Help</button>
-    <button data-go="classic" title="The phone layout: Week, Coach, Journal, Market"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Classic</button>
+    
     </div>
     <button class="dk-more" id="dkMore" hidden title="Hidden tabs"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
     <div class="dk-morebox" id="dkMoreBox" hidden></div>
@@ -2650,7 +2654,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="4.8.4";
+const BUILD="4.8.6";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -3155,7 +3159,7 @@ function hydrate(){
 
 /* ---------- sign in ---------- */
 function showLogin(msg){
-  $("#gate2").hidden=false;$("#gCancel").hidden=!USER;
+  document.body.classList.add("splash-off");$("#gate2").hidden=false;$("#gCancel").hidden=!USER;
   if($("#dlgSet").open)$("#dlgSet").close();
   if(msg){const m=$("#gMsg");m.textContent=msg;m.className="gmsg err"}
 }
@@ -3282,7 +3286,7 @@ function closeDesk(){
 $$(".dk-rail button[data-go]").forEach(b=>b.addEventListener("click",()=>{
   const g=b.dataset.go;
   if(g==="settings")return openSettings();
-  if(g==="classic"){closeDesk();const t=$$(".nav button").find(x=>x.dataset.p==="market");if(t)t.click();return}
+  if(g==="classic"){document.documentElement.classList.remove("boot-dk");closeDesk();const t=$$(".nav button").find(x=>x.dataset.p==="market");if(t)t.click();return}
   dkShow(g);
 }));
 $("#dkWho").addEventListener("change",e=>LS.set("deskWho",e.target.value));
@@ -4468,8 +4472,16 @@ function winHead(j){
   const st=!c.enabled?`<span class="dk-tag bad">PAUSED</span>`:lk?`<span class="dk-tag bad">LOCKED — ${esc(lk.why)}</span>`:`<span class="dk-tag ok">ON</span>`;
   return `<div class="dkp-head win43-head"><h2>Winston</h2><a class="win43-how" data-wpop="how">how he works ↗</a><span class="dk-tag">PAPER · own $${(+c.paper_balance||4000).toLocaleString()}</span>${st}<span class="win-mode ${data?"data":""}">${data?"DATA MODE":"STRICT"} · ${+c.max_open||1} position${(+c.max_open||1)===1?"":"s"}</span><span class="mut" style="font-size:12px">${esc(mk||"—")}</span>
     <span style="flex:1"></span>
-    <button class="dk-btn go" data-wpop="report">Today report</button><button class="dk-btn sec" data-wpop="score">Scorecard</button><button class="dk-btn sec" data-wpop="rules">${data?"Switch to strict":"Switch to data"} · rules</button><button class="dk-btn sec" id="winPause">${c.enabled?"Pause":"Resume"}</button></div>`;
+    <button class="dk-btn go" data-wpop="report">Today report</button><button class="dk-btn sec" data-wpop="score">Scorecard</button><button class="dk-btn sec" data-wpop="rules">${data?"Switch to strict":"Switch to data"} · rules</button><button class="dk-btn sec" id="winPause">${c.enabled?"Pause":"Resume"}</button>${(mk==="pre"||winPrepActive(j))?`<button class="dk-btn ${winPrepActive(j)?"go":"sec"}" id="winPrep" title="Before the open Winston waits. This switch wakes him early: he reads the coach's posts, thinks and plans. No orders — his normal trading times don't change. Today only.">${winPrepActive(j)?"● Prep ON — tap to stop":"Turn Winston on early"}</button>`:""}</div>`;
 }
+function winPrepActive(j){const c=(j&&j.config)||{};return c.prep_on===true&&!!c.prep_day&&!!(j&&j.clock)&&c.prep_day===j.clock.day}
+async function winPrepSet(on){
+  if(WIN.busy)return;WIN.busy=true;
+  try{await winApi("config_set",{prep_on:on});WIN.j=await winApi("state");toast(on?"Winston is on early — he reads the posts and plans. No orders until his normal time.":"Winston prep is off")}
+  catch(e){toast("Could not change it: "+String(e.message).slice(0,80))}
+  WIN.busy=false;if(DK.view==="winston")dkWinston(true);v4TopDraw();
+}
+document.addEventListener("click",e=>{if(e.target.closest("#v4wn")){e.stopPropagation();winPrepSet(!winPrepActive(WIN.j))}});
 function winStart(){const c=(typeof WIN!=="undefined"&&WIN.j&&WIN.j.config)||{};return(+c.paper_balance||4000).toLocaleString()}
 function winTabs(){return ""}
 function winStrip(j){
@@ -4663,6 +4675,7 @@ async function dkWinston(keep){
   const sy=pg.scrollTop;
   pg.innerHTML=`<div class="dkp win43">${winToday(j)}</div>`;pg.scrollTop=keep?sy:0;   // v4.3: one screen; Report / Scorecard / rules / how / trade cards are popups
   pg.querySelectorAll("[data-wpop]").forEach(b=>b.onclick=e=>{e.stopPropagation();winPop(b.dataset.wpop,b.dataset.wid)});
+  const pp=$("#winPrep");if(pp)pp.onclick=()=>winPrepSet(!winPrepActive(j));
   const pz=$("#winPause");if(pz)pz.onclick=async()=>{if(WIN.busy)return;WIN.busy=true;pz.disabled=true;
     try{await winApi("config_set",{enabled:!(j.config&&j.config.enabled)})}catch(e){alert("Could not change it: "+e.message)}
     WIN.busy=false;dkWinston(true)};
@@ -6200,24 +6213,23 @@ function dkJason(){
   $$("#dkPage [data-ci]").forEach(b=>b.onclick=()=>{DK.jIdx=+b.dataset.ci;dkJason()});
   $("#dkPineCopy").onclick=async()=>{const s=dkPineScript();try{await navigator.clipboard.writeText(s);toast("Copied — paste it into TradingView's Pine Editor")}catch(e){$("#dkPinePre").hidden=false;$("#dkPinePre").textContent=s;toast("Select the script below and copy it")}};
   $("#dkPineShow").onclick=()=>{const p=$("#dkPinePre");p.hidden=!p.hidden;p.textContent=dkPineScript()};
-  $$("#dkPage [data-classic]").forEach(b=>b.onclick=()=>{closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.classic);if(t)t.click()});
+  $$("#dkPage [data-classic]").forEach(b=>b.onclick=()=>{document.documentElement.classList.remove("boot-dk");closeDesk();const t=$$(".nav button").find(x=>x.dataset.p===b.dataset.classic);if(t)t.click()});
 }
 
 (async function boot(){
   if(!SB_ANON||SB_ANON.indexOf("PASTE")===0){
-    document.getElementById("gate2").hidden=false;
+    document.body.classList.add("splash-off");document.getElementById("gate2").hidden=false;
     document.getElementById("gMsg").className="gmsg err";
     document.getElementById("gMsg").textContent="config.js still has the placeholder in it. Paste the Supabase anon key there and push again.";
     return;
   }
+  setTimeout(()=>{if(!DK.open&&document.getElementById("gate2").hidden)try{openDesk()}catch(e){}},9000);   // safety: never sit on the splash
   claimHash();
   hydrate();                                   // paint from the mirror straight away
   // Market is the fixed landing screen — Josh's bias card and the journal
   // gate are what matter every time the app opens, on any device. "tab" still
   // syncs as people navigate (unchanged), it just isn't what boot reads.
-  const t=$$(".nav button").filter(x=>x.dataset.p==="market")[0];if(t)t.click();
   renderAll();
-  const wantDesk=DK_WIDE()||location.search.includes("desk=1");
 
   let tok=await token();
   if(!tok){
@@ -6241,7 +6253,7 @@ function dkJason(){
   // v3.0: laptops land on the Desk. A return from TradingView/Robinhood sign-in
   // finishes the connection first, then opens the Desk with Settings showing it.
   const back=await dkOauthReturn();
-  if(wantDesk||back)openDesk();
+  openDesk();   // v4.8.5: every device lands on the Desk
   if(back)openSettings();                                // the landing tab reads itself; no tap needed
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")autoMarket()});
 })();
@@ -6717,7 +6729,7 @@ function v4TopBuild(){
   const t=document.createElement("div");t.id="v4top";t.className="v4top";
   t.innerHTML=`<div class="mk"></div><div class="nm"><b>OTTO</b><small>Trader · The Desk</small></div>
     <div class="mid"><button data-v4go="watchlist">${v4Svg("list")}Watchlist</button><button data-v4go="watcher">${v4Svg("watch")}Watcher</button><button data-v4go="morning">${v4Svg("sun")}Morning read</button><button data-v4go="journal">${v4Svg("journal")}Journal</button></div>
-    <div class="r"><span class="st" id="v4w" title="The Desk's level watcher (Josh + Baby J cards) — runs 9:30 to 4:00"><i></i>Levels</span><span class="st" id="v4tv" data-set="1" title="TradingView"><i></i>TradingView</span><span class="st" id="v4rh" data-set="1" title="Robinhood"><i></i>Robinhood</span><span class="st q2" id="v4sw" title="Josh's signal watcher — the Discord watcher on Ifoma's PC"><i class="off"></i>Watcher</span><span class="st q" id="v4clock"></span><span class="who"><span class="av" id="v4av">J</span><span id="v4whoSlot"></span></span><button class="gear" id="v4gear" aria-label="Settings" hidden></button></div>`;
+    <div class="r"><span class="st" id="v4w" title="The Desk's level watcher (Josh + Baby J cards) — runs 9:30 to 4:00"><i></i>Levels</span><span class="st q2" id="v4wn" style="display:none;white-space:nowrap" title="Winston waits until 9:30. Tap to wake him early: he reads the coach's posts and plans — no orders."><i class="off"></i>Winston</span><span class="st" id="v4tv" data-set="1" title="TradingView"><i></i>TradingView</span><span class="st" id="v4rh" data-set="1" title="Robinhood"><i></i>Robinhood</span><span class="st q2" id="v4sw" title="Josh's signal watcher — the Discord watcher on Ifoma's PC"><i class="off"></i>Watcher</span><span class="st q" id="v4clock"></span><span class="who"><span class="av" id="v4av">J</span><span id="v4whoSlot"></span></span><button class="gear" id="v4gear" aria-label="Settings" hidden></button></div>`;
   dk.insertBefore(t,dk.firstChild);
   const who=$("#dkWho");if(who)who.addEventListener("change",()=>{$("#v4av").textContent=(who.value||"J")[0]});
   t.querySelectorAll("[data-v4go]").forEach(b=>b.addEventListener("click",()=>v4Go(b.dataset.v4go)));
@@ -6755,6 +6767,10 @@ function v4TopDraw(){
   const d=new Date().toLocaleDateString("en-US",{weekday:"short",day:"numeric",month:"short",timeZone:"America/New_York"}),tm=new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"});
   const ck=$("#v4clock");if(ck)ck.innerHTML=`${esc(d)} · <b>${esc(tm)}</b> · ${open?"open":pre?"pre-market":"closed"} <span class="ver">· v${BUILD}</span>`;
   const av=$("#v4av");if(av&&who)av.textContent=(who.value||"J")[0];
+  // v4.8.6: the manual "Winston ON early" switch — only before the open
+  const wn2=$("#v4wn");if(wn2){wn2.style.display=pre&&wide?"flex":"none";
+    if(pre&&wide){if(!WIN.j&&!WIN.topLoad){WIN.topLoad=1;winApi("state").then(j=>{WIN.j=j;v4TopDraw()}).catch(()=>{}).then(()=>{WIN.topLoad=0})}
+      const on=winPrepActive(WIN.j);wn2.innerHTML=`<i class="${on?"":"off"}"></i>${on?"Winston · prepping":"Winston · off till 9:30 — tap to prep"}`}}
 
   t.querySelectorAll(".mid button[data-v4go]").forEach(b=>b.classList.toggle("on",DK.view===b.dataset.v4go));
 }
@@ -6763,7 +6779,7 @@ function v4Launcher(){
   const it=(k,l,s)=>`<button data-v4go="${k}" class="${DK.view===k?"on":""}">${v4Svg(k)}<span>${l}${s?`<small>${s}</small>`:""}</span></button>`;
   o.innerHTML=`<div class="v4lp"><h4>Go to</h4><div class="g">${it("desk","Desk","Jarvis · cards · signals")}${it("scoreboard","Scoreboard","Josh + Baby J vs Winston")}${it("prep","Pre-market","Prep · Market · Night Charts")}${it("homework","Homework","the after-close read")}${it("winston","Winston","the paper trader")}${it("playbook","Playbook","the Otto Rules")}${it("jason","Calls","the coach's calls")}${it("quiz","Quiz","five questions, graded")}${it("journal","Journal","every trade, with its reason")}${it("charts","Night Charts","9 charts, ready by 7")}${it("more","Everything else","signals today · levels · brain")}${it("help","Help","")}</div>
     <h4 class="s">Desk tools</h4><div class="g">${it("watchlist","Watchlist","Treasure Hunt")}${it("watcher","Watcher","levels · every minute")}${it("morning","Morning read","the three inputs")}${it("customize","Customize","move the cards")}</div>
-    <h4 class="s">App</h4><div class="g">${it("settings","Settings","accounts · limits · push")}${it("classic","Phone layout","Week · Coach · Journal · Market")}<button data-v4go="look">${v4Svg("look")}<span>Look<small>${V4.on?"new (v4) · switch to Classic":"classic · switch to new"}</small></span></button></div></div>`;
+    <h4 class="s">App</h4><div class="g">${it("settings","Settings","accounts · limits · push")}<button data-v4go="look">${v4Svg("look")}<span>Look<small>${V4.on?"new (v4) · switch to Classic":"classic · switch to new"}</small></span></button></div></div>`;
   o.addEventListener("click",e=>{if(e.target===o)v4Close()});
   o.querySelectorAll("[data-v4go]").forEach(b=>b.addEventListener("click",()=>{v4Close();v4Go(b.dataset.v4go)}));
   $("#dk").appendChild(o);

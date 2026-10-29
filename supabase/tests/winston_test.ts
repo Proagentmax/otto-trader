@@ -1288,3 +1288,22 @@ Deno.test("v4.8 afterTally + scoreAfterExits + after_score route: early exits ge
   const bad = await (await X.handle(new Request("https://x.test/functions/v1/winston?fn=after_score&day=nope", { headers: { authorization: "Bearer " + GOODJWT } }))).json();
   eq(bad.ok, false, "needs a day");
 });
+
+Deno.test("v4.8.6 PREP switch: off = skipped before the open; on = he reads and writes notes, no orders / ideas / shadows, tick_state untouched, the post is still NEW at the open and the real tick is handed his prep notes; the switch is today-only", async () => {
+  seed(); setNow("2026-10-14T12:45:00Z");   // 8:45 AM ET
+  W.spot = { NVDA: 200, SPY: 600, QQQ: 520, TLT: 90 }; W.prev = { ...W.spot }; W.bars = {}; W.opts = {}; W.ai.n = 0;
+  TABLES.otto_jason.push({ id: 1, day: "2026-10-14", posted_label: "8:40 AM", kind: "level", ticker: "NVDA", direction: "long", level: 200, words: "NVDA over 200", late: false });
+  aiScript = () => ({ decisions: [{ ticker: "NVDA", side: "call", source: "coach:1", thesis: "over 200 holds", wrong_if_level: 198, target_level: 204, trigger_level: 200, cites: [], rule_ids: [] }], passes: [], notes: { summary: "prep read" } });
+  let r = await X.tick(); assert(r.skipped, "switch off: skipped before the open"); eq(W.ai.n, 0, "no AI while off");
+  const sw = await X.setEnabled({ prep_on: true }); eq([sw.ok, sw.prep_on, sw.prep_day], [true, true, "2026-10-14"], "switch on, today only");
+  r = await X.tick(); assert(r.ok && r.prep, "prep look ran: " + JSON.stringify(r)); eq(W.ai.n, 1, "one AI look");
+  eq([TABLES.winston_trades.length, TABLES.winston_ideas.length, TABLES.winston_shadows.length], [0, 0, 0], "no trade, idea row or shadow in prep");
+  assert(!TABLES.winston_settings.find((s) => s.key === "tick_state"), "tick_state untouched");
+  const pr = TABLES.winston_settings.find((s) => s.key === "prep").value; eq([pr.day, pr.ideas[0].ticker, pr.ideas[0].trigger_level], ["2026-10-14", "NVDA", 200], "plan saved");
+  assert(/NO ORDER CAN BE PLACED/.test(W.ai.last.user), "told it is prep only");
+  setNow("2026-10-14T12:55:00Z"); r = await X.tick(); eq(r.skipped, "nothing new", "nothing new = no AI"); eq(W.ai.n, 1, "no second AI call");
+  setNow("2026-10-15T12:45:00Z"); r = await X.tick(); assert(r.skipped, "next day the switch no longer applies"); eq(W.ai.n, 1, "still one");
+  await X.setEnabled({ prep_on: false });
+  setNow("2026-10-14T14:11:00Z"); await X.tick();
+  assert(/YOUR PRE-OPEN PREP/.test(W.ai.last.user) && /\[id 1 NEW\]/.test(W.ai.last.user), "the open tick sees the prep notes and the post as NEW");
+});
