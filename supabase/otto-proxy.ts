@@ -7707,7 +7707,7 @@ export async function coachCorner(range = "today") {
   };
   // v4.8.3: score the NEWEST unscored posts first, four at a time. It used to walk oldest-first with a budget of 12, so posts that never
   // finish (no bars) ate the budget on every request and the posts people actually look at never got scored ("pending" forever).
-  const todo = main.filter((r: any) => !(r.cc && r.cc.state === "scored")).sort((a: any, b: any) => Date.parse(b.posted_at || 0) - Date.parse(a.posted_at || 0)).slice(0, 16);
+  const todo = main.filter((r: any) => !(r.cc && (r.cc.state === "scored" || (r.cc.state === "unscored" && r.day < today)))).sort((a: any, b: any) => Date.parse(b.posted_at || 0) - Date.parse(a.posted_at || 0)).slice(0, 16);
   const fresh = new Map<any, any>();
   for (let i = 0; i < todo.length; i += 4) {
     await Promise.all(todo.slice(i, i + 4).map(async (r: any) => {
