@@ -1115,6 +1115,16 @@ svg.nc-svg{width:100%;height:auto;display:block}
 .v4pop .bd{padding:16px 24px 22px}
 .v4pop .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 0 14px}.v4pop .grid div{background:#1F242D;border-radius:12px;padding:9px 12px}.v4pop .grid .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3)}.v4pop .grid .v{font-family:var(--mono);font-size:18px;margin-top:3px;color:var(--ink)}.v4pop .grid .v.g{color:var(--gold)}
 .v4pop h4{margin:14px 0 5px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold)}
+/* v4.8.4 resizable pop-ups */
+.v4pop.fx{position:absolute;max-height:none;width:auto;margin:0}
+.v4pop .pfx{position:sticky;top:0;height:0;z-index:4}
+.v4pop .pfx .tbx{position:absolute;top:12px;right:58px;display:flex;gap:6px}
+.v4pop .pfx button{min-height:0;height:32px;min-width:34px;padding:0 9px;border-radius:9px;background:rgba(10,12,16,.7);border:1px solid rgba(255,255,255,.22);color:var(--ink);font-weight:700;font-size:13px;cursor:pointer}
+.v4pop .pfx button:hover{border-color:var(--gold);color:var(--gold)}
+.v4pop.fx .ph{cursor:grab;user-select:none}.v4pop.fx.drg .ph{cursor:grabbing}
+.v4ov .rzh{position:absolute;z-index:61;touch-action:none}
+.v4ov .rzh.r,.v4ov .rzh.l{width:10px;cursor:ew-resize}.v4ov .rzh.t,.v4ov .rzh.b{height:10px;cursor:ns-resize}
+.v4ov .rzh.br{width:26px;height:26px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#7a8599 50%,#7a8599 58%,transparent 58%,transparent 70%,#7a8599 70%,#7a8599 78%,transparent 78%);border-radius:0 0 18px 0}
 .v4pop .two{display:grid;grid-template-columns:1fr 330px;gap:18px}
 .v4pop .big{background:#12151B;border:1px solid #262D39;border-radius:16px;padding:12px 14px}.v4pop .big .hd{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.08em}.v4pop .big svg{width:100%;height:150px;margin-top:6px}
 .v4pop .side{background:linear-gradient(180deg,#1A1F2A,#12151B);border:1px solid rgba(245,196,81,.3);border-radius:16px;padding:12px 16px;font-size:14px}.v4pop .side h4:first-child{margin-top:0}
@@ -2640,7 +2650,7 @@ $("#rCopy").addEventListener("click",async()=>{try{await navigator.clipboard.wri
      major  the app works differently enough that Josh would notice
      minor  a new feature or tab
      patch  fixes, copy, corpus wiring */
-const BUILD="4.8.3";
+const BUILD="4.8.4";
 const ROUTINE=[
  {n:1,title:"The bond market",src:"The 10-year live, plus the official close",calls:[{k:"t10"}]},
  {n:2,title:"One currency pair",src:"USD / JPY, spot",calls:[{k:"jpy"}]},
@@ -6539,6 +6549,60 @@ function v4BindRight(box){
     rh.style.cursor="pointer";rh.addEventListener("click",e=>{if(e.target.closest("a,button"))return;v4Pop("acct")});
   }
 }
+/* ===== v4.8.4 resizable / draggable pop-ups (reading mode) ===== */
+const POPK="otto:popbox";
+function v4PopFx(o){
+  const p=o.querySelector(".v4pop");if(!p||innerWidth<720)return;
+  let S={};try{S=JSON.parse(localStorage.getItem(POPK)||"{}")||{}}catch(e){}
+  const bd=p.querySelector(".bd"),MINW=360,MINH=240;
+  let Z=Math.max(.85,Math.min(1.7,+S.z||1)),normal=null;
+  const bar=document.createElement("div");bar.className="pfx";
+  bar.innerHTML=`<div class="tbx"><button data-f="-" title="Smaller text">A−</button><button data-f="+" title="Bigger text">A+</button><button data-f="big" title="Fill most of the screen / back">⤢ Big read</button><button data-f="rs" title="Back to the normal size">↺</button></div>`;
+  p.insertBefore(bar,p.firstChild);
+  const hs=["l","r","t","b","br"].map(d=>{const h=document.createElement("div");h.className="rzh "+d;h.dataset.d=d;o.appendChild(h);return h});
+  const W=()=>o.clientWidth,H=()=>o.clientHeight;
+  function setZ(z){Z=Math.max(.85,Math.min(1.7,Math.round(z*100)/100));if(bd)bd.style.zoom=Z}
+  function lay(){const l=p.offsetLeft,t=p.offsetTop,w=p.offsetWidth,h=p.offsetHeight;
+    const set=(el,a)=>Object.assign(el.style,a);
+    set(hs[0],{left:(l-4)+"px",top:(t+14)+"px",height:Math.max(0,h-40)+"px"});
+    set(hs[1],{left:(l+w-6)+"px",top:(t+14)+"px",height:Math.max(0,h-40)+"px"});
+    set(hs[2],{left:(l+14)+"px",top:(t-4)+"px",width:Math.max(0,w-28)+"px"});
+    set(hs[3],{left:(l+14)+"px",top:(t+h-6)+"px",width:Math.max(0,w-40)+"px"});
+    set(hs[4],{left:(l+w-24)+"px",top:(t+h-24)+"px"})}
+  function fit(){const w=Math.min(p.offsetWidth,W()-16),h=Math.min(p.offsetHeight,H()-16);
+    p.style.width=Math.max(Math.min(MINW,W()-16),w)+"px";p.style.height=Math.max(Math.min(MINH,H()-16),h)+"px";
+    p.style.left=Math.max(8,Math.min(p.offsetLeft,W()-p.offsetWidth-8))+"px";p.style.top=Math.max(8,Math.min(p.offsetTop,H()-p.offsetHeight-8))+"px";lay()}
+  function save(){try{localStorage.setItem(POPK,JSON.stringify({x:p.offsetLeft,y:p.offsetTop,w:p.offsetWidth,h:p.offsetHeight,z:Z}))}catch(e){}}
+  function natural(){ // measure the normal centred box, then pin it in px
+    p.classList.remove("fx");["left","top","width","height"].forEach(k=>p.style[k]="");
+    const r=p.getBoundingClientRect(),hr=o.getBoundingClientRect();
+    p.classList.add("fx");p.style.left=(r.left-hr.left)+"px";p.style.top=(r.top-hr.top)+"px";p.style.width=r.width+"px";p.style.height=r.height+"px"}
+  natural();
+  if(S.w&&S.h){p.style.width=S.w+"px";p.style.height=S.h+"px";p.style.left=S.x+"px";p.style.top=S.y+"px"}
+  setZ(Z);fit();
+  bar.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;e.stopPropagation();const f=b.dataset.f;
+    if(f==="-")setZ(Z-.1);else if(f==="+")setZ(Z+.1);
+    else if(f==="rs"){normal=null;S={};try{localStorage.removeItem(POPK)}catch(x){}setZ(1);natural();fit()}
+    else if(f==="big"){if(normal){const nz=normal.z;Object.assign(p.style,{left:normal.left,top:normal.top,width:normal.width,height:normal.height});normal=null;setZ(nz||1)}else{normal={left:p.style.left,top:p.style.top,width:p.style.width,height:p.style.height,z:Z};const m=Math.round(Math.min(W(),H())*.02);p.style.left=m+"px";p.style.top=m+"px";p.style.width=(W()-2*m)+"px";p.style.height=(H()-2*m)+"px";setZ(Math.max(Z,1.25))}fit()}
+    save();lay()});
+  let dr=null;
+  const down=(mode,e)=>{if(e.button!==undefined&&e.button!==0)return;dr={m:mode,x:e.clientX,y:e.clientY,l:p.offsetLeft,t:p.offsetTop,w:p.offsetWidth,h:p.offsetHeight};if(mode==="move")p.classList.add("drg");e.preventDefault()};
+  const ph=p.querySelector(".ph");if(ph)ph.addEventListener("pointerdown",e=>{if(e.target.closest("button"))return;down("move",e)});
+  hs.forEach(h=>h.addEventListener("pointerdown",e=>{down(h.dataset.d,e);try{h.setPointerCapture(e.pointerId)}catch(x){}}));
+  const mv=e=>{if(!dr)return;const dx=e.clientX-dr.x,dy=e.clientY-dr.y,m=dr.m,mw=W(),mh=H();
+    if(m==="move"){p.style.left=Math.max(0,Math.min(mw-140,dr.l+dx))+"px";p.style.top=Math.max(0,Math.min(mh-60,dr.t+dy))+"px";lay();return}
+    if(m==="r"||m==="br")p.style.width=Math.max(MINW,Math.min(mw-dr.l-4,dr.w+dx))+"px";
+    if(m==="b"||m==="br")p.style.height=Math.max(MINH,Math.min(mh-dr.t-4,dr.h+dy))+"px";
+    if(m==="l"){const w=Math.max(MINW,Math.min(dr.l+dr.w-4,dr.w-dx));p.style.width=w+"px";p.style.left=(dr.l+dr.w-w)+"px"}
+    if(m==="t"){const h=Math.max(MINH,Math.min(dr.t+dr.h-4,dr.h-dy));p.style.height=h+"px";p.style.top=(dr.t+dr.h-h)+"px"}
+    lay()};
+  const up=()=>{if(!dr)return;dr=null;p.classList.remove("drg");o._nc=Date.now()+350;save()};
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);addEventListener("pointercancel",up);
+  o.addEventListener("click",e=>{if(o._nc>Date.now()&&e.target===o){e.stopImmediatePropagation();e.preventDefault()}},true);
+  const ro=new MutationObserver(()=>{if(!o.isConnected){removeEventListener("pointermove",mv);removeEventListener("pointerup",up);removeEventListener("pointercancel",up);ro.disconnect()}});
+  ro.observe($("#dk"),{childList:true});
+  addEventListener("resize",()=>{if(o.isConnected)fit()});
+}
 /* ---- popups ---- */
 function v4Close(){const o=$("#v4ov");if(o)o.remove()}
 function v4Open(ph,body,after){
@@ -6546,6 +6610,7 @@ function v4Open(ph,body,after){
   o.innerHTML=`<div class="v4pop">${ph}<button class="x" aria-label="Close">×</button><div class="bd">${body}</div></div>`;
   o.addEventListener("click",e=>{if(e.target===o)v4Close()});o.querySelector(".x").addEventListener("click",v4Close);
   $("#dk").appendChild(o);
+  try{v4PopFx(o)}catch(e){}
   o.querySelectorAll("[data-v4ask]").forEach(b=>b.addEventListener("click",()=>{v4Close();dkShow("desk");const i=$("#dkIn");if(i){i.value=b.dataset.v4ask;i.focus();i.dispatchEvent(new Event("input"))}}));
   o.querySelectorAll("[data-v4goto]").forEach(b=>b.addEventListener("click",()=>{V4.spot=+b.dataset.v4goto;v4SpotDraw();v4Pop("tile",V4.spot)}));
   if(after)after(o);
@@ -6778,6 +6843,18 @@ body.tour .v4top .st.tour{color:var(--gold);border-color:rgba(245,196,81,.5);box
 .tour-menu .bar0{height:4px;background:#23272f;margin:0 14px 6px;border-radius:2px}.tour-menu .bar0 i{display:block;height:4px;border-radius:2px;background:#2EE59D}
 .tour-menu .it{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer}.tour-menu .it:hover{background:#1d2128}.tour-menu .it .l{flex:1}.tour-menu .it b{display:block;font-size:13.5px}.tour-menu .it small{display:block;font-size:11.5px;color:var(--ink-3);margin-top:1px}
 .tour-menu .ck{width:20px;height:20px;border-radius:6px;border:1.5px solid #3a4250;display:grid;place-items:center;font-size:12px;color:transparent;flex:none}.tour-menu .it.done .ck{background:#2EE59D;border-color:#2EE59D;color:#06251a}.tour-menu .it.done b{text-decoration:line-through;color:var(--ink-3)}
+.tour-menu{width:360px}.tour-menu .tabs{display:flex;gap:6px;padding:6px 12px 8px;border-bottom:1px solid #232831;position:sticky;top:0;background:#15171B;z-index:2}
+.tour-menu .tabs span{flex:1;text-align:center;padding:6px 4px;border:1px solid #2b3240;border-radius:9px;font-size:12.5px;font-weight:700;color:var(--ink-3);cursor:pointer}.tour-menu .tabs span.on{background:var(--gold);color:#1a1300;border-color:var(--gold)}
+.tour-menu .grp{padding:10px 14px 2px;font-size:10px;letter-spacing:.14em;color:var(--gold);font-weight:800}
+.tour-menu .it .go{color:var(--gold);font-weight:800}
+.st.tour-pill.rst{padding:4px 10px;font-weight:800}.v4top .st.tour,.v4top .st.tour-pill{white-space:nowrap;flex:none}
+.tour-replay .steps{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 8px;padding-right:90px}.tour-replay .steps span{border:1px solid #2b3240;border-radius:999px;padding:4px 11px;font-size:12px;color:var(--ink-3);cursor:pointer}.tour-replay .steps span.on{background:var(--gold);color:#1a1300;border-color:var(--gold);font-weight:700}
+.tour-replay .post{background:#0f131a;border:1px solid #2b3240;border-radius:10px;padding:10px 12px;font-size:14px;color:var(--ink)}.tour-replay mark{background:rgba(245,196,81,.25);color:var(--gold);border-radius:4px;padding:0 3px}
+.tour-replay .btns .nx{background:var(--gold);color:#1a1300;border-color:var(--gold);cursor:pointer}.tour-replay .btns button{cursor:pointer}
+.tour-replay .lane{position:relative;height:112px;border-left:2px solid #2b3240;margin:8px 0 8px 14px}.tour-replay .lane .ln{position:absolute;left:0;right:0;border-top:1px dashed;padding-left:8px;font-size:12px}.tour-replay .lane .dot{position:absolute;left:-8px;width:14px;height:14px;border-radius:50%;background:var(--gold);transition:top .7s cubic-bezier(.2,.8,.2,1),box-shadow .4s}.tour-replay .lane .dot.fire{box-shadow:0 0 0 6px rgba(46,229,157,.25),0 0 18px rgba(46,229,157,.6);background:#2EE59D}
+.tour-replay .dim{opacity:.4}
+.tour-menu .it.lab{align-items:flex-start}
+.tour-menu .it .tg{font-size:9px;letter-spacing:.1em;border:1px solid #3a4250;color:var(--ink-3);border-radius:6px;padding:2px 6px;font-weight:700}
 .tour-menu .kind{font-size:9.5px;letter-spacing:.1em;border:1px solid rgba(245,196,81,.5);color:var(--gold);border-radius:6px;padding:2px 6px;font-weight:700}
 `;
 const TOUR_INFO={
@@ -6792,7 +6869,7 @@ const TOUR_INFO={
 const TOUR_CHIPS=[[".v4hero","hero"],["#dkMsgs","desk",1],[".win43-strip>.dk-cardx:nth-child(1)","book"],[".win43-strip>.dk-cardx:nth-child(2)","gate"],[".win43-strip>.dk-cardx:nth-child(3)","rh"],[".win43-strip>.dk-cardx:nth-child(4)","read"],[".win43-main>.dk-cardx:nth-child(1)","now"],[".win43-main>.dk-cardx:nth-child(2)","sess"]];
 const TOUR_STEPS=[
  {k:"Market Read",sub:"bonds first",view:"desk",sel:[".v4hero"],h:"Every morning starts the way you teach",p:"The 8:45 Market Read: bonds first, then the tape. The verdict is mechanical — no sentiment dials, no made-up numbers. The homework levels sit on the Watcher and fire only on the 10-minute close.",s:"“We read bonds first, same as you. If TLT is bid and tech is down a point, he's defensive. Today it's neutral.”"},
- {k:"A card from his post",sub:"pick one with Show me a card",view:"desk",sel:["#dkMsgs"],host:1,h:"When you post, this happens",p:"A ⚡ Signal post becomes a card in seconds — the contract picked to fit the account, the wrong-if and target on the card, a red banner if it breaks a rule. Josh taps Approve or Reject. Use “▤ Show me a card” in the top bar to pick which replay drops in.",s:"“That's your post. Here's the card it became. Nothing trades without a human tap.”"},
+ {k:"A card from his post",sub:"Desk Lab has more",view:"desk",sel:["#dkMsgs"],host:1,h:"When you post, this happens",p:"A ⚡ Signal post becomes a card in seconds — the contract picked to fit the account, the wrong-if and target on the card, a red banner if it breaks a rule. Josh taps Approve or Reject. Use ☰ Tour menu → Desk Lab in the top bar to drop in a replay or a demo.",s:"“That's your post. Here's the card it became. Nothing trades without a human tap.”"},
  {k:"Winston's reasoning",sub:"click a trade",view:"winston",sel:[".win43-strip>.dk-cardx:nth-child(1)",".win43-main>.dk-cardx:nth-child(2)"],h:"Meet Winston",p:"The autonomous one. Paper money, real fills, pays the spread. He runs on the coaching calls and his own reads, inside the rules. Click a trade in the list and he shows his work — the thesis word for word, the plan, what happened.",s:"“He isn't a bot following a script. Click a trade that came from your post. Read why he took it.”"},
  {k:"Rules ledger",sub:"every rule has a receipt",view:"winston",pop:"score",sel:["[data-tour=ledger]"],loading:"Loading the ledger…",h:"Your rules, with receipts",p:"When a rule blocks him we don't just block — we book a shadow trade and score it with the same exits. So every rule has a ledger. The coach-exit rule has cost zero targets — keep. Re-entry chasing has cost money — tighten.",s:"“Nobody's ever audited your rules like this. This week he's trading only his own ideas and your posts are being shadow-scored — so we can see the difference, honestly.”"},
  {k:"Coach's Corner",sub:"his posts, scored",view:"coach",wait:".cc-g2",sel:[".cc-g2"],loading:"Scoring his posts…",h:"Your posts, scored",p:"Every post you make, scored as if we had played it — 1 contract, real option prices when we had the contract. Your side on the left, what we actually did on the right. Filter to Calls, Levels or Unclear, and the Winston column shows what he did with each post.",s:"“This is the one screen that's only about your work. Calls and levels scored separately, so we can see what works.”"},
@@ -6801,34 +6878,68 @@ const TOUR_LIST=[...TOUR_STEPS.map((s,i)=>({l:s.k,s:s.sub,i})),{l:"Say it plainl
 TOUR.done=new Set();TOUR.last=0;TOUR.seen=false;TOUR.min=false;
 function tourNote(t,ms=2600){let n=$("#tourNote");if(!n){n=document.createElement("div");n.id="tourNote";n.className="tour-note";document.body.appendChild(n)}n.textContent=t;clearTimeout(n._t);n._t=setTimeout(()=>n.remove(),ms)}
 function tourMark(j,on=true){if(on)TOUR.done.add(j);else TOUR.done.delete(j);tourCkDraw()}
-function tourCkDraw(){const b=$("#v4ck");if(b)b.textContent=`✓ Must-see ${TOUR.done.size}/${TOUR_LIST.length}`;const m=$("#tourMenu");if(m&&m.dataset.k==="ck")tourCkMenu(true)}
+function tourCkDraw(){const b=$("#v4ck");if(b)b.textContent=`☰ Tour menu · ${TOUR.done.size}/${TOUR_LIST.length} ▾`;const m=$("#tourMenu");if(m&&m.dataset.k==="tm"&&TOUR.tab==="must")tourMenuDraw("must",true)}
 function tourMenuClose(){const m=$("#tourMenu");if(m)m.remove()}
 function tourMenuOpen(k,anchor,html){tourMenuClose();const m=document.createElement("div");m.id="tourMenu";m.className="tour-menu";m.dataset.k=k;m.innerHTML=html;document.body.appendChild(m);const r=anchor.getBoundingClientRect();m.style.top=(r.bottom+8)+"px";m.style.left=Math.max(10,Math.min(innerWidth-m.offsetWidth-10,r.right-m.offsetWidth))+"px";return m}
-function tourCkMenu(keep){
-  const a=$("#v4ck");if(!a)return;const n=TOUR.done.size,html=`<div class="hh"><span>MUST-SEE · CLICK TO JUMP</span><a id="tourCkReset">reset</a></div><div class="bar0"><i style="width:${n/TOUR_LIST.length*100}%"></i></div>`+TOUR_LIST.map((it,j)=>`<div class="it ${TOUR.done.has(j)?"done":""}" data-j="${j}"><span class="ck" data-c="${j}">✓</span><span class="l"><b>${esc(it.l)}</b><small>${esc(it.s)}</small></span>${it.talk?'<span class="kind">TALK</span>':""}</div>`).join("");
-  const m=keep&&$("#tourMenu");if(m){m.innerHTML=html}else tourMenuOpen("ck",a,html);
-  const mm=$("#tourMenu");mm.querySelector("#tourCkReset").onclick=()=>{TOUR.done.clear();tourCkDraw()};
-  mm.querySelectorAll(".it").forEach(el=>{const j=+el.dataset.j,it=TOUR_LIST[j];
-    el.querySelector(".ck").onclick=e=>{e.stopPropagation();tourMark(j,!TOUR.done.has(j))};
-    el.querySelector(".l").onclick=()=>{if(it.talk){tourMark(j,!TOUR.done.has(j));tourNote(it.s,3200)}else{tourMenuClose();tourGo(it.i)}}});
+TOUR.tab="jump";
+const TOUR_JUMP=[["THE DESK",[["Market Read","bonds first, then the tape",0],["A card from his post","what happens when the coach posts",1],["Desk Lab ›","trigger a trade, Signals, the Watcher","lab"]]],["WINSTON",[["Meet Winston","click a trade, he shows his work",2],["Rules ledger","every rule has a receipt",3],["Road to live","the gate + the kill link",5]]],["SCOREBOARD",[["Coach's Corner","his posts, scored",4]]]];
+function tourMenuDraw(tab,keep){
+  const a=$("#v4ck");if(!a)return;TOUR.tab=tab||TOUR.tab||"jump";tab=TOUR.tab;
+  const tabs=`<div class="tabs">${[["jump","Jump to"],["must","Must-see"],["lab","Desk Lab"]].map(([k,l])=>`<span data-t="${k}" class="${k===tab?"on":""}">${l}</span>`).join("")}</div>`;
+  let body="";const n=TOUR.done.size;
+  if(tab==="jump")body=TOUR_JUMP.map(([g,L])=>`<div class="grp">${g}</div>`+L.map(([l,s,i])=>`<div class="it" data-jump="${i}"><span class="l"><b>${esc(l)}</b><small>${esc(s)}</small></span>${i==="lab"?"":'<span class="go">›</span>'}</div>`).join("")).join("");
+  else if(tab==="must")body=`<div class="hh"><span>MUST-SEE · ${n}/${TOUR_LIST.length} · CLICK TO JUMP</span><a id="tourCkReset">reset ticks</a></div><div class="bar0"><i style="width:${n/TOUR_LIST.length*100}%"></i></div>`+TOUR_LIST.map((it,j)=>`<div class="it ${TOUR.done.has(j)?"done":""}" data-j="${j}"><span class="ck" data-c="${j}">✓</span><span class="l"><b>${esc(it.l)}</b><small>${esc(it.s)}</small></span>${it.talk?'<span class="kind">TALK</span>':""}</div>`).join("");
+  else body=`<div class="mut" style="padding:10px 14px;font-size:12px">Loading real trades…</div>`;
+  const m=keep&&$("#tourMenu")&&$("#tourMenu").dataset.k==="tm"?$("#tourMenu"):null;
+  const html=tabs+`<div id="tmBody">${body}</div>`;
+  const mm=m||tourMenuOpen("tm",a,html);if(m){const sc=m.scrollTop;m.innerHTML=html;m.scrollTop=sc}
+  mm.querySelectorAll(".tabs span").forEach(t=>t.onclick=e=>{e.stopPropagation();tourMenuDraw(t.dataset.t,true)});
+  if(tab==="jump")mm.querySelectorAll("[data-jump]").forEach(el=>el.onclick=()=>{const v=el.dataset.jump;if(v==="lab"){tourMenuDraw("lab",true);return}tourMenuClose();tourGo(+v)});
+  if(tab==="must"){const rs=mm.querySelector("#tourCkReset");if(rs)rs.onclick=()=>{TOUR.done.clear();tourCkDraw()};
+    mm.querySelectorAll(".it").forEach(el=>{const j=+el.dataset.j,it=TOUR_LIST[j];
+      el.querySelector(".ck").onclick=e=>{e.stopPropagation();tourMark(j,!TOUR.done.has(j))};
+      el.querySelector(".l").onclick=()=>{if(it.talk){tourMark(j,!TOUR.done.has(j));tourNote(it.s,3200)}else{tourMenuClose();tourGo(it.i)}}})}
+  if(tab==="lab")tourLabFill();
 }
-async function tourCardMenu(){
-  const a=$("#v4cards");if(!a)return;tourMenuOpen("cards",a,`<div class="hh"><span>SHOW ME A CARD</span></div><div class="mut" style="padding:8px 12px;font-size:12px">Loading real trades…</div>`);
-  const d=await tourReplayData();if(!$("#tourMenu")||$("#tourMenu").dataset.k!=="cards")return;
-  const t=d.t,o=d.own,sh=d.sh,I=[[0,"⚡ A card from his post",t?`${t.ticker} ${t.side==="put"?"short":"long"} · the contract Josh sees`:"no past trade yet"],[1,"▶ The in-trade card",t?`${t.label||t.ticker} · what Josh sees while it works`:"no past trade yet"],[2,"⛔ The rule said no → shadow",sh?`${sh.ticker} ${sh.side==="put"?"put":"call"} · blocked, then scored`:"no shadow trade yet"],[3,"💡 Winston's own idea",o?`${o.label||o.ticker} · took it on his own read`:"no own-idea win yet"],[4,"📉 A loss — the exit rule at work",d.loss?`${d.loss.label||d.loss.ticker} · ${wm(+d.loss.pnl_realistic)}`:"no past loss yet"],[5,"🙅 Winston passed on a coach post",d.pass?`${d.pass.p.ticker||"coach post"} · with his reason`:"no passed post yet"]];
-  const m=$("#tourMenu");m.innerHTML=`<div class="hh"><span>SHOW ME A CARD · REAL TRADES, LABELLED REPLAY</span></div>`+I.map(([k,l,s])=>`<div class="it" data-k="${k}"><span class="l"><b>${esc(l)}</b><small>${esc(s)}</small></span></div>`).join("")+`<div class="hh" style="margin-top:6px"><span>DEMO TRADES · PRETEND, NOTHING SAVED</span></div><div class="it" data-k="d1"><span class="l"><b>🟢 Josh + Baby J in a trade</b><small>open-trade card with CLOSE NOW</small></span></div><div class="it" data-k="d2"><span class="l"><b>🔴 Closing the trade</b><small>confirm, result, the why line</small></span></div><div class="it" data-k="d3"><span class="l"><b>🟣 Winston in a trade</b><small>what he watches, three ways it ends</small></span></div><div class="it" data-k="clear"><span class="l"><b>Clear replay + demo cards</b></span></div>`;
-  m.querySelectorAll(".it").forEach(el=>el.onclick=()=>{const k=el.dataset.k;tourMenuClose();if(/^d\d$/.test(k)){demoRun(k);return}if(k==="clear"){demoClear();TOUR.replay=[];document.querySelectorAll(".tour-replay").forEach(x=>x.remove());tourNote("Replay cards cleared");return}tourReplayAdd(+k)});
+function tourCkMenu(keep){tourMenuDraw(TOUR.tab||"jump",keep)}
+async function tourLabFill(){
+  const d=await tourReplayData();const m=$("#tourMenu");if(!m||m.dataset.k!=="tm"||TOUR.tab!=="lab")return;
+  const t=d.t,o=d.own,sh=d.sh;
+  const R=(k,l,s)=>`<div class="it lab" data-lab="${k}"><span class="l"><b>${esc(l)}</b><small>${esc(s)}</small></span></div>`;
+  const html=`<div class="grp">IN A TRADE · PRETEND, NOTHING SAVED</div>`+
+   R("d1","🟢 Josh + Baby J in a trade","the open-trade card with CLOSE NOW")+R("d2","🔴 Closing the trade","confirm, result, the why line")+R("d3","🟣 Winston in a trade","still in it / target hit / stop hit")+
+   `<div class="grp">SIGNALS · HOW OTTO LISTENS</div>`+R("sig","⚡ Signals — how Otto listens","a post arrives → Otto reads it → it becomes a card (3 steps)")+
+   `<div class="grp">THE WATCHER</div>`+R("wat","👁 He arms a level, then it fires","he watches the 10-minute close, then makes the call (4 steps)")+R("2",`⛔ A rule blocks it → shadow trade`,sh?`${sh.ticker} ${sh.side==="put"?"put":"call"} · blocked, then scored anyway`:"no shadow trade yet")+
+   `<div class="grp">REAL REPLAYS · FROM WINSTON'S OWN PAST TRADES</div>`+
+   R("0","⚡ A card from his post",t?`${t.ticker} ${t.side==="put"?"short":"long"} · the contract Josh sees`:"no past trade yet")+R("1","▶ The in-trade card",t?`${t.label||t.ticker} · what Josh sees while it works`:"no past trade yet")+
+   R("3","💡 Winston's own idea",o?`${o.label||o.ticker} · took it on his own read`:"no own-idea win yet")+R("4","📉 A loss — the exit rule at work",d.loss?`${d.loss.label||d.loss.ticker} · ${wm(+d.loss.pnl_realistic)}`:"no past loss yet")+R("5","🙅 Winston passed on a coach post",d.pass?`${d.pass.p.ticker||"coach post"} · with his reason`:"no passed post yet")+
+   `<div class="it" data-lab="clear"><span class="l"><b>Clear replay + demo cards</b></span></div>`;
+  const body=m.querySelector("#tmBody");if(!body)return;body.innerHTML=html;
+  body.querySelectorAll("[data-lab]").forEach(el=>el.onclick=()=>{const k=el.dataset.lab;tourMenuClose();
+    if(/^d\d$/.test(k)){demoRun(k);return}
+    if(k==="sig"||k==="wat"){demoCard(k);return}
+    if(k==="clear"){demoClear();TOUR.replay=[];document.querySelectorAll(".tour-replay").forEach(x=>x.remove());tourNote("Replay + demo cards cleared");return}
+    tourReplayAdd(+k)});
+}
+async function tourCardMenu(){TOUR.tab="lab";tourMenuDraw("lab")}
+function tourReset(){
+  if(!TOUR.on)return;
+  TOUR.done.clear();TOUR.replay=[];document.querySelectorAll(".tour-replay").forEach(x=>x.remove());
+  try{demoClear()}catch(e){}try{v4Close()}catch(e){}try{deskPop(false)}catch(e){}
+  document.querySelectorAll(".tour-ipop").forEach(x=>x.remove());tourMenuClose();
+  TOUR.last=0;TOUR.min=false;TOUR.manual=false;TOUR.tab="jump";tourCkDraw();
+  tourNote("Tour restarted — back at stop 1",2600);tourGo(0);
 }
 function tourInstall(){
   if(!$("#tourCss")){const s=document.createElement("style");s.id="tourCss";s.textContent=TOUR_CSS;document.head.appendChild(s)}
   const r=$("#v4top .r");if(!r||$("#v4tour"))return;
   const b=document.createElement("span");b.className="st tour";b.id="v4tour";b.title="Tour mode — a guided walk for showing Otto to someone. Changes nothing. Switch it off and on again and it picks up where you were.";b.innerHTML=`Tour<span class="tg"></span>`;
   b.addEventListener("click",()=>tourSet(!TOUR.on));r.insertBefore(b,r.firstChild);
-  const ck=document.createElement("span");ck.className="st tour-pill";ck.id="v4ck";ck.textContent=`✓ Must-see 0/${TOUR_LIST.length}`;ck.title="Your must-show list. Items tick themselves; click one to jump to it.";
-  ck.addEventListener("click",e=>{e.stopPropagation();if($("#tourMenu")&&$("#tourMenu").dataset.k==="ck")tourMenuClose();else tourCkMenu()});
-  const cd=document.createElement("span");cd.className="st tour-pill";cd.id="v4cards";cd.textContent="▤ Show me a card";cd.title="Pick which replay card drops into the Desk";
-  cd.addEventListener("click",e=>{e.stopPropagation();if($("#tourMenu")&&$("#tourMenu").dataset.k==="cards")tourMenuClose();else tourCardMenu()});
-  b.after(ck);ck.after(cd);
+  const rs=document.createElement("span");rs.className="st tour-pill rst";rs.id="v4rst";rs.textContent="↻";rs.title="Restart the tour from the beginning (clears the ticks and any demo cards)";
+  rs.addEventListener("click",e=>{e.stopPropagation();tourReset()});
+  const ck=document.createElement("span");ck.className="st tour-pill";ck.id="v4ck";ck.textContent=`☰ Tour menu · 0/${TOUR_LIST.length} ▾`;ck.title="Jump to any part of the tour, your must-see list, and the Desk Lab demos";
+  ck.addEventListener("click",e=>{e.stopPropagation();if($("#tourMenu")&&$("#tourMenu").dataset.k==="tm")tourMenuClose();else tourMenuDraw(TOUR.tab||"jump")});
+  b.after(rs);rs.after(ck);
   document.addEventListener("click",e=>{if(!e.target.closest("#tourMenu,.tour-pill"))tourMenuClose()});
 }
 function tourSet(on){
@@ -6869,7 +6980,7 @@ function tourOverlap(a,b){return Math.max(0,Math.min(a.right,b.right)-Math.max(a
 function tourBest(r,cw,ch){
   const W=innerWidth,H=innerHeight,m=14,cl=(v,a,b)=>Math.max(a,Math.min(b,v));
   const avoid=[...document.querySelectorAll("[data-avoid]")].map(e=>e.getBoundingClientRect()).filter(x=>x.width>0&&x.height>0);
-  const C=[[r.right+18,r.top],[r.left-cw-18,r.top],[r.left,r.bottom+18],[r.left,r.top-ch-18],[W-cw-m,H-ch-m],[m,H-ch-m],[W-cw-m,64],[m,64]].map(([x,y])=>[cl(x,m,W-cw-m),cl(y,58,Math.max(58,H-ch-m))]);   // never above y=58: the top bar (Must-see, Show me a card) stays clickable
+  const C=[[r.right+18,r.top],[r.left-cw-18,r.top],[r.left,r.bottom+18],[r.left,r.top-ch-18],[W-cw-m,H-ch-m],[m,H-ch-m],[W-cw-m,64],[m,64]].map(([x,y])=>[cl(x,m,W-cw-m),cl(y,58,Math.max(58,H-ch-m))]);   // never above y=58: the top bar (Tour menu) stays clickable
   let best=null;for(const [x,y] of C){const rc={left:x,top:y,right:x+cw,bottom:y+ch};let sc=tourOverlap(rc,r);for(const a of avoid)if(tourOverlap(rc,a)>0)sc+=1e7;sc-=y*0.5;if(!best||sc<best.sc)best={sc,x,y}}
   return best;
 }
@@ -6884,7 +6995,7 @@ function tourPlace(loading){
     <div class="bd">${TOUR.resumed?`<div class="resumed">Picked up where you left off. <a id="tourStartOver">Start over</a></div>`:""}${s.loading&&!hasT?`<div class="resumed" style="color:var(--ink-2)">${esc(s.loading)}</div>`:""}<h3>${esc(s.h)}</h3><p class="p">${esc(s.p)}</p><p class="say">${esc(s.s)}</p>
     <div class="nav"><button id="tourBack" style="visibility:${TOUR.step?"visible":"hidden"}">Back</button><span class="sp">${TOUR_STEPS.map((x,i)=>`<i data-i="${i}" title="${esc(x.k)}" class="${i===TOUR.step?"on":TOUR.done.has(i)?"seen":""}"></i>`).join("")}</span><button class="go" id="tourNext">${TOUR.step===TOUR_STEPS.length-1?"Done":"Next"}</button></div></div>`;
   c.querySelector("#tourBack").onclick=()=>tourGo(TOUR.step-1);c.querySelector("#tourNext").onclick=()=>tourGo(TOUR.step+1);
-  c.querySelector("#tourX").onclick=()=>{tourEnd();tourNote("Tour paused — use ✓ Must-see to jump back in",3000)};
+  c.querySelector("#tourX").onclick=()=>{tourEnd();tourNote("Tour paused — use ☰ Tour menu to jump back in",3000)};
   c.querySelector("#tourMin").onclick=()=>{TOUR.min=!TOUR.min;tourPlace()};
   const so=c.querySelector("#tourStartOver");if(so)so.onclick=()=>tourGo(0);
   c.querySelectorAll(".nav .sp i").forEach(d=>d.onclick=()=>tourGo(+d.dataset.i));
@@ -6966,11 +7077,11 @@ async function tourReplayAdd(k){
   TOUR.replay.push(html);tourReplayRestore(true);tourMark(1);
   tourNote(["A ⚡ Signal card — replay of a real post Winston took","The in-trade card — what Josh sees while it works","A blocked idea → shadow trade","Winston's own idea — replay of a real fill","A loss — replay of a real paper trade","A coach post Winston passed on — with his reason"][k],3200);
 }
-function tourReplayRestore(scroll){const m=$("#dkMsgs");if(!m||!TOUR.replay.length)return;m.querySelectorAll(".tour-replay").forEach(x=>x.remove());m.insertAdjacentHTML("beforeend",TOUR.replay.join(""));if(scroll)m.scrollTop=m.scrollHeight}
+function tourReplayRestore(scroll){const m=$("#dkMsgs");if(!m||!TOUR.replay.length)return;m.querySelectorAll(".tour-replay").forEach(x=>x.remove());m.insertAdjacentHTML("beforeend",TOUR.replay.map(x=>typeof x==="function"?x():x).join(""));if(scroll)m.scrollTop=m.scrollHeight}
 
 /* ===== v4.8.3 DEMO TRADES — pretend trades for showing the in-trade screens when the market is closed.
    Nothing is sent to the server, nothing is saved. Every card wears a DEMO tag. ===== */
-const DEMO={on:false,done:false,win:false,ws:"hold"};
+const DEMO={on:false,done:false,win:false,ws:"hold",st:{sig:0,wat:0}};
 function demoTrade(){
   const bars=[];let p=402.4;for(let i=0;i<18;i++){const o=p,c=o+Math.sin(i/2.3)*.5+.18,h=Math.max(o,c)+.25,l=Math.min(o,c)-.25;bars.push([i,o,h,l,c]);p=c}
   const iso=m=>new Date(Date.now()-m*60e3).toISOString();
@@ -6979,7 +7090,7 @@ function demoTrade(){
 }
 (function(){const _t=trCur;trCur=function(){const r=_t();return DEMO.on&&!DEMO.done?[demoTrade()].concat(r):r}})();
 async function demoClose(){await new Promise(r=>setTimeout(r,1200));DEMO.done=true;return {practice:true,demo:true,pnl:55,fill_px:4.40,qty:1,state:"filled",by:"Josh"}}
-function demoClear(){const was=DEMO.on||DEMO.win||DK.cnDone&&DK.cnDone.r&&DK.cnDone.r.demo;DEMO.on=false;DEMO.done=false;DEMO.win=false;DEMO.ws="hold";
+function demoClear(){DEMO.st={sig:0,wat:0};TOUR.replay=(TOUR.replay||[]).filter(x=>typeof x!=="function");document.querySelectorAll(".tour-replay[data-dk]").forEach(x=>x.remove());const was=DEMO.on||DEMO.win||DK.cnDone&&DK.cnDone.r&&DK.cnDone.r.demo;DEMO.on=false;DEMO.done=false;DEMO.win=false;DEMO.ws="hold";
   if(DK.cnDone&&DK.cnDone.r&&DK.cnDone.r.demo)DK.cnDone=null;const dl=$("#dlgOpenTrade");if(dl&&dl.open&&DK.trOpen==="DEMO:TSLA")dl.close();
   if(was){try{dkRenderRight()}catch(e){}if(DK.view==="winston")try{dkWinston(true)}catch(e){}}}
 function demoRun(k){
@@ -7006,6 +7117,35 @@ function demoWinPanel(){
   const t={id:"demo",day,ticker:"TSLA",label:"TSLA 410C 10/30",side:"call",status:"open",opened_at:iso(55),entry_ask:3.85,entry_under:403.2,qty:1,source:"coach:101",plan:{wrong_if_level:399.5,target_level:407,last_mark:{bid:4.40,under:405.1,at:iso(0)}}};
   const j2=DEMO.ws==="hold"?{...j,trades:(j.trades||[]).concat([t])}:j;
   return demoWinPanel()+_w(j2)}})();
+/* ===== v4.8.4 DESK LAB cards: Signals (3 steps) and the Watcher (4 steps). Pretend. Nothing is sent or saved. ===== */
+const DEMO_SIG=[
+ ["1 · The coach posts",()=>`<div class="post">“TSLA above 400, support at 396” <span class="mut" style="font-size:12px">— Coach · 9:51 AM</span></div><div class="mut" style="margin-top:8px">Otto listens to the coach's posts as they arrive. This is the Signals feed.</div>`],
+ ["2 · Otto reads it",()=>`<div class="post">“<mark>TSLA</mark> <mark>above 400</mark>, support at <mark>396</mark>”</div><div class="kv"><div><span>Ticker</span><b>TSLA</b></div><div><span>Direction</span><b class="up">long (above)</b></div><div><span>Trigger level</span><b>400</b></div><div><span>Wrong-if</span><b class="dn">396 (10-min close)</b></div></div><div class="mut">No guessing. If a post has no ticker or no level, Otto says “not scored — no direction and no level”.</div>`],
+ ["3 · It becomes a card",()=>`<div class="kv"><div><span>⚡ Signal</span><b>TSLA long through 400</b></div><div><span>Contract</span><b>TSLA 410C 10/30</b></div><div><span>Ask</span><b>$3.85</b></div><div><span>Fits</span><b class="up">★ 1 contract</b></div><div><span>Spread</span><b>2.1%</b></div></div><div class="btns"><button class="ok">Approve</button><button class="no">Reject</button><span class="mut" style="font-size:11px">demo — nothing happens until someone clicks Approve · a live card expires in 15 min</span></div>`]];
+const DEMO_WAT=[
+ ["1 · He arms a level","Level 400 on TSLA is armed. The Watcher now looks at every 10-minute candle. Nothing fires on a wick.",78],
+ ["2 · A touch, no close","Price pokes 400 but the 10-minute candle closes at 399.6. No call. He keeps watching.",36],
+ ["3 · A 10-minute close above","The 10:10 candle closes at 401.2 — above 400 and held. That is the trigger.",12],
+ ["4 · He makes the call","The card is built on the spot (⚡ Signal, contract picked, exits set). Josh sees it; nothing happens until Approve. Winston, on his own book, takes it automatically.",10]];
+function demoCardHtml(k,dotFrom){
+  const i=DEMO.st[k]||0;
+  if(k==="sig"){const T=DEMO_SIG;return `<div class="tour-replay" data-dk="sig"><span class="tag">DEMO · signals</span><div class="tt">Signals — how Otto listens</div><div class="steps">${T.map((t,j)=>`<span class="${j===i?"on":""}" data-dstep="sig:${j}">${t[0]}</span>`).join("")}</div>${T[i][1]()}${i<2?`<div class="btns"><button class="nx" data-dstep="sig:${i+1}">Next ›</button></div>`:`<div class="btns"><button data-dstep="sig:0">↺ Replay</button></div>`}</div>`}
+  const T=DEMO_WAT,top=dotFrom!=null?dotFrom:T[i][2];
+  return `<div class="tour-replay" data-dk="wat"><span class="tag">DEMO · watcher</span><div class="tt">The Watcher — he watches, then he makes the call</div><div class="steps">${T.map((t,j)=>`<span class="${j===i?"on":""}" data-dstep="wat:${j}">${t[0]}</span>`).join("")}</div>
+   <div class="lane"><div class="ln" style="top:28px;color:var(--up)">Level 400 (trigger)</div><div class="ln" style="top:92px;color:var(--down)">396 wrong-if</div><div class="dot ${i>=2?"fire":""}" style="top:${top}px"></div></div>
+   <div>${T[i][1]}</div>${i===3?`<div class="kv" style="margin-top:8px"><div><span>⚡ Signal</span><b>TSLA long through 400</b></div><div><span>Contract</span><b>TSLA 410C 10/30</b></div><div><span>Fits</span><b class="up">★ 1 contract</b></div><div><span>Winston</span><b>takes it on his own book</b></div></div><div class="btns"><button class="ok">Approve</button><button class="no">Reject</button><span class="mut" style="font-size:11px">demo — buttons do nothing</span></div>`:""}
+   <div class="btns">${i<3?`<button class="nx" data-dstep="wat:${i+1}">Next ›</button>`:`<button data-dstep="wat:0">↺ Replay</button>`}</div></div>`;
+}
+function demoCard(k){
+  if(!TOUR.on)return;if(DK.view!=="desk")dkShow("desk");
+  DEMO.st[k]=0;TOUR.replay=TOUR.replay.filter(x=>!(typeof x==="function"&&x.dk===k));
+  const f=()=>demoCardHtml(k);f.dk=k;TOUR.replay.push(f);tourReplayRestore(true);tourMark(1);
+  tourNote(k==="sig"?"Demo: how Otto listens to a coach post":"Demo: the Watcher — step through it",3200);
+}
+document.addEventListener("click",e=>{const el=e.target.closest("[data-dstep]");if(!el)return;e.preventDefault();e.stopPropagation();
+  const [k,n]=el.dataset.dstep.split(":");const card=el.closest(".tour-replay");const old=k==="wat"?(DEMO_WAT[DEMO.st.wat||0][2]):null;
+  DEMO.st[k]=+n;if(!card)return;const t=document.createElement("div");t.innerHTML=demoCardHtml(k,old);const nc=t.firstElementChild;card.replaceWith(nc);
+  if(k==="wat"){const dot=nc.querySelector(".dot");if(dot){dot.offsetWidth;dot.style.top=DEMO_WAT[+n][2]+"px"}}},true);
 (function(){const _b=v4TopBuild;v4TopBuild=function(){_b();tourInstall()};
   const _s=dkShow;dkShow=function(v){if(v!=="desk"&&document.querySelector(".dk-desk.pop"))deskPop(false);_s(v);if(TOUR.on){tourChips();tourReplayRestore();if(v==="coach")tourMark(4)}};
   if(typeof dkRenderMsgs==="function"){const _m=dkRenderMsgs;dkRenderMsgs=function(){const r=_m.apply(this,arguments);if(TOUR.on)tourReplayRestore();return r}}
